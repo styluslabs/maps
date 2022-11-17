@@ -1,7 +1,10 @@
 #include "bookmarks.h"
+#include "mapsapp.h"
+#include "util.h"
 #include "resources.h"
 #include "imgui.h"
 #include "imgui_stl.h"
+
 #include "sqlite3/sqlite3.h"
 #include "rapidjson/document.h"
 
@@ -33,9 +36,9 @@ void MapsBookmarks::showGUI()
   //unsigned int* markerImg = rasterizeSVG(bkmkMarker.data(), markerSize, markerSize);
 
   if(!bkmkDB) {
-    const char* dbPath = "/home/mwhite/maps/places.sqlite";
-    if(sqlite3_open_v2(dbPath, &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
-      logMsg("Error creating %s", dbPath);
+    std::string dbPath = MapsApp::baseDir + "places.sqlite";
+    if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+      logMsg("Error creating %s", dbPath.c_str());
       sqlite3_close(bkmkDB);
       bkmkDB = NULL;
       return;

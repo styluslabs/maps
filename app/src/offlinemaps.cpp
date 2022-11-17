@@ -1,6 +1,8 @@
 #include "offlinemaps.h"
 #include "mapsapp.h"
+#include "util.h"
 #include "imgui.h"
+#include <deque>
 // "private" headers
 #include "scene/scene.h"
 #include "data/mbtilesDataSource.h"
@@ -15,6 +17,7 @@ static Semaphore semOfflineWorker(1);
 
 // Offline maps
 // - initial discussion https://github.com/tangrams/tangram-es/issues/931
+
 struct OfflineSourceInfo
 {
   std::string name;
@@ -23,6 +26,7 @@ struct OfflineSourceInfo
   std::vector<std::string> urlSubdomains;
   bool urlIsTms;
   int maxZoom;
+  YAML::Node searchData;
 };
 
 // We'll need to resume offline downloads after app or device restart, so use easily serializable data format
@@ -46,10 +50,12 @@ private:
     void tileTaskCallback(std::shared_ptr<TileTask> _task);
 
     int offlineId;
+    int srcMaxZoom;
     std::deque<TileID> m_queued;
     std::vector<TileID> m_pending;
     std::mutex m_mutexQueue;
     std::unique_ptr<MBTilesDataSource> mbtiles;
+    std::vector<SearchData> searchData;
 };
 
 static int maxOfflineDownloads = 4;
@@ -98,8 +104,10 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
   NetworkDataSource::UrlOptions urlOptions = {src.urlSubdomains, src.urlIsTms};
   mbtiles->next = std::make_unique<NetworkDataSource>(_platform, src.url, urlOptions);
   name = src.name + "-" + std::to_string(ofl.id);
+  offlineId = ofl.id;
+  searchData = parseSearchFields(src.searchData);
 
-  int srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
+  srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
   // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
   for(int z = std::min(ofl.zoom, srcMaxZoom); z <= srcMaxZoom; ++z) {
     TileID tile00 = lngLatTile(ofl.lngLat00, z);
@@ -137,11 +145,19 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
     return;
   }
   // put back in queue (at end) on failure
-  if(!task->hasData())
+  if(!task->hasData()) {
     m_queued.push_back(*pendingit);
+    LOGW("%s: download of offline tile %s failed - will retry", name.c_str(), task->tileId().toString().c_str());
+  } else {
+
+    if(task->tileId().z == srcMaxZoom && !searchData.empty()) {
+      indexTileData(task, offlineId, searchData);
+    }
+
+    LOGW("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
+  }
   m_pending.erase(pendingit);
 
-  LOGW("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
   semOfflineWorker.post();
 }
 
@@ -168,9 +184,12 @@ void MapsOffline::showGUI()
       auto& info = src->offlineInfo();
       if(info.cacheFile.empty())
         LOGE("Cannot save offline tiles for source %s - no cache file specified", src->name().c_str());
-      else
-        offlinePending.back().sources.push_back(
-            {src->name(), info.cacheFile, info.url, info.urlSubdomains, info.urlIsTms, src->maxZoom()});
+      else {
+        offlinePending.back().sources.push_back({src->name(), info.cacheFile, info.url,
+            info.urlSubdomains, info.urlIsTms, src->maxZoom()});
+        if(!src->isRaster())
+          YamlPath("global.search_data").get(map->getScene()->config(), offlinePending.back().sources.back().searchData);
+      }
     }
 
     MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;

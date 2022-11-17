@@ -1,7 +1,9 @@
 #pragma once
 
 #include "tangram.h"
-#include "util.h"
+#include <cmath>
+
+using namespace Tangram;
 
 class MapsTracks;
 class MapsBookmarks;
@@ -12,15 +14,17 @@ class MapsSearch;
 class MapsApp
 {
 public:
-  void init(std::unique_ptr<Platform> p, const std::string& _apikey);
-  void drawFrame(int w, int h, int display_w, int display_h, double current_time, bool focused);
+  MapsApp(std::unique_ptr<Platform> p);
+  ~MapsApp();  // impl must be outside header to allow unique_ptr members w/ incomplete types
+
+  void drawFrame();  //int w, int h, int display_w, int display_h, double current_time, bool focused);
   void onMouseButton(double time, double x, double y, int button, int action, int mods);
   void onMouseMove(double time, double x, double y, bool pressed);
   void onMouseWheel(double scrollx, double scrolly, bool rotating, bool shoving);
   void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
 
   void loadSceneFile(bool setPosition = false, std::vector<SceneUpdate> updates = {});
-  bool needsRender() const { map->getPlatform().isContinuousRendering(); }
+  bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
 
@@ -32,11 +36,12 @@ public:
   bool searchActive = false;
 
   std::vector<SceneUpdate> sceneUpdates;
-  std::string sceneFile = "scene.yaml";
+  std::string sceneFile;
   std::string sceneYaml;
   bool load_async = true;
   bool show_gui = true;
   bool recreate_context = false;
+  bool wireframe_mode = false;
 
   float density = 1.0;
   float pixel_scale = 2.0;
@@ -48,15 +53,16 @@ public:
   std::unique_ptr<MapsSearch> mapsSearch;
 
   Map* map;
+
   static Platform* platform;
+  static std::string baseDir;
+  static std::string apiKey;
 
 private:
   void showGUI();
-};
-
-class MapsComponent
-{
-public:
-  MapsComponent(MapsApp* _app) : app(_app) {}
-  MapsApp* app;
+  void showSceneGUI();
+  void showViewportGUI();
+  void showDebugFlagsGUI();
+  void showSceneVarsGUI();
+  void showPickLabelGUI();
 };

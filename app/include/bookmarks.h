@@ -1,10 +1,11 @@
 #pragma once
 
-#include "mapsapp.h"
+#include "mapscomponent.h"
 
 class MapsBookmarks : public MapsComponent
 {
 public:
+  using MapsComponent::MapsComponent;
   void showGUI();
   void hideBookmarks();
 

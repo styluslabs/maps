@@ -1,9 +1,10 @@
 #pragma once
 
-#include "mapsapp.h"
+#include "mapscomponent.h"
 
-class MapTracks : public MapsComponent {
+class MapsTracks : public MapsComponent {
 public:
+  using MapsComponent::MapsComponent;
   void showGUI();
   void onClick(LngLat location);
 

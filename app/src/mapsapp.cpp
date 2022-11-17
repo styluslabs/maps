@@ -1,7 +1,9 @@
 #include "mapsapp.h"
 #include "tangram.h"
 #include "scene/scene.h"
+#include "style/style.h"  // for making uniforms avail as GUI variables
 #include "resources.h"
+#include "util.h"
 #include "imgui.h"
 #include "imgui_stl.h"
 #include "glm/common.hpp"
@@ -13,11 +15,9 @@
 #include "mapsearch.h"
 #include "mapsources.h"
 
-#include "gl.h"  // for glPolygonMode
+#include "imgui_impl_generic.h"  // for GLFW constants
 
-#if 1  //PLATFORM_MOBILE
-#include "imgui_impl_generic.h"
-#endif
+using namespace Tangram;
 
 constexpr double double_tap_time = 0.5; // seconds
 constexpr double scroll_span_multiplier = 0.05; // scaling for zoom and rotation
@@ -35,12 +35,11 @@ static double last_y_velocity = 0.0;
 static double last_x = 0;
 static double last_y = 0;
 
-static bool wireframe_mode = false;
-
-static std::string apiKey;
 static const char* apiKeyScenePath = "+global.sdk_api_key";
 
-using namespace Tangram;
+Platform* MapsApp::platform = NULL;
+std::string MapsApp::baseDir;
+std::string MapsApp::apiKey;
 
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
@@ -56,26 +55,6 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
   lngLatMin.longitude = std::min(std::min(lng00, lng01), std::min(lng10, lng11));
   lngLatMax.latitude  = std::max(std::max(lat00, lat01), std::max(lat10, lat11));
   lngLatMax.longitude = std::max(std::max(lng00, lng01), std::max(lng10, lng11));
-}
-
-void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
-{
-    for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
-      updates.push_back(update);
-    // sceneFile will be used iff sceneYaml is empty
-    SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
-    options.diskTileCacheSize = 256*1024*1024;
-    options.diskCacheDir = "/home/mwhite/maps/cache/";
-#ifdef DEBUG
-    options.debugStyles = true;
-#endif
-    map->loadScene(std::move(options), load_async);
-
-    // markers are invalidated ... technically we should use SceneReadyCallback for this if loading async
-    mapsTracks = std::make_unique<MapsTracks>(this);
-    mapsSearch = std::make_unique<MapsSearch>(this);
-    mapsBookmarks = std::make_unique<MapsBookmarks>(this);
-    pickResultMarker = 0;
 }
 
 void MapsApp::onMouseButton(double time, double x, double y, int button, int action, int mods)
@@ -188,7 +167,7 @@ void MapsApp::onMouseButton(double time, double x, double y, int button, int act
       // query OSM API with id - append .json to get JSON instead of XML
       if(!itemId.empty()) {
         auto url = Url("https://www.openstreetmap.org/api/0.6/node/" + itemId);
-        map->getPlatform().startUrlRequest(url, [url, itemId](UrlResponse&& response) {
+        map->getPlatform().startUrlRequest(url, [this, url, itemId](UrlResponse&& response) {
         if(response.error) {
           logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
           return;
@@ -223,7 +202,6 @@ void MapsApp::onMouseButton(double time, double x, double y, int button, int act
   }
 
   last_time_released = time;
-
 }
 
 void MapsApp::onMouseMove(double time, double x, double y, bool pressed)
@@ -271,85 +249,79 @@ void MapsApp::onMouseWheel(double scrollx, double scrolly, bool rotating, bool s
   }
 }
 
-void MapsApp::init(std::unique_ptr<Platform> p, const std::string& _apikey)
+void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
+{
+    for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
+      updates.push_back(update);
+    // sceneFile will be used iff sceneYaml is empty
+    SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
+    options.diskTileCacheSize = 256*1024*1024;
+    options.diskCacheDir = baseDir + "cache/";
+#ifdef DEBUG
+    options.debugStyles = true;
+#endif
+    map->loadScene(std::move(options), load_async);
+
+    // markers are invalidated ... technically we should use SceneReadyCallback for this if loading async
+    mapsTracks = std::make_unique<MapsTracks>(this);
+    mapsSearch = std::make_unique<MapsSearch>(this);
+    mapsBookmarks = std::make_unique<MapsBookmarks>(this);
+    pickResultMarker = 0;
+}
+
+MapsApp::MapsApp(std::unique_ptr<Platform> p)
 {
   MapsApp::platform = p.get();
-
-  // Setup ImGui binding
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
-  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
-#if PLATFORM_MOBILE
-  ImGui_ImplGeneric_Init();
-#endif
-  ImGui_ImplOpenGL3_Init(glsl_version);
-
-  // Setup style
-  ImGui::StyleColorsDark();
-  ImGui::GetIO().FontGlobalScale = 2.0f;
-
-  // Setup tangram
-  if (!map) {
-    map = new Tangram::Map(std::move(p));
-  }
-  // Setup graphics
-  map->setupGL();
-
-  apiKey = _apikey;
   sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
 
-  mapsSources = std::make_unique<MapsSources>(this);
+  // Setup style
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::StyleColorsDark();
+  io.FontGlobalScale = 2.0f;
+  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
+
+  // Setup tangram
+  map = new Tangram::Map(std::move(p));
+  map->setupGL();
+
+  mapsSources = std::make_unique<MapsSources>(this, baseDir + "mapsources.yaml");
   mapsOffline = std::make_unique<MapsOffline>(this);
 
-  loadSceneFile(false);  //true);
   // default position: Alamo Square, SF - overriden by scene camera position if async load
   map->setPickRadius(1.0f);
   map->setZoom(15);
   map->setPosition(-122.434668, 37.776444);
 }
 
-void MapsApp::drawFrame(int w, int h, int display_w, int display_h, double current_time, bool focused)
+MapsApp::~MapsApp() { delete map; }
+
+void MapsApp::drawFrame()  //int w, int h, int display_w, int display_h, double current_time, bool focused)
 {
+  static double lastFrameTime = 0;
   if(show_gui) {
 #if PLATFORM_MOBILE
     ImGui_ImplGeneric_NewFrame(int w, int h, int display_w, display_h, double current_time)
     ImGui_ImplGeneric_UpdateMousePosAndButtons(last_x, last_y, focused)
     //ImGui_ImplGeneric_UpdateMouseCursor();
 #endif
-    ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
-
-    // Create ImGui interface.
-    // ImGui::ShowDemoWindow();
-    showGUI();
+    showGUI();  // ImGui::ShowDemoWindow();
   }
 
   // Render
-  MapState state = map->update(current_time - lastTime);
-  lastTime = current_time;
+  auto t0 = std::chrono::high_resolution_clock::now();
+  double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
+  MapState state = map->update(currTime - lastFrameTime);
+  lastFrameTime = currTime;
   if (state.isAnimating()) {
     map->getPlatform().requestRender();
   }
 
-  const bool wireframe = wireframe_mode;
-  if(wireframe) {
-    glPolygonMode(GL_FRONT, GL_LINE);
-    glPolygonMode(GL_BACK, GL_LINE);
-  }
   map->render();
-  if(wireframe) {
-    glPolygonMode(GL_FRONT, GL_FILL);
-    glPolygonMode(GL_BACK, GL_FILL);
-  }
 
-  if (show_gui) {
-    // Render ImGui interface.
+  if(show_gui)
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-  }
-
 }
 
 void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
@@ -513,16 +485,16 @@ void MapsApp::showPickLabelGUI()
 
 void MapsApp::showGUI()
 {
-  showSceneGUI(this);
-  showSourceGUI(this);
-  showOfflineTilesGUI(this);
-  showViewportGUI(this);
+  showSceneGUI();
+  mapsSources->showGUI();
+  mapsOffline->showGUI();
+  showViewportGUI();
   mapsTracks->showGUI();
-  showDebugFlagsGUI(this);
-  showSceneVarsGUI(this);
-  showSearchGUI(this);
-  showBookmarkGUI(this);
-  showPickLabelGUI(this);
+  showDebugFlagsGUI();
+  showSceneVarsGUI();
+  mapsSearch->showGUI();
+  mapsBookmarks->showGUI();
+  showPickLabelGUI();
 }
 
 // rasterizing SVG markers

@@ -1,6 +1,6 @@
 #include "tracks.h"
 #include "mapsapp.h"
-#include "tangram.h"
+#include "util.h"
 #include "imgui.h"
 #include "imgui_stl.h"
 
@@ -24,7 +24,7 @@ static bool add_polyline_marker_on_click = false;
 static bool point_markers_position_clipped = false;
 
 // https://www.topografix.com/gpx_manual.asp
-void MapTracks::addGPXPolyline(const char* gpxfile)
+void MapsTracks::addGPXPolyline(const char* gpxfile)
 {
   using namespace rapidxml;  // https://rapidxml.sourceforge.net/manual.html
   file<> xmlFile(gpxfile); // Default template is char
@@ -61,7 +61,7 @@ void MapTracks::addGPXPolyline(const char* gpxfile)
   }
 }
 
-void MapTracks::showGUI()
+void MapsTracks::showGUI()
 {
     static std::string gpxFile;
 
@@ -118,13 +118,13 @@ void MapTracks::showGUI()
 
         ImGui::InputText("GPX File", &gpxFile);
         if (ImGui::Button("Add")) {
-          addGPXPolyline(map, gpxFile.c_str());
+          addGPXPolyline(gpxFile.c_str());
         }
         ImGui::SameLine();
         if (ImGui::Button("Replace")) {
           for (auto marker : trackMarkers)
             map->markerRemove(marker);
-          addGPXPolyline(map, gpxFile.c_str());
+          addGPXPolyline(gpxFile.c_str());
         }
         ImGui::SameLine();
         if (ImGui::Button("Clear All")) {
@@ -173,7 +173,7 @@ void MapTracks::showGUI()
     }
 }
 
-void MapTracks::onClick(LngLat location)
+void MapsTracks::onClick(LngLat location)
 {
   Map* map = app->map;
   if (add_point_marker_on_click) {

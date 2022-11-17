@@ -1,7 +1,8 @@
 #include "mapsearch.h"
 #include "mapsapp.h"
+#include "bookmarks.h"
 #include "resources.h"
-#include "tangram.h"
+#include "util.h"
 #include "imgui.h"
 #include "imgui_stl.h"
 
@@ -9,12 +10,14 @@
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
 #include "data/tileData.h"
+#include "data/formats/mvt.h"
 #include "scene/scene.h"
 #include "sqlite3/sqlite3.h"
 
 
 // building search DB from tiles
 static sqlite3* searchDB = NULL;
+static sqlite3_stmt* insertStmt = NULL;
 
 static LngLat mapCenter;
 static bool sortByDist = false;
@@ -56,12 +59,13 @@ struct SearchData {
   std::vector<std::string> fields;
 };
 
-static std::vector<SearchData> searchData;
+//static std::vector<SearchData> searchData;
 static std::atomic<int> tileCount{};
 
-static void processTileData(TileTask* task, sqlite3_stmt* stmt)
+static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vector<SearchData>& searchData)
 {
-  auto tileData = task->source()->parse(*task);
+  // TODO: also support GeoJSON and TopoJSON for no source case
+  auto tileData = task->source() ? task->source()->parse(*task) : Mvt::parseTile(*task, 0);
   for(const Layer& layer : tileData->layers) {
     for(const SearchData& searchdata : searchData) {
       if(searchdata.layer == layer.name) {
@@ -80,7 +84,7 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt)
           sqlite3_bind_double(stmt, 3, lnglat.longitude);
           sqlite3_bind_double(stmt, 4, lnglat.latitude);
           if (sqlite3_step(stmt) != SQLITE_DONE)
-            logMsg("sqlite3_step failed: %d\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
+            logMsg("sqlite3_step failed: %s\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
           sqlite3_clear_bindings(stmt);  // not necessary?
           sqlite3_reset(stmt);  // necessary to reuse statement
         }
@@ -89,31 +93,60 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt)
   }
 }
 
-static bool initSearch(Map* map)
+void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
-  static const char* dbPath = "/home/mwhite/maps/fts1.sqlite";
-  if(sqlite3_open_v2(dbPath, &searchDB, SQLITE_OPEN_READWRITE, NULL) == SQLITE_OK)
-    return true;
-  sqlite3_close(searchDB);
-  searchDB = NULL;
+  sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
+  sqlite3_bind_int(insertStmt, 5, mapId);
+  processTileData(task, insertStmt, searchData);
+  sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
+}
 
-  // load search config
-  for(int ii = 0; ii < 100; ++ii) {
-    std::string layer = map->readSceneValue(fstring("global.search_data#%d.layer", ii));
-    if(layer.empty()) break;
-    std::string fieldstr = map->readSceneValue(fstring("global.search_data#%d.fields", ii));
-    searchData.push_back({layer, splitStr<std::vector>(fieldstr, ", ", true)});
-  }
-  if(searchData.empty()) {
-    //logMsg("No search fields specified, search will be disabled.\n");
-    return false;
-  }
+std::vector<SearchData> parseSearchFields(const YAML::Node& node)
+{
+  std::vector<SearchData> searchData;
+  for(auto& elem : node)
+    searchData.push_back({elem["layer"].Scalar(), splitStr<std::vector>(elem["fields"].Scalar(), ", ", true)});
+  return searchData;
+}
 
-  // DB doesn't exist - create it
-  if(sqlite3_open_v2(dbPath, &searchDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
-    logMsg("Error creating %s", dbPath);
+static bool initSearch()
+{
+  std::string dbPath = MapsApp::baseDir + "fts1.sqlite";
+  if(sqlite3_open_v2(dbPath.c_str(), &searchDB, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
     sqlite3_close(searchDB);
     searchDB = NULL;
+
+    // DB doesn't exist - create it
+    if(sqlite3_open_v2(dbPath.c_str(), &searchDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+      logMsg("Error creating %s", dbPath.c_str());
+      sqlite3_close(searchDB);
+      searchDB = NULL;
+      return false;
+    }
+
+    DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
+    // search history
+    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE);");
+  }
+  //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF", NULL, NULL, &errorMessage);
+  //sqlite3_exec(searchDB, "PRAGMA count_changes=OFF", NULL, NULL, &errorMessage);
+  //sqlite3_exec(searchDB, "PRAGMA journal_mode=MEMORY", NULL, NULL, &errorMessage);
+  //sqlite3_exec(searchDB, "PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
+
+  char const* stmtStr = "INSERT INTO points_fts (tags,props,lng,lat,map_id) VALUES (?,?,?,?,?);";
+  if(sqlite3_prepare_v2(searchDB, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
+    logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
+    return false;
+  }
+}
+
+bool indexMBTiles()
+{
+  YAML::Node searchDataNode;
+  YamlPath("global.search_data").get(map->getScene()->config(), searchDataNode);
+  auto searchData = parseSearchFields(searchDataNode);
+  if(searchData.empty()) {
+    //logMsg("No search fields specified, search will be disabled.\n");
     return false;
   }
 
@@ -138,26 +171,12 @@ static bool initSearch(Map* map)
   auto& tileSources = map->getScene()->tileSources();
   auto& tileSrc = tileSources.front();
 
-  //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF", NULL, NULL, &errorMessage);
-  //sqlite3_exec(searchDB, "PRAGMA count_changes=OFF", NULL, NULL, &errorMessage);
-  //sqlite3_exec(searchDB, "PRAGMA journal_mode=MEMORY", NULL, NULL, &errorMessage);
-  //sqlite3_exec(searchDB, "PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
-  DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
-  // search history
-  DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE);");
-
   sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
-  sqlite3_stmt* stmt;
-  char const* strStmt = "INSERT INTO points_fts (tags,props,lng,lat) VALUES (?,?,?,?);";
-  if(sqlite3_prepare_v2(searchDB, strStmt, -1, &stmt, NULL) != SQLITE_OK) {
-    logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
-    return false;
-  }
 
   tileCount = (max_row-min_row+1)*(max_col-min_col+1);
-  auto tilecb = TileTaskCb{[stmt](std::shared_ptr<TileTask> task) {
+  auto tilecb = TileTaskCb{[stmt, searchData](std::shared_ptr<TileTask> task) {
     if (task->hasData())
-      processTileData(task.get(), stmt);
+      processTileData(task.get(), stmt, searchData);
     if(--tileCount == 0) {
       sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
       sqlite3_finalize(stmt);  // then ... stmt = NULL;

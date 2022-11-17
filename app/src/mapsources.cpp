@@ -1,12 +1,9 @@
 #include "mapsources.h"
 #include "mapsapp.h"
-#include "tangram.h"
+#include "util.h"
 #include "imgui.h"
 #include "imgui_stl.h"
 
-#include "yaml-cpp/yaml.h"
-
-static const char* sourcesFile =  "../mapsources.yaml";
 
 // Source selection
 
@@ -14,16 +11,16 @@ class SourceBuilder
 {
 public:
   const YAML::Node& sources;
+  std::vector<std::string> imports;
   std::vector<SceneUpdate> updates;
-  YAML::Node vectorSrc;
   int order = 0;
 
   std::vector<std::string> layerkeys;
 
   SourceBuilder(const YAML::Node& s) : sources(s) {}
 
-  void addLayer(const std::string& key);  //, const YAML::Node& src);
-  void apply(MapsApp* app);
+  void addLayer(const std::string& key);
+  std::string getSceneYaml(const std::string& baseUrl);
 };
 
 void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
@@ -57,8 +54,8 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     updates.emplace_back("+layers." + key + ".draw." + style + ".order", std::to_string(order++));
   }
   else {  // vector map
+    imports.push_back(src["url"].Scalar());
     layerkeys.push_back(key);
-    vectorSrc = src;  //src["url"].Scalar();
     ++order;  //order = 9001;  // subsequent rasters should be drawn on top of the vector map
   }
 
@@ -67,31 +64,32 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
   }
 }
 
-void SourceBuilder::apply(MapsApp* app)
+std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 {
   // main.cpp prepends file://<cwd>/ to sceneFile!
   // we'll probably want to skip curl for reading from filesystem in scene/importer.cpp - see tests/src/mockPlatform.cpp
   // or maybe add a Url getParent() method to Url class
-  if(vectorSrc.size() > 0) {
-    app->sceneFile = vectorSrc["url"].Scalar();
-    if(app->sceneFile.find("://") == std::string::npos) {
-      std::size_t sep = std::string(sourcesFile).find_last_of("/\\");
-      if(sep != std::string::npos)
-        app->sceneFile = std::string(sourcesFile, sep+1) + app->sceneFile;
-    }
-  }
-  else if(updates.empty())
-    return;
+  if(imports.empty())
+    return "global:\n\nsources:\n\nstyles:\n\nlayers:\n";
 
-  app->sceneYaml = vectorSrc.size() > 0 ? "" : "global:\n\nsources:\n\nstyles:\n\nlayers:\n";
-  app->loadSceneFile(false, updates);
+  std::string importstr;
+  for(auto& url : imports)
+    importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
+  return "import:\n" + importstr + "\nglobal:\n\nsources:\n\nstyles:\n\nlayers:\n";
 }
 
 // auto it = mapSources.begin();  std::advance(it, currSrcIdx[ii]-1); builder.addLayer(it->first.Scalar(), it->second);
 
+MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile)
+  : MapsComponent(_app), mapSources(YAML::LoadFile(sourcesFile))
+{
+  std::size_t sep = std::string(sourcesFile).find_last_of("/\\");
+  if(sep != std::string::npos)
+    baseUrl = "file://" + std::string(sourcesFile, sep+1);
+}
+
 void MapsSources::showGUI()
 {
-  static YAML::Node mapSources = YAML::LoadFile(sourcesFile);
   static constexpr int MAX_SOURCES = 8;
   static int currIdx = 0;
   static std::vector<int> currSrcIdx(MAX_SOURCES, 0);
@@ -139,7 +137,11 @@ void MapsSources::showGUI()
           builder.addLayer(keys[currSrcIdx[ii]]);
       }
     }
-    builder.apply(app);
+
+    if(!builder.imports.empty() || !builder.updates.empty()) {
+      app->sceneYaml = builder.getSceneYaml(baseUrl);
+      app->loadSceneFile(false, builder.updates);
+    }
 
     if(reload == 1 && builder.layerkeys.size() > 1)
       newSrcTitle = titles[currIdx];
