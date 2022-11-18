@@ -335,13 +335,28 @@ void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
   map->resize(fWidth, fHeight);
 }
 
+void MapsApp::updateLocation(const Location& _loc)
+{
+  loc = _loc;
+  if(!locMarker) {
+    locMarker = map->markerAdd();
+    map->markerSetStylingFromString(locMarker, locMarkerStyleStr);
+  }
+  //map->markerSetVisible(locMarker, true);
+  map->markerSetPoint(locMarker, loc.lngLat());
+
+}
 
 void MapsApp::showSceneGUI()
 {
     // always show map position ... what's the difference between getPosition/getZoom and getCameraPosition()?
     double lng, lat;
     map->getPosition(lng, lat);
-    ImGui::Text("lat,lng,zoom: %.7f, %.7f z%.2f", lat, lng, map->getZoom());
+    ImGui::Text("Map: lat,lng,zoom: %.7f, %.7f z%.2f", lat, lng, map->getZoom());
+    ImGui::Text("GPS: lat,lng,alt: %.7f, %.7f %.1f m", loc.lat, loc.lng, loc.alt);
+    if (ImGui::Button("Recenter")) {
+      map->flyTo(CameraPosition{loc.lng, loc.lat, map->getZoom()}, 1.0);
+    }
 
     if (ImGui::CollapsingHeader("Scene")) {
         if (ImGui::InputText("Scene URL", &sceneFile, ImGuiInputTextFlags_EnterReturnsTrue)) {

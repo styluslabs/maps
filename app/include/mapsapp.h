@@ -11,6 +11,22 @@ class MapsOffline;
 class MapsSources;
 class MapsSearch;
 
+struct Location
+{
+  long time;
+  double lat;
+  double lng;
+  float poserr;
+  double alt;
+  float alterr;
+  float dir;
+  float direrr;
+  float spd;
+  float spderr;
+
+  LngLat lngLat() const { return LngLat(lng, lat); }
+};
+
 class MapsApp
 {
 public:
@@ -22,14 +38,18 @@ public:
   void onMouseMove(double time, double x, double y, bool pressed);
   void onMouseWheel(double scrollx, double scrolly, bool rotating, bool shoving);
   void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
+  void updateLocation(const Location& _loc);
 
   void loadSceneFile(bool setPosition = false, std::vector<SceneUpdate> updates = {});
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
 
+  Location loc;
+
   MarkerID pickResultMarker = 0;
   MarkerID pickedMarkerId = 0;
+  MarkerID locMarker = 0;
   std::string pickResultProps;
   LngLat pickResultCoord = {NAN, NAN};
   std::string pickLabelStr;

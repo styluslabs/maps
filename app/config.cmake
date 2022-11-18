@@ -26,7 +26,6 @@ target_include_directories(maps-app
   core/deps/yaml-cpp/include
   core/deps/SQLiteCpp
   core/deps/isect2d/include
-  core/deps/alfons/src
 )
 
 #core/deps/isect2d/include

@@ -50,18 +50,6 @@ static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value*
   sqlite3_result_double(context, rank/log2(1+dist));
 }
 
-//search_data:
-//    - layer: place
-//      fields: name, class
-
-struct SearchData {
-  std::string layer;
-  std::vector<std::string> fields;
-};
-
-//static std::vector<SearchData> searchData;
-static std::atomic<int> tileCount{};
-
 static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vector<SearchData>& searchData)
 {
   // TODO: also support GeoJSON and TopoJSON for no source case
@@ -93,15 +81,19 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
   }
 }
 
-void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
+void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
   sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
-  sqlite3_bind_int(insertStmt, 5, mapId);
+  //sqlite3_bind_int(insertStmt, 5, mapId);
   processTileData(task, insertStmt, searchData);
   sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
 }
 
-std::vector<SearchData> parseSearchFields(const YAML::Node& node)
+//search_data:
+//    - layer: place
+//      fields: name, class
+
+std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
 {
   std::vector<SearchData> searchData;
   for(auto& elem : node)
@@ -133,15 +125,20 @@ static bool initSearch()
   //sqlite3_exec(searchDB, "PRAGMA journal_mode=MEMORY", NULL, NULL, &errorMessage);
   //sqlite3_exec(searchDB, "PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
 
-  char const* stmtStr = "INSERT INTO points_fts (tags,props,lng,lat,map_id) VALUES (?,?,?,?,?);";
+  char const* stmtStr = "INSERT INTO points_fts (tags,props,lng,lat) VALUES (?,?,?,?);";
   if(sqlite3_prepare_v2(searchDB, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
     logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
     return false;
   }
+
+  if(sqlite3_create_function(searchDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
+    logMsg("sqlite3_create_function: error creating osmSearchRank");
+  return true;
 }
 
-bool indexMBTiles()
+bool MapsSearch::indexMBTiles()
 {
+  Map* map = app->map;
   YAML::Node searchDataNode;
   YamlPath("global.search_data").get(map->getScene()->config(), searchDataNode);
   auto searchData = parseSearchFields(searchDataNode);
@@ -150,45 +147,52 @@ bool indexMBTiles()
     return false;
   }
 
-  // get bounds from mbtiles DB
-  // mbtiles spec: https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md
-  sqlite3* tileDB;
-  if(sqlite3_open_v2("/home/mwhite/maps/sf.mbtiles", &tileDB, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
-    logMsg("Error opening tile DB: %s\n", sqlite3_errmsg(tileDB));
-    return false;
-  }
-  int min_row, max_row, min_col, max_col, max_zoom;
-  const char* boundsSql = "SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column), max(zoom_level) FROM tiles WHERE zoom_level = (SELECT max(zoom_level) FROM tiles);";
-  DB_exec(tileDB, boundsSql, [&](sqlite3_stmt* stmt){
-    min_row = sqlite3_column_int(stmt, 0);
-    max_row = sqlite3_column_int(stmt, 1);
-    min_col = sqlite3_column_int(stmt, 2);
-    max_col = sqlite3_column_int(stmt, 3);
-    max_zoom = sqlite3_column_int(stmt, 4);
-  });
-  sqlite3_close(tileDB);
-
-  auto& tileSources = map->getScene()->tileSources();
-  auto& tileSrc = tileSources.front();
-
-  sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
-
-  tileCount = (max_row-min_row+1)*(max_col-min_col+1);
-  auto tilecb = TileTaskCb{[stmt, searchData](std::shared_ptr<TileTask> task) {
-    if (task->hasData())
-      processTileData(task.get(), stmt, searchData);
-    if(--tileCount == 0) {
-      sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
-      sqlite3_finalize(stmt);  // then ... stmt = NULL;
-      logMsg("Search index built.\n");
+  for(auto& tileSrc : map->getScene()->tileSources()) {
+    if(tileSrc->isRaster()) continue;
+    std::string dbfile = tileSrc->offlineInfo().cacheFile;
+    if(dbfile.empty()) {
+      dbfile = tileSrc->offlineInfo().url;
+      if(dbfile.substr(0, 7) == "file://")
+        dbfile = dbfile.substr(7);
     }
-  }};
 
-  for(int row = min_row; row <= max_row; ++row) {
-    for(int col = min_col; col <= max_col; ++col) {
-      TileID tileid(col, (1 << max_zoom) - 1 - row, max_zoom);
-      tileSrc->loadTileData(std::make_shared<BinaryTileTask>(tileid, tileSrc), tilecb);
+    // get bounds from mbtiles DB
+    // mbtiles spec: https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md
+    sqlite3* tileDB;
+    if(sqlite3_open_v2(dbfile.c_str(), &tileDB, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
+      logMsg("Error opening tile DB: %s\n", sqlite3_errmsg(tileDB));
+      continue;
     }
+    int min_row, max_row, min_col, max_col, max_zoom;
+    const char* boundsSql = "SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column), max(zoom_level) FROM tiles WHERE zoom_level = (SELECT max(zoom_level) FROM tiles);";
+    DB_exec(tileDB, boundsSql, [&](sqlite3_stmt* stmt){
+      min_row = sqlite3_column_int(stmt, 0);
+      max_row = sqlite3_column_int(stmt, 1);
+      min_col = sqlite3_column_int(stmt, 2);
+      max_col = sqlite3_column_int(stmt, 3);
+      max_zoom = sqlite3_column_int(stmt, 4);
+    });
+    sqlite3_close(tileDB);
+
+    tileCount = (max_row-min_row+1)*(max_col-min_col+1);
+    sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
+    auto tilecb = TileTaskCb{[searchData, this](std::shared_ptr<TileTask> task) {
+      if(task->hasData())
+        processTileData(task.get(), insertStmt, searchData);
+      if(--tileCount == 0) {
+        sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
+        //sqlite3_finalize(insertStmt);  // then ... stmt = NULL;
+        logMsg("Search index built.\n");
+      }
+    }};
+
+    for(int row = min_row; row <= max_row; ++row) {
+      for(int col = min_col; col <= max_col; ++col) {
+        TileID tileid(col, (1 << max_zoom) - 1 - row, max_zoom);
+        tileSrc->loadTileData(std::make_shared<BinaryTileTask>(tileid, tileSrc), tilecb);
+      }
+    }
+    //break; ???
   }
 
   return true;
@@ -206,17 +210,12 @@ void MapsSearch::showGUI()
   static int currItem = -1;
   static LngLat dotBounds00, dotBounds11;
 
-  Map* map = app->map;
-  if(!searchDB) {
-    if(!initSearch(map))
-      return;
-    // add search ranking fn
-    if(sqlite3_create_function(searchDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
-      logMsg("sqlite3_create_function: error creating osmSearchRank");
-  }
+  if(!searchDB && !initSearch())
+    return;
   if(!ImGui::CollapsingHeader("Search", ImGuiTreeNodeFlags_DefaultOpen))
     return;
 
+  Map* map = app->map;
   LngLat minLngLat(180, 90);
   LngLat maxLngLat(-180, -90);
   bool ent = ImGui::InputText("Query", &searchStr, ImGuiInputTextFlags_EnterReturnsTrue);

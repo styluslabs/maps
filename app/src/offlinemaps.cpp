@@ -1,5 +1,6 @@
 #include "offlinemaps.h"
 #include "mapsapp.h"
+#include "mapsearch.h"
 #include "util.h"
 #include "imgui.h"
 #include <deque>
@@ -105,7 +106,7 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
   mbtiles->next = std::make_unique<NetworkDataSource>(_platform, src.url, urlOptions);
   name = src.name + "-" + std::to_string(ofl.id);
   offlineId = ofl.id;
-  searchData = parseSearchFields(src.searchData);
+  searchData = MapsSearch::parseSearchFields(src.searchData);
 
   srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
   // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
@@ -117,6 +118,13 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
         m_queued.emplace_back(x, y, z);
     }
   }
+  // queue all z3 tiles so user sees world map when zooming out
+  if(ofl.zoom > 3) {  // && cfg->Bool("offlineWorldMap")
+    for(int x = 0; x < 8; ++x) {
+      for(int y = 0; y < 8; ++y)
+        m_queued.emplace_back(x, y, 3);
+    }
+  }
 }
 
 bool OfflineDownloader::fetchNextTile()
@@ -124,7 +132,7 @@ bool OfflineDownloader::fetchNextTile()
   std::unique_lock<std::mutex> lock(m_mutexQueue);
   if(m_queued.empty()) return false;
   auto task = std::make_shared<BinaryTileTask>(m_queued.front(), nullptr);
-  task->offlineId = offlineId;
+  task->offlineId = searchData.empty() ? offlineId : -offlineId;
   m_pending.push_back(m_queued.front());
   m_queued.pop_front();
   lock.unlock();
@@ -149,11 +157,8 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
     m_queued.push_back(*pendingit);
     LOGW("%s: download of offline tile %s failed - will retry", name.c_str(), task->tileId().toString().c_str());
   } else {
-
-    if(task->tileId().z == srcMaxZoom && !searchData.empty()) {
-      indexTileData(task, offlineId, searchData);
-    }
-
+    if(!searchData.empty() && task->tileId().z == srcMaxZoom)
+      MapsSearch::indexTileData(task.get(), offlineId, searchData);
     LOGW("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
   }
   m_pending.erase(pendingit);

@@ -41,3 +41,15 @@ outline:
   width: 1px
   color: "#9A291D"
 )#";
+
+// current location
+const char* locMarkerStyleStr = R"#(
+style: points
+collide: false
+order: 9000
+size: 24px
+color: "#FFFFFF"
+outline:
+  width: 3px
+  color: "#0000FF"
+)#";
