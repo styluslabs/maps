@@ -267,6 +267,7 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
     mapsSearch = std::make_unique<MapsSearch>(this);
     mapsBookmarks = std::make_unique<MapsBookmarks>(this);
     pickResultMarker = 0;
+    locMarker = 0;
 }
 
 MapsApp::MapsApp(std::unique_ptr<Platform> p)

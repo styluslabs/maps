@@ -81,11 +81,11 @@ class MapsView extends GLSurfaceView {
 
   private static class Renderer implements GLSurfaceView.Renderer {
     public void onDrawFrame(GL10 gl) {
-      MapsLib.step();
+      MapsLib.drawFrame();
     }
 
     public void onSurfaceChanged(GL10 gl, int width, int height) {
-      MapsLib.init(width, height);
+      MapsLib.resize(width, height);
     }
 
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {

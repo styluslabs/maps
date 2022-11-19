@@ -1,27 +1,38 @@
 package com.styluslabs.maps;
 
+import java.io.File;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.WindowManager;
+import android.location.Location
+import android.location.LocationManager
+import android.hardware.SensorManager
+import android.hardware.Sensor
+import android.hardware.GeomagneticField
 
-import java.io.File;
 
-
-public class MapsActivity extends Activity implements LocationListener
+public class MapsActivity extends Activity implements LocationListener, SensorEventListener
 {
   MapsView mGLSurfaceView;
   //private ViewGroup mLayout;
   //private View mTextEdit;
   private LocationManager locationManager;
+  private SensorManager mSensorManager;
+  private Sensor mAccelSensor;
+  private Sensor mMagSensor;
   private HttpHandler httpHandler;
   private final Map<Long, Object> httpRequestHandles = Collections.synchronizedMap(new HashMap<Long, Object>());
+
+  private float mDeclination = 0;
 
   @Override
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
     mGLSurfaceView = new MapsView(getApplication());
+
+    MapsLib.init(this, getContext().getAssets());
 
     //mLayout = new RelativeLayout(this);
     //mLayout.addView(mGLSurfaceView);
@@ -31,10 +42,13 @@ public class MapsActivity extends Activity implements LocationListener
 
     httpHandler = new DefaultHttpHandler();
 
-    locationManager = (LocationManager) mContext.getSystemService(LOCATION_SERVICE);
+    // stackoverflow.com/questions/1513485 ; github.com/streetcomplete/StreetComplete ... FineLocationManager.kt
+    locationManager = (LocationManager) getContext().getSystemService(LOCATION_SERVICE);
 
-    // min GPS dt = 0 (ms), dr = 1 (meters)
-    locationManager.requestLocationUpdates(LocationManager.FUSED_PROVIDER, 0, 1, this);
+    // stackoverflow.com/questions/20339942 ; github.com/streetcomplete/StreetComplete ... Compass.kt
+    mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
+    mAccelSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+    mMagSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
   }
 
   @Override
@@ -42,6 +56,9 @@ public class MapsActivity extends Activity implements LocationListener
   {
     super.onPause();
     mGLSurfaceView.onPause();
+
+    locationManager.removeUpdates(this);
+    mSensorManager.unregisterListener(this);
   }
 
   @Override
@@ -49,6 +66,14 @@ public class MapsActivity extends Activity implements LocationListener
   {
     super.onResume();
     mGLSurfaceView.onResume();
+
+    // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
+    // - see https://developer.android.com/training/location/request-updates
+    // min GPS dt = 0 (ms), dr = 1 (meters)
+    locationManager.requestLocationUpdates(LocationManager.FUSED_PROVIDER, 0, 1, this);  //GPS_PROVIDER || "fused"
+
+    mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
+    mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
   }
 
   @Override
@@ -64,8 +89,34 @@ public class MapsActivity extends Activity implements LocationListener
     float spderr = getSpeedAccuracyMetersPerSecond()  // speed accuracy in m/s
     long time = getTime();  // ms since unix epoch
     float alterr = getVerticalAccuracyMeters();  // altitude accuracy in meters
+    // for correcting orientation
+    mDeclination = GeomagneticField(lat, lng, alt, time).getDeclination()*180/java.lang.Math.PI;
 
     MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
+  }
+
+  private float[] mGravity;
+  private float[] mGeomagnetic;
+
+  @Override
+  public void onSensorChanged(SensorEvent event)
+  {
+    if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+      mGravity = event.values;
+
+    if(event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
+      mGeomagnetic = event.values;
+
+    if(mGravity != null && mGeomagnetic != null) {
+      float R[] = new float[9];
+      float I[] = new float[9];
+      if(SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic)) {
+        // orientation contains azimut, pitch and roll
+        float orient[] = new float[3];
+        SensorManager.getOrientation(R, orient);
+        MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
+      }
+    }
   }
 
   @Keep
