@@ -6,7 +6,7 @@ class MapsTracks : public MapsComponent {
 public:
   using MapsComponent::MapsComponent;
   void showGUI();
-  void onClick(LngLat location);
+  void tapEvent(LngLat location);
 
   std::vector<MarkerID> trackMarkers;
   MarkerID trackHoverMarker = 0;

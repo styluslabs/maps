@@ -20,9 +20,10 @@ static void ImGui_ImplGeneric_SetClipboardText(void* user_data, const char* text
     //glfwSetClipboardString((GLFWwindow*)user_data, text);
 }
 
+// action > 0 for press; <= 0 for release
 void ImGui_ImplGeneric_MouseButtonCallback(int button, int action, int /*mods*/)
 {
-    if (action == GLFW_PRESS && button >= 0 && button < IM_ARRAYSIZE(g_MouseJustPressed))
+    if (action > 0 && button >= 0 && button < IM_ARRAYSIZE(g_MouseJustPressed))
         g_MouseJustPressed[button] = true;
 }
 
@@ -112,31 +113,11 @@ void ImGui_ImplGeneric_Shutdown()
     //}
 }
 
-void ImGui_ImplGeneric_UpdateMousePosAndButtons(double mouse_x, double mouse_y, bool focused)
+void ImGui_ImplGeneric_UpdateMousePos(double mouse_x, double mouse_y)
 {
-    // Update buttons
-    ImGuiIO& io = ImGui::GetIO();
-    for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++)
-    {
-        // If a mouse press event came, always pass it as "mouse held this frame", so we don't miss click-release events that are shorter than 1 frame.
-        io.MouseDown[i] = g_MouseJustPressed[i];  // || glfwGetMouseButton(g_Window, i) != 0;
-        g_MouseJustPressed[i] = false;
-    }
-
-    // Update mouse position
-    const ImVec2 mouse_pos_backup = io.MousePos;
-    io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
-    if (focused)
-    {
-        if (io.WantSetMousePos)
-        {
-            //glfwSetCursorPos(g_Window, (double)mouse_pos_backup.x, (double)mouse_pos_backup.y);
-        }
-        else
-        {
-            io.MousePos = ImVec2((float)mouse_x, (float)mouse_y);
-        }
-    }
+  // Update buttons
+  ImGuiIO& io = ImGui::GetIO();
+  io.MousePos = ImVec2((float)mouse_x, (float)mouse_y);
 }
 
 void ImGui_ImplGeneric_UpdateMouseCursor()
@@ -160,15 +141,26 @@ void ImGui_ImplGeneric_UpdateMouseCursor()
     }*/
 }
 
-void ImGui_ImplGeneric_NewFrame(int w, int h, int display_w, int display_h, double current_time)
+void ImGui_ImplGeneric_Resize(int w, int h, int display_w, int display_h)
+{
+  ImGuiIO& io = ImGui::GetIO();
+  io.DisplaySize = ImVec2((float)w, (float)h);
+  io.DisplayFramebufferScale = ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ? ((float)display_h / h) : 0);
+}
+
+
+void ImGui_ImplGeneric_NewFrame(double current_time)
 {
     ImGuiIO& io = ImGui::GetIO();
     IM_ASSERT(io.Fonts->IsBuilt());     // Font atlas needs to be built, call renderer _NewFrame() function e.g. ImGui_ImplOpenGL3_NewFrame()
 
-    // Setup display size
-
-    io.DisplaySize = ImVec2((float)w, (float)h);
-    io.DisplayFramebufferScale = ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ? ((float)display_h / h) : 0);
+    // Update mouse buttons
+    for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++)
+    {
+        // If a mouse press event came, always pass it as "mouse held this frame", so we don't miss click-release events that are shorter than 1 frame.
+        io.MouseDown[i] = g_MouseJustPressed[i];  // || glfwGetMouseButton(g_Window, i) != 0;
+        g_MouseJustPressed[i] = false;
+    }
 
     // Setup time step
     io.DeltaTime = g_Time > 0.0 ? (float)(current_time - g_Time) : (float)(1.0f/60.0f);

@@ -41,17 +41,20 @@ JNI_FN(init)(JNIEnv* env, jobject obj, jobject mapsActivity, jobject assetManage
   //ImGui::ImeSetInputScreenPosFn = [](int x, int y){ showTextInput(x, y, 20, 20); }
 }
 
-JNI_FN(resize)(JNIEnv* env, jobject obj,  jint width, jint height)
+JNI_FN(resize)(JNIEnv* env, jobject obj, jint width, jint height)
 {
+  ImGui_ImplGeneric_Resize(w, h, w, h);
   app->onResize(w, h, w, h);
 }
 
 JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
 {
-  ImGui_ImplGeneric_NewFrame();
+  auto t0 = std::chrono::high_resolution_clock::now();
+  double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
+  ImGui_ImplGeneric_NewFrame(currTime);
   ImGui_ImplOpenGL3_NewFrame();
 
-  app->drawFrame();
+  app->drawFrame(currTime);
 
   if(app->show_gui)
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -59,15 +62,15 @@ JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
 
 JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)
 {
-  static const int actionToGLFW[]
-      = {GLFW_PRESS, GLFW_RELEASE, 0 /*motion*/, 0 /*cancel*/, 0, GLFW_PRESS, GLFW_RELEASE};
+  static const int translateAction[] = {1, -1, 0 /*motion*/, -1 /*cancel*/, 0, 1, -1};
 
   if(action == 2)
-    app->onMouseMove(t, x, y, true);  //action == GLFW_PRESS);
-  else {
-    ImGui_ImplGeneric_MouseButtonCallback(GLFW_MOUSE_BUTTON_LEFT, actionToGLFW[action], 0 /*mods*/);
-    app->onMouseButton(time, x, y, GLFW_MOUSE_BUTTON_LEFT, actionToGLFW[action], 0); //mods);
-  }
+    ImGui_ImplGeneric_UpdateMousePos(x, y);
+  else
+    ImGui_ImplGeneric_MouseButtonCallback(IMGUI_GENERIC_BUTTON_LEFT, translateAction[action], 0);
+
+  if (!ImGui::GetIO().WantCaptureMouse)
+    app->touchHandler.touchEvent(ptrId, translateAction[action], t, x, y, p);
 }
 
 JNI_FN(textInput)(JNIEnv* env, jobject obj, jstring text, jint cursorPos)
@@ -89,7 +92,7 @@ JNI_FN(onUrlComplete)(JNIEnv* env, jobject obj, jlong handle, jbyteArray data, j
 JNI_FN(updateLocation)(long time, double lat, double lng, float poserr,
     double alt, float alterr, float dir, float direrr, float spd, float spderr)
 {
-  app->updateLocation(Location{time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr});
+  app->updateLocation(Location{time/1000.0, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr});
 }
 
 JNI_FN(updateOrientation)(float azimuth, float pitch, float roll)

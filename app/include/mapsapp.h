@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tangram.h"
+#include "touchhandler.h"
 #include <cmath>
 
 using namespace Tangram;
@@ -13,7 +14,7 @@ class MapsSearch;
 
 struct Location
 {
-  long time;
+  double time;
   double lat;
   double lng;
   float poserr;
@@ -33,12 +34,17 @@ public:
   MapsApp(std::unique_ptr<Platform> p);
   ~MapsApp();  // impl must be outside header to allow unique_ptr members w/ incomplete types
 
-  void drawFrame();  //int w, int h, int display_w, int display_h, double current_time, bool focused);
+  void drawFrame(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
   void onMouseButton(double time, double x, double y, int button, int action, int mods);
   void onMouseMove(double time, double x, double y, bool pressed);
-  void onMouseWheel(double scrollx, double scrolly, bool rotating, bool shoving);
+  void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
   void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void updateLocation(const Location& _loc);
+
+  void tapEvent(float x, float y);
+  void doubleTapEvent(float x, float y);
+  void longPressEvent(float x, float y);
+  void hoverEvent(float x, float y);
 
   void loadSceneFile(bool setPosition = false, std::vector<SceneUpdate> updates = {});
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
@@ -65,6 +71,8 @@ public:
 
   float density = 1.0;
   float pixel_scale = 2.0;
+
+  TouchHandler touchHandler;
 
   std::unique_ptr<MapsTracks> mapsTracks;
   std::unique_ptr<MapsBookmarks> mapsBookmarks;

@@ -173,7 +173,7 @@ void MapsTracks::showGUI()
     }
 }
 
-void MapsTracks::onClick(LngLat location)
+void MapsTracks::tapEvent(LngLat location)
 {
   Map* map = app->map;
   if (add_point_marker_on_click) {

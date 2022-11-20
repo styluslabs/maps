@@ -15,25 +15,7 @@
 #include "mapsearch.h"
 #include "mapsources.h"
 
-#include "imgui_impl_generic.h"  // for GLFW constants
-
 using namespace Tangram;
-
-constexpr double double_tap_time = 0.5; // seconds
-constexpr double scroll_span_multiplier = 0.05; // scaling for zoom and rotation
-constexpr double scroll_distance_multiplier = 5.0; // scaling for shove
-constexpr double single_tap_time = 0.25; //seconds (to avoid a long press being considered as a tap)
-
-static bool was_panning = false;
-static double last_time_released = -double_tap_time; // First click should never trigger a double tap
-static double last_time_pressed = 0.0;
-static double last_time_moved = 0.0;
-static double last_x_down = 0.0;
-static double last_y_down = 0.0;
-static double last_x_velocity = 0.0;
-static double last_y_velocity = 0.0;
-static double last_x = 0;
-static double last_y = 0;
 
 static const char* apiKeyScenePath = "+global.sdk_api_key";
 
@@ -57,189 +39,144 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
   lngLatMax.longitude = std::max(std::max(lng00, lng01), std::max(lng10, lng11));
 }
 
-void MapsApp::onMouseButton(double time, double x, double y, int button, int action, int mods)
+void MapsApp::longPressEvent(float x, float y)
 {
-  last_x = x;
-  last_y = y;
-#if PLATFORM_MOBILE
-  ImGui_ImplGeneric_MouseButtonCallback(button, action, mods);
-#endif
-  if (ImGui::GetIO().WantCaptureMouse) {
-    map->getPlatform().requestRender();  // necessary for proper update of combo boxes, etc
-    return; // Imgui is handling this event.
+  // drop a pin at location
+  map->screenPositionToLngLat(x, y, &pickResultCoord.longitude, &pickResultCoord.latitude);
+  if (pickResultMarker == 0) {
+    pickResultMarker = map->markerAdd();
   }
+  map->markerSetStylingFromPath(pickResultMarker, "layers.pick-result.draw.pick-marker");
+  map->markerSetPoint(pickResultMarker, pickResultCoord);
+  map->markerSetVisible(pickResultMarker, true);
+  mapsSearch->clearSearch();  // ???
+  pickResultProps.clear();
+  pickLabelStr = fstring("lat = %.6f\nlon = %.6f", pickResultCoord.latitude, pickResultCoord.longitude);
+}
 
-  x *= density;
-  y *= density;
+void MapsApp::doubleTapEvent(float x, float y)
+{
+  //map->handleDoubleTapGesture(x, y);
+  LngLat tapped, current;
+  map->screenPositionToLngLat(x, y, &tapped.longitude, &tapped.latitude);
+  map->getPosition(current.longitude, current.latitude);
+  auto pos = map->getCameraPosition();
+  pos.zoom += 1.f;
+  pos.longitude = tapped.longitude;
+  pos.latitude = tapped.latitude;
+  map->setCameraPositionEased(pos, 0.5f, EaseType::quint);
+}
 
-  if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-    // drop a pin at location
-    map->screenPositionToLngLat(x, y, &pickResultCoord.longitude, &pickResultCoord.latitude);
+void MapsApp::tapEvent(float x, float y)
+{
+  // Single tap recognized
+  LngLat location;
+  map->screenPositionToLngLat(x, y, &location.longitude, &location.latitude);
+  double xx, yy;
+  map->lngLatToScreenPosition(location.longitude, location.latitude, &xx, &yy);
+
+  logMsg("------\n");
+  logMsg("LngLat: %f, %f\n", location.longitude, location.latitude);
+  logMsg("Clicked:  %f, %f\n", x, y);
+  logMsg("Remapped: %f, %f\n", xx, yy);
+
+  map->pickLabelAt(x, y, [&](const LabelPickResult* result) {
+    pickLabelStr.clear();
     if (pickResultMarker == 0) {
       pickResultMarker = map->markerAdd();
     }
-    map->markerSetStylingFromPath(pickResultMarker, "layers.pick-result.draw.pick-marker");
-    map->markerSetPoint(pickResultMarker, pickResultCoord);
+    if (!result) {
+      logMsg("Pick Label result is null.\n");
+      map->markerSetVisible(pickResultMarker, false);
+      pickResultCoord = LngLat(NAN, NAN);
+      return;
+    }
+
+    std::string itemId;
+    std::string namestr;
+    logMsg("Pick label result:\n");
+    for (const auto& item : result->touchItem.properties->items()) {
+      if(item.key == "id")
+        itemId = Properties::asString(item.value);
+      else if(item.key == "name")
+        namestr = Properties::asString(item.value);
+      std::string l = "  " + item.key + " = " + Properties::asString(item.value) + "\n";
+      logMsg(l.c_str());
+      pickLabelStr += l;
+    }
+    // save for use when creating bookmark
+    pickResultProps = result->touchItem.properties->toJson();
+    pickResultCoord = result->coordinates;
+
+    map->markerSetStylingFromString(pickResultMarker,
+      fstring(searchMarkerStyleStr, "marker-stroked", 2, namestr.c_str()).c_str());
+    map->markerSetPoint(pickResultMarker, result->coordinates);
     map->markerSetVisible(pickResultMarker, true);
     mapsSearch->clearSearch();  // ???
-    pickResultProps.clear();
-    pickLabelStr = fstring("lat = %.6f\nlon = %.6f", pickResultCoord.latitude, pickResultCoord.longitude);
-    return;
-  }
-  else if (button != GLFW_MOUSE_BUTTON_LEFT) {
-    return; // This event is for a mouse button that we don't care about
-  }
 
-  if (was_panning && action == GLFW_RELEASE) {
-    was_panning = false;
-    auto vx = glm::clamp(last_x_velocity, -2000.0, 2000.0);
-    auto vy = glm::clamp(last_y_velocity, -2000.0, 2000.0);
-    map->handleFlingGesture(x, y, vx, vy);
-    return; // Clicks with movement don't count as taps, so stop here
-  }
-
-  if (action == GLFW_PRESS) {
-    map->handlePanGesture(0.0f, 0.0f, 0.0f, 0.0f);
-    last_x_down = x;
-    last_y_down = y;
-    last_time_pressed = time;
-    return;
-  }
-
-  if ((time - last_time_released) < double_tap_time) {
-    // Double tap recognized
-    const float duration = 0.5f;
-    Tangram::LngLat tapped, current;
-    map->screenPositionToLngLat(x, y, &tapped.longitude, &tapped.latitude);
-    map->getPosition(current.longitude, current.latitude);
-    auto pos = map->getCameraPosition();
-    pos.zoom += 1.f;
-    pos.longitude = tapped.longitude;
-    pos.latitude = tapped.latitude;
-
-    map->setCameraPositionEased(pos, duration, EaseType::quint);
-  } else if ((time - last_time_pressed) < single_tap_time) {
-    // Single tap recognized
-    LngLat location;
-    map->screenPositionToLngLat(x, y, &location.longitude, &location.latitude);
-    double xx, yy;
-    map->lngLatToScreenPosition(location.longitude, location.latitude, &xx, &yy);
-
-    logMsg("------\n");
-    logMsg("LngLat: %f, %f\n", location.longitude, location.latitude);
-    logMsg("Clicked:  %f, %f\n", x, y);
-    logMsg("Remapped: %f, %f\n", xx, yy);
-
-    map->pickLabelAt(x, y, [&](const LabelPickResult* result) {
-      pickLabelStr.clear();
-      if (pickResultMarker == 0) {
-        pickResultMarker = map->markerAdd();
-      }
-      if (!result) {
-        logMsg("Pick Label result is null.\n");
-        map->markerSetVisible(pickResultMarker, false);
-        pickResultCoord = LngLat(NAN, NAN);
+    // query OSM API with id - append .json to get JSON instead of XML
+    if(!itemId.empty()) {
+      auto url = Url("https://www.openstreetmap.org/api/0.6/node/" + itemId);
+      map->getPlatform().startUrlRequest(url, [this, url, itemId](UrlResponse&& response) {
+      if(response.error) {
+        logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
         return;
       }
-
-      std::string itemId;
-      std::string namestr;
-      logMsg("Pick label result:\n");
-      for (const auto& item : result->touchItem.properties->items()) {
-        if(item.key == "id")
-          itemId = Properties::asString(item.value);
-        else if(item.key == "name")
-          namestr = Properties::asString(item.value);
-        std::string l = "  " + item.key + " = " + Properties::asString(item.value) + "\n";
-        logMsg(l.c_str());
-        pickLabelStr += l;
+      response.content.push_back('\0');
+      rapidxml::xml_document<> doc;
+      doc.parse<0>(response.content.data());
+      auto tag = doc.first_node("osm")->first_node("node")->first_node("tag");
+      if(tag) pickLabelStr = "id = " + itemId + "\n";
+      while(tag) {
+        auto key = tag->first_attribute("k");
+        auto val = tag->first_attribute("v");
+        pickLabelStr += key->value() + std::string(" = ") + val->value() + std::string("\n");
+        tag = tag->next_sibling("tag");
       }
-      // save for use when creating bookmark
-      pickResultProps = result->touchItem.properties->toJson();
-      pickResultCoord = result->coordinates;
+      });
+    }
+  });
 
-      map->markerSetStylingFromString(pickResultMarker,
-        fstring(searchMarkerStyleStr, "marker-stroked", 2, namestr.c_str()).c_str());
-      map->markerSetPoint(pickResultMarker, result->coordinates);
-      map->markerSetVisible(pickResultMarker, true);
-      mapsSearch->clearSearch();  // ???
+  map->pickMarkerAt(x, y, [&](const MarkerPickResult* result) {
+    if(!result || result->id == pickResultMarker)
+    return;
+    // hide pick result marker, since there is already a marker!
+    map->markerSetVisible(pickResultMarker, false);
+    // looking for search marker or bookmark marker?
+    pickedMarkerId = result->id;
+  });
 
-      // query OSM API with id - append .json to get JSON instead of XML
-      if(!itemId.empty()) {
-        auto url = Url("https://www.openstreetmap.org/api/0.6/node/" + itemId);
-        map->getPlatform().startUrlRequest(url, [this, url, itemId](UrlResponse&& response) {
-        if(response.error) {
-          logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
-          return;
-        }
-        response.content.push_back('\0');
-        rapidxml::xml_document<> doc;
-        doc.parse<0>(response.content.data());
-        auto tag = doc.first_node("osm")->first_node("node")->first_node("tag");
-        if(tag) pickLabelStr = "id = " + itemId + "\n";
-        while(tag) {
-          auto key = tag->first_attribute("k");
-          auto val = tag->first_attribute("v");
-          pickLabelStr += key->value() + std::string(" = ") + val->value() + std::string("\n");
-          tag = tag->next_sibling("tag");
-        }
-        });
-      }
-    });
+  mapsTracks->tapEvent(location);
 
-    map->pickMarkerAt(x, y, [&](const MarkerPickResult* result) {
-      if(!result || result->id == pickResultMarker)
-      return;
-      // hide pick result marker, since there is already a marker!
-      map->markerSetVisible(pickResultMarker, false);
-      // looking for search marker or bookmark marker?
-      pickedMarkerId = result->id;
-    });
+  map->getPlatform().requestRender();
+}
 
-    mapsTracks->onClick(location);
+void MapsApp::hoverEvent(float x, float y)
+{
+  // ???
+}
 
-    map->getPlatform().requestRender();
-  }
-
-  last_time_released = time;
+void MapsApp::onMouseButton(double time, double x, double y, int button, int action, int mods)
+{
+  if(button == 0)
+    touchHandler.touchEvent(0, action > 0 ? 1 : -1, time, x*density, y*density, 1.0f);
+  else if(action > 0)
+    longPressEvent(x, y);
 }
 
 void MapsApp::onMouseMove(double time, double x, double y, bool pressed)
 {
-  last_x = x;
-  last_y = y;
+  if(pressed)
+    touchHandler.touchEvent(0, 0, time, x*density, y*density, 1.0f);
+}
 
-  if (ImGui::GetIO().WantCaptureMouse) {
-    return; // Imgui is handling this event.
-  }
+void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving)
+{
+  constexpr double scroll_span_multiplier = 0.05; // scaling for zoom and rotation
+  constexpr double scroll_distance_multiplier = 5.0; // scaling for shove
 
   x *= density;
   y *= density;
-  if (pressed) {
-    if (was_panning) {
-      map->handlePanGesture(last_x_down, last_y_down, x, y);
-    }
-    was_panning = true;
-    last_x_velocity = (x - last_x_down) / (time - last_time_moved);
-    last_y_velocity = (y - last_y_down) / (time - last_time_moved);
-    last_x_down = x;
-    last_y_down = y;
-  }
-  last_time_moved = time;
-}
-
-
-void MapsApp::onMouseWheel(double scrollx, double scrolly, bool rotating, bool shoving)
-{
-#if PLATFORM_MOBILE
-  ImGui_ImplGeneric_ScrollCallback(scrollx, scrolly);
-#endif
-  if (ImGui::GetIO().WantCaptureMouse) {
-    return; // Imgui is handling this event.
-  }
-
-  double x = last_x * density;
-  double y = last_y * density;
   if (shoving) {
     map->handleShoveGesture(scroll_distance_multiplier * scrolly);
   } else if (rotating) {
@@ -251,26 +188,26 @@ void MapsApp::onMouseWheel(double scrollx, double scrolly, bool rotating, bool s
 
 void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
 {
-    for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
-      updates.push_back(update);
-    // sceneFile will be used iff sceneYaml is empty
-    SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
-    options.diskTileCacheSize = 256*1024*1024;
-    options.diskCacheDir = baseDir + "cache/";
+  for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
+    updates.push_back(update);
+  // sceneFile will be used iff sceneYaml is empty
+  SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
+  options.diskTileCacheSize = 256*1024*1024;
+  options.diskCacheDir = baseDir + "cache/";
 #ifdef DEBUG
-    options.debugStyles = true;
+  options.debugStyles = true;
 #endif
-    map->loadScene(std::move(options), load_async);
+  map->loadScene(std::move(options), load_async);
 
-    // markers are invalidated ... technically we should use SceneReadyCallback for this if loading async
-    mapsTracks = std::make_unique<MapsTracks>(this);
-    mapsSearch = std::make_unique<MapsSearch>(this);
-    mapsBookmarks = std::make_unique<MapsBookmarks>(this);
-    pickResultMarker = 0;
-    locMarker = 0;
+  // markers are invalidated ... technically we should use SceneReadyCallback for this if loading async
+  mapsTracks = std::make_unique<MapsTracks>(this);
+  mapsSearch = std::make_unique<MapsSearch>(this);
+  mapsBookmarks = std::make_unique<MapsBookmarks>(this);
+  pickResultMarker = 0;
+  locMarker = 0;
 }
 
-MapsApp::MapsApp(std::unique_ptr<Platform> p)
+MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(this)
 {
   MapsApp::platform = p.get();
   sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
@@ -297,24 +234,17 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p)
 
 MapsApp::~MapsApp() { delete map; }
 
-void MapsApp::drawFrame()  //int w, int h, int display_w, int display_h, double current_time, bool focused)
+void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display_h, double current_time, bool focused)
 {
   static double lastFrameTime = 0;
   if(show_gui) {
-#if PLATFORM_MOBILE
-    ImGui_ImplGeneric_NewFrame(int w, int h, int display_w, display_h, double current_time)
-    ImGui_ImplGeneric_UpdateMousePosAndButtons(last_x, last_y, focused)
-    //ImGui_ImplGeneric_UpdateMouseCursor();
-#endif
     ImGui::NewFrame();
     showGUI();  // ImGui::ShowDemoWindow();
   }
 
   // Render
-  auto t0 = std::chrono::high_resolution_clock::now();
-  double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
-  MapState state = map->update(currTime - lastFrameTime);
-  lastFrameTime = currTime;
+  MapState state = map->update(time - lastFrameTime);
+  lastFrameTime = time;
   if (state.isAnimating()) {
     map->getPlatform().requestRender();
   }

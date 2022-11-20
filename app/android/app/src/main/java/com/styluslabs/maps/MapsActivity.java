@@ -10,6 +10,8 @@ import android.location.LocationManager
 import android.hardware.SensorManager
 import android.hardware.Sensor
 import android.hardware.GeomagneticField
+import com.mapzen.tangram.FontConfig
+import com.mapzen.tangram.networking.DefaultHttpHandler
 
 
 public class MapsActivity extends Activity implements LocationListener, SensorEventListener

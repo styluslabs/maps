@@ -6,22 +6,14 @@ void ImGui_ImplGeneric_KeyCallback(int key, int, int action, int mods);
 void ImGui_ImplGeneric_CharCallback(unsigned int c);
 bool ImGui_ImplGeneric_Init();
 void ImGui_ImplGeneric_Shutdown();
-void ImGui_ImplGeneric_UpdateMousePosAndButtons(double mouse_x, double mouse_y, bool focused);
-void ImGui_ImplGeneric_NewFrame(int w, int h, int display_w, int display_h, double current_time);
+void ImGui_ImplGeneric_UpdateMousePos(double mouse_x, double mouse_y);
+void ImGui_ImplGeneric_Resize(int w, int h, int display_w, int display_h);
+void ImGui_ImplGeneric_NewFrame(double current_time);
 
 
-#define GLFW_MOUSE_BUTTON_1         0
-#define GLFW_MOUSE_BUTTON_2         1
-#define GLFW_MOUSE_BUTTON_3         2
-#define GLFW_MOUSE_BUTTON_4         3
-#define GLFW_MOUSE_BUTTON_5         4
-#define GLFW_MOUSE_BUTTON_6         5
-#define GLFW_MOUSE_BUTTON_7         6
-#define GLFW_MOUSE_BUTTON_8         7
-#define GLFW_MOUSE_BUTTON_LAST      GLFW_MOUSE_BUTTON_8
-#define GLFW_MOUSE_BUTTON_LEFT      GLFW_MOUSE_BUTTON_1
-#define GLFW_MOUSE_BUTTON_RIGHT     GLFW_MOUSE_BUTTON_2
-#define GLFW_MOUSE_BUTTON_MIDDLE    GLFW_MOUSE_BUTTON_3
+#define IMGUI_GENERIC_BUTTON_LEFT      0
+#define IMGUI_GENERIC_BUTTON_RIGHT     1
+#define IMGUI_GENERIC_BUTTON_MIDDLE    2
 
 #define GLFW_KEY_SPACE              32
 #define GLFW_KEY_APOSTROPHE         39  /* ' */
