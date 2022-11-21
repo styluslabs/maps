@@ -10,5 +10,9 @@ public:
   void hideBookmarks();
 
   std::vector<MarkerID> bkmkMarkers;
+
+private:
+  void showPlacesGUI();
+  void showViewsGUI();
 };
 

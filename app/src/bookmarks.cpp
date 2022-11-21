@@ -10,6 +10,8 @@
 
 // bookmarks (saved places)
 
+static sqlite3* bkmkDB = NULL;
+
 void MapsBookmarks::hideBookmarks()
 {
   for(MarkerID mrkid : bkmkMarkers)
@@ -18,23 +20,6 @@ void MapsBookmarks::hideBookmarks()
 
 void MapsBookmarks::showGUI()
 {
-  static sqlite3* bkmkDB = NULL;
-  static std::vector<int> placeRowIds;
-  static std::vector<std::string> placeNames;
-  static std::string placeNotes;
-  static std::string currList;
-  static std::string newListTitle;
-  static int currListIdx = 0;
-  static int currPlaceIdx = 0;
-  static bool updatePlaces = true;
-
-  Map* map = app->map;
-  // using markerSetBitmap will make a copy of bitmap for every marker ... let's see what happens w/ textures
-  //  from scene file (I doubt those get duplicated for every use)
-  //int markerSize = 24;
-  //std::string bkmkMarker = fstring(markerSVG, "#00FFFF", "#000", "0.5");
-  //unsigned int* markerImg = rasterizeSVG(bkmkMarker.data(), markerSize, markerSize);
-
   if(!bkmkDB) {
     std::string dbPath = MapsApp::baseDir + "places.sqlite";
     if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
@@ -45,11 +30,34 @@ void MapsBookmarks::showGUI()
     }
     //DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS history(query TEXT UNIQUE);");
     DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id INTEGER, list TEXT, props TEXT, notes TEXT, lng REAL, lat REAL);");
+    DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL));");
   }
+
+  showPlacesGUI();
+  showViewsGUI();
+}
+
+void MapsBookmarks::showPlacesGUI()
+{
+  static std::vector<int> placeRowIds;
+  static std::vector<std::string> placeNames;
+  static std::string placeNotes;
+  static std::string currList;
+  static std::string newListTitle;
+  static int currListIdx = 0;
+  static int currPlaceIdx = 0;
+  static bool updatePlaces = true;
+
+  // using markerSetBitmap will make a copy of bitmap for every marker ... let's see what happens w/ textures
+  //  from scene file (I doubt those get duplicated for every use)
+  //int markerSize = 24;
+  //std::string bkmkMarker = fstring(markerSVG, "#00FFFF", "#000", "0.5");
+  //unsigned int* markerImg = rasterizeSVG(bkmkMarker.data(), markerSize, markerSize);
 
   if (!ImGui::CollapsingHeader("Saved Places", ImGuiTreeNodeFlags_DefaultOpen))
     return;
 
+  Map* map = app->map;
   std::vector<std::string> lists;
   DB_exec(bkmkDB, "SELECT DISTINCT list FROM bookmarks;", [&](sqlite3_stmt* stmt){
     lists.emplace_back((const char*)(sqlite3_column_text(stmt, 0)));
@@ -165,5 +173,62 @@ void MapsBookmarks::showGUI()
       logMsg("sqlite3_step failed: %d\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
     sqlite3_finalize(stmt);
     updatePlaces = true;
+  }
+}
+
+void MapsBookmarks::showViewsGUI()
+{
+  static int currViewIdx = 0;
+  static std::string viewTitle;
+
+  if (!ImGui::CollapsingHeader("Saved Views"))  //, ImGuiTreeNodeFlags_DefaultOpen))
+    return;
+
+  Map* map = app->map;
+  // automatically suggest title based on city/state/country in view?
+  bool ent = ImGui::InputText("Title", &viewTitle, ImGuiInputTextFlags_EnterReturnsTrue);
+  if ((ImGui::Button("Save View") || ent) && !viewTitle.empty()) {
+    const char* query = "UPDATE INTO saved_views (title,lng,lat,zoom,rotation,tilt,width,height) VALUES (?,?,?,?,?,?,?,?);";
+
+    LngLat lngLatMin, lngLatMax;
+    app->getMapBounds(lngLatMin, lngLatMax);
+    auto view = map->getCameraPosition();
+
+    DB_exec(bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, viewTitle.c_str(), -1, SQLITE_STATIC);
+      sqlite3_bind_double(stmt, 2, view.longitude);
+      sqlite3_bind_double(stmt, 3, view.latitude);
+      sqlite3_bind_double(stmt, 4, view.zoom);
+      sqlite3_bind_double(stmt, 5, view.rotation);
+      sqlite3_bind_double(stmt, 6, view.tilt);
+      sqlite3_bind_double(stmt, 7, lngLatMax.longitude - lngLatMin.longitude);
+      sqlite3_bind_double(stmt, 8, lngLatMax.latitude - lngLatMin.latitude);
+    });
+  }
+
+  std::vector<std::string> views;
+  DB_exec(bkmkDB, "SELECT title FROM saved_views;", [&](sqlite3_stmt* stmt){
+    views.emplace_back((const char*)(sqlite3_column_text(stmt, 0)));
+  });
+
+  std::vector<const char*> cviews;
+  for(const auto& s : views)
+    cviews.push_back(s.c_str());
+
+  if(ImGui::ListBox("Views", &currViewIdx, cviews.data(), cviews.size())) {
+    const char* query = "SELECT lng,lat,zoom,rotation,tilt FROM saved_views WHERE title = ?;";
+
+    CameraPosition view;
+    DB_exec(bkmkDB, query, [&](sqlite3_stmt* stmt){
+      view.longitude = sqlite3_column_double(stmt, 0);
+      view.latitude = sqlite3_column_double(stmt, 1);
+      view.zoom = sqlite3_column_double(stmt, 2);
+      view.rotation = sqlite3_column_double(stmt, 3);
+      view.tilt = sqlite3_column_double(stmt, 4);
+    }, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, views[currViewIdx].c_str(), -1, SQLITE_STATIC);
+    });
+
+    map->setCameraPositionEased(view, 1.0);
   }
 }
