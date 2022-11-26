@@ -42,6 +42,6 @@ public:
   static constexpr double maxTapTime = 0.25;  // seconds
   static constexpr double minDblTapTime = 0.04;  // min time between end of first tap and start of second
   static constexpr double maxDblTapTime = 0.25;  // max time between end of first tap and start of second
-  static constexpr double minFlingTime = 0.25;
+  static constexpr double minFlingTime = 0.1;
   static constexpr double minLongPressTime = 0.7;  // 0.5s is typical on Android
 };

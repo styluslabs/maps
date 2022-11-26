@@ -30,7 +30,7 @@ void MapsBookmarks::showGUI()
     }
     //DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS history(query TEXT UNIQUE);");
     DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id INTEGER, list TEXT, props TEXT, notes TEXT, lng REAL, lat REAL);");
-    DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL));");
+    DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL);");
   }
 
   showPlacesGUI();
@@ -188,7 +188,7 @@ void MapsBookmarks::showViewsGUI()
   // automatically suggest title based on city/state/country in view?
   bool ent = ImGui::InputText("Title", &viewTitle, ImGuiInputTextFlags_EnterReturnsTrue);
   if ((ImGui::Button("Save View") || ent) && !viewTitle.empty()) {
-    const char* query = "UPDATE INTO saved_views (title,lng,lat,zoom,rotation,tilt,width,height) VALUES (?,?,?,?,?,?,?,?);";
+    const char* query = "REPLACE INTO saved_views (title,lng,lat,zoom,rotation,tilt,width,height) VALUES (?,?,?,?,?,?,?,?);";
 
     LngLat lngLatMin, lngLatMax;
     app->getMapBounds(lngLatMin, lngLatMax);

@@ -47,7 +47,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
           prevTapTime = t;
         }
       }
-      else if(dt > minFlingTime && dr > minFlingDist) {
+      else if(dt > minFlingTime && dr > minFlingDist && (t - prevTime)*flingInvTau < 1) {
         flingV = glm::clamp(flingV, -2000.0f, 2000.0f);
         map->handleFlingGesture(prevCOM.x, prevCOM.y, flingV.x, flingV.y);
       }
@@ -100,8 +100,8 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
 
     map->handlePanGesture(prevCOM.x, prevCOM.y, pt.x, pt.y);
     // single pole IIR low pass filter for fling velocity
-    float a = 1 - std::exp(-(t - prevTime)*flingInvTau);
-    flingV += a*(pt - prevCOM)/float(t - prevTime);
+    float a = std::exp(-(t - prevTime)*flingInvTau);
+    flingV = a*flingV + (1-a)*(pt - prevCOM)/float(t - prevTime);
     prevCOM = pt;
     prevTime = t;
   }

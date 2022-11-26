@@ -51,8 +51,8 @@ JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
 {
   auto t0 = std::chrono::high_resolution_clock::now();
   double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
-  ImGui_ImplGeneric_NewFrame(currTime);
   ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplGeneric_NewFrame(currTime);
 
   app->drawFrame(currTime);
 
@@ -70,7 +70,7 @@ JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jf
     ImGui_ImplGeneric_MouseButtonCallback(IMGUI_GENERIC_BUTTON_LEFT, translateAction[action], 0);
 
   if (!ImGui::GetIO().WantCaptureMouse)
-    app->touchHandler.touchEvent(ptrId, translateAction[action], t, x, y, p);
+    app->touchHandler->touchEvent(ptrId, translateAction[action], t, x, y, p);
 }
 
 JNI_FN(textInput)(JNIEnv* env, jobject obj, jstring text, jint cursorPos)

@@ -1,11 +1,11 @@
 #pragma once
 
 #include "tangram.h"
-#include "touchhandler.h"
 #include <cmath>
 
 using namespace Tangram;
 
+class TouchHandler;
 class MapsTracks;
 class MapsBookmarks;
 class MapsOffline;
@@ -72,8 +72,7 @@ public:
   float density = 1.0;
   float pixel_scale = 2.0;
 
-  TouchHandler touchHandler;
-
+  std::unique_ptr<TouchHandler> touchHandler;
   std::unique_ptr<MapsTracks> mapsTracks;
   std::unique_ptr<MapsBookmarks> mapsBookmarks;
   std::unique_ptr<MapsOffline> mapsOffline;

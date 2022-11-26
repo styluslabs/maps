@@ -9,6 +9,7 @@
 #include "glm/common.hpp"
 #include "rapidxml/rapidxml.hpp"
 
+#include "touchhandler.h"
 #include "bookmarks.h"
 #include "offlinemaps.h"
 #include "tracks.h"
@@ -159,7 +160,7 @@ void MapsApp::hoverEvent(float x, float y)
 void MapsApp::onMouseButton(double time, double x, double y, int button, int action, int mods)
 {
   if(button == 0)
-    touchHandler.touchEvent(0, action > 0 ? 1 : -1, time, x*density, y*density, 1.0f);
+    touchHandler->touchEvent(0, action > 0 ? 1 : -1, time, x*density, y*density, 1.0f);
   else if(action > 0)
     longPressEvent(x, y);
 }
@@ -167,7 +168,7 @@ void MapsApp::onMouseButton(double time, double x, double y, int button, int act
 void MapsApp::onMouseMove(double time, double x, double y, bool pressed)
 {
   if(pressed)
-    touchHandler.touchEvent(0, 0, time, x*density, y*density, 1.0f);
+    touchHandler->touchEvent(0, 0, time, x*density, y*density, 1.0f);
 }
 
 void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving)
@@ -207,7 +208,7 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
   locMarker = 0;
 }
 
-MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(this)
+MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(this))
 {
   MapsApp::platform = p.get();
   sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
@@ -223,7 +224,7 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(this)
   map = new Tangram::Map(std::move(p));
   map->setupGL();
 
-  mapsSources = std::make_unique<MapsSources>(this, baseDir + "mapsources.yaml");
+  mapsSources = std::make_unique<MapsSources>(this, baseDir + "tangram-es/scenes/mapsources.yaml");
   mapsOffline = std::make_unique<MapsOffline>(this);
 
   // default position: Alamo Square, SF - overriden by scene camera position if async load

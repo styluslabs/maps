@@ -7,6 +7,7 @@ add_library(maps-app
   app/src/mapsources.cpp
   app/src/offlinemaps.cpp
   app/src/resources.cpp
+  app/src/touchhandler.cpp
   app/src/tracks.cpp
   app/src/util.cpp
 )

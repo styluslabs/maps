@@ -34,29 +34,35 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
   }
   else if(src["type"].Scalar() == "Raster") {
     layerkeys.push_back(key);
+    std::string rasterN = fstring("raster-%d", order);
     for (const auto& attr : src) {
       if(attr.first.Scalar() != "title")
-        updates.emplace_back("+sources." + key + "." + attr.first.Scalar(), yamlToStr(attr.second));
+        updates.emplace_back("+sources." + rasterN + "." + attr.first.Scalar(), yamlToStr(attr.second));
     }
     // if cache file is not explicitly specified, use key since it is guaranteed to be unique
     if(!src["cache"] || src["cache"].Scalar() != "false")
-      updates.emplace_back("+sources." + key + ".cache", key);
+      updates.emplace_back("+sources." + rasterN + ".cache", key);
     // separate style is required for each overlay layer; overlay layers are always drawn over opaque layers
     //  text and points are drawn as overlays w/ blend_order -1, so use blend_order < -1 to place rasters
     //  under vector map text
-    std::string style = "raster";
-    if(order > 0) {
-      style = fstring("overlay-raster-%d", order);
-      updates.emplace_back("+styles." + style, fstring("{base: raster, blend: overlay, blend_order: %d}", order-10));
-    }
-    updates.emplace_back("+layers." + key + ".data.source", key);
+    if(order > 0)
+      updates.emplace_back("+styles." + rasterN, fstring("{base: raster, blend: overlay, blend_order: %d}", order-10));
+    updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
-    updates.emplace_back("+layers." + key + ".draw." + style + ".order", std::to_string(order++));
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order > 0 ? rasterN : "raster");
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string(order++));
   }
-  else {  // vector map
+  else if(src["type"].Scalar() == "Vector") {  // vector map
     imports.push_back(src["url"].Scalar());
     layerkeys.push_back(key);
     ++order;  //order = 9001;  // subsequent rasters should be drawn on top of the vector map
+  }
+  else if(src["type"].Scalar() == "Update") {
+    layerkeys.push_back(key);
+  }
+  else {
+    LOGE("Invalid map source type %s for %s", src["type"].Scalar(), key);
+    return;
   }
 
   for(const auto& update : src["updates"]) {
@@ -75,7 +81,7 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   std::string importstr;
   for(auto& url : imports)
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
-  return "import:\n" + importstr + "\nglobal:\n\nsources:\n\nstyles:\n\nlayers:\n";
+  return "import:\n" + importstr;  //+ "\nglobal:\n\nsources:\n\nstyles:\n\nlayers:\n";
 }
 
 // auto it = mapSources.begin();  std::advance(it, currSrcIdx[ii]-1); builder.addLayer(it->first.Scalar(), it->second);
@@ -85,7 +91,7 @@ MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile)
 {
   std::size_t sep = std::string(sourcesFile).find_last_of("/\\");
   if(sep != std::string::npos)
-    baseUrl = "file://" + std::string(sourcesFile, sep+1);
+    baseUrl = "file://" + sourcesFile.substr(0, sep+1);
 }
 
 void MapsSources::showGUI()
@@ -127,6 +133,19 @@ void MapsSources::showGUI()
       reload = 2;  // layer changed - reload scene
   }
 
+  if (nSources > 1) {
+    ImGui::SameLine();
+    if (ImGui::Button("Remove")) {
+      --nSources;
+      if(currSrcIdx[nSources] > 0)
+        reload = 2;
+    }
+  }
+  if (nSources < MAX_SOURCES && ImGui::Button("Add Layer")) {
+    currSrcIdx[nSources] = 0;
+    ++nSources;
+  }
+
   if(reload) {
     SourceBuilder builder(mapSources);
     if(reload == 1)
@@ -140,6 +159,7 @@ void MapsSources::showGUI()
 
     if(!builder.imports.empty() || !builder.updates.empty()) {
       app->sceneYaml = builder.getSceneYaml(baseUrl);
+      app->sceneFile = baseUrl + "__GUI_SOURCES__";
       app->loadSceneFile(false, builder.updates);
     }
 
@@ -158,14 +178,6 @@ void MapsSources::showGUI()
     for(int ii = builder.layerkeys.size(); ii < nSources; ++ii)
       currSrcIdx[ii] = 0;
   }
-
-  if (nSources > 1) {
-    ImGui::SameLine();
-    if (ImGui::Button("Remove"))
-      --nSources;
-  }
-  if (nSources < MAX_SOURCES && ImGui::Button("Add Layer"))
-    ++nSources;
 
   if(nSources > 1) {
     ImGui::InputText("Name", &newSrcTitle, ImGuiInputTextFlags_EnterReturnsTrue);
