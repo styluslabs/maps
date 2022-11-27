@@ -61,7 +61,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     layerkeys.push_back(key);
   }
   else {
-    LOGE("Invalid map source type %s for %s", src["type"].Scalar(), key);
+    LOGE("Invalid map source type %s for %s", src["type"].Scalar().c_str(), key.c_str());
     return;
   }
 
@@ -86,12 +86,27 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 
 // auto it = mapSources.begin();  std::advance(it, currSrcIdx[ii]-1); builder.addLayer(it->first.Scalar(), it->second);
 
-MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile)
-  : MapsComponent(_app), mapSources(YAML::LoadFile(sourcesFile))
+MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile) : MapsComponent(_app)
 {
-  std::size_t sep = std::string(sourcesFile).find_last_of("/\\");
+  // have to use Url request to access assets on Android
+  auto cb = [&, sourcesFile](UrlResponse&& response) {
+    if(response.error)
+      LOGE("Unable to load '%s': %s", sourcesFile.c_str(), response.error);
+    else {
+      try {
+        mapSources = YAML::Load(response.content.data(), response.content.size());
+        sourcesLoaded = true;
+      } catch (std::exception& e) {
+        LOGE("Error parsing '%s': %s", sourcesFile.c_str(), e.what());
+      }
+    }
+  };
+
+  app->platform->startUrlRequest(Url(sourcesFile), cb);
+
+  std::size_t sep = sourcesFile.find_last_of("/\\");
   if(sep != std::string::npos)
-    baseUrl = "file://" + sourcesFile.substr(0, sep+1);
+    baseUrl = sourcesFile.substr(0, sep+1);  //"file://" +
 }
 
 void MapsSources::showGUI()
@@ -104,6 +119,10 @@ void MapsSources::showGUI()
 
   if (!ImGui::CollapsingHeader("Sources", ImGuiTreeNodeFlags_DefaultOpen))
     return;
+  if(!sourcesLoaded) {
+    ImGui::TextWrapped("Loading mapsources.yaml...");
+    return;
+  }
 
   try {
 

@@ -222,9 +222,12 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
 
   // Setup tangram
   map = new Tangram::Map(std::move(p));
-  map->setupGL();
 
-  mapsSources = std::make_unique<MapsSources>(this, baseDir + "tangram-es/scenes/mapsources.yaml");
+#ifdef TANGRAM_ANDROID
+  mapsSources = std::make_unique<MapsSources>(this, "asset:///mapsources.yaml");
+#else
+  mapsSources = std::make_unique<MapsSources>(this, "file://" + baseDir + "tangram-es/scenes/mapsources.yaml");
+#endif
   mapsOffline = std::make_unique<MapsOffline>(this);
 
   // default position: Alamo Square, SF - overriden by scene camera position if async load
@@ -237,13 +240,15 @@ MapsApp::~MapsApp() { delete map; }
 
 void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display_h, double current_time, bool focused)
 {
+  //static bool glReady = false; if(!glReady) { map->setupGL(); glReady = true; }
   static double lastFrameTime = 0;
+
   if(show_gui) {
     ImGui::NewFrame();
     showGUI();  // ImGui::ShowDemoWindow();
   }
 
-  // Render
+  //LOGW("Rendering frame at %f", time);
   MapState state = map->update(time - lastFrameTime);
   lastFrameTime = time;
   if (state.isAnimating()) {
@@ -276,7 +281,11 @@ void MapsApp::updateLocation(const Location& _loc)
   }
   //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, loc.lngLat());
+}
 
+void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
+{
+  orientation = azimuth;
 }
 
 void MapsApp::showSceneGUI()
@@ -285,7 +294,7 @@ void MapsApp::showSceneGUI()
     double lng, lat;
     map->getPosition(lng, lat);
     ImGui::Text("Map: lat,lng,zoom: %.7f, %.7f z%.2f", lat, lng, map->getZoom());
-    ImGui::Text("GPS: lat,lng,alt: %.7f, %.7f %.1f m", loc.lat, loc.lng, loc.alt);
+    ImGui::Text("GPS: lat,lng,alt,dir: %.7f, %.7f %.1f m %.0f", loc.lat, loc.lng, loc.alt, orientation);
     if (ImGui::Button("Recenter")) {
       map->flyTo(CameraPosition{loc.lng, loc.lat, map->getZoom()}, 1.0);
     }

@@ -48,8 +48,8 @@ style: points
 collide: false
 order: 9000
 size: 24px
-color: "#FFFFFF"
+color: "#0000FF"
 outline:
   width: 3px
-  color: "#0000FF"
+  color: "#FFFFFF"
 )#";

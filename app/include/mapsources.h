@@ -12,4 +12,5 @@ public:
 private:
   std::string baseUrl;
   YAML::Node mapSources;
+  std::atomic<bool> sourcesLoaded{false};
 };

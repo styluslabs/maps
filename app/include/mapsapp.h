@@ -40,6 +40,7 @@ public:
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
   void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void updateLocation(const Location& _loc);
+  void updateOrientation(float azimuth, float pitch, float roll);
 
   void tapEvent(float x, float y);
   void doubleTapEvent(float x, float y);
@@ -52,6 +53,7 @@ public:
   bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
 
   Location loc;
+  float orientation = 0;
 
   MarkerID pickResultMarker = 0;
   MarkerID pickedMarkerId = 0;

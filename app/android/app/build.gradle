@@ -14,14 +14,14 @@ android {
         // Available arguments are inside ${SDK}/cmake/.../android.toolchain.cmake file
         targets 'droidmaps'
         arguments '-DTANGRAM_PLATFORM=android',
-                  '-DANDROID_STL=c++_shared',
-                  '-DNEXTZEN_API_KEY=' + apiKey
+                  '-DANDROID_STL=c++_shared'
         cppFlags '-std=c++14',
                  '-fvisibility=hidden', // export only JNIEXPORT
                  '-pedantic',
                  '-fPIC',
                  '-fexceptions',
                  '-frtti',
+                 '-DNEXTZEN_API_KEY=\\"' + apiKey + '\\"',
                  // linker
                  '-Wl,--exclude-libs,ALL', // dont export static lib symbols
                  //warnings
@@ -51,7 +51,7 @@ android {
 
   externalNativeBuild {
     cmake {
-      //version '3.18.1'
+      version '3.24.2'
       path '../../../CMakeLists.txt'
     }
   }
@@ -73,5 +73,5 @@ android {
 
 dependencies {
   api 'com.squareup.okhttp3:okhttp:3.12.0'
-  //implementation 'androidx.annotation:annotation:1.1.0'
+  implementation 'androidx.annotation:annotation:1.1.0'
 }

@@ -4,6 +4,20 @@
 #include "glm/glm.hpp"
 
 
+static constexpr float flingInvTau = 1/0.05f;  // time constant for smoothing of pan speed
+static constexpr float pinchThreshold = 60;  // pixels (change in distance between fingers)
+static constexpr float rotateThreshold = 0.25f;  // radians
+static constexpr float shoveThreshold = 60;  // pixels (translation of centroid of fingers)
+
+static constexpr float maxTapDist = 20;  // max pixels between start and end points for a tap
+static constexpr float minFlingDist = 150;
+static constexpr double maxTapTime = 0.25;  // seconds
+static constexpr double minDblTapTime = 0.04;  // min time between end of first tap and start of second
+static constexpr double maxDblTapTime = 0.25;  // max time between end of first tap and start of second
+static constexpr double minFlingTime = 0.03;
+static constexpr double minLongPressTime = 0.7;  // 0.5s is typical on Android
+
+
 // action: -1 = release, 0 = move, 1 = press
 void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y, float p)
 {
@@ -50,6 +64,10 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       else if(dt > minFlingTime && dr > minFlingDist && (t - prevTime)*flingInvTau < 1) {
         flingV = glm::clamp(flingV, -2000.0f, 2000.0f);
         map->handleFlingGesture(prevCOM.x, prevCOM.y, flingV.x, flingV.y);
+        LOGW("Fling: v = %f, %f", flingV.x, flingV.y);
+      }
+      else {
+        LOGW("No fling: total dt = %f, dr = %f, final dt = %f", dt, dr, t - prevTime);
       }
     }
     multiTouchState = TOUCH_NONE;
@@ -69,11 +87,11 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
     else {
       if(multiTouchState == TOUCH_NONE) {
-        if(dist - prevDist > pinchThreshold)
+        if(std::abs(dist - prevDist) > pinchThreshold)
           multiTouchState = TOUCH_PINCH;
-        else if(angle - prevAngle > rotateThreshold)
+        else if(std::abs(angle - prevAngle) > rotateThreshold)
           multiTouchState = TOUCH_ROTATE;
-        else if(glm::distance(com, prevCOM) > shoveThreshold)
+        else if(std::abs(com.y - prevCOM.y) > shoveThreshold)
           multiTouchState = TOUCH_SHOVE;
       }
       if(multiTouchState == TOUCH_PINCH)
@@ -81,7 +99,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       else if(multiTouchState == TOUCH_ROTATE)
         map->handleRotateGesture(com.x, com.y, angle - prevAngle);
       else if(multiTouchState == TOUCH_SHOVE)
-        map->handleShoveGesture(glm::distance(com, prevCOM));
+        map->handleShoveGesture(com.y - prevCOM.y);
     }
     if(multiTouchState != TOUCH_NONE || touchPoints.size() > prevpoints) {
       prevCOM = com;
@@ -90,6 +108,8 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
   }
   else if(prevpoints == 1) {
+
+    // HEY! We need to update prevCOM etc when we go from 2 fingers to 1 finger!
 
     // TODO: this should be done by setting a timer
     if(canBeLongPress && t - initTime > minLongPressTime) {

@@ -1,17 +1,32 @@
 package com.styluslabs.maps;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
+import java.util.HashMap;
+import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+//import androidx.core.app.ActivityCompat;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.WindowManager;
-import android.location.Location
-import android.location.LocationManager
-import android.hardware.SensorManager
-import android.hardware.Sensor
-import android.hardware.GeomagneticField
-import com.mapzen.tangram.FontConfig
-import com.mapzen.tangram.networking.DefaultHttpHandler
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.content.res.AssetManager;
+import android.location.Location;
+import android.location.LocationManager;
+import android.location.LocationListener;
+import android.hardware.SensorManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.GeomagneticField;
+import com.mapzen.tangram.FontConfig;
+import com.mapzen.tangram.networking.HttpHandler;
+import com.mapzen.tangram.networking.DefaultHttpHandler;
 
 
 public class MapsActivity extends Activity implements LocationListener, SensorEventListener
@@ -28,29 +43,52 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
 
   private float mDeclination = 0;
 
+  public static final int PERM_REQ_LOCATION = 1;
+
   @Override
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
     mGLSurfaceView = new MapsView(getApplication());
-
-    MapsLib.init(this, getContext().getAssets());
-
     //mLayout = new RelativeLayout(this);
     //mLayout.addView(mGLSurfaceView);
     //setContentView(mLayout);
+    setContentView(mGLSurfaceView);
+    mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
 
-    setContentView(mView);
+    MapsLib.init(this, getAssets(), getExternalFilesDir(null).getAbsolutePath());
 
     httpHandler = new DefaultHttpHandler();
 
     // stackoverflow.com/questions/1513485 ; github.com/streetcomplete/StreetComplete ... FineLocationManager.kt
-    locationManager = (LocationManager) getContext().getSystemService(LOCATION_SERVICE);
+    locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
     // stackoverflow.com/questions/20339942 ; github.com/streetcomplete/StreetComplete ... Compass.kt
     mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
     mAccelSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
     mMagSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
+    if(!canGetLocation()) {
+      requestPermissions(//this,  //ActivityCompat
+          new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERM_REQ_LOCATION);
+    }
+  }
+
+  @Override
+  public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+    switch (requestCode) {
+    case PERM_REQ_LOCATION:
+      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && canGetLocation()) {
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);
+      }
+      break;
+    }
+  }
+
+  protected boolean canGetLocation()
+  {
+    return checkSelfPermission(//this,  //ContextCompat
+        Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
   }
 
   @Override
@@ -59,7 +97,9 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     super.onPause();
     mGLSurfaceView.onPause();
 
-    locationManager.removeUpdates(this);
+    if(canGetLocation()) {
+      locationManager.removeUpdates(this);
+    }
     mSensorManager.unregisterListener(this);
   }
 
@@ -72,8 +112,9 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
     // - see https://developer.android.com/training/location/request-updates
     // min GPS dt = 0 (ms), dr = 1 (meters)
-    locationManager.requestLocationUpdates(LocationManager.FUSED_PROVIDER, 0, 1, this);  //GPS_PROVIDER || "fused"
-
+    if(canGetLocation()) {
+      locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);  //FUSED_PROVIDER || "fused"
+    }
     mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
     mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
   }
@@ -82,17 +123,17 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
   public void onLocationChanged(Location loc)
   {
     float poserr = loc.getAccuracy();  // accuracy in meters
-    double alt = loc.getAltitude()  // meters
+    double alt = loc.getAltitude();  // meters
     float dir = loc.getBearing();  // bearing (direction of travel) in degrees
-    float direrr = loc.getBearingAccuracyDegrees()
+    float direrr = loc.getBearingAccuracyDegrees();
     double lat = loc.getLatitude();  // degrees
     double lng = loc.getLongitude();  // degrees
     float spd = loc.getSpeed();  // m/s
-    float spderr = getSpeedAccuracyMetersPerSecond()  // speed accuracy in m/s
-    long time = getTime();  // ms since unix epoch
-    float alterr = getVerticalAccuracyMeters();  // altitude accuracy in meters
+    float spderr = loc.getSpeedAccuracyMetersPerSecond();  // speed accuracy in m/s
+    long time = loc.getTime();  // ms since unix epoch
+    float alterr = loc.getVerticalAccuracyMeters();  // altitude accuracy in meters
     // for correcting orientation
-    mDeclination = GeomagneticField(lat, lng, alt, time).getDeclination()*180/java.lang.Math.PI;
+    mDeclination = new GeomagneticField((float)lat, (float)lng, (float)alt, time).getDeclination()*180/(float)java.lang.Math.PI;
 
     MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
   }
@@ -121,6 +162,9 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     }
   }
 
+  @Override
+  public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+
   @Keep
   public void requestRender()
   {
@@ -130,7 +174,7 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
   @Keep
   public void setRenderMode(int cont)
   {
-    mGLSurfaceView.setRenderMode(cont ? RENDER_CONTINUOUSLY : RENDER_WHEN_DIRTY);
+    mGLSurfaceView.setRenderMode(cont != 0 ? MapsView.RENDERMODE_CONTINUOUSLY : MapsView.RENDERMODE_WHEN_DIRTY);
   }
 
   @Keep
@@ -248,7 +292,11 @@ class MapsInputConnection extends BaseInputConnection
         //    char c = text.charAt(i);
         //    nativeGenerateScancodeForUnichar(c);
         //}
-        MapsLib.textInput(text.toString(), newCursorPosition);
+
+        for(int c : text){
+            MapsLib.charInput(c, newCursorPosition);
+        }
+        //MapsLib.textInput(text.toString(), newCursorPosition);
         return super.commitText(text, newCursorPosition);
     }
 

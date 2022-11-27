@@ -15,7 +15,7 @@
     android:allowBackup="true"
     android:requestLegacyExternalStorage="true"
     android:icon="@mipmap/ic_launcher"
-    android:label="@string/gl2jni_activity">
+    android:label="StylusMaps">
 
     <activity android:name="MapsActivity"
       android:theme="@android:style/Theme.NoTitleBar"

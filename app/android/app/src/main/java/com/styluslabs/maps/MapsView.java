@@ -25,6 +25,7 @@ class MapsView extends GLSurfaceView {
     // supporting OpenGL ES 2.0 or later backwards-compatible versions.
     setEGLConfigChooser(8, 8, 8, 0, 16, 0);
     setEGLContextClientVersion(3);
+    setPreserveEGLContextOnPause(true);
     setRenderer(new Renderer());
   }
 
@@ -39,7 +40,7 @@ class MapsView extends GLSurfaceView {
   // an alternative approach is to use View.setOnTouchListener() to specify some other class implementing
   //  the View.OnTouchListener interface (e.g., the main activity) to receive the touch events
   @Override
-  public onTouchEvent(MotionEvent event)
+  public boolean onTouchEvent(MotionEvent event)
   {
     // Ref: http://developer.android.com/training/gestures/multi.html
     final int pointerCount = event.getPointerCount();
@@ -64,9 +65,12 @@ class MapsView extends GLSurfaceView {
       break;
     case MotionEvent.ACTION_POINTER_UP:
     case MotionEvent.ACTION_POINTER_DOWN:
+    {
       // Non primary pointer up/down
-      sendTouchEvent(event, action, event.getActionIndex(), event.getX(i), event.getY(i), event.getPressure(i));
+      int i = event.getActionIndex();
+      sendTouchEvent(event, action, i, event.getX(i), event.getY(i), event.getPressure(i));
       break;
+    }
     case MotionEvent.ACTION_CANCEL:
       for (int i = 0; i < pointerCount; i++) {
         sendTouchEvent(event, action, i, event.getX(i), event.getY(i), event.getPressure(i));
@@ -89,7 +93,7 @@ class MapsView extends GLSurfaceView {
     }
 
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-      // Do nothing.
+      MapsLib.setupGL();
     }
   }
 }
