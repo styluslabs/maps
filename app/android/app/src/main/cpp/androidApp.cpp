@@ -5,6 +5,7 @@
 #include "touchhandler.h"
 #include "AndroidPlatform.h"
 #include "JniHelpers.h"
+#include "JniThreadBinding.h"
 
 #include "imgui.h"
 #include "imgui_impl_generic.h"
@@ -12,15 +13,25 @@
 
 static MapsApp* app = NULL;
 
+static jobject mapsActivityRef = nullptr;
+static jmethodID showTextInputMID = nullptr;
+static jmethodID hideTextInputMID = nullptr;
+
 #define TANGRAM_JNI_VERSION JNI_VERSION_1_6
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
 {
+  static const char* ctrlClassName = "com/styluslabs/maps/MapsActivity";
   JNIEnv* jniEnv = nullptr;
   if (javaVM->GetEnv(reinterpret_cast<void**>(&jniEnv), TANGRAM_JNI_VERSION) != JNI_OK)
     return -1;
   Tangram::JniHelpers::jniOnLoad(javaVM, NULL);  // pass jniEnv to skip stuff used for full Android library
-  Tangram::AndroidPlatform::jniOnLoad(javaVM, jniEnv, "com/styluslabs/maps/MapsActivity");
+  Tangram::AndroidPlatform::jniOnLoad(javaVM, jniEnv, ctrlClassName);
+
+  jclass tangramClass = jniEnv->FindClass(ctrlClassName);
+  showTextInputMID = jniEnv->GetMethodID(tangramClass, "showTextInput", "(IIII)V");
+  hideTextInputMID = jniEnv->GetMethodID(tangramClass, "hideTextInput", "()V");
+
   return TANGRAM_JNI_VERSION;
 }
 
@@ -41,7 +52,11 @@ JNI_FN(init)(JNIEnv* env, jobject obj, jobject mapsActivity, jobject assetManage
   app->sceneFile = "asset:///scene.yaml";
   app->loadSceneFile(false);
 
-  //ImGui::ImeSetInputScreenPosFn = [](int x, int y){ showTextInput(x, y, 20, 20); }
+  mapsActivityRef = env->NewWeakGlobalRef(mapsActivity);
+  //ImGui::GetIO().ImeSetInputScreenPosFn = [](int x, int y){
+  //  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  //  jniEnv->CallVoidMethod(mapsActivityRef, showTextInputMID, x, y, 20, 20);
+  //};
 }
 
 JNI_FN(resize)(JNIEnv* env, jobject obj, jint w, jint h)
@@ -57,6 +72,7 @@ JNI_FN(setupGL)(JNIEnv* env, jobject obj)
 
 JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
 {
+  static bool prevWantTextInput = false;
   auto t0 = std::chrono::high_resolution_clock::now();
   double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
   ImGui_ImplOpenGL3_NewFrame();
@@ -66,6 +82,17 @@ JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
 
   if(app->show_gui)
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+  bool wantTextInput = ImGui::GetIO().WantTextInput;
+  if(wantTextInput && !prevWantTextInput) {
+    ImVec2 pos = ImGui::GetIO().mousePos;
+    env->CallVoidMethod(mapsActivityRef, showTextInputMID, int(pos.x), int(pos.y), 20, 20);
+  }
+  else if(!wantTextInput && prevWantTextInput) {
+    //JniThreadBinding jniEnv(JniHelpers::getJVM());
+    env->CallVoidMethod(mapsActivityRef, hideTextInputMID);
+  }
+  prevWantTextInput = wantTextInput;
 }
 
 JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)
@@ -85,11 +112,13 @@ JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jf
 JNI_FN(charInput)(JNIEnv* env, jobject obj, jint c, jint cursorPos)
 {
   ImGui_ImplGeneric_CharCallback(c);
+  MapsApp::platform->requestRender();
 }
 
 JNI_FN(keyEvent)(JNIEnv* env, jobject obj, int key, int action)
 {
   ImGui_ImplGeneric_KeyCallback(key, 0, action ? GLFW_PRESS : GLFW_RELEASE, 0);
+  MapsApp::platform->requestRender();
 }
 
 JNI_FN(onUrlComplete)(JNIEnv* env, jobject obj, jlong handle, jbyteArray data, jstring err)

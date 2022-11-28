@@ -9,10 +9,20 @@ import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 //import androidx.core.app.ActivityCompat;
+import android.content.Context;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
+import android.text.InputType;
 import android.view.WindowManager;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.KeyEvent;
+import android.view.inputmethod.InputMethodManager;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.BaseInputConnection;
+import android.view.inputmethod.EditorInfo;
+import android.widget.RelativeLayout;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
@@ -32,8 +42,8 @@ import com.mapzen.tangram.networking.DefaultHttpHandler;
 public class MapsActivity extends Activity implements LocationListener, SensorEventListener
 {
   MapsView mGLSurfaceView;
-  //private ViewGroup mLayout;
-  //private View mTextEdit;
+  private ViewGroup mLayout;
+  private View mTextEdit;
   private LocationManager locationManager;
   private SensorManager mSensorManager;
   private Sensor mAccelSensor;
@@ -50,10 +60,10 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
   {
     super.onCreate(icicle);
     mGLSurfaceView = new MapsView(getApplication());
-    //mLayout = new RelativeLayout(this);
-    //mLayout.addView(mGLSurfaceView);
-    //setContentView(mLayout);
-    setContentView(mGLSurfaceView);
+    mLayout = new RelativeLayout(this);
+    mLayout.addView(mGLSurfaceView);
+    setContentView(mLayout);
+    //setContentView(mGLSurfaceView);
     mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
 
     MapsLib.init(this, getAssets(), getExternalFilesDir(null).getAbsolutePath());
@@ -233,21 +243,21 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     }
   }
 
-
-  /*public void showTextInput(int x, int y, int w, int h)
+  public void showTextInput(int x, int y, int w, int h)
   {
-    RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + HEIGHT_PADDING);
+    //runOnUiThread(new Runnable() { @Override public void run() { textView.setText(data); } });
+    RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + 15);  //HEIGHT_PADDING);
     params.leftMargin = x;
     params.topMargin = y;
     if (mTextEdit == null) {
-      mTextEdit = new DummyEdit(SDL.getContext());
+      mTextEdit = new DummyEdit(this);
       mLayout.addView(mTextEdit, params);
     } else {
       mTextEdit.setLayoutParams(params);
     }
     mTextEdit.setVisibility(View.VISIBLE);
     mTextEdit.requestFocus();
-    InputMethodManager imm = (InputMethodManager) SDL.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+    InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
     imm.showSoftInput(mTextEdit, 0);
     //mScreenKeyboardShown = true;
   }
@@ -256,17 +266,17 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
   {
     if(mTextEdit != null) {
       mTextEdit.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
-      InputMethodManager imm = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+      InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
       imm.hideSoftInputFromWindow(mTextEdit.getWindowToken(), 0);
       //mScreenKeyboardShown = false;
     }
-  }*/
+  }
 }
 
-/*
+
 class MapsInputConnection extends BaseInputConnection
 {
-    public SDLInputConnection(View targetView, boolean fullEditor) { super(targetView, fullEditor); }
+    public MapsInputConnection(View targetView, boolean fullEditor) { super(targetView, fullEditor); }
 
     //@Override
     //public boolean sendKeyEvent(KeyEvent event)
@@ -293,7 +303,7 @@ class MapsInputConnection extends BaseInputConnection
         //    nativeGenerateScancodeForUnichar(c);
         //}
 
-        for(int c : text){
+        for(int c : text.codePoints().toArray()){
             MapsLib.charInput(c, newCursorPosition);
         }
         //MapsLib.textInput(text.toString(), newCursorPosition);
@@ -307,10 +317,8 @@ class MapsInputConnection extends BaseInputConnection
     //    return super.setComposingText(text, newCursorPosition);
     //}
 
-    public static native void textInput(String text, int newCursorPosition);
-
+    //public static native void textInput(String text, int newCursorPosition);
     //public native void nativeGenerateScancodeForUnichar(char c);
-
     //public native void nativeSetComposingText(String text, int newCursorPosition);
 
     @Override
@@ -384,4 +392,3 @@ class DummyEdit extends View implements View.OnKeyListener
         return ic;
     }
 }
-*/
