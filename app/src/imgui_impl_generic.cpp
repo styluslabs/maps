@@ -8,6 +8,7 @@
 // Data
 static double           g_Time = 0.0;
 static bool             g_MouseJustPressed[5] = { false, false, false, false, false };
+static bool             g_MouseBtnDown[5] = { false, false, false, false, false };
 //static GLFWcursor*      g_MouseCursors[ImGuiMouseCursor_COUNT] = { 0 };
 
 static const char* ImGui_ImplGeneric_GetClipboardText(void* user_data)
@@ -23,8 +24,11 @@ static void ImGui_ImplGeneric_SetClipboardText(void* user_data, const char* text
 // action > 0 for press; <= 0 for release
 void ImGui_ImplGeneric_MouseButtonCallback(int button, int action, int /*mods*/)
 {
-    if (action > 0 && button >= 0 && button < IM_ARRAYSIZE(g_MouseJustPressed))
-        g_MouseJustPressed[button] = true;
+    if (button >= 0 && button < IM_ARRAYSIZE(g_MouseJustPressed)) {
+        if(action > 0)
+            g_MouseJustPressed[button] = true;
+        g_MouseBtnDown[button] = action > 0;
+    }
 }
 
 void ImGui_ImplGeneric_ScrollCallback(double xoffset, double yoffset)
@@ -148,17 +152,15 @@ void ImGui_ImplGeneric_Resize(int w, int h, int display_w, int display_h)
   io.DisplayFramebufferScale = ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ? ((float)display_h / h) : 0);
 }
 
-
 void ImGui_ImplGeneric_NewFrame(double current_time)
 {
     ImGuiIO& io = ImGui::GetIO();
     IM_ASSERT(io.Fonts->IsBuilt());     // Font atlas needs to be built, call renderer _NewFrame() function e.g. ImGui_ImplOpenGL3_NewFrame()
 
     // Update mouse buttons
-    for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++)
-    {
+    for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown); i++) {
         // If a mouse press event came, always pass it as "mouse held this frame", so we don't miss click-release events that are shorter than 1 frame.
-        io.MouseDown[i] = g_MouseJustPressed[i];  // || glfwGetMouseButton(g_Window, i) != 0;
+        io.MouseDown[i] = g_MouseJustPressed[i] || g_MouseBtnDown[i];
         g_MouseJustPressed[i] = false;
     }
 

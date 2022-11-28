@@ -76,7 +76,7 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   // we'll probably want to skip curl for reading from filesystem in scene/importer.cpp - see tests/src/mockPlatform.cpp
   // or maybe add a Url getParent() method to Url class
   if(imports.empty())
-    return "global:\n\nsources:\n\nstyles:\n\nlayers:\n";
+    return "global:\n\nsources:\n\nlayers:\n";
 
   std::string importstr;
   for(auto& url : imports)

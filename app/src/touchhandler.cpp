@@ -62,13 +62,11 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
         }
       }
       else if(dt > minFlingTime && dr > minFlingDist && (t - prevTime)*flingInvTau < 1) {
-        flingV = glm::clamp(flingV, -2000.0f, 2000.0f);
+        flingV = glm::clamp(flingV, -4000.0f, 4000.0f);
         map->handleFlingGesture(prevCOM.x, prevCOM.y, flingV.x, flingV.y);
-        LOGW("Fling: v = %f, %f", flingV.x, flingV.y);
+        //LOGW("Fling: v = %f, %f", flingV.x, flingV.y);
       }
-      else {
-        LOGW("No fling: total dt = %f, dr = %f, final dt = %f", dt, dr, t - prevTime);
-      }
+      //else { LOGW("No fling: total dt = %f, dr = %f, final dt = %f", dt, dr, t - prevTime); }
     }
     multiTouchState = TOUCH_NONE;
     return;
@@ -84,6 +82,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     if(touchPoints.size() > prevpoints) {
       multiTouchState = TOUCH_NONE;
       canBeLongPress = false;
+      flingV = {0, 0};
     }
     else {
       if(multiTouchState == TOUCH_NONE) {
@@ -94,8 +93,10 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
         else if(std::abs(com.y - prevCOM.y) > shoveThreshold)
           multiTouchState = TOUCH_SHOVE;
       }
-      if(multiTouchState == TOUCH_PINCH)
+      if(multiTouchState == TOUCH_PINCH) {
+        map->handlePanGesture(prevCOM.x, prevCOM.y, com.x, com.y);
         map->handlePinchGesture(com.x, com.y, dist/prevDist, 0.f);
+      }
       else if(multiTouchState == TOUCH_ROTATE)
         map->handleRotateGesture(com.x, com.y, angle - prevAngle);
       else if(multiTouchState == TOUCH_SHOVE)
@@ -107,21 +108,21 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       prevAngle = angle;
     }
   }
-  else if(prevpoints == 1) {
-
-    // HEY! We need to update prevCOM etc when we go from 2 fingers to 1 finger!
-
-    // TODO: this should be done by setting a timer
-    if(canBeLongPress && t - initTime > minLongPressTime) {
-      if(glm::distance(prevCOM, initCOM) < maxTapDist)
-        app->longPressEvent(initCOM.x, initCOM.y);
-      canBeLongPress = false;
+  else if(prevpoints > 0) {
+    if(prevpoints == 1) {
+      // TODO: this should be done by setting a timer
+      if(canBeLongPress && t - initTime > minLongPressTime) {
+        if(glm::distance(prevCOM, initCOM) < maxTapDist)
+          app->longPressEvent(initCOM.x, initCOM.y);
+        canBeLongPress = false;
+      }
+      map->handlePanGesture(prevCOM.x, prevCOM.y, pt.x, pt.y);
+      if(t > prevTime) {
+        // single pole IIR low pass filter for fling velocity
+        float a = 0;  //std::exp(-(t - prevTime)*flingInvTau);
+        flingV = a*flingV + (1-a)*(pt - prevCOM)/float(t - prevTime);
+      }
     }
-
-    map->handlePanGesture(prevCOM.x, prevCOM.y, pt.x, pt.y);
-    // single pole IIR low pass filter for fling velocity
-    float a = std::exp(-(t - prevTime)*flingInvTau);
-    flingV = a*flingV + (1-a)*(pt - prevCOM)/float(t - prevTime);
     prevCOM = pt;
     prevTime = t;
   }

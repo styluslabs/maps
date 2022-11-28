@@ -8,6 +8,7 @@
 #include "imgui_stl.h"
 #include "glm/common.hpp"
 #include "rapidxml/rapidxml.hpp"
+#include <sys/stat.h>
 
 #include "touchhandler.h"
 #include "bookmarks.h"
@@ -220,6 +221,9 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
   //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
 
+  // make sure cache folder exists
+  mkdir((baseDir + "cache").c_str(), 0777);
+
   // Setup tangram
   map = new Tangram::Map(std::move(p));
 
@@ -243,12 +247,13 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
   //static bool glReady = false; if(!glReady) { map->setupGL(); glReady = true; }
   static double lastFrameTime = 0;
 
+  //ImGuiIO& io = ImGui::GetIO();
+  //LOGW("Rendering frame at %f w/ btn 0 %s at %f,%f", time, io.MouseDown[0] ? "down" : "up", io.MousePos.x, io.MousePos.y);
   if(show_gui) {
     ImGui::NewFrame();
     showGUI();  // ImGui::ShowDemoWindow();
   }
 
-  //LOGW("Rendering frame at %f", time);
   MapState state = map->update(time - lastFrameTime);
   lastFrameTime = time;
   if (state.isAnimating()) {

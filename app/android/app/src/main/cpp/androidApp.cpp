@@ -78,6 +78,8 @@ JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jf
 
   if (!ImGui::GetIO().WantCaptureMouse)
     app->touchHandler->touchEvent(ptrId, translateAction[action], t/1000.0, x, y, p);
+  else
+    MapsApp::platform->requestRender();  // note that desktop (GLFW) app rerenders upon any GLFW event
 }
 
 JNI_FN(charInput)(JNIEnv* env, jobject obj, jint c, jint cursorPos)
