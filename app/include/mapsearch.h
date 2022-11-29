@@ -2,10 +2,20 @@
 
 #include "mapscomponent.h"
 #include "yaml-cpp/yaml.h"
+#include "rapidjson/document.h"
 
 struct SearchData {
   std::string layer;
   std::vector<std::string> fields;
+};
+
+struct SearchResult
+{
+  LngLat pos;
+  float rank;
+  MarkerID markerId;
+  bool isPinMarker;
+  rapidjson::Document tags;  // will eventually be a DuktapeValue? standard osm tag names for now
 };
 
 class MapsSearch : public MapsComponent
@@ -24,5 +34,12 @@ public:
 
 private:
   std::atomic<int> tileCount;
+
+  std::vector<SearchResult> results;
+
+  size_t pinMarkerIdx = 0;
+  size_t dotMarkerIdx = 0;
+
+  SearchResult& addSearchResult(double lng, double lat, float rank);
 };
 

@@ -120,21 +120,21 @@ void MapsApp::tapEvent(float x, float y)
     if(!itemId.empty()) {
       auto url = Url("https://www.openstreetmap.org/api/0.6/node/" + itemId);
       map->getPlatform().startUrlRequest(url, [this, url, itemId](UrlResponse&& response) {
-      if(response.error) {
-        logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
-        return;
-      }
-      response.content.push_back('\0');
-      rapidxml::xml_document<> doc;
-      doc.parse<0>(response.content.data());
-      auto tag = doc.first_node("osm")->first_node("node")->first_node("tag");
-      if(tag) pickLabelStr = "id = " + itemId + "\n";
-      while(tag) {
-        auto key = tag->first_attribute("k");
-        auto val = tag->first_attribute("v");
-        pickLabelStr += key->value() + std::string(" = ") + val->value() + std::string("\n");
-        tag = tag->next_sibling("tag");
-      }
+        if(response.error) {
+          logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
+          return;
+        }
+        response.content.push_back('\0');
+        rapidxml::xml_document<> doc;
+        doc.parse<0>(response.content.data());
+        auto tag = doc.first_node("osm")->first_node("node")->first_node("tag");
+        if(tag) pickLabelStr = "id = " + itemId + "\n";
+        while(tag) {
+          auto key = tag->first_attribute("k");
+          auto val = tag->first_attribute("v");
+          pickLabelStr += key->value() + std::string(" = ") + val->value() + std::string("\n");
+          tag = tag->next_sibling("tag");
+        }
       });
     }
   });

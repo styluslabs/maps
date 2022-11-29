@@ -7,8 +7,8 @@
 #include "imgui_stl.h"
 
 #include <deque>
-#include "rapidjson/document.h"
 #include "rapidjson/writer.h"
+#include "rapidxml/rapidxml.hpp"
 #include "data/tileData.h"
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
@@ -196,6 +196,151 @@ bool MapsSearch::indexMBTiles()
   }
 
   return true;
+}
+
+
+
+/*
+
+How to store search results?
+- parsed json or xml ... how to standardize for different search providers? rename fields? convert to standard osm tag names?
+- hardcoded struct ... seems like this would eventually get too messy, if we have groups/tags for photos,
+
+What about xml/json + stylesheet to describe presentation?  producing ugui svg?
+
+
+Marker display:
+- show as many as possible as pins (or up to some max number to keep map neater?), rest as dots?
+- when zooming in, convert dots (not clickable) to pins (clickable) when possible (hide dot marker, show pin marker)
+
+*/
+
+SearchResult& MapsSearch::addSearchResult(double lng, double lat, float rank)
+{
+  Map* map = app->map;
+  results.push_back({{lng, lat}, rank, 0, false, {}});
+
+  if((1)/* far enough from nearest existing pin */) {
+
+    if(searchMarkers.empty()) {
+      std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
+      app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
+      svg = fstring(markerSVG, "#CF513D");  // SVG parsing is destructive!!!
+      app->textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);
+    }
+    if(pinMarkerIdx >= searchMarkers.size())
+      searchMarkers.push_back(map->markerAdd());
+    MarkerID markerId = searchMarkers[pinMarkerIdx];
+    map->markerSetVisible(markerId, true);
+    // 2nd value is priority (smaller number means higher priority)
+    std::string namestr = results.back().tags["name"].GetString();
+    std::replace(namestr.begin(), namestr.end(), '"', '\'');
+    map->markerSetStylingFromString(markerId,
+        fstring(searchMarkerStyleStr, "search-marker-red", pinMarkerIdx+2, namestr.c_str()).c_str());
+    map->markerSetPoint(markerId, LngLat(lng, lat));
+    ++pinMarkerIdx;
+
+    results.back().markerId = markerId;
+    results.back().isPinMarker = true;
+  }
+  else {
+    if(dotMarkerIdx >= dotMarkers.size()) {
+      dotMarkers.push_back(map->markerAdd());
+      map->markerSetStylingFromString(dotMarkers[dotMarkerIdx], dotMarkerStyleStr);
+    }
+    map->markerSetVisible(dotMarkers[dotMarkerIdx], true);
+    map->markerSetPoint(dotMarkers[dotMarkerIdx], LngLat(lng, lat));
+    results.back().markerId = dotMarkers[dotMarkerIdx];
+    ++dotMarkerIdx;
+  }
+
+  return results.back();
+}
+
+void MapsSearch::onZoom()
+{
+  Map* map = app->map;
+  float zoom = map->getZoom();
+  if(std::abs(zoom - prevZoom) < 0.5f) return;
+  if(zoom < prevZoom) {
+    // if zoom decr by more than threshold, convert colliding pins to dots
+
+    for(auto& res : results) {
+      if(!res.isPinMarker) continue;
+      if((1)/* collides */) {
+        // convert to dot marker
+      }
+      // add to spatial index if not converted to dot
+    }
+
+
+  }
+  else {
+    // if zoom incr, convert dots to pins if no collision
+
+    for(auto& res : results) {
+      if(!res.isPinMarker /* && far enough */) {
+        // convert to pin marker
+
+        // ... this would fragment dotMarkers!  should we have single list of markers and set styling each time?
+        // assign a dot marker to every hit, hidden if pin marker exists?
+        // remove markers from list when used for hit?
+
+      }
+      // add to spatial index
+    }
+
+  }
+
+  prevZoom = zoom;
+}
+
+void MapsSearch::onlineSearch(std::string queryStr)
+{
+  using namespace rapidjson;
+
+  LngLat lngLat00, lngLat11;
+  app->getMapBounds(lngLat00, lngLat11);
+  std::string bounds = fstring("%f,%f,%f,%f", lngLat00.longitude, lngLat00.latitude, lngLat11.longitude, lngLat11.latitude);
+  std::string urlStr = fstring("https://nominatim.openstreetmap.org/search?format=jsonv2&viewbox=%s&q=%s",
+      bounds.c_str(), Url::escapeReservedCharacters(queryStr).c_str());
+  auto url = Url(urlStr);
+  app->map->getPlatform().startUrlRequest(url, [this, url](UrlResponse&& response) {
+    if(response.error) {
+      logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
+      return;
+    }
+    Document doc;
+    doc.Parse(response.content.data(), response.content.size());
+    for(SizeType ii = 0; ii < doc.Size(); ++ii) {
+      double lat = doc[ii]["lat"].GetDouble();
+      double lng = doc[ii]["lon"].GetDouble();
+      float rank = doc[ii]["importance"].GetFloat();
+
+      SearchResult& res = addSearchResult(lng, lat, rank);
+      res.tags.AddMember("name", doc[ii]["display_name"], res.tags.GetAllocator());
+      res.tags.AddMember(doc[ii]["category"], doc[ii]["type"], res.tags.GetAllocator());
+    }
+
+    /*response.content.push_back('\0');
+    rapidxml::xml_document<> doc;
+    doc.parse<0>(response.content.data());
+    auto tag = doc.first_node("searchresults")->first_node("place");
+    while(tag) {
+      auto lat = tag->first_attribute("lat");
+      auto lon = tag->first_attribute("lon");
+      auto rank = tag->first_attribute("importance");
+
+      // lat, lon, name, description, photos
+      SearchResult& res = addSearchResult(lon->value(), lat->value(), rank->value());
+      res.tags.AddMember("name", Value(tag->first_attribute("display_name")->value()), res.tags.GetAllocator());
+      res.tags.AddMember(doc[ii]["category"], doc[ii]["type"], res.tags.GetAllocator());
+
+      //pickLabelStr += key->value() + std::string(" = ") + val->value() + std::string("\n");
+      tag = tag->next_sibling("place");
+    }*/
+  });
+
 }
 
 void MapsSearch::showGUI()

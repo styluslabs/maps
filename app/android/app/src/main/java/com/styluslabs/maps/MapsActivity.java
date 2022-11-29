@@ -255,6 +255,7 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     runOnUiThread(new Runnable() { @Override public void run() { _showTextInput(x,y,w,h); } });
   }
 
+  // ref: SDL SDLActivity.java
   public void _showTextInput(int x, int y, int w, int h)
   {
     RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + 15);  //HEIGHT_PADDING);
