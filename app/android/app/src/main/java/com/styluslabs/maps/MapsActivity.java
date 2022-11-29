@@ -243,9 +243,20 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     }
   }
 
+  // issue is that Views can only be touched from thread that created them, but these methods are called from
+  //  drawFrame() on GL thread; just doing easiest fix for ImGui (currently ignoring issue of charInput being
+  //  called from UI thread instead of GL thread), to be revisited for actual GUI
+  // - Use SurfaceView and create EGL context ourselves so we can call drawFrame() from UI thread?
+  //  - in requestRender, do (drawReq is atomic):
+  //   if(!drawReq) Handler(Looper.getMainLooper()).post(new Runnable() { drawReq = false; drawFrame(); });
+  //  - see github.com/tsaarni/android-native-egl-example
   public void showTextInput(int x, int y, int w, int h)
   {
-    //runOnUiThread(new Runnable() { @Override public void run() { textView.setText(data); } });
+    runOnUiThread(new Runnable() { @Override public void run() { _showTextInput(x,y,w,h); } });
+  }
+
+  public void _showTextInput(int x, int y, int w, int h)
+  {
     RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + 15);  //HEIGHT_PADDING);
     params.leftMargin = x;
     params.topMargin = y;
@@ -263,6 +274,11 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
   }
 
   public void hideTextInput()
+  {
+    runOnUiThread(new Runnable() { @Override public void run() { _hideTextInput(); } });
+  }
+
+  public void _hideTextInput()
   {
     if(mTextEdit != null) {
       mTextEdit.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
@@ -359,14 +375,13 @@ class DummyEdit extends View implements View.OnKeyListener
     {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             if(!event.isCtrlPressed() && (event.isPrintingKey() || event.getKeyCode() == KeyEvent.KEYCODE_SPACE)) {
-            //if (SDLActivity.isTextInputEvent(event)) {
                 ic.commitText(String.valueOf((char) event.getUnicodeChar()), 1);
-                return true;
+            } else {
+                MapsLib.keyEvent(keyCode, 1);
             }
-            //SDLActivity.onNativeKeyDown(keyCode);
             return true;
         } else if (event.getAction() == KeyEvent.ACTION_UP) {
-            //SDLActivity.onNativeKeyUp(keyCode);
+            MapsLib.keyEvent(keyCode, -1);
             return true;
         }
         return false;

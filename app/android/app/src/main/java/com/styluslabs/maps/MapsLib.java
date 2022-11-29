@@ -14,6 +14,7 @@ public class MapsLib
   public static native void setupGL();
   public static native void drawFrame();
   public static native void touchEvent(int ptrId, int action, int t, float x, float y, float p);
+  public static native void keyEvent(int keycode, int action);
   public static native void charInput(int c, int newCursorPosition);
   public static native void onUrlComplete(long requestHandle, byte[] rawDataBytes, String errorMessage);
   public static native void updateLocation(long time, double lat, double lng, float poserr, double alt, float alterr, float dir, float direrr, float spd, float spderr);
