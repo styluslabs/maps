@@ -254,10 +254,11 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
     showGUI();  // ImGui::ShowDemoWindow();
   }
 
+  platform->notifyRender();
   MapState state = map->update(time - lastFrameTime);
   lastFrameTime = time;
   if (state.isAnimating()) {
-    map->getPlatform().requestRender();
+    platform->requestRender();
   }
 
   map->render();

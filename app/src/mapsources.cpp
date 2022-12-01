@@ -138,7 +138,7 @@ void MapsSources::showGUI()
     ctitles.push_back(s.c_str());
 
   int reload = 0;
-  if(ImGui::Combo(fstring("Source").c_str(), &currIdx, ctitles.data(), ctitles.size()))
+  if(ImGui::Combo("Source", &currIdx, ctitles.data(), ctitles.size()))
     reload = 1;  // selected source changed - reload scene
 
   if(currIdx > 0 && mapSources[keys[currIdx]]["type"].Scalar() == "Multi") {

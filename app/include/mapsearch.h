@@ -11,6 +11,7 @@ struct SearchData {
 
 struct SearchResult
 {
+  int64_t id;
   LngLat pos;
   float rank;
   MarkerID markerId;
@@ -29,17 +30,33 @@ public:
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
   static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
 
-  std::vector<MarkerID> searchMarkers;
+  std::vector<MarkerID> pinMarkers;
   std::vector<MarkerID> dotMarkers;
 
 private:
-  std::atomic<int> tileCount;
+  std::atomic_int tileCount;
 
-  std::vector<SearchResult> results;
+  std::vector<SearchResult> listResults;
+  std::vector<SearchResult> mapResults;
 
-  size_t pinMarkerIdx = 0;
-  size_t dotMarkerIdx = 0;
+  float markerRadius = 25;  // in pixels
+  float prevZoom = 0;
 
-  SearchResult& addSearchResult(double lng, double lat, float rank);
+  bool markerTexturesMade = false;
+  bool moreMapResultsAvail = false;
+
+  void offlineListSearch(std::string queryStr, LngLat, LngLat);
+  void offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11);
+
+  void onlineListSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
+  void onlineMapSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
+  void onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch);
+
+  void onZoom();
+  void createMarkers();
+  SearchResult& addListResult(int64_t id, double lng, double lat, float rank);
+  SearchResult& addMapResult(int64_t id, double lng, double lat, float rank);
+  void clearSearchResults(std::vector<SearchResult>& results);
+  MarkerID getPinMarker(const SearchResult& res);
+  MarkerID getDotMarker(const SearchResult& res);
 };
-

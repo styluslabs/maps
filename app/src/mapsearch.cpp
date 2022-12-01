@@ -13,6 +13,7 @@
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
 #include "sqlite3/sqlite3.h"
+#include "isect2d.h"
 
 
 // building search DB from tiles
@@ -22,14 +23,6 @@ static sqlite3_stmt* insertStmt = NULL;
 static LngLat mapCenter;
 static bool sortByDist = false;
 
-
-void MapsSearch::clearSearch()
-{
-  for(MarkerID mrkid : searchMarkers)
-    app->map->markerSetVisible(mrkid, false);
-  for(MarkerID mrkid : dotMarkers)
-    app->map->markerSetVisible(mrkid, false);
-}
 
 static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv)
 {
@@ -198,63 +191,104 @@ bool MapsSearch::indexMBTiles()
   return true;
 }
 
+void MapsSearch::clearSearchResults(std::vector<SearchResult>& results)
+{
+  for(auto& res : results) {
+    if(res.markerId == 0) continue;
+    if(res.isPinMarker)
+      pinMarkers.push_back(res.markerId);
+    else
+      dotMarkers.push_back(res.markerId);
+    app->map->markerSetVisible(res.markerId, false);
+    res.markerId = 0;
+  }
+  results.clear();
+}
 
+void MapsSearch::clearSearch()
+{
+  clearSearchResults(mapResults);
+  clearSearchResults(listResults);
 
-/*
+  if(app->searchActive)
+    app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
+  app->searchActive = false;
+}
 
-How to store search results?
-- parsed json or xml ... how to standardize for different search providers? rename fields? convert to standard osm tag names?
-- hardcoded struct ... seems like this would eventually get too messy, if we have groups/tags for photos,
-
-What about xml/json + stylesheet to describe presentation?  producing ugui svg?
-
-
-Marker display:
-- show as many as possible as pins (or up to some max number to keep map neater?), rest as dots?
-- when zooming in, convert dots (not clickable) to pins (clickable) when possible (hide dot marker, show pin marker)
-
-*/
-
-SearchResult& MapsSearch::addSearchResult(double lng, double lat, float rank)
+MarkerID MapsSearch::getPinMarker(const SearchResult& res)
 {
   Map* map = app->map;
-  results.push_back({{lng, lat}, rank, 0, false, {}});
+  MarkerID markerId = pinMarkers.empty() ? map->markerAdd() : pinMarkers.back();
+  if(!pinMarkers.empty())
+    pinMarkers.pop_back();
 
-  if((1)/* far enough from nearest existing pin */) {
+  map->markerSetVisible(markerId, true);
+  // 2nd value is priority (smaller number means higher priority)
+  std::string namestr = res.tags["name"].GetString();
+  std::replace(namestr.begin(), namestr.end(), '"', '\'');
+  map->markerSetStylingFromString(markerId,
+      fstring(searchMarkerStyleStr, "search-marker-red", pinMarkerIdx+2, namestr.c_str()).c_str());
+  map->markerSetPoint(markerId, res.pos);
+  return markerId;
+}
 
-    if(searchMarkers.empty()) {
-      std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
-      app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
-      svg = fstring(markerSVG, "#CF513D");  // SVG parsing is destructive!!!
-      app->textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);
-    }
-    if(pinMarkerIdx >= searchMarkers.size())
-      searchMarkers.push_back(map->markerAdd());
-    MarkerID markerId = searchMarkers[pinMarkerIdx];
-    map->markerSetVisible(markerId, true);
-    // 2nd value is priority (smaller number means higher priority)
-    std::string namestr = results.back().tags["name"].GetString();
-    std::replace(namestr.begin(), namestr.end(), '"', '\'');
-    map->markerSetStylingFromString(markerId,
-        fstring(searchMarkerStyleStr, "search-marker-red", pinMarkerIdx+2, namestr.c_str()).c_str());
-    map->markerSetPoint(markerId, LngLat(lng, lat));
-    ++pinMarkerIdx;
+MarkerID MapsSearch::getDotMarker(const SearchResult& res)
+{
+  Map* map = app->map;
+  MarkerID markerId = dotMarkers.empty() ? map->markerAdd() : dotMarkers.back();
+  if(!dotMarkers.empty())
+    dotMarkers.pop_back();
+  else
+    map->markerSetStylingFromString(markerId, dotMarkerStyleStr);
+  map->markerSetVisible(markerId, true);
+  map->markerSetPoint(markerId, res.pos);
+  return markerId;
+}
 
-    results.back().markerId = markerId;
-    results.back().isPinMarker = true;
+SearchResult& MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank)
+{
+  mapResults.push_back({id, {lng, lat}, rank, 0, false, {}});
+  return mapResults.back();
+}
+
+SearchResult& MapsSearch::addListResult(int64_t id, double lng, double lat, float rank)
+{
+  listResults.push_back({id, {lng, lat}, rank, 0, false, {}});
+  return listResults.back();
+}
+
+static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, float radius)
+{
+  double x, y;
+  map->lngLatToScreenPosition(pos.longitude, pos.latitude, &x, &y);
+  return isect2d::AABB<glm::vec2>(x - radius, y - radius, x + radius, y + radius);
+}
+
+// if isect2d is insufficient, try https://github.com/nushoin/RTree - single-header r-tree impl
+void MapsSearch::createMarkers()
+{
+  if(!markerTexturesMade) {
+    std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
+    app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
+    svg = fstring(markerSVG, "#CF513D");  // SVG parsing is destructive!!!
+    app->textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
+    markerTexturesMade = true;
   }
-  else {
-    if(dotMarkerIdx >= dotMarkers.size()) {
-      dotMarkers.push_back(map->markerAdd());
-      map->markerSetStylingFromString(dotMarkers[dotMarkerIdx], dotMarkerStyleStr);
-    }
-    map->markerSetVisible(dotMarkers[dotMarkerIdx], true);
-    map->markerSetPoint(dotMarkers[dotMarkerIdx], LngLat(lng, lat));
-    results.back().markerId = dotMarkers[dotMarkerIdx];
-    ++dotMarkerIdx;
-  }
 
-  return results.back();
+  isect2d::ISect2D<glm::vec2> collider;
+  for(auto& res : mapResults) {
+    if(res.markerId == 0) {
+      bool collided = false;
+      collider.intersect(markerAABB(app->map, res.pos, markerRadius),
+          [&](auto& a, auto& b) { collided = true; return false; });
+      res.markerId = collided ? getDotMarker(res) : getPinMarker(res);
+      res.isPinMarker = !collided;
+
+
+    }
+    else if(res.isPinMarker)
+      collider.insert(markerAABB(app->map, res.pos, markerRadius));
+  }
 }
 
 void MapsSearch::onZoom()
@@ -262,62 +296,65 @@ void MapsSearch::onZoom()
   Map* map = app->map;
   float zoom = map->getZoom();
   if(std::abs(zoom - prevZoom) < 0.5f) return;
+
+  double scrx, scry;
+  isect2d::ISect2D<glm::vec2> collider;
   if(zoom < prevZoom) {
     // if zoom decr by more than threshold, convert colliding pins to dots
-
-    for(auto& res : results) {
+    for(auto& res : mapResults) {
       if(!res.isPinMarker) continue;
-      if((1)/* collides */) {
+      bool collided = false;
+      collider.intersect(markerAABB(map, res.pos, markerRadius),
+          [&](auto& a, auto& b) { collided = true; return false; });
+      if(collided) {
         // convert to dot marker
+        pinMarkers.push_back(res.markerId);
+        res.markerId = getDotMarker(res);
+        res.isPinMarker = false;
       }
-      // add to spatial index if not converted to dot
     }
-
-
   }
   else {
     // if zoom incr, convert dots to pins if no collision
-
-    for(auto& res : results) {
-      if(!res.isPinMarker /* && far enough */) {
+    for(auto& res : mapResults) {
+      if(res.isPinMarker) continue;
+      // don't touch offscreen markers
+      if(!map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude, &scrx, &scry)) continue;
+      bool collided = false;
+      collider.intersect(markerAABB(map, res.pos, markerRadius),
+          [&](auto& a, auto& b) { collided = true; return false; });
+      if(!collided) {
         // convert to pin marker
-
-        // ... this would fragment dotMarkers!  should we have single list of markers and set styling each time?
-        // assign a dot marker to every hit, hidden if pin marker exists?
-        // remove markers from list when used for hit?
-
+        dotMarkers.push_back(res.markerId);
+        res.markerId = getPinMarker(res);
+        res.isPinMarker = true;
       }
-      // add to spatial index
     }
-
   }
-
   prevZoom = zoom;
 }
 
-void MapsSearch::onlineSearch(std::string queryStr)
+void MapsSearch::onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch)
 {
-  using namespace rapidjson;
-
-  LngLat lngLat00, lngLat11;
-  app->getMapBounds(lngLat00, lngLat11);
+  //"exclude_place_ids="
   std::string bounds = fstring("%f,%f,%f,%f", lngLat00.longitude, lngLat00.latitude, lngLat11.longitude, lngLat11.latitude);
-  std::string urlStr = fstring("https://nominatim.openstreetmap.org/search?format=jsonv2&viewbox=%s&q=%s",
-      bounds.c_str(), Url::escapeReservedCharacters(queryStr).c_str());
+  std::string urlStr = fstring("https://nominatim.openstreetmap.org/search?format=jsonv2&viewbox=%s&limit=%d&q=%s",
+      bounds.c_str(), isMapSearch ? 50 : 20, Url::escapeReservedCharacters(queryStr).c_str());
   auto url = Url(urlStr);
-  app->map->getPlatform().startUrlRequest(url, [this, url](UrlResponse&& response) {
+  app->map->getPlatform().startUrlRequest(url, [this, url, isMapSearch](UrlResponse&& response) {
     if(response.error) {
       logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
       return;
     }
-    Document doc;
+    rapidjson::Document doc;
     doc.Parse(response.content.data(), response.content.size());
-    for(SizeType ii = 0; ii < doc.Size(); ++ii) {
+    for(rapidjson::SizeType ii = 0; ii < doc.Size(); ++ii) {
+      int64_t osmid = doc[ii]["osm_id"].GetInt64();
       double lat = doc[ii]["lat"].GetDouble();
       double lng = doc[ii]["lon"].GetDouble();
       float rank = doc[ii]["importance"].GetFloat();
 
-      SearchResult& res = addSearchResult(lng, lat, rank);
+      SearchResult& res = isMapSearch ? addMapResult(osmid, lng, lat, rank) : addListResult(osmid, lng, lat, rank);
       res.tags.AddMember("name", doc[ii]["display_name"], res.tags.GetAllocator());
       res.tags.AddMember(doc[ii]["category"], doc[ii]["type"], res.tags.GetAllocator());
     }
@@ -340,25 +377,84 @@ void MapsSearch::onlineSearch(std::string queryStr)
       tag = tag->next_sibling("place");
     }*/
   });
+}
 
+void MapsSearch::onlineMapSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11)
+{
+  onlineSearch(queryStr, lngLat00, lngLat11, true);
+  moreMapResultsAvail = mapResults.size() >= 50;
+}
+
+void MapsSearch::onlineListSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11)
+{
+  onlineSearch(queryStr, lngLat00, lngLat11, false);
+}
+
+// Remaining issues:
+// - we don't want pin markers to disappear (change to dots) when panning
+
+void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
+{
+  const char* query = "SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
+      "MATCH ? AND lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? ORDER BY rank LIMIT 1000;";
+  DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
+    int rowid = sqlite3_column_int(stmt, 1);
+    double lng = sqlite3_column_double(stmt, 2);
+    double lat = sqlite3_column_double(stmt, 3);
+    double score = sqlite3_column_double(stmt, 4);
+    auto& res = addMapResult(rowid, lng, lat, score);
+    res.tags.Parse((const char*)(sqlite3_column_text(stmt, 1)));
+  }, [&](sqlite3_stmt* stmt){
+    std::string s(queryStr + "*");
+    std::replace(s.begin(), s.end(), '\'', ' ');
+    sqlite3_bind_text(stmt, 1, s.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt, 2, lnglat00.longitude);
+    sqlite3_bind_double(stmt, 3, lnglat00.latitude);
+    sqlite3_bind_double(stmt, 4, lngLat11.longitude);
+    sqlite3_bind_double(stmt, 5, lngLat11.latitude);
+  });
+  moreMapResultsAvail = mapResults.size() >= 1000;
+}
+
+void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
+{
+  // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
+  const char* query = "SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
+      "MATCH ? ORDER BY osmSearchRank(rank, lng, lat) LIMIT 20 OFFSET ?;";
+  DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
+    int rowid = sqlite3_column_int(stmt, 1);
+    double lng = sqlite3_column_double(stmt, 2);
+    double lat = sqlite3_column_double(stmt, 3);
+    double score = sqlite3_column_double(stmt, 4);
+    auto& res = addListResult(rowid, lng, lat, score);
+    res.tags.Parse((const char*)(sqlite3_column_text(stmt, 1)));
+    if(!res.tags.HasMember("name"))
+      res.tags.AddMember("name", "Untitled", res.tags.GetAllocator());
+  }, [&](sqlite3_stmt* stmt){
+    std::string s(queryStr + "*");
+    std::replace(s.begin(), s.end(), '\'', ' ');
+    sqlite3_bind_text(stmt, 1, s.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, listResults.size());  //resultOffset);
+  });
 }
 
 void MapsSearch::showGUI()
 {
-  using namespace rapidjson;
-
-  static int resultOffset = 0;
   static std::vector<std::string> autocomplete;
-  static std::vector<Document> results;
-  static std::vector<LngLat> respts;
   static std::string searchStr;  // imgui compares to this to determine if text is edited, so make persistant
   static int currItem = -1;
+  static int providerIdx = 0;
   static LngLat dotBounds00, dotBounds11;
+  static int64_t prevPickedResultId = -1;
 
   if(!searchDB && !initSearch())
     return;
   if(!ImGui::CollapsingHeader("Search", ImGuiTreeNodeFlags_DefaultOpen))
     return;
+
+  const char* providers[] = {"Offline", "Nominatim"};
+  if(ImGui::Combo("Provider", &providerIdx, providers, 2))
+    clearSearch();
 
   Map* map = app->map;
   LngLat minLngLat(180, 90);
@@ -399,17 +495,12 @@ void MapsSearch::showGUI()
   }
   if(ImGui::Button("Clear")) {
     //ImGui::SetKeyboardFocusHere(-1);
-    if(app->searchActive)
-      map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
-    for(MarkerID mrkid : dotMarkers)
-      map->markerSetVisible(mrkid, false);
-    // showBookmarkGUI() will redisplay bookmark markers
-    app->searchActive = false;
+    clearSearch();
     searchStr.clear();
     autocomplete.clear();
     ent = true;
   }
-  else if (!results.empty()) {
+  else if (!listResults.empty()) {
     ImGui::SameLine();
     if(ImGui::Button("More"))
       nextPage = !ent && !edited;
@@ -417,169 +508,139 @@ void MapsSearch::showGUI()
 
   if(ent || edited || nextPage) {
     if(!nextPage) {
-      results.clear();
-      respts.clear();
+      clearSearchResults(mapResults);
+      clearSearchResults(listResults);
       map->markerSetVisible(app->pickResultMarker, false);
       currItem = -1;
     }
-    resultOffset = nextPage ? resultOffset + 20 : 0;
-    size_t markerIdx = nextPage ? results.size() : 0;
+    //resultOffset = nextPage ? resultOffset + 20 : 0;
+    //size_t markerIdx = nextPage ? results.size() : 0;
     if(searchStr.size() > 2) {
       map->getPosition(mapCenter.longitude, mapCenter.latitude);
-      // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
-      const char* query = "SELECT props, lng, lat FROM points_fts WHERE points_fts "
-          "MATCH ? ORDER BY osmSearchRank(rank, lng, lat) LIMIT 20 OFFSET ?;";
+      if(providerIdx == 1)
+        onlineListSearch(searchStr, dotBounds00, dotBounds11);
+      else
+        offlineListSearch(searchStr, dotBounds00, dotBounds11);
 
-      DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
-        double lng = sqlite3_column_double(stmt, 1);
-        double lat = sqlite3_column_double(stmt, 2);
-        respts.push_back(LngLat(lng, lat));
-        results.emplace_back();
-        results.back().Parse((const char*)(sqlite3_column_text(stmt, 0)));
-        if(!results.back().HasMember("name")) {
-          results.pop_back();
-          respts.pop_back();
-        }
-        else if(ent || nextPage) {
-          if(searchMarkers.empty()) {
-            std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
-            app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
-            svg = fstring(markerSVG, "#CF513D");  // SVG parsing is destructive!!!
-            app->textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);
+      // zoom out if necessary to show first 5 results
+      if(ent || nextPage) {
+        LngLat minLngLat(180, 90), maxLngLat(-180, -90);
+        int resultIdx = 0;
+        for(auto& res : listResults) {
+          if(resultIdx <= 5 || lngLatDist(mapCenter, res.pos) < 2.0) {
+            minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
+            minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
+            maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
+            maxLngLat.latitude = std::max(maxLngLat.latitude, res.pos.latitude);
           }
-          if(markerIdx >= searchMarkers.size())
-            searchMarkers.push_back(map->markerAdd());
-          map->markerSetVisible(searchMarkers[markerIdx], true);
-          // 2nd value is priority (smaller number means higher priority)
-          std::string namestr = results.back()["name"].GetString();
-          std::replace(namestr.begin(), namestr.end(), '"', '\'');
-          map->markerSetStylingFromString(searchMarkers[markerIdx],
-              fstring(searchMarkerStyleStr, "search-marker-red", markerIdx+2, namestr.c_str()).c_str());
-          map->markerSetPoint(searchMarkers[markerIdx], LngLat(lng, lat));
-          ++markerIdx;
+          ++resultIdx;
+        }
 
-          if(markerIdx <= 5 || lngLatDist(mapCenter, LngLat(lng, lat)) < 2.0) {
-            minLngLat.longitude = std::min(minLngLat.longitude, lng);
-            minLngLat.latitude = std::min(minLngLat.latitude, lat);
-            maxLngLat.longitude = std::max(maxLngLat.longitude, lng);
-            maxLngLat.latitude = std::max(maxLngLat.latitude, lat);
+        if(minLngLat.longitude != 180) {
+          double scrx, scry;
+          if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
+              || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
+            auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);
+            pos.zoom = std::min(pos.zoom, 16.0f);
+            map->flyTo(pos, 1.0);
           }
         }
-      }, [&](sqlite3_stmt* stmt){
-        std::string s(searchStr + "*");
-        std::replace(s.begin(), s.end(), '\'', ' ');
-        sqlite3_bind_text(stmt, 1, s.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 2, resultOffset);
-      });
+      }
+
+      if(!app->searchActive && ent && !listResults.empty()) {
+        map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
+        app->mapsBookmarks->hideBookmarks();
+        app->searchActive = true;
+      }
     }
-    if(!app->searchActive && ent && !results.empty()) {
-      map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
-      app->mapsBookmarks->hideBookmarks();
-      app->searchActive = true;
-    }
-    for(; markerIdx < searchMarkers.size(); ++markerIdx)
-      map->markerSetVisible(searchMarkers[markerIdx], false);
   }
 
-  // dot markers for complete results
-  // TODO: also repeat search if zooming in and we were at result limit
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
-  if(app->searchActive && (ent || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
+  if(app->searchActive && (ent || (moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
+      || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude)) {
     double lng01 = fabs(lngLat11.longitude - lngLat00.longitude);
     double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
     dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
     dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
-    size_t markerIdx = 0;
-    const char* query = "SELECT rowid, lng, lat FROM points_fts WHERE points_fts "
-        "MATCH ? AND lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? ORDER BY rank LIMIT 1000;";
-    DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
-      double lng = sqlite3_column_double(stmt, 1);
-      double lat = sqlite3_column_double(stmt, 2);
-      //respts.push_back(LngLat(lng, lat));
-      if(markerIdx >= dotMarkers.size()) {
-        dotMarkers.push_back(map->markerAdd());
-        map->markerSetStylingFromString(dotMarkers[markerIdx], dotMarkerStyleStr);
+    clearSearchResults(mapResults);
+    if(providerIdx == 1)
+      onlineMapSearch(searchStr, dotBounds00, dotBounds11);
+    else
+      offlineMapSearch(searchStr, dotBounds00, dotBounds11);
+    createMarkers();
+    prevZoom = map->getZoom();
+  }
+  else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
+    onZoom();
+  }
+
+  SearchResult* pickedResult = NULL;
+  if(app->pickedMarkerId > 0) {
+    for(auto& res : mapResults) {
+      if(res.markerId == app->pickedMarkerId) {
+        pickedResult = &res;
+        map->markerSetVisible(res.markerId, false);  // hide existing marker
+        app->pickedMarkerId = 0;
+        break;
       }
-      map->markerSetVisible(dotMarkers[markerIdx], true);
-      map->markerSetPoint(dotMarkers[markerIdx], LngLat(lng, lat));
-      ++markerIdx;
-    }, [&](sqlite3_stmt* stmt){
-      std::string s(searchStr + "*");
-      std::replace(s.begin(), s.end(), '\'', ' ');
-      sqlite3_bind_text(stmt, 1, s.c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_double(stmt, 2, dotBounds00.longitude);
-      sqlite3_bind_double(stmt, 3, dotBounds00.latitude);
-      sqlite3_bind_double(stmt, 4, dotBounds11.longitude);
-      sqlite3_bind_double(stmt, 5, dotBounds11.latitude);
-    });
-    for(; markerIdx < dotMarkers.size(); ++markerIdx)
-      map->markerSetVisible(dotMarkers[markerIdx], false);
+    }
   }
 
   std::vector<std::string> sresults;
-  for (size_t ii = 0; ii < results.size(); ++ii) {
-    double distkm = lngLatDist(mapCenter, respts[ii]);
-    sresults.push_back(fstring("%s (%.1f km)", results[ii]["name"].GetString(), distkm));
+  for (auto& res : listResults) {
+    double distkm = lngLatDist(mapCenter, res.pos);
+    sresults.push_back(fstring("%s (%.1f km)", res.tags["name"].GetString(), distkm));
   }
 
   std::vector<const char*> cresults;
   for(const auto& s : sresults)
     cresults.push_back(s.c_str());
 
-  int prevItem = currItem;
-  bool updatePickMarker = false;
-  if(app->pickedMarkerId > 0) {
-    for(size_t ii = 0; ii < searchMarkers.size(); ++ii) {
-      if(searchMarkers[ii] == app->pickedMarkerId) {
-        currItem = ii;
-        app->pickedMarkerId = 0;
-        updatePickMarker = true;
-        break;
-      }
+  if(ImGui::ListBox("Results", &currItem, cresults.data(), cresults.size())) {
+    pickedResult = &listResults[currItem];
+    // find and hide existing map marker, if any
+    for(auto& res : mapResults) {
+      if(res.id == pickedResult->id)
+        map->markerSetVisible(res.markerId, false);
     }
   }
 
-  double scrx, scry;
-  if(ImGui::ListBox("Results", &currItem, cresults.data(), cresults.size()) || updatePickMarker) {
-    // if item selected, show info and place single marker
+  if(pickedResult) {
+    // restore normal marker for previous picked result
+    if(prevPickedResultId >= 0) {
+      for(auto& res : mapResults) {
+        if(res.id == prevPickedResultId)
+          map->markerSetVisible(res.markerId, true);
+      }
+    }
+    prevPickedResultId = pickedResult->id;
+
     app->pickLabelStr.clear();
-    for (auto& m : results[currItem].GetObject())
+    for (auto& m : pickedResult->tags.GetObject())
       app->pickLabelStr += m.name.GetString() + std::string(" = ") + m.value.GetString() + "\n";
-    if(prevItem >= 0)
-      map->markerSetVisible(searchMarkers[prevItem], true);
-    map->markerSetVisible(searchMarkers[currItem], false);
+
     if (app->pickResultMarker == 0)
       app->pickResultMarker = map->markerAdd();
     map->markerSetVisible(app->pickResultMarker, true);
     // 2nd value is priority (smaller number means higher priority)
-    std::string namestr = results[currItem]["name"].GetString();
+    std::string namestr = pickedResult->tags["name"].GetString();
     std::replace(namestr.begin(), namestr.end(), '"', '\'');
     map->markerSetStylingFromString(app->pickResultMarker,
         fstring(searchMarkerStyleStr, "pick-marker-red", 1, namestr.c_str()).c_str());
-    map->markerSetPoint(app->pickResultMarker, respts[currItem]);
+    map->markerSetPoint(app->pickResultMarker, pickedResult->pos);
 
-    StringBuffer sb;
-    Writer<StringBuffer> writer(sb);
-    results[currItem].Accept(writer);
+    rapidjson::StringBuffer sb;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+    pickedResult->tags.Accept(writer);
     app->pickResultProps = sb.GetString();
-    app->pickResultCoord = respts[currItem];
+    app->pickResultCoord = pickedResult->pos;
 
     // ensure marker is visible
-    double lng = respts[currItem].longitude;
-    double lat = respts[currItem].latitude;
+    double scrx, scry;
+    double lng = pickedResult->pos.longitude, lat = pickedResult->pos.latitude;
     if(!map->lngLatToScreenPosition(lng, lat, &scrx, &scry))
       map->flyTo(CameraPosition{lng, lat, 16}, 1.0);  // max(map->getZoom(), 14)
-  }
-  else if(minLngLat.longitude != 180) {
-    map->markerSetVisible(app->pickResultMarker, false);
-    app->pickResultCoord = LngLat(NAN, NAN);
-    if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
-        || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
-      auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);
-      pos.zoom = std::min(pos.zoom, 16.0f);
-      map->flyTo(pos, 1.0);
-    }
   }
 }
