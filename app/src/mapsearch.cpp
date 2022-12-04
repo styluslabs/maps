@@ -227,7 +227,7 @@ MarkerID MapsSearch::getPinMarker(const SearchResult& res)
   std::string namestr = res.tags["name"].GetString();
   std::replace(namestr.begin(), namestr.end(), '"', '\'');
   map->markerSetStylingFromString(markerId,
-      fstring(searchMarkerStyleStr, "search-marker-red", pinMarkerIdx+2, namestr.c_str()).c_str());
+      fstring(searchMarkerStyleStr, "search-marker-red", mapResults.size()+2, namestr.c_str()).c_str());
   map->markerSetPoint(markerId, res.pos);
   return markerId;
 }
@@ -270,12 +270,13 @@ void MapsSearch::createMarkers()
   if(!markerTexturesMade) {
     std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
     app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
-    svg = fstring(markerSVG, "#CF513D");  // SVG parsing is destructive!!!
-    app->textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
     markerTexturesMade = true;
   }
 
+  Map* map = app->map;
   isect2d::ISect2D<glm::vec2> collider;
+  int w = map->getViewportWidth(), h = map->getViewportHeight();
+  collider.resize({16, 16}, {w, h});
   for(auto& res : mapResults) {
     if(res.markerId == 0) {
       bool collided = false;
@@ -283,8 +284,6 @@ void MapsSearch::createMarkers()
           [&](auto& a, auto& b) { collided = true; return false; });
       res.markerId = collided ? getDotMarker(res) : getPinMarker(res);
       res.isPinMarker = !collided;
-
-
     }
     else if(res.isPinMarker)
       collider.insert(markerAABB(app->map, res.pos, markerRadius));
@@ -299,6 +298,8 @@ void MapsSearch::onZoom()
 
   double scrx, scry;
   isect2d::ISect2D<glm::vec2> collider;
+  int w = map->getViewportWidth(), h = map->getViewportHeight();
+  collider.resize({16, 16}, {w, h});
   if(zoom < prevZoom) {
     // if zoom decr by more than threshold, convert colliding pins to dots
     for(auto& res : mapResults) {
@@ -334,11 +335,13 @@ void MapsSearch::onZoom()
   prevZoom = zoom;
 }
 
+// TODO: we need destructor to cancel pending URL requests!
+
 void MapsSearch::onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch)
 {
   //"exclude_place_ids="
   std::string bounds = fstring("%f,%f,%f,%f", lngLat00.longitude, lngLat00.latitude, lngLat11.longitude, lngLat11.latitude);
-  std::string urlStr = fstring("https://nominatim.openstreetmap.org/search?format=jsonv2&viewbox=%s&limit=%d&q=%s",
+  std::string urlStr = fstring("https://nominatim.openstreetmap.org/search?format=jsonv2&bounded=1&viewbox=%s&limit=%d&q=%s",
       bounds.c_str(), isMapSearch ? 50 : 20, Url::escapeReservedCharacters(queryStr).c_str());
   auto url = Url(urlStr);
   app->map->getPlatform().startUrlRequest(url, [this, url, isMapSearch](UrlResponse&& response) {
@@ -346,18 +349,22 @@ void MapsSearch::onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngL
       logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
       return;
     }
+    std::lock_guard<std::mutex> lock(resultsMutex);
     rapidjson::Document doc;
     doc.Parse(response.content.data(), response.content.size());
     for(rapidjson::SizeType ii = 0; ii < doc.Size(); ++ii) {
       int64_t osmid = doc[ii]["osm_id"].GetInt64();
-      double lat = doc[ii]["lat"].GetDouble();
-      double lng = doc[ii]["lon"].GetDouble();
+      double lat = atof(doc[ii]["lat"].GetString());
+      double lng = atof(doc[ii]["lon"].GetString());
       float rank = doc[ii]["importance"].GetFloat();
 
       SearchResult& res = isMapSearch ? addMapResult(osmid, lng, lat, rank) : addListResult(osmid, lng, lat, rank);
+      res.tags.Parse("{}");
       res.tags.AddMember("name", doc[ii]["display_name"], res.tags.GetAllocator());
       res.tags.AddMember(doc[ii]["category"], doc[ii]["type"], res.tags.GetAllocator());
     }
+    if(isMapSearch)
+      createMarkers();
 
     /*response.content.push_back('\0');
     rapidxml::xml_document<> doc;
@@ -398,12 +405,14 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
   const char* query = "SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
       "MATCH ? AND lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? ORDER BY rank LIMIT 1000;";
   DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
-    int rowid = sqlite3_column_int(stmt, 1);
+    int rowid = sqlite3_column_int(stmt, 0);
     double lng = sqlite3_column_double(stmt, 2);
     double lat = sqlite3_column_double(stmt, 3);
     double score = sqlite3_column_double(stmt, 4);
     auto& res = addMapResult(rowid, lng, lat, score);
     res.tags.Parse((const char*)(sqlite3_column_text(stmt, 1)));
+    if(!res.tags.IsObject() || !res.tags.HasMember("name"))
+      mapResults.pop_back();
   }, [&](sqlite3_stmt* stmt){
     std::string s(queryStr + "*");
     std::replace(s.begin(), s.end(), '\'', ' ');
@@ -414,6 +423,7 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
     sqlite3_bind_double(stmt, 5, lngLat11.latitude);
   });
   moreMapResultsAvail = mapResults.size() >= 1000;
+  createMarkers();
 }
 
 void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
@@ -422,14 +432,14 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
   const char* query = "SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
       "MATCH ? ORDER BY osmSearchRank(rank, lng, lat) LIMIT 20 OFFSET ?;";
   DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
-    int rowid = sqlite3_column_int(stmt, 1);
+    int rowid = sqlite3_column_int(stmt, 0);
     double lng = sqlite3_column_double(stmt, 2);
     double lat = sqlite3_column_double(stmt, 3);
     double score = sqlite3_column_double(stmt, 4);
     auto& res = addListResult(rowid, lng, lat, score);
     res.tags.Parse((const char*)(sqlite3_column_text(stmt, 1)));
-    if(!res.tags.HasMember("name"))
-      res.tags.AddMember("name", "Untitled", res.tags.GetAllocator());
+    if(!res.tags.IsObject() || !res.tags.HasMember("name"))
+      listResults.pop_back();
   }, [&](sqlite3_stmt* stmt){
     std::string s(queryStr + "*");
     std::replace(s.begin(), s.end(), '\'', ' ');
@@ -488,6 +498,11 @@ void MapsSearch::showGUI()
     }
   }
 
+  // online results added from different thread
+  std::lock_guard<std::mutex> lock(resultsMutex);
+
+  LngLat lngLat00, lngLat11;
+  app->getMapBounds(lngLat00, lngLat11);
   // sort by distance only?
   bool nextPage = false;
   if (ImGui::Checkbox("Sort by distance", &sortByDist)) {
@@ -517,10 +532,12 @@ void MapsSearch::showGUI()
     //size_t markerIdx = nextPage ? results.size() : 0;
     if(searchStr.size() > 2) {
       map->getPosition(mapCenter.longitude, mapCenter.latitude);
-      if(providerIdx == 1)
-        onlineListSearch(searchStr, dotBounds00, dotBounds11);
+      if(providerIdx == 1) {
+        if(ent || nextPage)
+          onlineListSearch(searchStr, lngLat00, lngLat11);
+      }
       else
-        offlineListSearch(searchStr, dotBounds00, dotBounds11);
+        offlineListSearch(searchStr, lngLat00, lngLat11);
 
       // zoom out if necessary to show first 5 results
       if(ent || nextPage) {
@@ -547,7 +564,7 @@ void MapsSearch::showGUI()
         }
       }
 
-      if(!app->searchActive && ent && !listResults.empty()) {
+      if(!app->searchActive && ent) {  //&& !listResults.empty()) {
         map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
         app->mapsBookmarks->hideBookmarks();
         app->searchActive = true;
@@ -555,8 +572,6 @@ void MapsSearch::showGUI()
     }
   }
 
-  LngLat lngLat00, lngLat11;
-  app->getMapBounds(lngLat00, lngLat11);
   if(app->searchActive && (ent || (moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
       || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude)) {
@@ -569,7 +584,6 @@ void MapsSearch::showGUI()
       onlineMapSearch(searchStr, dotBounds00, dotBounds11);
     else
       offlineMapSearch(searchStr, dotBounds00, dotBounds11);
-    createMarkers();
     prevZoom = map->getZoom();
   }
   else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
@@ -602,8 +616,10 @@ void MapsSearch::showGUI()
     pickedResult = &listResults[currItem];
     // find and hide existing map marker, if any
     for(auto& res : mapResults) {
-      if(res.id == pickedResult->id)
+      if(res.id == pickedResult->id) {
         map->markerSetVisible(res.markerId, false);
+        break;
+      }
     }
   }
 
@@ -611,36 +627,17 @@ void MapsSearch::showGUI()
     // restore normal marker for previous picked result
     if(prevPickedResultId >= 0) {
       for(auto& res : mapResults) {
-        if(res.id == prevPickedResultId)
+        if(res.id == prevPickedResultId) {
           map->markerSetVisible(res.markerId, true);
+          break;
+        }
       }
     }
     prevPickedResultId = pickedResult->id;
 
-    app->pickLabelStr.clear();
-    for (auto& m : pickedResult->tags.GetObject())
-      app->pickLabelStr += m.name.GetString() + std::string(" = ") + m.value.GetString() + "\n";
-
-    if (app->pickResultMarker == 0)
-      app->pickResultMarker = map->markerAdd();
-    map->markerSetVisible(app->pickResultMarker, true);
-    // 2nd value is priority (smaller number means higher priority)
-    std::string namestr = pickedResult->tags["name"].GetString();
-    std::replace(namestr.begin(), namestr.end(), '"', '\'');
-    map->markerSetStylingFromString(app->pickResultMarker,
-        fstring(searchMarkerStyleStr, "pick-marker-red", 1, namestr.c_str()).c_str());
-    map->markerSetPoint(app->pickResultMarker, pickedResult->pos);
-
     rapidjson::StringBuffer sb;
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     pickedResult->tags.Accept(writer);
-    app->pickResultProps = sb.GetString();
-    app->pickResultCoord = pickedResult->pos;
-
-    // ensure marker is visible
-    double scrx, scry;
-    double lng = pickedResult->pos.longitude, lat = pickedResult->pos.latitude;
-    if(!map->lngLatToScreenPosition(lng, lat, &scrx, &scry))
-      map->flyTo(CameraPosition{lng, lat, 16}, 1.0);  // max(map->getZoom(), 14)
+    app->setPickResult(pickedResult->pos, pickedResult->tags["name"].GetString(), sb.GetString());
   }
 }

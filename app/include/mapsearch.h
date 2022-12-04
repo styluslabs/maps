@@ -35,6 +35,7 @@ public:
 
 private:
   std::atomic_int tileCount;
+  std::mutex resultsMutex;
 
   std::vector<SearchResult> listResults;
   std::vector<SearchResult> mapResults;

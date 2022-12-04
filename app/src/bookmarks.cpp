@@ -45,14 +45,8 @@ void MapsBookmarks::showPlacesGUI()
   static std::string currList;
   static std::string newListTitle;
   static int currListIdx = 0;
-  static int currPlaceIdx = 0;
+  static int currPlaceIdx = -1;
   static bool updatePlaces = true;
-
-  // using markerSetBitmap will make a copy of bitmap for every marker ... let's see what happens w/ textures
-  //  from scene file (I doubt those get duplicated for every use)
-  //int markerSize = 24;
-  //std::string bkmkMarker = fstring(markerSVG, "#00FFFF", "#000", "0.5");
-  //unsigned int* markerImg = rasterizeSVG(bkmkMarker.data(), markerSize, markerSize);
 
   if (!ImGui::CollapsingHeader("Saved Places", ImGuiTreeNodeFlags_DefaultOpen))
     return;
@@ -128,23 +122,35 @@ void MapsBookmarks::showPlacesGUI()
     updatePlaces = false;
   }
 
+  int prevPlaceIdx = currPlaceIdx;
+  if(app->pickedMarkerId > 0) {
+    for(size_t ii = 0; ii < bkmkMarkers.size(); ++ii) {
+      if(bkmkMarkers[ii] == app->pickedMarkerId) {
+        currPlaceIdx = ii;
+        break;
+      }
+    }
+  }
+
   std::vector<const char*> cnames;
   for(const auto& s : placeNames)
     cnames.push_back(s.c_str());
 
-  if(ImGui::ListBox("Places", &currPlaceIdx, cnames.data(), cnames.size())) {
-    std::string query = fstring("SELECT notes, lng, lat FROM bookmarks WHERE rowid = %d;", placeRowIds[currPlaceIdx]);
-    double lng, lat, scrx, scry;
+  if(ImGui::ListBox("Places", &currPlaceIdx, cnames.data(), cnames.size()) || app->pickedMarkerId > 0) {
+    std::string query = fstring("SELECT props, notes, lng, lat FROM bookmarks WHERE rowid = %d;", placeRowIds[currPlaceIdx]);
     DB_exec(bkmkDB, query.c_str(), [&](sqlite3_stmt* stmt){
-      lng = sqlite3_column_double(stmt, 1);
-      lat = sqlite3_column_double(stmt, 2);
-      placeNotes = (const char*)(sqlite3_column_text(stmt, 0));
+      double lng = sqlite3_column_double(stmt, 2);
+      double lat = sqlite3_column_double(stmt, 3);
+      placeNotes = (const char*)(sqlite3_column_text(stmt, 1));
+      app->setPickResult(LngLat(lng, lat), placeNames[currPlaceIdx], (const char*)(sqlite3_column_text(stmt, 0)));
     });
-    if(!map->lngLatToScreenPosition(lng, lat, &scrx, &scry))
-      map->flyTo(CameraPosition{lng, lat, 16}, 1.0);  // max(map->getZoom(), 14)
 
-    // we should highlight the selected place (while still showing others)
-    //markerSetBitmap(MarkerID _marker, int _width, int _height, const unsigned int* _data);
+    // What if pick result is cleared some other way?  How to restore bookmark marker?
+    //app->onPickResultChanged = [this](){ updatePlaces = true; };
+    //map->markerSetVisible(bkmkMarkers[currPlaceIdx], false);
+    //if(prevPlaceIdx >= 0)
+    //  map->markerSetVisible(bkmkMarkers[prevPlaceIdx], true);
+    app->pickedMarkerId = 0;
   }
 
   if (ImGui::Button("Delete Place")) {

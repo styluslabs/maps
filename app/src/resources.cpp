@@ -10,8 +10,9 @@ const char* markerSVG = R"#(<svg xmlns="http://www.w3.org/2000/svg" width="24" h
 // icons and text are linked by set Label::setRelative() in PointStyleBuilder::addFeature()
 // labels are collected and collided by LabelManager::updateLabelSet() - sorted by priority (lower number
 //  is higher priority), collided, then sorted by order (higher order means drawn later, i.e., on top)
+//blend_order: 3
 const char* searchMarkerStyleStr = R"#(
-style: pick-marker
+style: points
 texture: %s
 interactive: true
 collide: false
@@ -23,6 +24,7 @@ text:
   offset: [0px, -11px]
   collide: true
   optional: true
+  max_lines: 2
   font:
     family: Open Sans
     size: 12px

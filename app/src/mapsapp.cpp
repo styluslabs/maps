@@ -41,19 +41,48 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
   lngLatMax.longitude = std::max(std::max(lng00, lng01), std::max(lng10, lng11));
 }
 
+void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string props, int priority)
+{
+  if(pickResultMarker == 0)
+    pickResultMarker = map->markerAdd();
+  map->markerSetVisible(pickResultMarker, true);
+  // 2nd value is priority (smaller number means higher priority)
+  std::replace(namestr.begin(), namestr.end(), '"', '\'');
+  map->markerSetStylingFromString(pickResultMarker,
+      fstring(searchMarkerStyleStr, "pick-marker-red", priority, namestr.c_str()).c_str());
+  map->markerSetPoint(pickResultMarker, pos);
+  pickResultCoord = pos;
+  pickResultProps = props;
+
+  if(props.empty()) {
+    pickLabelStr = fstring("lat = %.6f\nlon = %.6f", pos.latitude, pos.longitude);
+  }
+  else {
+    pickLabelStr.clear();
+    rapidjson::Document doc;
+    doc.Parse(props.c_str());
+    for (auto& m : doc.GetObject()) {
+      std::string val = "<object>";
+      if(m.value.IsNumber())
+        val = std::to_string(m.value.GetDouble());
+      else if(m.value.IsString())
+        val = m.value.GetString();
+      pickLabelStr += m.name.GetString() + std::string(" = ") + val + "\n";
+    }
+  }
+
+  // ensure marker is visible
+  double scrx, scry;
+  if(!map->lngLatToScreenPosition(pos.longitude, pos.latitude, &scrx, &scry))
+    map->flyTo(CameraPosition{pos.longitude, pos.latitude, 16}, 1.0);  // max(map->getZoom(), 14)
+}
+
 void MapsApp::longPressEvent(float x, float y)
 {
-  // drop a pin at location
-  map->screenPositionToLngLat(x, y, &pickResultCoord.longitude, &pickResultCoord.latitude);
-  if (pickResultMarker == 0) {
-    pickResultMarker = map->markerAdd();
-  }
-  map->markerSetStylingFromPath(pickResultMarker, "layers.pick-result.draw.pick-marker");
-  map->markerSetPoint(pickResultMarker, pickResultCoord);
-  map->markerSetVisible(pickResultMarker, true);
+  double lng, lat;
+  map->screenPositionToLngLat(x, y, &lng, &lat);
+  setPickResult(LngLat(lng, lat), "", "");
   mapsSearch->clearSearch();  // ???
-  pickResultProps.clear();
-  pickLabelStr = fstring("lat = %.6f\nlon = %.6f", pickResultCoord.latitude, pickResultCoord.longitude);
 }
 
 void MapsApp::doubleTapEvent(float x, float y)
@@ -83,37 +112,19 @@ void MapsApp::tapEvent(float x, float y)
   logMsg("Remapped: %f, %f\n", xx, yy);
 
   map->pickLabelAt(x, y, [&](const LabelPickResult* result) {
-    pickLabelStr.clear();
-    if (pickResultMarker == 0) {
-      pickResultMarker = map->markerAdd();
-    }
     if (!result) {
       logMsg("Pick Label result is null.\n");
-      map->markerSetVisible(pickResultMarker, false);
+      pickLabelStr.clear();
+      pickResultProps.clear();
+      if(pickResultMarker > 0)
+        map->markerSetVisible(pickResultMarker, false);
       pickResultCoord = LngLat(NAN, NAN);
       return;
     }
 
-    std::string itemId;
-    std::string namestr;
-    logMsg("Pick label result:\n");
-    for (const auto& item : result->touchItem.properties->items()) {
-      if(item.key == "id")
-        itemId = Properties::asString(item.value);
-      else if(item.key == "name")
-        namestr = Properties::asString(item.value);
-      std::string l = "  " + item.key + " = " + Properties::asString(item.value) + "\n";
-      logMsg(l.c_str());
-      pickLabelStr += l;
-    }
-    // save for use when creating bookmark
-    pickResultProps = result->touchItem.properties->toJson();
-    pickResultCoord = result->coordinates;
-
-    map->markerSetStylingFromString(pickResultMarker,
-      fstring(searchMarkerStyleStr, "marker-stroked", 2, namestr.c_str()).c_str());
-    map->markerSetPoint(pickResultMarker, result->coordinates);
-    map->markerSetVisible(pickResultMarker, true);
+    std::string itemId = result->touchItem.properties->getAsString("id");
+    std::string namestr = result->touchItem.properties->getAsString("name");
+    setPickResult(result->coordinates, namestr, result->touchItem.properties->toJson());
     mapsSearch->clearSearch();  // ???
 
     // query OSM API with id - append .json to get JSON instead of XML
@@ -201,7 +212,7 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
 #endif
   map->loadScene(std::move(options), load_async);
 
-  // markers are invalidated ... technically we should use SceneReadyCallback for this if loading async
+  // markers are invalidated ... not sure if we should use SceneReadyCallback for this since map->scene is replaced immediately
   mapsTracks = std::make_unique<MapsTracks>(this);
   mapsSearch = std::make_unique<MapsSearch>(this);
   mapsBookmarks = std::make_unique<MapsBookmarks>(this);
@@ -233,6 +244,11 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   mapsSources = std::make_unique<MapsSources>(this, "file://" + baseDir + "tangram-es/scenes/mapsources.yaml");
 #endif
   mapsOffline = std::make_unique<MapsOffline>(this);
+
+  map->setSceneReadyListener([this](SceneID id, const SceneError*) {
+    std::string svg = fstring(markerSVG, "#CF513D");  // note that SVG parsing is destructive
+    textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
+  });
 
   // default position: Alamo Square, SF - overriden by scene camera position if async load
   map->setPickRadius(1.0f);
