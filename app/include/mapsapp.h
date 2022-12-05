@@ -11,6 +11,7 @@ class MapsBookmarks;
 class MapsOffline;
 class MapsSources;
 class MapsSearch;
+class PluginManager;
 
 struct Location
 {
@@ -81,6 +82,7 @@ public:
   std::unique_ptr<MapsOffline> mapsOffline;
   std::unique_ptr<MapsSources> mapsSources;
   std::unique_ptr<MapsSearch> mapsSearch;
+  std::unique_ptr<PluginManager> pluginManager;
 
   Map* map;
 

@@ -33,6 +33,9 @@ public:
   std::vector<MarkerID> pinMarkers;
   std::vector<MarkerID> dotMarkers;
 
+  // search flags
+  enum { MAP_SEARCH = 1, SORT_BY_DIST = 2 };
+
 private:
   std::atomic_int tileCount;
   std::mutex resultsMutex;

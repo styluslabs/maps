@@ -244,6 +244,7 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   mapsSources = std::make_unique<MapsSources>(this, "file://" + baseDir + "tangram-es/scenes/mapsources.yaml");
 #endif
   mapsOffline = std::make_unique<MapsOffline>(this);
+  pluginManager = std::make_unique<PluginManager>(this);
 
   map->setSceneReadyListener([this](SceneID id, const SceneError*) {
     std::string svg = fstring(markerSVG, "#CF513D");  // note that SVG parsing is destructive

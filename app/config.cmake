@@ -10,6 +10,7 @@ add_library(maps-app
   app/src/touchhandler.cpp
   app/src/tracks.cpp
   app/src/util.cpp
+  app/src/plugins.cpp
 )
 
 #imgui_impl_generic.cpp

@@ -1,6 +1,7 @@
 #include "mapsearch.h"
 #include "mapsapp.h"
 #include "bookmarks.h"
+#include "plugins.h"
 #include "resources.h"
 #include "util.h"
 #include "imgui.h"
@@ -344,7 +345,7 @@ void MapsSearch::onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngL
   std::string urlStr = fstring("https://nominatim.openstreetmap.org/search?format=jsonv2&bounded=1&viewbox=%s&limit=%d&q=%s",
       bounds.c_str(), isMapSearch ? 50 : 20, Url::escapeReservedCharacters(queryStr).c_str());
   auto url = Url(urlStr);
-  app->map->getPlatform().startUrlRequest(url, [this, url, isMapSearch](UrlResponse&& response) {
+  MapsApp::platform->startUrlRequest(url, [this, url, isMapSearch](UrlResponse&& response) {
     if(response.error) {
       logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
       return;
@@ -396,9 +397,6 @@ void MapsSearch::onlineListSearch(std::string queryStr, LngLat lngLat00, LngLat 
 {
   onlineSearch(queryStr, lngLat00, lngLat11, false);
 }
-
-// Remaining issues:
-// - we don't want pin markers to disappear (change to dots) when panning
 
 void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
 {
@@ -462,8 +460,11 @@ void MapsSearch::showGUI()
   if(!ImGui::CollapsingHeader("Search", ImGuiTreeNodeFlags_DefaultOpen))
     return;
 
-  const char* providers[] = {"Offline", "Nominatim"};
-  if(ImGui::Combo("Provider", &providerIdx, providers, 2))
+  std::vector<const char*> cproviders = {"Offline"};
+  for(auto& fn : app->pluginManager->searchFns)
+    cproviders.push_back(fn.title.c_str());
+
+  if(ImGui::Combo("Provider", &providerIdx, cproviders.data(), cproviders.size()))
     clearSearch();
 
   Map* map = app->map;
@@ -532,9 +533,9 @@ void MapsSearch::showGUI()
     //size_t markerIdx = nextPage ? results.size() : 0;
     if(searchStr.size() > 2) {
       map->getPosition(mapCenter.longitude, mapCenter.latitude);
-      if(providerIdx == 1) {
+      if(providerIdx > 0) {
         if(ent || nextPage)
-          onlineListSearch(searchStr, lngLat00, lngLat11);
+          app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
       }
       else
         offlineListSearch(searchStr, lngLat00, lngLat11);
@@ -580,8 +581,8 @@ void MapsSearch::showGUI()
     dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
     dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
     clearSearchResults(mapResults);
-    if(providerIdx == 1)
-      onlineMapSearch(searchStr, dotBounds00, dotBounds11);
+    if(providerIdx > 0)
+      app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, MAP_SEARCH);
     else
       offlineMapSearch(searchStr, dotBounds00, dotBounds11);
     prevZoom = map->getZoom();
