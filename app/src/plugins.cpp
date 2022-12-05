@@ -10,20 +10,18 @@ const char* testJsSrc = R"#(
 
 function nominatimSearch(query, bounds, flags)
 {
-  //bounds = getMapBounds();
-  url = "https://nominatim.openstreetmap.org/search?format=jsonv2&bounded=1&viewbox=" + bounds.join() + "&limit=50&q=" + query;
-
+  val url = "https://nominatim.openstreetmap.org/search?format=jsonv2&bounded=1&viewbox=" + bounds.join() + "&limit=50&q=" + query;
   jsonHttpRequest(url, function(content) {
     for(var ii = 0; ii < content.length; ii++) {
-      r = content[i];
-      tags = {"name": r.display_name, r.category: r.type};
-      last = ii + 1 == content.length ? 4 : 0;
+      val r = content[i];
+      val tags = {"name": r.display_name, r.category: r.type};
+      val last = ii + 1 == content.length ? 4 : 0;
       addSearchResult(r.osm_id, r.lat, r.lon, r.importance, flags + last, tags);
     }
   });
 }
 
-registerFunction(nominatimSearch, "search", "Nominatim Search");
+registerFunction("nominatimSearch", "search", "Nominatim Search");
 
 )#";
 
@@ -46,6 +44,7 @@ PluginManager::~PluginManager()
 
 void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags)
 {
+  std::lock_guard<std::mutex> lock(jsMutex);
   duk_context* ctx = jsContext;
   // query
   duk_push_string(ctx, queryStr.c_str());
@@ -86,7 +85,7 @@ static int registerFunction(duk_context* ctx)
 static int jsonHttpRequest(duk_context* ctx)
 {
   static int reqCounter = 0;
-
+  // called from jsSearch, etc., so do not lock jsMutex (alternative is to use recursive_lock)
   const char* urlstr = duk_require_string(ctx, 0);
   auto url = Url(urlstr);
   std::string cbvar = fstring("_jsonHttpRequest_%d", reqCounter++);
@@ -100,6 +99,7 @@ static int jsonHttpRequest(duk_context* ctx)
       logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
       return;
     }
+    std::lock_guard<std::mutex> lock(PluginManager::inst->jsMutex);
     // get the callback
     //duk_push_global_stash(ctx);
     //duk_get_prop_string(ctx, -2, cbvar.c_str());
@@ -116,10 +116,9 @@ static int jsonHttpRequest(duk_context* ctx)
   return 0;
 }
 
-// how to call createMarkers()?  from JS? thread safety?
-
 static int addSearchResult(duk_context* ctx)
 {
+  // called from startUrlRequest callback so do not lock jsMutex
   // JS: addSearchResult(r.osm_id, r.lat, r.lon, r.importance, flags, tags);
   int64_t osm_id = duk_require_number(ctx, 0);
   double lat = duk_require_number(ctx, 1);
@@ -130,7 +129,6 @@ static int addSearchResult(duk_context* ctx)
   auto& ms = PluginManager::inst->app->mapsSearch;
   auto& res = flags & MapsSearch::MAP_SEARCH ? ms->addMapResult(osm_id, lng, lat, score)
                                              : ms->addListResult(osm_id, lng, lat, score);
-
   // duktape obj -> string -> rapidjson obj ... not ideal
   res.tags.Parse(duk_json_encode(ctx, 5));
 

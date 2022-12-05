@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-#include <string>
 #include "mapscomponent.h"
 //#include "js/JavaScript.h"
 #include "duktape/duktape.h"
@@ -20,6 +18,8 @@ public:
   void loadPlugins(duk_context* ctx);
 
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
+
+  std::mutex jsMutex;
 
   std::vector<PluginFn> searchFns;
 

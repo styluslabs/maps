@@ -30,6 +30,10 @@ public:
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
   static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
 
+  void createMarkers();
+  SearchResult& addListResult(int64_t id, double lng, double lat, float rank);
+  SearchResult& addMapResult(int64_t id, double lng, double lat, float rank);
+
   std::vector<MarkerID> pinMarkers;
   std::vector<MarkerID> dotMarkers;
 
@@ -57,9 +61,6 @@ private:
   void onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch);
 
   void onZoom();
-  void createMarkers();
-  SearchResult& addListResult(int64_t id, double lng, double lat, float rank);
-  SearchResult& addMapResult(int64_t id, double lng, double lat, float rank);
   void clearSearchResults(std::vector<SearchResult>& results);
   MarkerID getPinMarker(const SearchResult& res);
   MarkerID getDotMarker(const SearchResult& res);
