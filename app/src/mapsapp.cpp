@@ -16,6 +16,7 @@
 #include "tracks.h"
 #include "mapsearch.h"
 #include "mapsources.h"
+#include "plugins.h"
 
 using namespace Tangram;
 
