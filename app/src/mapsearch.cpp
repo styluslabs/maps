@@ -248,6 +248,7 @@ MarkerID MapsSearch::getDotMarker(const SearchResult& res)
 
 SearchResult& MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank)
 {
+  mapResultsChanged = true;
   mapResults.push_back({id, {lng, lat}, rank, 0, false, {}});
   return mapResults.back();
 }
@@ -289,6 +290,7 @@ void MapsSearch::createMarkers()
     else if(res.isPinMarker)
       collider.insert(markerAABB(app->map, res.pos, markerRadius));
   }
+  mapResultsChanged = false;
 }
 
 void MapsSearch::onZoom()
@@ -364,26 +366,6 @@ void MapsSearch::onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngL
       res.tags.AddMember("name", doc[ii]["display_name"], res.tags.GetAllocator());
       res.tags.AddMember(doc[ii]["category"], doc[ii]["type"], res.tags.GetAllocator());
     }
-    if(isMapSearch)
-      createMarkers();
-
-    /*response.content.push_back('\0');
-    rapidxml::xml_document<> doc;
-    doc.parse<0>(response.content.data());
-    auto tag = doc.first_node("searchresults")->first_node("place");
-    while(tag) {
-      auto lat = tag->first_attribute("lat");
-      auto lon = tag->first_attribute("lon");
-      auto rank = tag->first_attribute("importance");
-
-      // lat, lon, name, description, photos
-      SearchResult& res = addSearchResult(lon->value(), lat->value(), rank->value());
-      res.tags.AddMember("name", Value(tag->first_attribute("display_name")->value()), res.tags.GetAllocator());
-      res.tags.AddMember(doc[ii]["category"], doc[ii]["type"], res.tags.GetAllocator());
-
-      //pickLabelStr += key->value() + std::string(" = ") + val->value() + std::string("\n");
-      tag = tag->next_sibling("place");
-    }*/
   });
 }
 
@@ -421,7 +403,6 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
     sqlite3_bind_double(stmt, 5, lngLat11.latitude);
   });
   moreMapResultsAvail = mapResults.size() >= 1000;
-  createMarkers();
 }
 
 void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
@@ -590,6 +571,9 @@ void MapsSearch::showGUI()
   else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
     onZoom();
   }
+
+  if(mapResultsChanged)
+    createMarkers();
 
   SearchResult* pickedResult = NULL;
   if(app->pickedMarkerId > 0) {

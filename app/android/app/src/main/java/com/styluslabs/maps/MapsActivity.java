@@ -209,7 +209,7 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
   }
 
   @Keep
-  void startUrlRequest(@NonNull final String url, final long requestHandle)
+  void startUrlRequest(@NonNull final String url, @NonNull final String headers, final long requestHandle)
   {
     final HttpHandler.Callback callback = new HttpHandler.Callback() {
       @Override
@@ -237,7 +237,7 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
       }
     };
 
-    Object request = httpHandler.startRequest(url, callback);
+    Object request = httpHandler.startRequest(url, headers, callback);
     if (request != null) {
       httpRequestHandles.put(requestHandle, request);
     }

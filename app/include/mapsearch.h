@@ -30,10 +30,10 @@ public:
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
   static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
 
-  void createMarkers();
   SearchResult& addListResult(int64_t id, double lng, double lat, float rank);
   SearchResult& addMapResult(int64_t id, double lng, double lat, float rank);
 
+  std::mutex resultsMutex;
   std::vector<MarkerID> pinMarkers;
   std::vector<MarkerID> dotMarkers;
 
@@ -42,7 +42,6 @@ public:
 
 private:
   std::atomic_int tileCount;
-  std::mutex resultsMutex;
 
   std::vector<SearchResult> listResults;
   std::vector<SearchResult> mapResults;
@@ -52,6 +51,7 @@ private:
 
   bool markerTexturesMade = false;
   bool moreMapResultsAvail = false;
+  bool mapResultsChanged = false;  // protected by resultsMutex
 
   void offlineListSearch(std::string queryStr, LngLat, LngLat);
   void offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11);
@@ -64,4 +64,5 @@ private:
   void clearSearchResults(std::vector<SearchResult>& results);
   MarkerID getPinMarker(const SearchResult& res);
   MarkerID getDotMarker(const SearchResult& res);
+  void createMarkers();
 };

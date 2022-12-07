@@ -13,12 +13,11 @@ const char* testJsSrc = R"#(
 function nominatimSearch(query, bounds, flags)
 {
   const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&bounded=1&viewbox=" + bounds.join() + "&limit=50&q=" + query;
-  jsonHttpRequest(url, function(content) {
+  jsonHttpRequest(url, "", function(content) {
     for(var ii = 0; ii < content.length; ii++) {
       const r = content[ii];
       const tags = {"name": r.display_name, [r.category]: r.type};
-      const last = ii + 1 == content.length ? 4 : 0;
-      addSearchResult(r.osm_id, r.lat, r.lon, r.importance, flags + last, tags);
+      addSearchResult(r.osm_id, r.lat, r.lon, r.importance, flags, tags);
     }
   });
 }
@@ -107,14 +106,15 @@ static int jsonHttpRequest(duk_context* ctx)
   static int reqCounter = 0;
   // called from jsSearch, etc., so do not lock jsMutex (alternative is to use recursive_lock)
   const char* urlstr = duk_require_string(ctx, 0);
+  const char* hdrstr = duk_require_string(ctx, 1);
   auto url = Url(urlstr);
   std::string cbvar = fstring("_jsonHttpRequest_%d", reqCounter++);
-  duk_dup(ctx, 1);
+  duk_dup(ctx, 2);
   duk_put_global_string(ctx, cbvar.c_str());
   //duk_push_global_stash(ctx);
   //duk_dup(ctx, 1);  // callback
   //duk_put_prop_string(ctx, -2, cbvar.c_str());
-  MapsApp::platform->startUrlRequest(url, [ctx, cbvar, url](UrlResponse&& response) {
+  MapsApp::platform->startUrlRequest(url, hdrstr, [ctx, cbvar, url](UrlResponse&& response) {
     if(response.error) {
       logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
       return;
@@ -147,14 +147,12 @@ static int addSearchResult(duk_context* ctx)
   double score = duk_to_number(ctx, 3);
   int flags = duk_to_number(ctx, 4);
 
+  std::lock_guard<std::mutex> lock(PluginManager::inst->app->mapsSearch->resultsMutex);
   auto& ms = PluginManager::inst->app->mapsSearch;
   auto& res = flags & MapsSearch::MAP_SEARCH ? ms->addMapResult(osm_id, lng, lat, score)
                                              : ms->addListResult(osm_id, lng, lat, score);
   // duktape obj -> string -> rapidjson obj ... not ideal
   res.tags.Parse(duk_json_encode(ctx, 5));
-
-  if(flags & 0x4)
-    ms->createMarkers();
 
   return 0;
 }
@@ -164,9 +162,9 @@ void PluginManager::loadPlugins(duk_context* ctx)
   // create C functions
   duk_push_c_function(ctx, registerFunction, 3);
   duk_put_global_string(ctx, "registerFunction");
-  duk_push_c_function(ctx, jsonHttpRequest, 2);
+  duk_push_c_function(ctx, jsonHttpRequest, 3);
   duk_put_global_string(ctx, "jsonHttpRequest");
-  duk_push_c_function(ctx, addSearchResult, 2);
+  duk_push_c_function(ctx, addSearchResult, 6);
   duk_put_global_string(ctx, "addSearchResult");
 
   if(duk_pcompile_string(ctx, 0, testJsSrc) != 0)
