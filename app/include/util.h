@@ -19,6 +19,8 @@ struct sqlite3;
 typedef std::function<void(sqlite3_stmt*)> SQLiteStmtFn;
 bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb = SQLiteStmtFn(), SQLiteStmtFn bind = SQLiteStmtFn());
 
+std::vector<std::string> lsDirectory(const std::string& name);
+
 #include <sstream>
 
 template<template<class, class...> class Container, class... Container_Params>
@@ -98,3 +100,30 @@ public:
     return res;
   }
 };
+
+// read an entire file into a container - supports vector<char> or string
+// using C fns is faster than ifstream!
+template<class Container>
+bool readFile(Container* buff, const char* filename)
+{
+  FILE* f = fopen(filename, "rb");
+  if(!f)
+    return false;
+  long bytesread = 0;
+  // obtain file size
+  fseek(f, 0, SEEK_END);
+  long size = ftell(f);
+  // ftell returns -1 on error (e.g. if file is a directory)
+  if(size > 0) {
+    rewind(f);
+    // insert after any existing contents
+    size_t offset = buff->size();
+    buff->resize(offset + size);
+    // C++11 guarantees this will work for std::string
+    bytesread = fread(&(*buff)[offset], 1, size, f);
+  }
+  fclose(f);
+  return bytesread == size;
+}
+
+std::string readFile(const char* filename);

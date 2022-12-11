@@ -133,7 +133,7 @@ void MapsApp::tapEvent(float x, float y)
       auto url = Url("https://www.openstreetmap.org/api/0.6/node/" + itemId);
       map->getPlatform().startUrlRequest(url, [this, url, itemId](UrlResponse&& response) {
         if(response.error) {
-          logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
+          LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
           return;
         }
         response.content.push_back('\0');
@@ -245,7 +245,7 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   mapsSources = std::make_unique<MapsSources>(this, "file://" + baseDir + "tangram-es/scenes/mapsources.yaml");
 #endif
   mapsOffline = std::make_unique<MapsOffline>(this);
-  pluginManager = std::make_unique<PluginManager>(this);
+  pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
 
   map->setSceneReadyListener([this](SceneID id, const SceneError*) {
     std::string svg = fstring(markerSVG, "#CF513D");  // note that SVG parsing is destructive

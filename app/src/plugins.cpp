@@ -1,6 +1,7 @@
 #include "plugins.h"
 #include "mapsapp.h"
 #include "mapsearch.h"
+#include "mapsources.h"
 #include "util.h"
 
 using namespace Tangram;
@@ -8,32 +9,7 @@ using namespace Tangram;
 
 PluginManager* PluginManager::inst = NULL;
 
-const char* testJsSrc = R"#(
-
-function nominatimSearch(query, bounds, flags)
-{
-  const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&bounded=1&viewbox=" + bounds.join() + "&limit=50&q=" + query;
-  jsonHttpRequest(url, "", function(content) {
-    for(var ii = 0; ii < content.length; ii++) {
-      const r = content[ii];
-      const tags = {"name": r.display_name, [r.category]: r.type};
-      addSearchResult(r.osm_id, r.lat, r.lon, r.importance, flags, tags);
-    }
-  });
-}
-
-registerFunction("nominatimSearch", "search", "Nominatim Search");
-
-)#";
-
-// how will plugins be defined, registered, tracked?
-// yaml plugins:  section - in mapsources.yaml?  separate plugins.yaml?  plugins folder w/ js files?
-// - run each js file for it to register fns
-
-//static void dukErrorHander(void*, const char* message)
-//{
-//  LOGE("Plugins: fatal Duktape error: %s", message);
-//}
+// duktape ref: https://duktape.org/api.html
 
 static void dukTryCall(duk_context* ctx, int nargs)
 {
@@ -48,11 +24,24 @@ static void dukTryCall(duk_context* ctx, int nargs)
   }
 }
 
-PluginManager::PluginManager(MapsApp* _app) : MapsComponent(_app)
+PluginManager::PluginManager(MapsApp* _app, const std::string& pluginDir) : MapsComponent(_app)
 {
   inst = this;
   jsContext = duk_create_heap_default();  //(NULL, NULL, NULL, NULL, dukErrorHander);
-  loadPlugins(jsContext);
+  createFns(jsContext);
+
+  duk_context* ctx = jsContext;
+  auto files = lsDirectory(pluginDir);
+  for(auto& file : files) {
+    if(file.substr(file.size() - 3) != ".js") continue;
+    std::string js = readFile((pluginDir + "/" + file).c_str());
+    duk_push_string(ctx, file.c_str());
+    if(duk_pcompile_lstring_filename(ctx, 0, js.data(), js.size()) != 0)
+      LOGW("JS compile error: %s\n%s\n---", duk_safe_to_string(ctx, -1), file.c_str());
+    else
+      dukTryCall(ctx, 0);  // JS code should call registerFunction()
+    duk_pop(ctx);
+  }
 }
 
 PluginManager::~PluginManager()
@@ -116,7 +105,7 @@ static int jsonHttpRequest(duk_context* ctx)
   //duk_put_prop_string(ctx, -2, cbvar.c_str());
   MapsApp::platform->startUrlRequest(url, hdrstr, [ctx, cbvar, url](UrlResponse&& response) {
     if(response.error) {
-      logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
+      LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
       return;
     }
     std::lock_guard<std::mutex> lock(PluginManager::inst->jsMutex);
@@ -130,7 +119,10 @@ static int jsonHttpRequest(duk_context* ctx)
     duk_put_global_string(ctx, cbvar.c_str());  // release for GC
     // parse response JSON and call callback
     duk_push_lstring(ctx, response.content.data(), response.content.size());
-    duk_json_decode(ctx, -1);
+    char c0 = response.content.size() > 1 ? response.content[0] : '\0';
+    // TODO: use DUK_USE_CPP_EXCEPTIONS to catch parsing errors!
+    if(c0 == '[' || c0 == '{')
+      duk_json_decode(ctx, -1);
     dukTryCall(ctx, 1);
     duk_pop(ctx);
   });
@@ -157,7 +149,19 @@ static int addSearchResult(duk_context* ctx)
   return 0;
 }
 
-void PluginManager::loadPlugins(duk_context* ctx)
+static int addMapSource(duk_context* ctx)
+{
+  const char* keystr = duk_require_string(ctx, 0);
+  const char* yamlstr = duk_require_string(ctx, 1);
+  try {
+    PluginManager::inst->app->mapsSources->addSource(keystr, YAML::Load(yamlstr, strlen(yamlstr)));
+  } catch (std::exception& e) {
+    LOGE("Error parsing map source YAML: %s", e.what());
+  }
+  return 0;
+}
+
+void PluginManager::createFns(duk_context* ctx)
 {
   // create C functions
   duk_push_c_function(ctx, registerFunction, 3);
@@ -166,10 +170,6 @@ void PluginManager::loadPlugins(duk_context* ctx)
   duk_put_global_string(ctx, "jsonHttpRequest");
   duk_push_c_function(ctx, addSearchResult, 6);
   duk_put_global_string(ctx, "addSearchResult");
-
-  if(duk_pcompile_string(ctx, 0, testJsSrc) != 0)
-    LOGW("JS compile error: %s\n%s\n---", duk_safe_to_string(ctx, -1), testJsSrc);
-  else
-    dukTryCall(ctx, 0);  // JS code should call registerFunction()
-  duk_pop(ctx);
+  duk_push_c_function(ctx, addMapSource, 2);
+  duk_put_global_string(ctx, "addMapSource");
 }

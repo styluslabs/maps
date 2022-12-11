@@ -349,7 +349,7 @@ void MapsSearch::onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngL
   auto url = Url(urlStr);
   MapsApp::platform->startUrlRequest(url, [this, url, isMapSearch](UrlResponse&& response) {
     if(response.error) {
-      logMsg("Error fetching %s: %s\n", url.data().c_str(), response.error);
+      LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
       return;
     }
     std::lock_guard<std::mutex> lock(resultsMutex);

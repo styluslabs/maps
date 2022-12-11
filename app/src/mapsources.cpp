@@ -94,7 +94,11 @@ MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile) : MapsCo
       LOGE("Unable to load '%s': %s", sourcesFile.c_str(), response.error);
     else {
       try {
+        std::lock_guard<std::mutex> lock(sourcesMutex);
+        YAML::Node oldsources = Clone(mapSources);
         mapSources = YAML::Load(response.content.data(), response.content.size());
+        for(auto& node : oldsources)
+          mapSources[node.first.Scalar()] = node.second;
         sourcesLoaded = true;
       } catch (std::exception& e) {
         LOGE("Error parsing '%s': %s", sourcesFile.c_str(), e.what());
@@ -107,6 +111,13 @@ MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile) : MapsCo
   std::size_t sep = sourcesFile.find_last_of("/\\");
   if(sep != std::string::npos)
     baseUrl = sourcesFile.substr(0, sep+1);  //"file://" +
+}
+
+void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
+{
+  std::lock_guard<std::mutex> lock(sourcesMutex);
+  mapSources[key] = srcnode;
+  //for(auto& k : layerkeys) -- TODO: if modified layer is in use, reload
 }
 
 void MapsSources::showGUI()

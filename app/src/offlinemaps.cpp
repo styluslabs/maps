@@ -24,8 +24,7 @@ struct OfflineSourceInfo
   std::string name;
   std::string cacheFile;
   std::string url;
-  std::vector<std::string> urlSubdomains;
-  bool urlIsTms;
+  UrlOptions urlOptions;
   int maxZoom;
   YAML::Node searchData;
 };
@@ -102,8 +101,7 @@ static void offlineDLMain()
 OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& ofl, const OfflineSourceInfo& src)
 {
   mbtiles = std::make_unique<MBTilesDataSource>(_platform, src.name, src.cacheFile, "", true);
-  NetworkDataSource::UrlOptions urlOptions = {src.urlSubdomains, src.urlIsTms};
-  mbtiles->next = std::make_unique<NetworkDataSource>(_platform, src.url, urlOptions);
+  mbtiles->next = std::make_unique<NetworkDataSource>(_platform, src.url, src.urlOptions);
   name = src.name + "-" + std::to_string(ofl.id);
   offlineId = ofl.id;
   searchData = MapsSearch::parseSearchFields(src.searchData);
@@ -190,8 +188,8 @@ void MapsOffline::showGUI()
       if(info.cacheFile.empty())
         LOGE("Cannot save offline tiles for source %s - no cache file specified", src->name().c_str());
       else {
-        offlinePending.back().sources.push_back({src->name(), info.cacheFile, info.url,
-            info.urlSubdomains, info.urlIsTms, src->maxZoom()});
+        offlinePending.back().sources.push_back(
+            {src->name(), info.cacheFile, info.url, info.urlOptions, src->maxZoom(), {}});
         if(!src->isRaster())
           YamlPath("global.search_data").get(map->getScene()->config(), offlinePending.back().sources.back().searchData);
       }

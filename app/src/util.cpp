@@ -71,3 +71,38 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
   //logMsg("Query time: %.6f s for %s\n", std::chrono::duration<float>(t1 - t0).count(), sql);
   return true;
 }
+
+// from fileutil.h
+std::string readFile(const char* filename)
+{
+  std::string s;
+  readFile(&s, filename);
+  return s;
+}
+
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/stat.h>
+
+std::vector<std::string> lsDirectory(const std::string& name)
+{
+  std::vector<std::string> v;
+  DIR* dirp = opendir(name.c_str());
+  if(!dirp)
+    return v;
+  struct dirent* dp;
+  while((dp = readdir(dirp)) != NULL) {
+    if(strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
+      continue;
+    v.emplace_back(dp->d_name);
+    if(dp->d_type & DT_DIR)
+      v.back().push_back('/');
+    else if(dp->d_type == DT_UNKNOWN || dp->d_type == DT_LNK) {
+      struct stat s;
+      if(stat((name + "/" + v.back()).c_str(), &s) == 0 && S_ISDIR(s.st_mode))
+        v.back().push_back('/');
+    }
+  }
+  closedir(dirp);
+  return v;
+}

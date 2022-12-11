@@ -13,9 +13,9 @@ struct PluginFn
 class PluginManager : public MapsComponent
 {
 public:
-  PluginManager(MapsApp* _app);
+  PluginManager(MapsApp* _app, const std::string& pluginDir);
   ~PluginManager();
-  void loadPlugins(duk_context* ctx);
+  void createFns(duk_context* ctx);
 
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
 
