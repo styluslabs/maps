@@ -338,47 +338,7 @@ void MapsSearch::onZoom()
   prevZoom = zoom;
 }
 
-// TODO: we need destructor to cancel pending URL requests!
-
-void MapsSearch::onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch)
-{
-  //"exclude_place_ids="
-  std::string bounds = fstring("%f,%f,%f,%f", lngLat00.longitude, lngLat00.latitude, lngLat11.longitude, lngLat11.latitude);
-  std::string urlStr = fstring("https://nominatim.openstreetmap.org/search?format=jsonv2&bounded=1&viewbox=%s&limit=%d&q=%s",
-      bounds.c_str(), isMapSearch ? 50 : 20, Url::escapeReservedCharacters(queryStr).c_str());
-  auto url = Url(urlStr);
-  MapsApp::platform->startUrlRequest(url, [this, url, isMapSearch](UrlResponse&& response) {
-    if(response.error) {
-      LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
-      return;
-    }
-    std::lock_guard<std::mutex> lock(resultsMutex);
-    rapidjson::Document doc;
-    doc.Parse(response.content.data(), response.content.size());
-    for(rapidjson::SizeType ii = 0; ii < doc.Size(); ++ii) {
-      int64_t osmid = doc[ii]["osm_id"].GetInt64();
-      double lat = atof(doc[ii]["lat"].GetString());
-      double lng = atof(doc[ii]["lon"].GetString());
-      float rank = doc[ii]["importance"].GetFloat();
-
-      SearchResult& res = isMapSearch ? addMapResult(osmid, lng, lat, rank) : addListResult(osmid, lng, lat, rank);
-      res.tags.Parse("{}");
-      res.tags.AddMember("name", doc[ii]["display_name"], res.tags.GetAllocator());
-      res.tags.AddMember(doc[ii]["category"], doc[ii]["type"], res.tags.GetAllocator());
-    }
-  });
-}
-
-void MapsSearch::onlineMapSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11)
-{
-  onlineSearch(queryStr, lngLat00, lngLat11, true);
-  moreMapResultsAvail = mapResults.size() >= 50;
-}
-
-void MapsSearch::onlineListSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11)
-{
-  onlineSearch(queryStr, lngLat00, lngLat11, false);
-}
+// online map search C++ code removed 2022-12-11 (now handled via plugins)
 
 void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
 {

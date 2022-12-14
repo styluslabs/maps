@@ -174,8 +174,12 @@ void MapsApp::onMouseButton(double time, double x, double y, int button, int act
 {
   if(button == 0)
     touchHandler->touchEvent(0, action > 0 ? 1 : -1, time, x*density, y*density, 1.0f);
-  else if(action > 0)
-    longPressEvent(x, y);
+  else if(action > 0) {
+    if(mods == 0x04)  // GLFW_MOD_ALT
+      dumpTileContents(x, y);
+    else
+      longPressEvent(x, y);
+  }
 }
 
 void MapsApp::onMouseMove(double time, double x, double y, bool pressed)
@@ -312,6 +316,44 @@ void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
   orientation = azimuth;
 }
 
+#include <fstream>
+
+void MapsApp::dumpTileContents(float x, float y)
+{
+  static std::mutex logMutex;
+  double lng, lat;
+  map->screenPositionToLngLat(x, y, &lng, &lat);
+
+  TileTaskCb cb{[](std::shared_ptr<TileTask> task) {
+    if(!task->hasData() || !task->source()) return;
+    TileID id = task->tileId();
+    std::string filename = baseDir + fstring("dump_%d_%d_%d.json", id.z, id.x, id.y);
+    std::ofstream fout(filename);
+    std::lock_guard<std::mutex> lock(logMutex);
+    auto tileData = task->source()->parse(*task);  //task->source() ? : Mvt::parseTile(*task, 0);
+    std::vector<std::string> layerstr;
+    for(const Layer& layer : tileData->layers) {
+      std::vector<std::string> featstr;
+      for(const Feature& feature : layer.features)
+        featstr.push_back(feature.props.toJson());
+      layerstr.push_back("\"" + layer.name + "\": [" + joinStr(featstr, ", ") + "]");
+    }
+    fout << "{" << joinStr(layerstr, ", ") << "}";
+    LOGW("Tile dumped to %s", filename.c_str());
+  }};
+
+  auto& tileSources = map->getScene()->tileSources();
+  for(auto& src : tileSources) {
+    if(!src->isRaster()) {
+      TileID tileId = lngLatTile(LngLat(lng, lat), int(map->getZoom()));
+      while(tileId.z > src->maxZoom())
+        tileId = tileId.getParent();
+      auto task = std::make_shared<BinaryTileTask>(tileId, src);
+      src->loadTileData(task, cb);
+    }
+  }
+}
+
 void MapsApp::showSceneGUI()
 {
     // always show map position ... what's the difference between getPosition/getZoom and getCameraPosition()?
@@ -325,13 +367,14 @@ void MapsApp::showSceneGUI()
 
     if (ImGui::CollapsingHeader("Scene")) {
         if (ImGui::InputText("Scene URL", &sceneFile, ImGuiInputTextFlags_EnterReturnsTrue)) {
+            sceneYaml.clear();
             loadSceneFile();
         }
         if (ImGui::InputText("API key", &apiKey, ImGuiInputTextFlags_EnterReturnsTrue)) {
           if (!apiKey.empty()) {
               sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
           }
-          loadSceneFile(false);  //, {SceneUpdate{apiKeyScenePath, apiKey}});
+          loadSceneFile();  //, {SceneUpdate{apiKeyScenePath, apiKey}});
         }
         if (ImGui::Button("Reload Scene")) {
             loadSceneFile();

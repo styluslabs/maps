@@ -97,4 +97,6 @@ private:
   void showDebugFlagsGUI();
   void showSceneVarsGUI();
   void showPickLabelGUI();
+
+  void dumpTileContents(float x, float y);
 };
