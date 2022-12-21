@@ -327,7 +327,7 @@ void MapsApp::dumpTileContents(float x, float y)
   TileTaskCb cb{[](std::shared_ptr<TileTask> task) {
     if(!task->hasData() || !task->source()) return;
     TileID id = task->tileId();
-    std::string filename = baseDir + fstring("dump_%d_%d_%d_%d.json", task->source()->id(), id.z, id.x, id.y);
+    std::string filename = baseDir + fstring("dump_%s_%d_%d_%d.json", task->source()->name().c_str(), id.z, id.x, id.y);
     std::ofstream fout(filename);
     std::lock_guard<std::mutex> lock(logMutex);
     auto tileData = task->source()->parse(*task);  //task->source() ? : Mvt::parseTile(*task, 0);
