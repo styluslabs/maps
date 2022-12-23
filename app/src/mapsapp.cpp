@@ -124,6 +124,8 @@ void MapsApp::tapEvent(float x, float y)
     }
 
     std::string itemId = result->touchItem.properties->getAsString("id");
+    if(itemId.empty())
+      itemId = result->touchItem.properties->getAsString("osm_id");
     std::string namestr = result->touchItem.properties->getAsString("name");
     setPickResult(result->coordinates, namestr, result->touchItem.properties->toJson());
     mapsSearch->clearSearch();  // ???
