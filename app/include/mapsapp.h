@@ -72,6 +72,7 @@ public:
   bool show_gui = true;
   bool recreate_context = false;
   bool wireframe_mode = false;
+  bool single_tile_worker = false;
 
   float density = 1.0;
   float pixel_scale = 2.0;

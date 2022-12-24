@@ -142,7 +142,7 @@ void MapsApp::tapEvent(float x, float y)
         rapidxml::xml_document<> doc;
         doc.parse<0>(response.content.data());
         auto tag = doc.first_node("osm")->first_node("node")->first_node("tag");
-        if(tag) pickLabelStr = "id = " + itemId + "\n";
+        if(tag) pickLabelStr += "\n============\nid = " + itemId + "\n";
         while(tag) {
           auto key = tag->first_attribute("k");
           auto val = tag->first_attribute("v");
@@ -217,6 +217,8 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
 #ifdef DEBUG
   options.debugStyles = true;
 #endif
+  if(single_tile_worker)
+    options.numTileWorkers = 1;  // much easier to debug (alterative is gdb scheduler-locking option)
   map->loadScene(std::move(options), load_async);
 
   // markers are invalidated ... not sure if we should use SceneReadyCallback for this since map->scene is replaced immediately
@@ -449,6 +451,7 @@ void MapsApp::showDebugFlagsGUI()
             setDebugFlag(DebugFlags::selection_buffer, flag);
         }
         ImGui::Checkbox("Wireframe Mode", &wireframe_mode);
+        ImGui::Checkbox("Single Tile worker thread", &single_tile_worker);
     }
 }
 
