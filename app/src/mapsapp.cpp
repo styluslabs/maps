@@ -532,11 +532,26 @@ void MapsApp::showGUI()
 #define NANOSVGRAST_IMPLEMENTATION
 #include "nanosvg/nanosvgrast.h"
 
+std::vector<uint8_t> tangramLoadSvg(char* svg, float scale, int& width_out, int& height_out)
+{
+  NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
+  if (!image) return {};
+  int w = int(image->width*scale + 0.5f), h = int(image->height*scale + 0.5f);
+  NSVGrasterizer* rast = nsvgCreateRasterizer();
+  if (!rast) return {};  // OOM, so we don't care about NSVGimage leak
+  std::vector<uint8_t> img(w*h*4, 0);
+  // note the hack to flip y-axis - should be moved into nanosvgrast.h, activated w/ h < 0
+  nsvgRasterize(rast, image, 0, 0, scale, &img[w*(h-1)*4], w, h, -w*4);
+  nsvgDelete(image);
+  nsvgDeleteRasterizer(rast);
+  return img;
+}
+
 // create image w/ dimensions w,h from SVG string svg and upload to scene as texture with name texname
 bool MapsApp::textureFromSVG(const char* texname, char* svg, float scale)
 {
   //image = nsvgParseFromFile(filename, "px", dpi);
-  NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
+  /*NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
   if (!image) return false;
 
   scale *= pixel_scale;
@@ -547,8 +562,9 @@ bool MapsApp::textureFromSVG(const char* texname, char* svg, float scale)
   // note the hack to flip y-axis - should be moved into nanosvgrast.h, activated w/ h < 0
   nsvgRasterize(rast, image, 0,0,scale, &img[w*(h-1)*4], w, h, -w*4);
   nsvgDelete(image);
-  nsvgDeleteRasterizer(rast);
-
+  nsvgDeleteRasterizer(rast);*/
+  int w, h;
+  auto img = tangramLoadSvg(svg, scale*pixel_scale, w, h);
   TextureOptions texoptions;
   texoptions.displayScale = 1/pixel_scale;
   map->getScene()->sceneTextures().add(texname, w, h, img.data(), texoptions);
