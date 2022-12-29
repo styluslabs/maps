@@ -534,21 +534,39 @@ void MapsApp::showGUI()
 
 namespace Tangram {
 
-std::vector<uint8_t> userLoadSvg(char* svg, float scale, int& w, int& h)
+bool userLoadSvg(char* svg, Texture* texture)  //float scale, int& w, int& h)
 {
   NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
-  if (!image) return {};
+  if (!image) return false;
   nsvgApplyViewXform(image);
-  w = int(image->width*scale + 0.5f);
-  h = int(image->height*scale + 0.5f);
+
+  auto atlas = std::make_unique<SpriteAtlas>();
+  bool hasSprites = false;
+  NSVGshape* shape = image->shapes;
+  while(shape) {
+    if(shape->id[0] && !shape->flags) {
+      hasSprites = true;
+      glm::vec2 pos(shape->bounds[0], shape->bounds[1]);
+      glm::vec2 size(shape->bounds[2] - shape->bounds[0], shape->bounds[3] - shape->bounds[1]);
+      atlas->addSpriteNode(shape->id, pos, size);
+    }
+    shape = shape->next;
+  }
+  if(hasSprites)
+    texture->setSpriteAtlas(std::move(atlas));
+
+  float scale = 1.0;
+  int w = int(image->width*scale + 0.5f);
+  int h = int(image->height*scale + 0.5f);
   NSVGrasterizer* rast = nsvgCreateRasterizer();
-  if (!rast) return {};  // OOM, so we don't care about NSVGimage leak
+  if (!rast) return false;  // OOM, so we don't care about NSVGimage leak
   std::vector<uint8_t> img(w*h*4, 0);
   // note the hack to flip y-axis - should be moved into nanosvgrast.h, activated w/ h < 0
   nsvgRasterize(rast, image, 0, 0, scale, &img[w*(h-1)*4], w, h, -w*4);
   nsvgDelete(image);
   nsvgDeleteRasterizer(rast);
-  return img;
+  texture->setPixelData(w, h, 4, img.data(), img.size());
+  return true;
 }
 
 }
@@ -557,9 +575,8 @@ std::vector<uint8_t> userLoadSvg(char* svg, float scale, int& w, int& h)
 bool MapsApp::textureFromSVG(const char* texname, char* svg, float scale)
 {
   //image = nsvgParseFromFile(filename, "px", dpi);
-  /*NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
+  NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
   if (!image) return false;
-
   scale *= pixel_scale;
   int w = int(image->width*scale + 0.5f), h = int(image->height*scale + 0.5f);
   NSVGrasterizer* rast = nsvgCreateRasterizer();
@@ -568,9 +585,9 @@ bool MapsApp::textureFromSVG(const char* texname, char* svg, float scale)
   // note the hack to flip y-axis - should be moved into nanosvgrast.h, activated w/ h < 0
   nsvgRasterize(rast, image, 0,0,scale, &img[w*(h-1)*4], w, h, -w*4);
   nsvgDelete(image);
-  nsvgDeleteRasterizer(rast);*/
-  int w, h;
-  auto img = userLoadSvg(svg, scale*pixel_scale, w, h);
+  nsvgDeleteRasterizer(rast);
+  //int w, h;
+  //auto img = userLoadSvg(svg, scale*pixel_scale, w, h);
   TextureOptions texoptions;
   texoptions.displayScale = 1/pixel_scale;
   map->getScene()->sceneTextures().add(texname, w, h, img.data(), texoptions);
