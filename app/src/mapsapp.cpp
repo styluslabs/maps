@@ -124,16 +124,19 @@ void MapsApp::tapEvent(float x, float y)
     }
 
     std::string itemId = result->touchItem.properties->getAsString("id");
+    std::string osmType = result->touchItem.properties->getAsString("osm_type");
     if(itemId.empty())
       itemId = result->touchItem.properties->getAsString("osm_id");
+    if(osmType.empty())
+      osmType = "node";
     std::string namestr = result->touchItem.properties->getAsString("name");
     setPickResult(result->coordinates, namestr, result->touchItem.properties->toJson());
     mapsSearch->clearSearch();  // ???
 
     // query OSM API with id - append .json to get JSON instead of XML
     if(!itemId.empty()) {
-      auto url = Url("https://www.openstreetmap.org/api/0.6/node/" + itemId);
-      map->getPlatform().startUrlRequest(url, [this, url, itemId](UrlResponse&& response) {
+      auto url = Url("https://www.openstreetmap.org/api/0.6/" + osmType + "/" + itemId);
+      map->getPlatform().startUrlRequest(url, [this, url, itemId, osmType](UrlResponse&& response) {
         if(response.error) {
           LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
           return;
@@ -141,7 +144,9 @@ void MapsApp::tapEvent(float x, float y)
         response.content.push_back('\0');
         rapidxml::xml_document<> doc;
         doc.parse<0>(response.content.data());
-        auto tag = doc.first_node("osm")->first_node("node")->first_node("tag");
+        auto osmNode = doc.first_node("osm");
+        auto eleNode = osmNode ? osmNode->first_node(osmType.c_str()) : 0;
+        auto tag = eleNode ? eleNode->first_node("tag") : 0;
         if(tag) pickLabelStr += "\n============\nid = " + itemId + "\n";
         while(tag) {
           auto key = tag->first_attribute("k");

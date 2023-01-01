@@ -408,6 +408,14 @@ void MapsSearch::showGUI()
   if(ImGui::Combo("Provider", &providerIdx, cproviders.data(), cproviders.size()))
     clearSearch();
 
+  if(providerIdx == 0) {
+    ImGui::SameLine();
+    if(ImGui::Button("Rebuild")) {
+      DB_exec(searchDB, "DELETE FROM points_fts;");
+      indexMBTiles();
+    }
+  }
+
   Map* map = app->map;
   LngLat minLngLat(180, 90);
   LngLat maxLngLat(-180, -90);
