@@ -10,33 +10,36 @@ const char* markerSVG = R"#(<svg xmlns="http://www.w3.org/2000/svg" width="24" h
 // icons and text are linked by set Label::setRelative() in PointStyleBuilder::addFeature()
 // labels are collected and collided by LabelManager::updateLabelSet() - sorted by priority (lower number
 //  is higher priority), collided, then sorted by order (higher order means drawn later, i.e., on top)
-//blend_order: 3
 const char* searchMarkerStyleStr = R"#(
 style: points
 texture: %s
 interactive: true
 collide: false
 offset: [0px, -11px]
-priority: %d
-order: 900
+priority: 0.%06d
+blend_order: 3
 text:
   text_source: "function() { return \"%s\"; }"
+  anchor: [right, left, bottom, top]
   offset: [0px, -11px]
   collide: true
   optional: true
   max_lines: 2
   font:
     family: Open Sans
+    weight: 600
     size: 12px
     fill: black
     stroke: { color: white, width: 2px }
 )#";
+// considered using text.optional: 'function() { return $zoom > 18; }' but we don't want risk of marker being hidden
+// note that we must cannot use single quotes for text_source function since name could contain them!
 
 // outline: https://github.com/tangrams/tangram-es/pull/1702
 const char* dotMarkerStyleStr = R"#(
 style: points
 collide: false
-order: 900
+blend_order: 2
 size: 6px
 color: "#CF513D"
 outline:
@@ -48,7 +51,7 @@ outline:
 const char* locMarkerStyleStr = R"#(
 style: points
 collide: false
-order: 9000
+blend_order: 1000
 size: 24px
 color: "#0000FF"
 outline:

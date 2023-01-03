@@ -29,7 +29,7 @@ void MapsBookmarks::showGUI()
       return;
     }
     //DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS history(query TEXT UNIQUE);");
-    DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id INTEGER, list TEXT, props TEXT, notes TEXT, lng REAL, lat REAL);");
+    DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list TEXT, props TEXT, notes TEXT, lng REAL, lat REAL);");
     DB_exec(bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL);");
   }
 
@@ -161,25 +161,33 @@ void MapsBookmarks::showPlacesGUI()
   ImGui::InputText("Notes", &placeNotes, ImGuiInputTextFlags_EnterReturnsTrue);
 
   if (!std::isnan(app->pickResultCoord.latitude) && ImGui::Button("Save Current Place")) {
-    const char* strStmt = "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
-    sqlite3_stmt* stmt;
-    if(sqlite3_prepare_v2(bkmkDB, strStmt, -1, &stmt, NULL) != SQLITE_OK) {
-      logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(bkmkDB));
-      return;
-    }
     rapidjson::Document doc;
     doc.Parse(app->pickResultProps.c_str());
-    sqlite3_bind_int64(stmt, 1, doc.IsObject() && doc.HasMember("id") ? doc["id"].GetInt64() : 0);
-    sqlite3_bind_text(stmt, 2, currList.c_str(), -1, SQLITE_STATIC);  // drop trailing separator
-    sqlite3_bind_text(stmt, 3, app->pickResultProps.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, placeNotes.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_double(stmt, 5, app->pickResultCoord.longitude);
-    sqlite3_bind_double(stmt, 6, app->pickResultCoord.latitude);
-    if (sqlite3_step(stmt) != SQLITE_DONE)
-      logMsg("sqlite3_step failed: %d\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
-    sqlite3_finalize(stmt);
+    std::string osm_id;
+    if(doc.IsObject() && doc.HasMember("osm_id") && doc.HasMember("osm_type"))
+      osm_id = doc["osm_type"].GetString() + std::string(":") + doc["osm_id"].GetString();
+    addBookmark(currList.c_str(), osm_id.c_str(), app->pickResultProps.c_str(), placeNotes.c_str(), app->pickResultCoord);
     updatePlaces = true;
   }
+}
+
+void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat)
+{
+  const char* strStmt = "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
+  sqlite3_stmt* stmt;
+  if(sqlite3_prepare_v2(bkmkDB, strStmt, -1, &stmt, NULL) != SQLITE_OK) {
+    logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(bkmkDB));
+    return;
+  }
+  sqlite3_bind_text(stmt, 1, osm_id, -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 2, list, -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 3, props, -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 4, note, -1, SQLITE_STATIC);
+  sqlite3_bind_double(stmt, 5, lnglat.longitude);
+  sqlite3_bind_double(stmt, 6, lnglat.latitude);
+  if (sqlite3_step(stmt) != SQLITE_DONE)
+    logMsg("sqlite3_step failed: %d\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
+  sqlite3_finalize(stmt);
 }
 
 void MapsBookmarks::showViewsGUI()

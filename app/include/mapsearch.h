@@ -46,7 +46,7 @@ private:
   std::vector<SearchResult> listResults;
   std::vector<SearchResult> mapResults;
 
-  float markerRadius = 25;  // in pixels
+  //float markerRadius = 50;  // in pixels
   float prevZoom = 0;
 
   bool markerTexturesMade = false;

@@ -527,6 +527,7 @@ void MapsApp::showGUI()
   showSceneVarsGUI();
   mapsSearch->showGUI();
   mapsBookmarks->showGUI();
+  pluginManager->showGUI();
   showPickLabelGUI();
 }
 

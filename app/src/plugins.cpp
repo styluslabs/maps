@@ -2,7 +2,10 @@
 #include "mapsapp.h"
 #include "mapsearch.h"
 #include "mapsources.h"
+#include "bookmarks.h"
 #include "util.h"
+#include "imgui.h"
+#include "imgui_stl.h"
 
 using namespace Tangram;
 
@@ -78,13 +81,14 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
 static int registerFunction(duk_context* ctx)
 {
   // alternative is to pass fn object instead of name, which we can then add to globals w/ generated name
+  const char* name = duk_require_string(ctx, 0);
   std::string fntype = duk_require_string(ctx, 1);
+  const char* title = duk_require_string(ctx, 2);
 
-  if(fntype == "search") {
-    const char* name = duk_require_string(ctx, 0);
-    const char* title = duk_require_string(ctx, 2);
+  if(fntype == "search")
     PluginManager::inst->searchFns.push_back({name, title});
-  }
+  else if(fntype == "command")
+    PluginManager::inst->commandFns.push_back({name, title});
   else
     LOGE("Unsupported plugin function type %s", fntype.c_str());
   return 0;
@@ -161,6 +165,20 @@ static int addMapSource(duk_context* ctx)
   return 0;
 }
 
+static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lnglat[1])
+{
+  const char* list = duk_require_string(ctx, 0);
+  const char* osm_id = duk_require_string(ctx, 1);
+  const char* props = duk_json_encode(ctx, 2);
+  const char* notes = duk_require_string(ctx, 3);
+  double lng = duk_to_number(ctx, 4);
+  double lat = duk_to_number(ctx, 5);
+
+  auto& mb = PluginManager::inst->app->mapsBookmarks;
+  mb->addBookmark(list, osm_id, props, notes, LngLat(lng, lat));
+  return 0;
+}
+
 void PluginManager::createFns(duk_context* ctx)
 {
   // create C functions
@@ -172,4 +190,21 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addSearchResult");
   duk_push_c_function(ctx, addMapSource, 2);
   duk_put_global_string(ctx, "addMapSource");
+  duk_push_c_function(ctx, addBookmark, 6);
+  duk_put_global_string(ctx, "addBookmark");
+}
+
+void PluginManager::showGUI()
+{
+  if(!ImGui::CollapsingHeader("Plugin Commands", ImGuiTreeNodeFlags_DefaultOpen))
+    return;
+  for(auto& cmd : commandFns) {
+    if(ImGui::Button(cmd.title.c_str())) {
+      std::lock_guard<std::mutex> lock(jsMutex);
+      duk_context* ctx = jsContext;
+      duk_get_global_string(ctx, cmd.name.c_str());
+      dukTryCall(ctx, 0);
+      duk_pop(ctx);
+    }
+  }
 }

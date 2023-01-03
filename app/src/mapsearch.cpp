@@ -137,7 +137,7 @@ bool MapsSearch::indexMBTiles()
   YamlPath("global.search_data").get(map->getScene()->config(), searchDataNode);
   auto searchData = parseSearchFields(searchDataNode);
   if(searchData.empty()) {
-    //logMsg("No search fields specified, search will be disabled.\n");
+    LOGW("No search fields specified, cannot build index!\n");
     return false;
   }
 
@@ -276,6 +276,7 @@ void MapsSearch::createMarkers()
   }
 
   Map* map = app->map;
+  float markerRadius = map->getZoom() >= 17 ? 25 : 50;
   isect2d::ISect2D<glm::vec2> collider;
   int w = map->getViewportWidth(), h = map->getViewportHeight();
   collider.resize({16, 16}, {w, h});
@@ -299,6 +300,7 @@ void MapsSearch::onZoom()
   float zoom = map->getZoom();
   if(std::abs(zoom - prevZoom) < 0.5f) return;
 
+  float markerRadius = zoom >= 17 ? 25 : 50;
   double scrx, scry;
   isect2d::ISect2D<glm::vec2> collider;
   int w = map->getViewportWidth(), h = map->getViewportHeight();
@@ -312,6 +314,7 @@ void MapsSearch::onZoom()
           [&](auto& a, auto& b) { collided = true; return false; });
       if(collided) {
         // convert to dot marker
+        map->markerSetVisible(res.markerId, false);
         pinMarkers.push_back(res.markerId);
         res.markerId = getDotMarker(res);
         res.isPinMarker = false;
@@ -329,6 +332,7 @@ void MapsSearch::onZoom()
           [&](auto& a, auto& b) { collided = true; return false; });
       if(!collided) {
         // convert to pin marker
+        map->markerSetVisible(res.markerId, false);
         dotMarkers.push_back(res.markerId);
         res.markerId = getPinMarker(res);
         res.isPinMarker = true;
