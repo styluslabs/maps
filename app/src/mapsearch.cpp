@@ -230,6 +230,16 @@ MarkerID MapsSearch::getPinMarker(const SearchResult& res)
   map->markerSetStylingFromString(markerId,
       fstring(searchMarkerStyleStr, "search-marker-red", mapResults.size()+2, namestr.c_str()).c_str());
   map->markerSetPoint(markerId, res.pos);
+
+  Properties props;
+  for(auto& m : res.tags.GetObject()) {
+    if(m.value.IsNumber())
+      props.set(m.name.GetString(), m.value.GetDouble());
+    else if(m.value.IsString())
+      props.set(m.name.GetString(), m.value.GetString());
+  }
+  map->markerSetProperties(markerId, std::move(props));
+
   return markerId;
 }
 
@@ -280,6 +290,7 @@ void MapsSearch::createMarkers()
   isect2d::ISect2D<glm::vec2> collider;
   int w = map->getViewportWidth(), h = map->getViewportHeight();
   collider.resize({16, 16}, {w, h});
+  int ii = 0;
   for(auto& res : mapResults) {
     if(res.markerId == 0) {
       bool collided = false;
@@ -287,9 +298,11 @@ void MapsSearch::createMarkers()
           [&](auto& a, auto& b) { collided = true; return false; });
       res.markerId = collided ? getDotMarker(res) : getPinMarker(res);
       res.isPinMarker = !collided;
+      map->markerSetDrawOrder(res.markerId, ii + (res.isPinMarker ? 0x10000 : 0));
     }
     else if(res.isPinMarker)
       collider.insert(markerAABB(app->map, res.pos, markerRadius));
+    ++ii;
   }
   mapResultsChanged = false;
 }
@@ -302,6 +315,7 @@ void MapsSearch::onZoom()
 
   float markerRadius = zoom >= 17 ? 25 : 50;
   double scrx, scry;
+  int ii = 0;
   isect2d::ISect2D<glm::vec2> collider;
   int w = map->getViewportWidth(), h = map->getViewportHeight();
   collider.resize({16, 16}, {w, h});
@@ -318,7 +332,9 @@ void MapsSearch::onZoom()
         pinMarkers.push_back(res.markerId);
         res.markerId = getDotMarker(res);
         res.isPinMarker = false;
+        map->markerSetDrawOrder(res.markerId, ii);
       }
+      ++ii;
     }
   }
   else {
@@ -336,6 +352,8 @@ void MapsSearch::onZoom()
         dotMarkers.push_back(res.markerId);
         res.markerId = getPinMarker(res);
         res.isPinMarker = true;
+        map->markerSetDrawOrder(res.markerId, ii + 0x10000);
+        ++ii;
       }
     }
   }

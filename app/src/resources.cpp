@@ -9,7 +9,9 @@ const char* markerSVG = R"#(<svg xmlns="http://www.w3.org/2000/svg" width="24" h
 
 // icons and text are linked by set Label::setRelative() in PointStyleBuilder::addFeature()
 // labels are collected and collided by LabelManager::updateLabelSet() - sorted by priority (lower number
-//  is higher priority), collided, then sorted by order (higher order means drawn later, i.e., on top)
+//  is higher priority), collided, then sorted by order set by markerSetDrawOrder (not YAML "order") - higher
+//  order means drawn later, i.e., on top
+// blend_order only supported for styles: https://github.com/tangrams/tangram-es/issues/2039
 const char* searchMarkerStyleStr = R"#(
 style: points
 texture: %s
@@ -17,7 +19,6 @@ interactive: true
 collide: false
 offset: [0px, -11px]
 priority: 0.%06d
-blend_order: 3
 text:
   text_source: "function() { return \"%s\"; }"
   anchor: [right, left, bottom, top]
@@ -39,7 +40,6 @@ text:
 const char* dotMarkerStyleStr = R"#(
 style: points
 collide: false
-blend_order: 2
 size: 6px
 color: "#CF513D"
 outline:
@@ -51,7 +51,6 @@ outline:
 const char* locMarkerStyleStr = R"#(
 style: points
 collide: false
-blend_order: 1000
 size: 24px
 color: "#0000FF"
 outline:

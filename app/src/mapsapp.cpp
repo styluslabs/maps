@@ -239,6 +239,10 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   MapsApp::platform = p.get();
   sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
 
+  // styles for search markers if we use data source instead of markers (blend_order isn't supported on draw groups in tangram-es)
+  //sceneUpdates.push_back(SceneUpdate("+styles.__dot_marker", "{ base: points, lighting: false, blend_order: 2000 }"));
+  //sceneUpdates.push_back(SceneUpdate("+styles.__pin_marker", "{ base: points, lighting: false, blend_order: 2001 }"));
+
   // Setup style
   ImGuiIO& io = ImGui::GetIO();
   ImGui::StyleColorsDark();
@@ -315,6 +319,7 @@ void MapsApp::updateLocation(const Location& _loc)
   if(!locMarker) {
     locMarker = map->markerAdd();
     map->markerSetStylingFromString(locMarker, locMarkerStyleStr);
+    map->markerSetDrawOrder(locMarker, INT_MAX);
   }
   //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, loc.lngLat());
