@@ -51,7 +51,7 @@ public:
   void loadSceneFile(bool setPosition = false, std::vector<SceneUpdate> updates = {});
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
-  bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
+  //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
   void setPickResult(LngLat pos, std::string namestr, std::string props, int priority = 1);
 
   Location loc;

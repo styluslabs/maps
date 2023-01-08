@@ -49,7 +49,7 @@ private:
   //float markerRadius = 50;  // in pixels
   float prevZoom = 0;
 
-  bool markerTexturesMade = false;
+  //bool markerTexturesMade = false;
   bool moreMapResultsAvail = false;
   bool mapResultsChanged = false;  // protected by resultsMutex
 

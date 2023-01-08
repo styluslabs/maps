@@ -222,16 +222,15 @@ MarkerID MapsSearch::getPinMarker(const SearchResult& res)
   MarkerID markerId = pinMarkers.empty() ? map->markerAdd() : pinMarkers.back();
   if(!pinMarkers.empty())
     pinMarkers.pop_back();
+  else
+    map->markerSetStylingFromPath(markerId, "layers.search-marker.draw.marker");
+    //map->markerSetStylingFromString(markerId, fstring(searchMarkerStyleStr, "pois-search").c_str());
 
   map->markerSetVisible(markerId, true);
-  // 2nd value is priority (smaller number means higher priority)
-  std::string namestr = res.tags["name"].GetString();
-  std::replace(namestr.begin(), namestr.end(), '"', '\'');
-  map->markerSetStylingFromString(markerId,
-      fstring(searchMarkerStyleStr, "search-marker-red", mapResults.size()+2, namestr.c_str()).c_str());
   map->markerSetPoint(markerId, res.pos);
 
   Properties props;
+  props.set("priority", (mapResults.size()+2)/1E6);
   for(auto& m : res.tags.GetObject()) {
     if(m.value.IsNumber())
       props.set(m.name.GetString(), m.value.GetDouble());
@@ -250,7 +249,8 @@ MarkerID MapsSearch::getDotMarker(const SearchResult& res)
   if(!dotMarkers.empty())
     dotMarkers.pop_back();
   else
-    map->markerSetStylingFromString(markerId, dotMarkerStyleStr);
+    map->markerSetStylingFromPath(markerId, "layers.search-dot.draw.marker");
+    //map->markerSetStylingFromString(markerId, dotMarkerStyleStr);
   map->markerSetVisible(markerId, true);
   map->markerSetPoint(markerId, res.pos);
   return markerId;
@@ -279,11 +279,11 @@ static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, float radius)
 // if isect2d is insufficient, try https://github.com/nushoin/RTree - single-header r-tree impl
 void MapsSearch::createMarkers()
 {
-  if(!markerTexturesMade) {
-    std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
-    app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
-    markerTexturesMade = true;
-  }
+  //if(!markerTexturesMade) {
+  //  std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
+  //  app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
+  //  markerTexturesMade = true;
+  //}
 
   Map* map = app->map;
   float markerRadius = map->getZoom() >= 17 ? 25 : 50;

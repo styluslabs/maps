@@ -11,18 +11,20 @@ const char* markerSVG = R"#(<svg xmlns="http://www.w3.org/2000/svg" width="24" h
 // labels are collected and collided by LabelManager::updateLabelSet() - sorted by priority (lower number
 //  is higher priority), collided, then sorted by order set by markerSetDrawOrder (not YAML "order") - higher
 //  order means drawn later, i.e., on top
-// blend_order only supported for styles: https://github.com/tangrams/tangram-es/issues/2039
+// blend_order only supported for style blocks: https://github.com/tangrams/tangram-es/issues/2039
+// for pins, used `offset: [0px, -11px]` for marker and text
 const char* searchMarkerStyleStr = R"#(
 style: points
 texture: %s
+sprite: global.poi_sprite_fn
+sprite_default: generic
+size: [[13, 16px], [15, 20px]]
 interactive: true
 collide: false
-offset: [0px, -11px]
-priority: 0.%06d
+priority: 'function() { return feature.priority; }'
 text:
-  text_source: "function() { return \"%s\"; }"
+  text_source: name
   anchor: [right, left, bottom, top]
-  offset: [0px, -11px]
   collide: true
   optional: true
   max_lines: 2

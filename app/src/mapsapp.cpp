@@ -49,8 +49,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string props, 
   map->markerSetVisible(pickResultMarker, true);
   // 2nd value is priority (smaller number means higher priority)
   std::replace(namestr.begin(), namestr.end(), '"', '\'');
-  map->markerSetStylingFromString(pickResultMarker,
-      fstring(searchMarkerStyleStr, "pick-marker-red", priority, namestr.c_str()).c_str());
+  //map->markerSetStylingFromString(pickResultMarker, fstring(searchMarkerStyleStr, "pick-marker-red").c_str());
+  map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
+
+  Properties mprops;
+  mprops.set("priority", priority);
+  mprops.set("name", namestr);
+  map->markerSetProperties(pickResultMarker, std::move(mprops));
+
   map->markerSetPoint(pickResultMarker, pos);
   pickResultCoord = pos;
   pickResultProps = props;
@@ -239,10 +245,6 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   MapsApp::platform = p.get();
   sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
 
-  // styles for search markers if we use data source instead of markers (blend_order isn't supported on draw groups in tangram-es)
-  //sceneUpdates.push_back(SceneUpdate("+styles.__dot_marker", "{ base: points, lighting: false, blend_order: 2000 }"));
-  //sceneUpdates.push_back(SceneUpdate("+styles.__pin_marker", "{ base: points, lighting: false, blend_order: 2001 }"));
-
   // Setup style
   ImGuiIO& io = ImGui::GetIO();
   ImGui::StyleColorsDark();
@@ -264,10 +266,10 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   mapsOffline = std::make_unique<MapsOffline>(this);
   pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
 
-  map->setSceneReadyListener([this](SceneID id, const SceneError*) {
-    std::string svg = fstring(markerSVG, "#CF513D");  // note that SVG parsing is destructive
-    textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
-  });
+  //map->setSceneReadyListener([this](SceneID id, const SceneError*) {
+  //  std::string svg = fstring(markerSVG, "#CF513D");  // note that SVG parsing is destructive
+  //  textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
+  //});
 
   // default position: Alamo Square, SF - overriden by scene camera position if async load
   map->setPickRadius(1.0f);
@@ -583,7 +585,8 @@ bool userLoadSvg(char* svg, Texture* texture)  //float scale, int& w, int& h)
 }
 
 // create image w/ dimensions w,h from SVG string svg and upload to scene as texture with name texname
-bool MapsApp::textureFromSVG(const char* texname, char* svg, float scale)
+// since SVG can now be loaded from scene file, not sure we'll need this fn
+/*bool MapsApp::textureFromSVG(const char* texname, char* svg, float scale)
 {
   //image = nsvgParseFromFile(filename, "px", dpi);
   NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
@@ -603,4 +606,4 @@ bool MapsApp::textureFromSVG(const char* texname, char* svg, float scale)
   texoptions.displayScale = 1/pixel_scale;
   map->getScene()->sceneTextures().add(texname, w, h, img.data(), texoptions);
   return true;
-}
+}*/

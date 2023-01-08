@@ -93,10 +93,10 @@ void MapsBookmarks::showPlacesGUI()
     size_t markerIdx = 0;
     const char* query = "SELECT rowid, props, lng, lat FROM bookmarks WHERE list = ?;";
     DB_exec(bkmkDB, query, [&](sqlite3_stmt* stmt){
-      if(bkmkMarkers.empty()) {
-        std::string svg = fstring(markerSVG, "#12B5CB");
-        app->textureFromSVG("bkmk-marker-cyan", (char*)svg.data(), 1.25f);
-      }
+      //if(bkmkMarkers.empty()) {
+      //  std::string svg = fstring(markerSVG, "#12B5CB");
+      //  app->textureFromSVG("bkmk-marker-cyan", (char*)svg.data(), 1.25f);
+      //}
       double lng = sqlite3_column_double(stmt, 2);
       double lat = sqlite3_column_double(stmt, 3);
       placeRowIds.push_back(sqlite3_column_int(stmt, 0));
@@ -109,9 +109,14 @@ void MapsBookmarks::showPlacesGUI()
       std::string namestr = doc.IsObject() && doc.HasMember("name") ?
             doc["name"].GetString() : fstring("%.6f, %.6f", lat, lng);
       placeNames.push_back(namestr);
-      std::replace(namestr.begin(), namestr.end(), '"', '\'');
-      map->markerSetStylingFromString(bkmkMarkers[markerIdx],
-          fstring(searchMarkerStyleStr, "bkmk-marker-cyan", markerIdx+2, namestr.c_str()).c_str());
+      //map->markerSetStylingFromString(bkmkMarkers[markerIdx], fstring(searchMarkerStyleStr, "bkmk-marker-cyan").c_str());
+      map->markerSetStylingFromPath(bkmkMarkers[markerIdx], "layers.bookmark-marker.draw.marker");
+
+      Properties mprops;
+      mprops.set("priority", markerIdx+2);
+      mprops.set("name", namestr);
+      map->markerSetProperties(bkmkMarkers[markerIdx], std::move(mprops));
+
       map->markerSetPoint(bkmkMarkers[markerIdx], LngLat(lng, lat));
       ++markerIdx;
     }, [&](sqlite3_stmt* stmt){
