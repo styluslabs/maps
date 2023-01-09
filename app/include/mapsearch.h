@@ -49,7 +49,6 @@ private:
   //float markerRadius = 50;  // in pixels
   float prevZoom = 0;
 
-  //bool markerTexturesMade = false;
   bool moreMapResultsAvail = false;
   bool mapResultsChanged = false;  // protected by resultsMutex
 
@@ -62,7 +61,7 @@ private:
 
   void onZoom();
   void clearSearchResults(std::vector<SearchResult>& results);
-  MarkerID getPinMarker(const SearchResult& res);
+  MarkerID getPinMarker(const SearchResult& res, int idx);
   MarkerID getDotMarker(const SearchResult& res);
   void createMarkers();
 };

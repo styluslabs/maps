@@ -29,6 +29,8 @@ struct Location
   LngLat lngLat() const { return LngLat(lng, lat); }
 };
 
+namespace YAML { class Node; }
+
 class MapsApp
 {
 public:
@@ -53,6 +55,7 @@ public:
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
   void setPickResult(LngLat pos, std::string namestr, std::string props, int priority = 1);
+  YAML::Node readSceneValue(const std::string& yamlPath);
 
   Location loc;
   float orientation = 0;

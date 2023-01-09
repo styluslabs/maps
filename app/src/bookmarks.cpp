@@ -113,7 +113,7 @@ void MapsBookmarks::showPlacesGUI()
       map->markerSetStylingFromPath(bkmkMarkers[markerIdx], "layers.bookmark-marker.draw.marker");
 
       Properties mprops;
-      mprops.set("priority", markerIdx+2);
+      mprops.set("priority", markerIdx);
       mprops.set("name", namestr);
       map->markerSetProperties(bkmkMarkers[markerIdx], std::move(mprops));
 

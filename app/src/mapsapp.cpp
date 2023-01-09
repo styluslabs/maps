@@ -332,6 +332,14 @@ void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
   orientation = azimuth;
 }
 
+YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
+{
+  YAML::Node node;
+  if(map->getScene()->isReady())
+      YamlPath(yamlPath).get(map->getScene()->config(), node);
+  return node;
+}
+
 #include <fstream>
 
 void MapsApp::dumpTileContents(float x, float y)
@@ -470,13 +478,12 @@ void MapsApp::showDebugFlagsGUI()
 void MapsApp::showSceneVarsGUI()
 {
   if (ImGui::CollapsingHeader("Scene Variables", ImGuiTreeNodeFlags_DefaultOpen)) {
-    for(int ii = 0; ii < 100; ++ii) {
-      std::string name = map->readSceneValue(fstring("global.gui_variables#%d.name", ii));
-      if(name.empty()) break;
-      std::string label = map->readSceneValue(fstring("global.gui_variables#%d.label", ii));
-      std::string reload = map->readSceneValue(fstring("global.gui_variables#%d.reload", ii));
-
-      std::string stylename = map->readSceneValue(fstring("global.gui_variables#%d.style", ii));
+    YAML::Node vars = readSceneValue("global.gui_variables");
+    for(const auto& var : vars) {
+      std::string name = var["name"].as<std::string>("");
+      std::string label = var["label"].as<std::string>("");
+      std::string reload = var["reload"].as<std::string>("");
+      std::string stylename = var["style"].as<std::string>("");
       if(!stylename.empty()) {
         // shader uniform
         auto& styles = map->getScene()->styles();
@@ -502,7 +509,7 @@ void MapsApp::showSceneVarsGUI()
       }
       else {
         // global variable, accessed in scene file by JS functions
-        std::string value = map->readSceneValue("global." + name);
+        std::string value = readSceneValue("global." + name).as<std::string>("");
         bool flag = value == "true";
         if (ImGui::Checkbox(label.c_str(), &flag)) {
             // we expect only one checkbox to change per frame, so this is OK

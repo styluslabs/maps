@@ -21,6 +21,9 @@ static constexpr double minLongPressTime = 0.7;  // 0.5s is typical on Android
 // action: -1 = release, 0 = move, 1 = press
 void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y, float p)
 {
+  // unfortunately, glfw doesn't provide input event timestamps, so we have to use glfwGetTime() when we
+  //  receive event, which results in inaccuracies and undesired fling gestures
+  //LOGW("touchEvent: %d, t: %f, x: %f, y: %f", action, t, x, y);
   Map* map = app->map;
   size_t prevpoints = touchPoints.size();
   auto it = touchPoints.begin();

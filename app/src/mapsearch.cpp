@@ -216,7 +216,7 @@ void MapsSearch::clearSearch()
   app->searchActive = false;
 }
 
-MarkerID MapsSearch::getPinMarker(const SearchResult& res)
+MarkerID MapsSearch::getPinMarker(const SearchResult& res, int idx)
 {
   Map* map = app->map;
   MarkerID markerId = pinMarkers.empty() ? map->markerAdd() : pinMarkers.back();
@@ -230,7 +230,7 @@ MarkerID MapsSearch::getPinMarker(const SearchResult& res)
   map->markerSetPoint(markerId, res.pos);
 
   Properties props;
-  props.set("priority", (mapResults.size()+2)/1E6);
+  props.set("priority", (idx);
   for(auto& m : res.tags.GetObject()) {
     if(m.value.IsNumber())
       props.set(m.name.GetString(), m.value.GetDouble());
@@ -279,12 +279,6 @@ static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, float radius)
 // if isect2d is insufficient, try https://github.com/nushoin/RTree - single-header r-tree impl
 void MapsSearch::createMarkers()
 {
-  //if(!markerTexturesMade) {
-  //  std::string svg = fstring(markerSVG, "#CF513D");  //"#9A291D"
-  //  app->textureFromSVG("search-marker-red", (char*)svg.data(), 1.25f);
-  //  markerTexturesMade = true;
-  //}
-
   Map* map = app->map;
   float markerRadius = map->getZoom() >= 17 ? 25 : 50;
   isect2d::ISect2D<glm::vec2> collider;
@@ -296,7 +290,7 @@ void MapsSearch::createMarkers()
       bool collided = false;
       collider.intersect(markerAABB(app->map, res.pos, markerRadius),
           [&](auto& a, auto& b) { collided = true; return false; });
-      res.markerId = collided ? getDotMarker(res) : getPinMarker(res);
+      res.markerId = collided ? getDotMarker(res) : getPinMarker(res, ii);
       res.isPinMarker = !collided;
       map->markerSetDrawOrder(res.markerId, ii + (res.isPinMarker ? 0x10000 : 0));
     }
@@ -350,7 +344,7 @@ void MapsSearch::onZoom()
         // convert to pin marker
         map->markerSetVisible(res.markerId, false);
         dotMarkers.push_back(res.markerId);
-        res.markerId = getPinMarker(res);
+        res.markerId = getPinMarker(res, ii);
         res.isPinMarker = true;
         map->markerSetDrawOrder(res.markerId, ii + 0x10000);
         ++ii;
