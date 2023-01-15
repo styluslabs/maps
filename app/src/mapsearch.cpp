@@ -230,7 +230,7 @@ MarkerID MapsSearch::getPinMarker(const SearchResult& res, int idx)
   map->markerSetPoint(markerId, res.pos);
 
   Properties props;
-  props.set("priority", (idx);
+  props.set("priority", idx);
   for(auto& m : res.tags.GetObject()) {
     if(m.value.IsNumber())
       props.set(m.name.GetString(), m.value.GetDouble());
@@ -608,5 +608,130 @@ void MapsSearch::showGUI()
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     pickedResult->tags.Accept(writer);
     app->setPickResult(pickedResult->pos, pickedResult->tags["name"].GetString(), sb.GetString());
+  }
+}
+
+
+// - store search string in MapsSearch or SearchWidget
+// - when scroller nears end, request more results and append instead of replace
+
+// HEY! If it looks like we'll end up w/ a mess of events and event handlers, maybe just have a fn in each
+//  MapsComponent that is called before map is rendered each frame
+
+void MapsSearch::viewChanged()
+{
+  if(app->searchActive && ((moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
+      || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
+      || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude)) {
+    updateMapResults();
+    prevZoom = map->getZoom();
+  }
+  else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
+    onZoom();
+  }
+}
+
+void MapsSearch::updateMapResults()
+{
+  double lng01 = fabs(lngLat11.longitude - lngLat00.longitude);
+  double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
+  dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
+  dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
+  clearSearchResults(mapResults);
+  if(providerIdx > 0)
+    app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, MAP_SEARCH);
+  else
+    offlineMapSearch(searchStr, dotBounds00, dotBounds11);
+}
+
+void MapsSearch::resultsUpdated()
+{
+  if(mapResultsChanged)
+    createMarkers();
+
+  searchWidget->populateAutoresults(listResults);
+
+  searchWidget->populateResults(listResults);
+
+  // zoom out if necessary to show first 5 results
+  if(ent || nextPage) {
+    LngLat minLngLat(180, 90), maxLngLat(-180, -90);
+    int resultIdx = 0;
+    for(auto& res : listResults) {
+      if(resultIdx <= 5 || lngLatDist(mapCenter, res.pos) < 2.0) {
+        minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
+        minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
+        maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
+        maxLngLat.latitude = std::max(maxLngLat.latitude, res.pos.latitude);
+      }
+      ++resultIdx;
+    }
+
+    if(minLngLat.longitude != 180) {
+      double scrx, scry;
+      if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
+          || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
+        auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);
+        pos.zoom = std::min(pos.zoom, 16.0f);
+        map->flyTo(pos, 1.0);
+      }
+    }
+  }
+
+}
+
+void MapsSearch::searchText(std::string searchStr, bool ent, bool nextPage)
+{
+  Map* map = app->map;
+
+  LngLat lngLat00, lngLat11;
+  app->getMapBounds(lngLat00, lngLat11);
+
+  // history (autocomplete)
+  if(ent) {
+    // IGNORE prevents error from UNIQUE constraint
+    DB_exec(searchDB, fstring("INSERT OR IGNORE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
+  }
+  else {
+    std::vector<std::string> autocomplete;
+    std::string histq = fstring("SELECT * FROM history WHERE query LIKE '%s%%' LIMIT 5;", searchStr.c_str());
+    DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
+      autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
+    });
+
+    searchWidget->populateAutocomplete(autocomplete);
+
+  }
+
+  if(!nextPage) {
+    clearSearchResults(mapResults);
+    clearSearchResults(listResults);
+    map->markerSetVisible(app->pickResultMarker, false);
+    //currItem = -1;
+  }
+  //resultOffset = nextPage ? resultOffset + 20 : 0;
+  //size_t markerIdx = nextPage ? results.size() : 0;
+  if(searchStr.size() > 2) {
+    map->getPosition(mapCenter.longitude, mapCenter.latitude);
+    if(providerIdx > 0) {
+      if(ent || nextPage)
+        app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
+    }
+    else {
+      offlineListSearch(searchStr, lngLat00, lngLat11);
+
+      //if(!ent && !nextPage)
+        resultsUpdated();
+
+    }
+
+    if(ent)
+      updateMapResults();
+
+    if(!app->searchActive && ent) {  //&& !listResults.empty()) {
+      map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
+      app->mapsBookmarks->hideBookmarks();
+      app->searchActive = true;
+    }
   }
 }
