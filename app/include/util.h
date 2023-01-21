@@ -5,7 +5,10 @@
 
 #include "tangram.h"
 #include "glm/vec2.hpp"
-using namespace Tangram;
+
+using Tangram::LngLat;
+using Tangram::TileID;
+
 namespace YAML { class Node; }
 
 double lngLatDist(LngLat r1, LngLat r2);

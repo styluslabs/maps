@@ -3,7 +3,8 @@
 #include "tangram.h"
 #include <cmath>
 
-using namespace Tangram;
+//using namespace Tangram;
+#include "mapscomponent.h"
 
 class TouchHandler;
 class MapsTracks;
@@ -12,6 +13,11 @@ class MapsOffline;
 class MapsSources;
 class MapsSearch;
 class PluginManager;
+
+class SvgGui;
+class Splitter;
+class Widget;
+class Window;
 
 struct Location
 {
@@ -72,7 +78,7 @@ public:
   std::string sceneFile;
   std::string sceneYaml;
   bool load_async = true;
-  bool show_gui = true;
+  bool show_gui = false;
   bool recreate_context = false;
   bool wireframe_mode = false;
   bool single_tile_worker = false;
@@ -90,12 +96,19 @@ public:
 
   Map* map;
 
+  // GUI
+  Window* createGUI();
+
+  Splitter* resultSplitter;
+  Widget* resultPanel;
+
   static Platform* platform;
   static std::string baseDir;
   static std::string apiKey;
+  static SvgGui* gui;
 
 private:
-  void showGUI();
+  void showImGUI();
   void showSceneGUI();
   void showViewportGUI();
   void showDebugFlagsGUI();

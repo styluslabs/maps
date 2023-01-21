@@ -16,6 +16,9 @@
 #include "sqlite3/sqlite3.h"
 #include "isect2d.h"
 
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
 
 // building search DB from tiles
 static sqlite3* searchDB = NULL;
@@ -46,6 +49,7 @@ static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value*
 
 static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vector<SearchData>& searchData)
 {
+  using namespace Tangram;
   // TODO: also support GeoJSON and TopoJSON for no source case
   auto tileData = task->source() ? task->source()->parse(*task) : Mvt::parseTile(*task, 0);
   for(const Layer& layer : tileData->layers) {
@@ -134,7 +138,7 @@ bool MapsSearch::indexMBTiles()
 {
   Map* map = app->map;
   YAML::Node searchDataNode;
-  YamlPath("global.search_data").get(map->getScene()->config(), searchDataNode);
+  Tangram::YamlPath("global.search_data").get(map->getScene()->config(), searchDataNode);
   auto searchData = parseSearchFields(searchDataNode);
   if(searchData.empty()) {
     LOGW("No search fields specified, cannot build index!\n");
@@ -183,7 +187,7 @@ bool MapsSearch::indexMBTiles()
     for(int row = min_row; row <= max_row; ++row) {
       for(int col = min_col; col <= max_col; ++col) {
         TileID tileid(col, (1 << max_zoom) - 1 - row, max_zoom);
-        tileSrc->loadTileData(std::make_shared<BinaryTileTask>(tileid, tileSrc), tilecb);
+        tileSrc->loadTileData(std::make_shared<Tangram::BinaryTileTask>(tileid, tileSrc), tilecb);
       }
     }
     //break; ???
@@ -611,19 +615,17 @@ void MapsSearch::showGUI()
   }
 }
 
+// methods for ugui UI
 
-// - store search string in MapsSearch or SearchWidget
-// - when scroller nears end, request more results and append instead of replace
-
-// HEY! If it looks like we'll end up w/ a mess of events and event handlers, maybe just have a fn in each
-//  MapsComponent that is called before map is rendered each frame
-
-void MapsSearch::viewChanged()
+void MapsSearch::onMapChange()
 {
+  Map* map = app->map;
+  LngLat lngLat00, lngLat11;
+  app->getMapBounds(lngLat00, lngLat11);
   if(app->searchActive && ((moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
       || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude)) {
-    updateMapResults();
+    updateMapResults(lngLat00, lngLat11);
     prevZoom = map->getZoom();
   }
   else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
@@ -631,7 +633,7 @@ void MapsSearch::viewChanged()
   }
 }
 
-void MapsSearch::updateMapResults()
+void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
 {
   double lng01 = fabs(lngLat11.longitude - lngLat00.longitude);
   double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
@@ -646,15 +648,15 @@ void MapsSearch::updateMapResults()
 
 void MapsSearch::resultsUpdated()
 {
-  if(mapResultsChanged)
-    createMarkers();
-
-  searchWidget->populateAutoresults(listResults);
-
   searchWidget->populateResults(listResults);
 
   // zoom out if necessary to show first 5 results
-  if(ent || nextPage) {
+  if(mapResultsChanged) {
+    Map* map = app->map;
+    LngLat mapCenter;
+    map->getPosition(mapCenter.longitude, mapCenter.latitude);
+    createMarkers();
+
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
     int resultIdx = 0;
     for(auto& res : listResults) {
@@ -677,22 +679,26 @@ void MapsSearch::resultsUpdated()
       }
     }
   }
-
 }
 
-void MapsSearch::searchText(std::string searchStr, bool ent, bool nextPage)
+void MapsSearch::searchText(std::string query, SearchPhase phase)
 {
   Map* map = app->map;
-
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
+  if(phase != NEXTPAGE) {
+    searchStr = query;
+    clearSearchResults(mapResults);
+    clearSearchResults(listResults);
+    map->markerSetVisible(app->pickResultMarker, false);
+  }
 
   // history (autocomplete)
-  if(ent) {
+  if(phase == RETURN) {
     // IGNORE prevents error from UNIQUE constraint
     DB_exec(searchDB, fstring("INSERT OR IGNORE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
   }
-  else {
+  else if(phase == EDITING) {
     std::vector<std::string> autocomplete;
     std::string histq = fstring("SELECT * FROM history WHERE query LIKE '%s%%' LIMIT 5;", searchStr.c_str());
     DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
@@ -700,38 +706,190 @@ void MapsSearch::searchText(std::string searchStr, bool ent, bool nextPage)
     });
 
     searchWidget->populateAutocomplete(autocomplete);
-
   }
 
-  if(!nextPage) {
-    clearSearchResults(mapResults);
-    clearSearchResults(listResults);
-    map->markerSetVisible(app->pickResultMarker, false);
-    //currItem = -1;
-  }
-  //resultOffset = nextPage ? resultOffset + 20 : 0;
-  //size_t markerIdx = nextPage ? results.size() : 0;
   if(searchStr.size() > 2) {
+    LngLat mapCenter;
     map->getPosition(mapCenter.longitude, mapCenter.latitude);
-    if(providerIdx > 0) {
-      if(ent || nextPage)
-        app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
-    }
-    else {
+
+    if(phase == RETURN)
+      updateMapResults(lngLat00, lngLat11);
+
+    if(providerIdx == 0) {
       offlineListSearch(searchStr, lngLat00, lngLat11);
-
-      //if(!ent && !nextPage)
-        resultsUpdated();
-
+      resultsUpdated();
     }
+    else if(phase != EDITING)
+      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
 
-    if(ent)
-      updateMapResults();
-
-    if(!app->searchActive && ent) {  //&& !listResults.empty()) {
+    if(!app->searchActive && phase == RETURN) {
       map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
       app->mapsBookmarks->hideBookmarks();
       app->searchActive = true;
     }
   }
+}
+
+// SearchWidget
+
+SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
+{
+  textEdit = new TextEdit(containerNode()->selectFirst(".textbox"));
+  setMinWidth(textEdit, 100);
+
+  textEdit->onChanged = [this](const char* s){
+    app->mapsSearch->searchText(s, MapsSearch::EDITING);  //StringRef(s).trimmed().toString();
+  };
+
+  SvgDocument* scrollDoc = static_cast<SvgDocument*>(containerNode()->selectFirst(".scroll-doc"));
+  autoCompList = new Widget(containerNode()->selectFirst(".scroll-content"));
+  ScrollWidget* scrollWidget = new ScrollWidget(scrollDoc, autoCompList);
+
+  scrollWidget->onScroll = [this, scrollWidget](){
+    if(scrollWidget->scrollY - scrollWidget->scrollLimits.bottom < 100) {
+      app->mapsSearch->searchText("", MapsSearch::NEXTPAGE);
+    }
+  };
+
+  Button* searchBtn = new Button(containerNode()->selectFirst(".search-btn"));
+  searchBtn->onPressed = [this](){
+    // show history
+    app->mapsSearch->searchText("", MapsSearch::EDITING);
+  };
+
+  Button* cancelBtn = new Button(containerNode()->selectFirst(".cancel-btn"));
+  cancelBtn->onClicked = [this](){
+    app->mapsSearch->clearSearch();
+    window()->gui()->deleteContents(autoCompList, ".listitem");
+    window()->gui()->deleteContents(resultList, ".listitem");
+
+    app->resultSplitter->setVisible(false);
+    app->resultPanel->setVisible(false);
+  };
+
+  historyIconNode.reset(new SvgUse(Rect::wh(100, 100), "", SvgGui::useFile("icons/ic_menu_clock.svg")));
+  resultIconNode.reset(new SvgUse(Rect::wh(100, 100), "", SvgGui::useFile("icons/ic_menu_zoom.svg")));
+}
+
+// or should we put results in resultList and show that immediately?
+void SearchWidget::populateAutocomplete(const std::vector<std::string>& history)
+{
+  window()->gui()->deleteContents(autoCompList, ".listitem");
+
+  for(size_t ii = 0; ii < history.size(); ++ii) {
+    Button* item = new Button(autoCompProto->clone());
+    item->onClicked = [this, query=history[ii]](){
+      app->mapsSearch->searchText(query, MapsSearch::RETURN);
+    };
+
+    SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    textnode->addText(history[ii].c_str());
+
+    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
+    imghost->addChild(historyIconNode->clone());
+
+    autoCompList->addWidget(item);
+  }
+}
+
+void SearchWidget::populateResults(const std::vector<SearchResult>& results)
+{
+  LngLat mapCenter;
+  app->map->getPosition(mapCenter.longitude, mapCenter.latitude);
+
+  app->resultSplitter->setVisible(true);
+  app->resultPanel->setVisible(true);
+
+  window()->gui()->deleteContents(resultList, ".listitem");
+
+  for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
+    const SearchResult& res = results[ii];
+    Button* item = new Button(searchResultProto->clone());
+
+    item->onClicked = [](){
+      // show result detail
+    };
+
+    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(res.tags["name"].GetString());
+
+    SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
+    double distkm = lngLatDist(mapCenter, res.pos);
+    distnode->addText(fstring("%.1f km", distkm).c_str());
+
+    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
+    imghost->addChild(resultIconNode->clone());
+
+    resultList->addWidget(item);
+  }
+}
+
+SearchWidget* SearchWidget::create()
+{
+  static const char* searchBoxSVG = R"#(
+    <!-- g id="searchbox" class="inputbox" layout="box" -->
+    <g id="searchbox" class="inputbox" layout="flex" flex-direction="column">
+      <g class="searchbox_content" box-anchor="fill" layout="flex" flex-direction="row">
+        <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
+          <rect class="min-width-rect" fill="none" width="150" height="36"/>
+          <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
+        </g>
+        <g class="toolbutton search-btn" layout="box" box-anchor="left">
+          <rect class="background" box-anchor="hfill" width="36" height="42"/>
+          <use class="icon" width="52" height="52" xlink:href="icons/ic_menu_zoom.svg"/>
+        </g>
+        <g class="toolbutton cancel-btn" layout="box" box-anchor="right">
+          <rect class="background" box-anchor="hfill" width="36" height="42"/>
+          <use class="icon" width="52" height="52" xlink:href="icons/ic_menu_cancel.svg"/>
+        </g>
+      </g>
+
+      <!-- g class="scroll-container menu" display="none" position="absolute" top="100%" left="0" box-anchor="fill" layout="box" -->
+      <g class="scroll-container list" box-anchor="fill" layout="box">
+        <svg class="scroll-doc" box-anchor="fill">
+          <g class="scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
+          </g>
+        </svg>
+      </g>
+
+    </g>
+  )#";
+
+  SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
+  SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
+  textEditNode->addChild(textEditInnerNode());
+
+  SearchWidget* searchBox = new SearchWidget(searchBoxNode);
+  searchBox->isFocusable = true;
+
+  static const char* searchResultProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g layout="flex" flex-direction="row" box-anchor="left">
+        <g class="image-container" margin="2 5"></g>
+        <g layout="box" box-anchor="vfill">
+          <text class="title-text" box-anchor="left" margin="0 10"></text>
+          <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+          <text class="dist-text weak" box-anchor="left bottom" margin="0 120" font-size="12"></text>
+        </g>
+      </g>
+    </g>
+  )";
+  searchBox->searchResultProto.reset(loadSVGFragment(searchResultProtoSVG));
+
+  static const char* listItemProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g layout="flex" flex-direction="row" box-anchor="left">
+        <g class="image-container" margin="2 5"></g>
+        <g layout="box" box-anchor="vfill">
+          <text class="title-text" box-anchor="left" margin="0 10"></text>
+          <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        </g>
+      </g>
+    </g>
+  )";
+  searchBox->autoCompProto.reset(loadSVGFragment(listItemProtoSVG));
+
+  return searchBox;
 }

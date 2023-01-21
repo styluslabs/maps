@@ -18,7 +18,9 @@
 #include "mapsources.h"
 #include "plugins.h"
 
-using namespace Tangram;
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
 
 static const char* apiKeyScenePath = "+global.sdk_api_key";
 
@@ -102,7 +104,7 @@ void MapsApp::doubleTapEvent(float x, float y)
   pos.zoom += 1.f;
   pos.longitude = tapped.longitude;
   pos.latitude = tapped.latitude;
-  map->setCameraPositionEased(pos, 0.5f, EaseType::quint);
+  map->setCameraPositionEased(pos, 0.5f, Tangram::EaseType::quint);
 }
 
 void MapsApp::tapEvent(float x, float y)
@@ -118,7 +120,7 @@ void MapsApp::tapEvent(float x, float y)
   logMsg("Clicked:  %f, %f\n", x, y);
   logMsg("Remapped: %f, %f\n", xx, yy);
 
-  map->pickLabelAt(x, y, [&](const LabelPickResult* result) {
+  map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
     if (!result) {
       logMsg("Pick Label result is null.\n");
       pickLabelStr.clear();
@@ -164,7 +166,7 @@ void MapsApp::tapEvent(float x, float y)
     }
   });
 
-  map->pickMarkerAt(x, y, [&](const MarkerPickResult* result) {
+  map->pickMarkerAt(x, y, [&](const Tangram::MarkerPickResult* result) {
     if(!result || result->id == pickResultMarker)
     return;
     // hide pick result marker, since there is already a marker!
@@ -222,7 +224,7 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
   for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
     updates.push_back(update);
   // sceneFile will be used iff sceneYaml is empty
-  SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
+  Tangram::SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
   options.diskTileCacheSize = 256*1024*1024;
   options.diskCacheDir = baseDir + "cache/";
 #ifdef DEBUG
@@ -288,15 +290,22 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
   //LOGW("Rendering frame at %f w/ btn 0 %s at %f,%f", time, io.MouseDown[0] ? "down" : "up", io.MousePos.x, io.MousePos.y);
   if(show_gui) {
     ImGui::NewFrame();
-    showGUI();  // ImGui::ShowDemoWindow();
+    showImGUI();  // ImGui::ShowDemoWindow();
   }
 
   platform->notifyRender();
-  MapState state = map->update(time - lastFrameTime);
+  Tangram::MapState state = map->update(time - lastFrameTime);
   lastFrameTime = time;
   if (state.isAnimating()) {
     platform->requestRender();
   }
+
+  mapsTracks->onMapChange();
+  mapsBookmarks->onMapChange();
+  mapsOffline->onMapChange();
+  mapsSources->onMapChange();
+  mapsSearch->onMapChange();
+  pluginManager->onMapChange();
 
   map->render();
 
@@ -336,7 +345,7 @@ YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
 {
   YAML::Node node;
   if(map->getScene()->isReady())
-      YamlPath(yamlPath).get(map->getScene()->config(), node);
+      Tangram::YamlPath(yamlPath).get(map->getScene()->config(), node);
   return node;
 }
 
@@ -344,6 +353,7 @@ YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
 
 void MapsApp::dumpTileContents(float x, float y)
 {
+  using namespace Tangram;
   static std::mutex logMutex;
   double lng, lat;
   map->screenPositionToLngLat(x, y, &lng, &lat);
@@ -423,7 +433,7 @@ void MapsApp::showViewportGUI()
         if (ImGui::SliderAngle("Rotation", &camera.rotation, 0.f, 360.f)) {
             map->setCameraPosition(camera);
         }
-        EdgePadding padding = map->getPadding();
+        Tangram::EdgePadding padding = map->getPadding();
         if (ImGui::InputInt4("Left/Top/Right/Bottom", &padding.left)) {
             map->setPadding(padding);
         }
@@ -432,6 +442,8 @@ void MapsApp::showViewportGUI()
 
 void MapsApp::showDebugFlagsGUI()
 {
+    using Tangram::DebugFlags;
+
     if (ImGui::CollapsingHeader("Debug Flags")) {
         bool flag;
         flag = getDebugFlag(DebugFlags::freeze_tiles);
@@ -530,214 +542,79 @@ void MapsApp::showPickLabelGUI()
     }
 }
 
-
-#include "ugui/svggui.h"
-#include "ugui/widgets.h"
-#include "ugui/textedit.h"
-
-class SearchWidget : public Widget
-{
-public:
-  Widget* autoCompList;
-  Widget* resultList;
-
-  MapsSearch* mapsSearch;
-
-  TextEdit* textEdit;
-
-  std::unique_ptr<SvgNode> searchResultProto;
-  std::unique_ptr<SvgNode> autoCompProto;
-  std::unique_ptr<SvgNode> historyIconNode;
-  std::unique_ptr<SvgNode> resultIconNode;
-};
-
-SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
-{
-  textEdit = new TextEdit(containerNode()->selectFirst(".textbox"));
-  setMinWidth(textEdit, 100);
-
-  textEdit->onChanged = [this](const char* s){
-    //std::string str = StringRef(s).trimmed().toString();
-    mapsSearch->searchText(s);
-  };
-
-  historyIconNode.reset(new SvgUse(Rect::wh(100, 100), "", SvgGui::useFile("icons/ic_menu_clock.svg")));
-  resultIconNode.reset(new SvgUse(Rect::wh(100, 100), "", SvgGui::useFile("icons/ic_menu_zoom.svg")));
-}
-
-// or should we put results in resultList and show that immediately?
-void SearchWidget::populateAutocomplete(const std::vector<std::string>& history)
-{
-  window()->gui()->deleteContents(autoCompList, ".listitem");
-
-  for(size_t ii = 0; ii < history.size(); ++ii) {
-    Button* item = new Button(autoCompProto->clone());
-    //item->setUserData<FSPath>(fileinfo);
-    item->onClicked = [this](){
-      //const FSPath& fileinfo = widget->userData<FSPath>();
-      mapsSearch->autocompleteSelect();
-    };
-
-    SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    textnode->addText(history[ii].c_str());
-
-    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
-    imghost->addChild(historyIconNode->clone());
-
-    autoCompList->addWidget(item);
-  }
-}
-
-void SearchWidget::populateResults(const std::vector<SearchResult>& results)
-{
-  window()->gui()->deleteContents(autoCompList, ".listitem");
-
-  for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
-    const SearchResult& res = results[ii];
-    Button* item = new Button(searchResultProto->clone());
-
-    item->onClicked = [](){
-      // show result detail
-    };
-
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(res.tags["name"].GetString());
-
-    SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-    double distkm = lngLatDist(mapCenter, res.pos);
-    distnode->addText(fstring("%.1f km", distkm).c_str());
-
-    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
-    imghost->addChild(resultIconNode->clone());
-
-    resultList->addWidget(item);
-  }
-}
-
-SearchBox* createSearchBox()
-{
-  static const char* searchBoxSVG = R"#(
-    <!-- g id="searchbox" class="inputbox" layout="box" -->
-    <g id="searchbox" class="inputbox" layout="flex" flex-direction="column">
-      <g class="searchbox_content" box-anchor="fill" layout="flex" flex-direction="row">
-        <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
-          <rect class="min-width-rect" fill="none" width="150" height="36"/>
-          <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
-        </g>
-        <g class="toolbutton search-btn" layout="box" box-anchor="left">
-          <rect class="background" box-anchor="hfill" width="36" height="42"/>
-          <use class="icon" width="52" height="52" xlink:href="icons/ic_menu_zoom.svg"/>
-        </g>
-        <g class="toolbutton cancel-btn" layout="box" box-anchor="right">
-          <rect class="background" box-anchor="hfill" width="36" height="42"/>
-          <use class="icon" width="52" height="52" xlink:href="icons/ic_menu_cancel.svg"/>
-        </g>
-      </g>
-
-      <!-- g class="scroll-container menu" display="none" position="absolute" top="100%" left="0" box-anchor="fill" layout="box" -->
-      <g class="scroll-container list" box-anchor="fill" layout="box">
-        <svg class="scroll-doc" box-anchor="fill">
-          <g class="scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
-          </g>
-        </svg>
-      </g>
-
-    </g>
-  )#";
-
-
-  static const char* searchResultProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5"></g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
-          <text class="dist-text weak" box-anchor="left bottom" margin="0 120" font-size="12"></text>
-        </g>
-      </g>
-    </g>
-  )";
-  searchResultProto.reset(loadSVGFragment(searchResultProtoSVG));
-
-
-  static const char* listItemProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5"></g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
-        </g>
-      </g>
-    </g>
-  )";
-  autoCompProto.reset(loadSVGFragment(listItemProtoSVG));
-
-  Button* searchBtn = new Button(searchBoxNode->selectFirst(".search-btn"));
-  searchBtn->onPressed = [](){
-    // show history
-  };
-
-
-  Button* cancelBtn = new Button(searchBoxNode->selectFirst(".cancel-btn"));
-  cancelBtn->onClicked = [](){
-
-  };
-
-
-
-  SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
-  SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
-  textEditNode->addChild(textEditInnerNode());
-
-  SvgDocument* scrollDoc = static_cast<SvgDocument*>(searchBoxNode->selectFirst(".scroll-doc"));
-
-  Widget* listView = new Widget(searchBoxNode->selectFirst(".scroll-content"));
-
-  ScrollWidget* scrollWidget = new ScrollWidget(scrollDoc, listView);
-
-  scrollWidget->onScroll = [](){
-    if(scrollY - scrollLimits.bottom < 100) {
-      mapsSearch->moreResults();
-    }
-  };
-
-  SearchBox* searchBox = new SearchBox(searchBoxNode);
-  searchBox->isFocusable = true;
-  return searchBox;
-}
-
 class MapsWidget : public Widget
 {
 public:
-  MapsWidget();
+  MapsWidget(MapsApp* _app);
 
   void draw(SvgPainter* svgp) const override;
   Rect bounds(SvgPainter* svgp) const override;
   Rect dirtyRect() const override;
+
+  MapsApp* app;
+  Rect viewport;
+};
+
+static int actionFromSDLFinger(unsigned int sdltype)
+{
+  if(sdltype == SDL_FINGERMOTION) return 0;
+  else if(sdltype == SDL_FINGERDOWN) return 1;
+  else if(sdltype == SDL_FINGERUP) return -1;
+  else if(sdltype == SVGGUI_FINGERCANCEL) return -1;
+  return 0;
 }
 
-MapsWidget::MapsWidget() : Widget(new SvgCustomNode)
+MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
 {
+  onApplyLayout = [this](const Rect& src, const Rect& dest){
+    real w = dest.width(), h = dest.height();
+    if(w != viewport.width() || h != viewport.height())
+      app->onResize(w, h, w, h);
+    viewport = dest;
+    return true;
+  };
+
+  addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERMOTION || event->type == SDL_FINGERUP) {
+      app->touchHandler->touchEvent(0, actionFromSDLFinger(event->type),
+          event->tfinger.timestamp, event->tfinger.x, event->tfinger.y, 1.0f);
+    }
+    else if(event->type == SDL_MOUSEWHEEL) {
+      Point p = window()->gui()->prevFingerPos;
+      uint32_t mods = (PLATFORM_WIN || PLATFORM_LINUX) ? (event->wheel.direction >> 16) : 0;
+      app->onMouseWheel(p.x, p.y, event->wheel.x, event->wheel.x, mods & KMOD_ALT, mods & KMOD_CTRL);
+    }
+    else if(event->type == SvgGui::MULTITOUCH) {
+      SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
+      auto points = static_cast<std::vector<SDL_Finger>*>(event->user.data2);
+      for(const SDL_Finger& pt : *points) {
+        int action = pt.id == fevent->tfinger.fingerId ? actionFromSDLFinger(fevent->type) : 0;
+        app->touchHandler->touchEvent(0, action, event->user.timestamp, pt.x, pt.y, 1.0f);
+      }
+    }
+    else
+      return false;
+    return true;
+  });
 }
 
 Rect MapsWidget::bounds(SvgPainter* svgp) const
 {
-  return m_layoutTransform.mapRect(scribbleView->screenRect);
+  return viewport;  //m_layoutTransform.mapRect(scribbleView->screenRect);
 }
 
 Rect MapsWidget::dirtyRect() const
 {
-  const Rect& dirty = scribbleView->dirtyRectScreen;
-  return dirty.isValid() ? m_layoutTransform.mapRect(dirty) : Rect();
+  return viewport;
+  //const Rect& dirty = scribbleView->dirtyRectScreen;
+  //return dirty.isValid() ? m_layoutTransform.mapRect(dirty) : Rect();
 }
 
 void MapsWidget::draw(SvgPainter* svgp) const
 {
-  drawFrame();
+  auto t0 = std::chrono::high_resolution_clock::now();
+  double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
+  app->drawFrame(currTime);
 }
 
 
@@ -766,22 +643,182 @@ Window* MapsApp::createGUI()
   )";
 
 
-  Window* win = new Window(createWindowNode(mainWindowSVG));
+  SvgDocument* winnode = createWindowNode(mainWindowSVG);
+  Window* win = new Window(winnode);
 
   // search box, bookmarks btn, map sources btn, recenter map
 
-  splitter = new Splitter(containerNode()->selectFirst("#results-splitter"),
-      containerNode()->selectFirst("#result-split-sizer"), Splitter::BOTTOM, 120);
-  resultsPanel = selectFirst("#results-container");
+  Splitter* splitter = new Splitter(winnode->selectFirst("#results-splitter"),
+      winnode->selectFirst("#result-split-sizer"), Splitter::BOTTOM, 120);
+  resultPanel = win->selectFirst("#results-container");
 
-  mapsPanel = selectFirst("#maps-container");
-  mapsPanel->addWidget(createMapsWidget());
-  mapsPanel->addWidget(createSearchBox());
+  Widget* mapsPanel = win->selectFirst("#maps-container");
+  mapsPanel->addWidget(new MapsWidget(this));  //createMapsWidget());
+  mapsPanel->addWidget(SearchWidget::create());
 
   return win;
 }
 
-void MapsApp::showDebugGUI()
+
+#if 1  //PLATFORM_DESKTOP
+#define GLFW_INCLUDE_NONE
+#include "ugui/svggui_platform.h"
+#include "ugui/example/glfwSDL.h"
+#include "usvg/svgparser.h"
+#include "usvg/svgwriter.h"
+#include "ulib/platformutil.h"
+#include "nanovg-2/src/nanovg_sw.h"
+#include "nanovg-2/src/nanovg_sw_utils.h"
+
+#include "linuxPlatform.h"
+
+void glfwSDLEvent(SDL_Event* event)
+{
+  event->common.timestamp = SDL_GetTicks();
+  MapsApp::gui->sdlEvent(event);
+}
+
+static bool timerEventFired = false;
+
+void PLATFORM_WakeEventLoop()
+{
+  timerEventFired = true;
+  glfwPostEmptyEvent();
+}
+
+int main(int argc, char* argv[])
+{
+  bool runApplication = true;
+#if PLATFORM_WIN
+  SetProcessDPIAware();
+  winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
+#endif
+
+  if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
+  /*glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); */
+  //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
+  glfwWindowHint(GLFW_SAMPLES, 2);
+  glfwWindowHint(GLFW_STENCIL_BITS, 8);
+
+  GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "UGUI Example", NULL, NULL);
+  if(!glfwWin) { PLATFORM_LOG("glfwCreateWindow failed.\n"); return -1; }
+  glfwSDLInit(glfwWin);  // setup event callbacks
+
+  glfwMakeContextCurrent(glfwWin);
+  glfwSwapInterval(1); // Enable vsync
+  //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+
+  int nvgFlags = NVG_AUTOW_DEFAULT | (Painter::sRGB ? NVG_SRGB : 0);
+  int nvglFBFlags = NVG_IMAGE_SRGB;
+
+  NVGcontext* nvgContext = nvgswCreate(nvgFlags);  // | NVG_DEBUG);
+  if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return -1; }
+
+  glfwSwapInterval(0);
+  glfwSetTime(0);
+
+  Painter::vg = nvgContext;
+  Painter::loadFont("sans", "/home/mwhite/maps/tangram-es/scenes/fonts/roboto-regular.ttf");
+
+  SvgParser::openStream = [](const char* name) -> std::istream* {
+    if(name[0] == ':' && name[1] == '/') {
+      const char* res = getResource(name + 2);
+      if(res)
+        return new std::istringstream(res);
+      name += 2;  //return new std::ifstream(PLATFORM_STR(FSPath(basepath, name+2).c_str()), std::ios_base::in | std::ios_base::binary);
+    }
+    return new std::ifstream(PLATFORM_STR(name), std::ios_base::in | std::ios_base::binary);
+  };
+
+  loadIconRes();
+  // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
+  setGuiResources(defaultWidgetSVG, defaultStyleCSS);
+  SvgGui* gui = new SvgGui();
+  MapsApp::gui = gui;  // needed by glfwSDLEvent()
+  // scaling
+  gui->paintScale = 2.0;  //210.0/150.0;
+  gui->inputScale = 1/gui->paintScale;
+  nvgAtlasTextThreshold(nvgContext, 24 * gui->paintScale);  // 24px font is default for dialog titles
+
+  Painter* painter = new Painter();
+  //NVGLUframebuffer* nvglFB = nvgluCreateFramebuffer(nvgContext, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
+  //nvgluSetFramebufferSRGB(1);  // no-op for GLES - sRGB enabled iff FB is sRGB
+  NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
+  void* swFB = NULL;
+
+  char* apiKey = getenv("NEXTZEN_API_KEY");
+  MapsApp::apiKey = apiKey ? apiKey : "";
+  MapsApp::baseDir = "/home/mwhite/maps/";
+  auto platform = std::make_unique<Tangram::LinuxPlatform>();
+  MapsApp* app = new MapsApp(std::move(platform));
+
+  Window* win = app->createGUI();
+  win->sdlWindow = (SDL_Window*)glfwWin;
+  win->addHandler([&](SvgGui*, SDL_Event* event){
+    if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
+      runApplication = false;
+    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
+      SvgGui::debugLayout = true;
+    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)
+      SvgGui::debugDirty = !SvgGui::debugDirty;
+    return false;
+  });
+  gui->showWindow(win, NULL);
+
+  while(runApplication) {
+    glfwWaitEvents();
+    if(timerEventFired) {
+      timerEventFired = false;
+      SDL_Event event = {0};
+      event.type = SvgGui::TIMER;
+      gui->sdlEvent(&event);
+    }
+
+    int fbWidth = 0, fbHeight = 0;
+    glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
+
+    painter->deviceRect = Rect::wh(fbWidth, fbHeight);
+    Rect dirty = gui->layoutAndDraw(painter);
+    if(SvgGui::debugLayout) {
+      XmlStreamWriter xmlwriter;
+      SvgWriter::DEBUG_CSS_STYLE = true;
+      SvgWriter(xmlwriter).serialize(win->modalOrSelf()->documentNode());
+      SvgWriter::DEBUG_CSS_STYLE = false;
+      xmlwriter.saveFile("debug_layout.svg");
+      PLATFORM_LOG("Post-layout SVG written to debug_layout.svg\n");
+      SvgGui::debugLayout = false;
+    }
+    if(!dirty.isValid())
+      continue;
+
+    bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
+    if(!swFB || sizeChanged)
+      swFB = realloc(swFB, fbWidth*fbHeight*4);
+    nvgswSetFramebuffer(Painter::vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
+
+    painter->endFrame();
+
+    nvgswuBlit(swBlitter, swFB, fbWidth, fbHeight,
+        int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
+
+    glfwSwapBuffers(glfwWin);
+  }
+
+  gui->closeWindow(win);
+  delete gui;
+  delete painter;
+  delete app;
+  nvgswuDeleteBlitter(swBlitter);
+  nvgswDelete(nvgContext);
+  glfwTerminate();
+  return 0;
+}
+#endif
+
+void MapsApp::showImGUI()
 {
   showSceneGUI();
   mapsSources->showGUI();

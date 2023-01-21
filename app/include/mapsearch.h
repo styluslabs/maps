@@ -4,6 +4,10 @@
 #include "yaml-cpp/yaml.h"
 #include "rapidjson/document.h"
 
+#include "ugui/svggui.h"
+
+using Tangram::TileTask;
+
 struct SearchData {
   std::string layer;
   std::vector<std::string> fields;
@@ -17,6 +21,27 @@ struct SearchResult
   MarkerID markerId;
   bool isPinMarker;
   rapidjson::Document tags;  // will eventually be a DuktapeValue? standard osm tag names for now
+};
+
+class TextEdit;
+
+class SearchWidget : public Widget
+{
+public:
+  SearchWidget(SvgNode* n);
+  void populateAutocomplete(const std::vector<std::string>& history);
+  void populateResults(const std::vector<SearchResult>& results);
+
+  Widget* autoCompList;
+  Widget* resultList;
+  MapsApp* app;
+  TextEdit* textEdit;
+  std::unique_ptr<SvgNode> searchResultProto;
+  std::unique_ptr<SvgNode> autoCompProto;
+  std::unique_ptr<SvgNode> historyIconNode;
+  std::unique_ptr<SvgNode> resultIconNode;
+
+  static SearchWidget* create();
 };
 
 class MapsSearch : public MapsComponent
@@ -37,8 +62,18 @@ public:
   std::vector<MarkerID> pinMarkers;
   std::vector<MarkerID> dotMarkers;
 
+  int providerIdx = 0;
   // search flags
   enum { MAP_SEARCH = 1, SORT_BY_DIST = 2 };
+
+  // SearchWidget interface
+  SearchWidget* searchWidget;
+
+  enum SearchPhase { EDITING, RETURN, NEXTPAGE };
+  void searchText(std::string query, SearchPhase phase);
+  void onMapChange();
+  void updateMapResults(LngLat lngLat00, LngLat lngLat11);
+  void resultsUpdated();
 
 private:
   std::atomic_int tileCount;
@@ -48,6 +83,8 @@ private:
 
   //float markerRadius = 50;  // in pixels
   float prevZoom = 0;
+  LngLat dotBounds00, dotBounds11;
+  std::string searchStr;
 
   bool moreMapResultsAvail = false;
   bool mapResultsChanged = false;  // protected by resultsMutex

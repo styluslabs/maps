@@ -7,7 +7,7 @@
 #include "imgui.h"
 #include "imgui_stl.h"
 
-using namespace Tangram;
+//using namespace Tangram;
 
 
 PluginManager* PluginManager::inst = NULL;
