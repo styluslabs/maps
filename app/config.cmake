@@ -11,9 +11,25 @@ add_library(maps-app
   app/src/tracks.cpp
   app/src/util.cpp
   app/src/plugins.cpp
+  # ugui
+  app/styluslabs/ugui/svggui.cpp
+  app/styluslabs/ugui/widgets.cpp
+  app/styluslabs/ugui/textedit.cpp
+  app/styluslabs/ulib/geom.cpp
+  app/styluslabs/ulib/image.cpp
+  app/styluslabs/ulib/path2d.cpp
+  app/styluslabs/ulib/painter.cpp
+  app/styluslabs/usvg/svgnode.cpp
+  app/styluslabs/usvg/svgstyleparser.cpp
+  app/styluslabs/usvg/svgparser.cpp
+  app/styluslabs/usvg/svgpainter.cpp
+  app/styluslabs/usvg/svgwriter.cpp
+  app/styluslabs/usvg/pdfwriter.cpp
+  app/styluslabs/usvg/cssparser.cpp
+  app/styluslabs/nanovg-2/src/nanovg.c
+  app/styluslabs/pugixml/src/pugixml.cpp
+  app/styluslabs/ugui/example/glfwSDL.c
 )
-
-#imgui_impl_generic.cpp
 
 target_include_directories(maps-app
   PUBLIC
@@ -28,13 +44,15 @@ target_include_directories(maps-app
   core/deps/yaml-cpp/include
   core/deps/SQLiteCpp
   core/deps/isect2d/include
+  core/deps/stb
+  app/styluslabs
+  app/styluslabs/nanovg-2/src
+  app/styluslabs/pugixml/src
+  app/styluslabs/SDL/include
+  platforms/common
 )
 
-#core/deps/isect2d/include
-#core/deps/variant/include/mapbox
-#core/deps/alfons/src
-#core/deps/harfbuzz-icu-freetype/harfbuzz/src
-#core/deps/harfbuzz-icu-freetype/icu/common
-#core/deps/rapidjson
-
 target_compile_definitions(maps-app PRIVATE GLM_FORCE_CTOR_INIT)
+target_compile_definitions(maps-app PRIVATE PUGIXML_NO_XPATH)
+target_compile_definitions(maps-app PRIVATE PUGIXML_NO_EXCEPTIONS)
+target_compile_definitions(maps-app PRIVATE NO_PAINTER_GL)

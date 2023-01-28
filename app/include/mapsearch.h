@@ -24,6 +24,7 @@ struct SearchResult
 };
 
 class TextEdit;
+class Button;
 
 class SearchWidget : public Widget
 {
@@ -33,7 +34,9 @@ public:
   void populateResults(const std::vector<SearchResult>& results);
 
   Widget* autoCompList;
-  Widget* resultList;
+  Widget* autoCompContainer;
+  Button* cancelBtn;
+  //Widget* resultList;
   MapsApp* app;
   TextEdit* textEdit;
   std::unique_ptr<SvgNode> searchResultProto;
@@ -41,7 +44,7 @@ public:
   std::unique_ptr<SvgNode> historyIconNode;
   std::unique_ptr<SvgNode> resultIconNode;
 
-  static SearchWidget* create();
+  static SearchWidget* create(MapsApp* _app);
 };
 
 class MapsSearch : public MapsComponent
@@ -65,9 +68,6 @@ public:
   int providerIdx = 0;
   // search flags
   enum { MAP_SEARCH = 1, SORT_BY_DIST = 2 };
-
-  // SearchWidget interface
-  SearchWidget* searchWidget;
 
   enum SearchPhase { EDITING, RETURN, NEXTPAGE };
   void searchText(std::string query, SearchPhase phase);

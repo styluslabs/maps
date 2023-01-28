@@ -248,11 +248,13 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
 
   // Setup style
-  ImGuiIO& io = ImGui::GetIO();
-  ImGui::StyleColorsDark();
-  io.FontGlobalScale = 2.0f;
-  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
+  if(show_gui) {
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::StyleColorsDark();
+    io.FontGlobalScale = 2.0f;
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
+  }
 
   // make sure cache folder exists
   mkdir((baseDir + "cache").c_str(), 0777);
@@ -293,7 +295,7 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
     showImGUI();  // ImGui::ShowDemoWindow();
   }
 
-  platform->notifyRender();
+  //platform->notifyRender();
   Tangram::MapState state = map->update(time - lastFrameTime);
   lastFrameTime = time;
   if (state.isAnimating()) {
@@ -567,29 +569,37 @@ static int actionFromSDLFinger(unsigned int sdltype)
 MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
 {
   onApplyLayout = [this](const Rect& src, const Rect& dest){
-    real w = dest.width(), h = dest.height();
-    if(w != viewport.width() || h != viewport.height())
+    if(dest.width() != viewport.width() || dest.height() != viewport.height()) {
+      real w = dest.width()/app->gui->inputScale, h = dest.height()/app->gui->inputScale;
       app->onResize(w, h, w, h);
+    }
+    if(src != dest)
+      node->invalidate(true);
     viewport = dest;
     return true;
   };
 
   addHandler([this](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERMOTION || event->type == SDL_FINGERUP) {
+    // dividing by inputScale is a temporary hack - touchHandler should work in device independent coords (and
+    //  why doesn't map's pixel scale apply to coords?)
+    if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP ||
+        (event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK)) {
+      if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
+        gui->setPressed(this);
       app->touchHandler->touchEvent(0, actionFromSDLFinger(event->type),
-          event->tfinger.timestamp, event->tfinger.x, event->tfinger.y, 1.0f);
+          event->tfinger.timestamp/1000.0, event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale, 1.0f);
     }
     else if(event->type == SDL_MOUSEWHEEL) {
-      Point p = window()->gui()->prevFingerPos;
+      Point p = gui->prevFingerPos;
       uint32_t mods = (PLATFORM_WIN || PLATFORM_LINUX) ? (event->wheel.direction >> 16) : 0;
-      app->onMouseWheel(p.x, p.y, event->wheel.x, event->wheel.x, mods & KMOD_ALT, mods & KMOD_CTRL);
+      app->onMouseWheel(p.x/gui->inputScale, p.y/gui->inputScale, event->wheel.x/120.0, event->wheel.y/120.0, mods & KMOD_ALT, mods & KMOD_CTRL);
     }
     else if(event->type == SvgGui::MULTITOUCH) {
       SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
       auto points = static_cast<std::vector<SDL_Finger>*>(event->user.data2);
       for(const SDL_Finger& pt : *points) {
         int action = pt.id == fevent->tfinger.fingerId ? actionFromSDLFinger(fevent->type) : 0;
-        app->touchHandler->touchEvent(0, action, event->user.timestamp, pt.x, pt.y, 1.0f);
+        app->touchHandler->touchEvent(0, action, event->user.timestamp/1000.0, pt.x/gui->inputScale, pt.y/gui->inputScale, 1.0f);
       }
     }
     else
@@ -626,7 +636,7 @@ Window* MapsApp::createGUI()
         <g id="maps-container" box-anchor="fill" layout="box">
         </g>
         <rect id="result-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
-        <g id="results-container" box-anchor="fill" layout="box">
+        <g id="results-container" display="none" box-anchor="fill" layout="box">
           <rect id="result-split-sizer" fill="none" box-anchor="hfill" width="320" height="20"/>
         </g>
       </g>
@@ -648,29 +658,70 @@ Window* MapsApp::createGUI()
 
   // search box, bookmarks btn, map sources btn, recenter map
 
-  Splitter* splitter = new Splitter(winnode->selectFirst("#results-splitter"),
+  resultSplitter = new Splitter(winnode->selectFirst("#result-splitter"),
       winnode->selectFirst("#result-split-sizer"), Splitter::BOTTOM, 120);
   resultPanel = win->selectFirst("#results-container");
 
+  resultPanel->addWidget(new Widget(loadSVGFragment(resultListSVG)));
+  resultList = resultPanel->selectFirst(".scroll-content");
+
+  SvgDocument* scrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst(".scroll-doc"));
+  ScrollWidget* resultScroller = new ScrollWidget(scrollDoc, resultList);
+
+  mapsWidget = new MapsWidget(this);
+  mapsWidget->node->setAttribute("box-anchor", "fill");
+  mapsWidget->isFocusable = true;
+
+  searchWidget = SearchWidget::create(this);
+
   Widget* mapsPanel = win->selectFirst("#maps-container");
-  mapsPanel->addWidget(new MapsWidget(this));  //createMapsWidget());
-  mapsPanel->addWidget(SearchWidget::create());
+  mapsPanel->addWidget(mapsWidget);
+  mapsPanel->addWidget(searchWidget);
 
   return win;
 }
 
 
 #if 1  //PLATFORM_DESKTOP
-#define GLFW_INCLUDE_NONE
 #include "ugui/svggui_platform.h"
-#include "ugui/example/glfwSDL.h"
 #include "usvg/svgparser.h"
 #include "usvg/svgwriter.h"
 #include "ulib/platformutil.h"
+
+//#define GLFW_INCLUDE_NONE
+#define GLFW_INCLUDE_GLEXT
+#define GL_GLEXT_PROTOTYPES
+#include "ugui/example/glfwSDL.h"
+#define NANOVG_SW_IMPLEMENTATION
+#define NVG_LOG PLATFORM_LOG
+#define NVGSWU_GLES2
 #include "nanovg-2/src/nanovg_sw.h"
 #include "nanovg-2/src/nanovg_sw_utils.h"
 
-#include "linuxPlatform.h"
+#include "../linux/src/linuxPlatform.h"
+
+SvgGui* MapsApp::gui = NULL;
+
+// String resources:
+typedef std::unordered_map<std::string, const char*> ResourceMap;
+static ResourceMap resourceMap;
+
+static void addStringResources(std::initializer_list<ResourceMap::value_type> values)
+{
+  resourceMap.insert(values);
+}
+
+const char* getResource(const std::string& name)
+{
+  auto it = resourceMap.find(name);
+  return it != resourceMap.end() ? it->second : NULL;
+}
+
+// SVG for icons
+#define LOAD_RES_FN loadIconRes
+#include "scribbleres/res_icons.cpp"
+
+#include "ugui/theme.cpp"
 
 void glfwSDLEvent(SDL_Event* event)
 {
@@ -694,6 +745,21 @@ int main(int argc, char* argv[])
   winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
 #endif
 
+  // command line args
+  const char* sceneFile = "scenes/scene.yaml";
+  for(int argi = 1; argi < argc; ++argi) {
+    if(strcmp(argv[argi], "-f") == 0 && ++argi < argc)
+      sceneFile = argv[argi];
+  }
+
+  Url baseUrl("file:///");
+  char pathBuffer[PATH_MAX] = {0};
+  if (getcwd(pathBuffer, PATH_MAX) != nullptr) {
+      baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
+  }
+  LOG("Base URL: %s", baseUrl.string().c_str());
+  Url sceneUrl = baseUrl.resolve(Url(sceneFile));
+
   if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
   /*glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -703,7 +769,7 @@ int main(int argc, char* argv[])
   glfwWindowHint(GLFW_SAMPLES, 2);
   glfwWindowHint(GLFW_STENCIL_BITS, 8);
 
-  GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "UGUI Example", NULL, NULL);
+  GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "Maps (DEBUG)", NULL, NULL);
   if(!glfwWin) { PLATFORM_LOG("glfwCreateWindow failed.\n"); return -1; }
   glfwSDLInit(glfwWin);  // setup event callbacks
 
@@ -712,7 +778,7 @@ int main(int argc, char* argv[])
   //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
   int nvgFlags = NVG_AUTOW_DEFAULT | (Painter::sRGB ? NVG_SRGB : 0);
-  int nvglFBFlags = NVG_IMAGE_SRGB;
+  //int nvglFBFlags = NVG_IMAGE_SRGB;
 
   NVGcontext* nvgContext = nvgswCreate(nvgFlags);  // | NVG_DEBUG);
   if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return -1; }
@@ -752,8 +818,11 @@ int main(int argc, char* argv[])
   char* apiKey = getenv("NEXTZEN_API_KEY");
   MapsApp::apiKey = apiKey ? apiKey : "";
   MapsApp::baseDir = "/home/mwhite/maps/";
-  auto platform = std::make_unique<Tangram::LinuxPlatform>();
-  MapsApp* app = new MapsApp(std::move(platform));
+  MapsApp* app = new MapsApp(std::make_unique<Tangram::LinuxPlatform>());
+
+  app->sceneFile = sceneUrl.string();
+  app->map->setupGL();
+  app->loadSceneFile(false);
 
   Window* win = app->createGUI();
   win->sdlWindow = (SDL_Window*)glfwWin;
@@ -769,7 +838,7 @@ int main(int argc, char* argv[])
   gui->showWindow(win, NULL);
 
   while(runApplication) {
-    glfwWaitEvents();
+    app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
     if(timerEventFired) {
       timerEventFired = false;
       SDL_Event event = {0};
@@ -779,8 +848,11 @@ int main(int argc, char* argv[])
 
     int fbWidth = 0, fbHeight = 0;
     glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
-
     painter->deviceRect = Rect::wh(fbWidth, fbHeight);
+
+    if(MapsApp::platform->notifyRender())
+      app->mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);
+
     Rect dirty = gui->layoutAndDraw(painter);
     if(SvgGui::debugLayout) {
       XmlStreamWriter xmlwriter;
@@ -799,8 +871,15 @@ int main(int argc, char* argv[])
       swFB = realloc(swFB, fbWidth*fbHeight*4);
     nvgswSetFramebuffer(Painter::vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
 
+    dirty = Rect::wh(fbWidth, fbHeight);
+    //painter->fillRect(Rect::wh(fbWidth, fbHeight), Color::RED);
     painter->endFrame();
 
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_CULL_FACE);
     nvgswuBlit(swBlitter, swFB, fbWidth, fbHeight,
         int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
 

@@ -1,6 +1,6 @@
 #pragma once
 
-//#include "ulib/stringutil.h"
+#include "ulib/stringutil.h"
 //#include "ulib/threadutil.h"
 
 #include "tangram.h"
@@ -22,6 +22,7 @@ struct sqlite3;
 typedef std::function<void(sqlite3_stmt*)> SQLiteStmtFn;
 bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb = SQLiteStmtFn(), SQLiteStmtFn bind = SQLiteStmtFn());
 
+/*
 std::vector<std::string> lsDirectory(const std::string& name);
 
 #include <sstream>
@@ -130,3 +131,4 @@ bool readFile(Container* buff, const char* filename)
 }
 
 std::string readFile(const char* filename);
+*/

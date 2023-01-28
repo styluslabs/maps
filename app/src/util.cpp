@@ -3,7 +3,15 @@
 #include "scene/scene.h"
 #include "sqlite3/sqlite3.h"
 
-using namespace Tangram;
+#define PLATFORMUTIL_IMPLEMENTATION
+#include "ulib/platformutil.h"
+
+#define STRINGUTIL_IMPLEMENTATION
+#include "ulib/stringutil.h"
+
+#define FILEUTIL_IMPLEMENTATION
+#include "ulib/fileutil.h"
+
 
 template<typename T>
 static constexpr T clamp(T val, T min, T max) {
@@ -32,6 +40,7 @@ TileID lngLatTile(LngLat ll, int z)
 #endif
 LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord)
 {
+  using namespace Tangram;
   double scale = MapProjection::metersPerTileAtZoom(tileId.z);
   ProjectedMeters tileOrigin = MapProjection::tileSouthWestCorner(tileId);
   ProjectedMeters meters = glm::dvec2(tileCoord) * scale + tileOrigin;
@@ -55,7 +64,7 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
   int res;
   sqlite3_stmt* stmt;
   if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) {
-    logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(db));
+    LOGE("sqlite3_prepare_v2 error: %s", sqlite3_errmsg(db));
     return false;
   }
   if(bind)
@@ -65,13 +74,14 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
       cb(stmt);
   }
   if(res != SQLITE_DONE && res != SQLITE_OK)
-    logMsg("sqlite3_step error: %s\n", sqlite3_errmsg(db));
+    LOGE("sqlite3_step error: %s", sqlite3_errmsg(db));
   sqlite3_finalize(stmt);
   auto t1 = std::chrono::high_resolution_clock::now();
   //logMsg("Query time: %.6f s for %s\n", std::chrono::duration<float>(t1 - t0).count(), sql);
   return true;
 }
 
+/*
 // from fileutil.h
 std::string readFile(const char* filename)
 {
@@ -106,3 +116,4 @@ std::vector<std::string> lsDirectory(const std::string& name)
   closedir(dirp);
   return v;
 }
+*/

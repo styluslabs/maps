@@ -18,6 +18,8 @@ class SvgGui;
 class Splitter;
 class Widget;
 class Window;
+class SearchWidget;
+class MapsWidget;
 
 struct Location
 {
@@ -94,13 +96,16 @@ public:
   std::unique_ptr<MapsSearch> mapsSearch;
   std::unique_ptr<PluginManager> pluginManager;
 
-  Map* map;
+  Map* map = NULL;
 
   // GUI
   Window* createGUI();
 
-  Splitter* resultSplitter;
-  Widget* resultPanel;
+  Splitter* resultSplitter = NULL;
+  Widget* resultPanel = NULL;
+  Widget* resultList = NULL;
+  MapsWidget* mapsWidget = NULL;
+  SearchWidget* searchWidget = NULL;
 
   static Platform* platform;
   static std::string baseDir;

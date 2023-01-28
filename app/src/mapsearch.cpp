@@ -648,7 +648,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
 
 void MapsSearch::resultsUpdated()
 {
-  searchWidget->populateResults(listResults);
+  app->searchWidget->populateResults(listResults);
 
   // zoom out if necessary to show first 5 results
   if(mapResultsChanged) {
@@ -695,6 +695,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   // history (autocomplete)
   if(phase == RETURN) {
+    app->searchWidget->autoCompContainer->setVisible(false);
     // IGNORE prevents error from UNIQUE constraint
     DB_exec(searchDB, fstring("INSERT OR IGNORE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
   }
@@ -705,7 +706,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
     });
 
-    searchWidget->populateAutocomplete(autocomplete);
+    app->searchWidget->populateAutocomplete(autocomplete);
   }
 
   if(searchStr.size() > 2) {
@@ -741,15 +742,27 @@ SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
     app->mapsSearch->searchText(s, MapsSearch::EDITING);  //StringRef(s).trimmed().toString();
   };
 
+  addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
+      if(!textEdit->text().empty())
+        app->mapsSearch->searchText(textEdit->text(), MapsSearch::RETURN);
+      return true;
+    }
+    return false;
+  });
+
   SvgDocument* scrollDoc = static_cast<SvgDocument*>(containerNode()->selectFirst(".scroll-doc"));
   autoCompList = new Widget(containerNode()->selectFirst(".scroll-content"));
   ScrollWidget* scrollWidget = new ScrollWidget(scrollDoc, autoCompList);
+  autoCompContainer = new Widget(containerNode()->selectFirst(".scroll-container"));
 
+  /*
   scrollWidget->onScroll = [this, scrollWidget](){
     if(scrollWidget->scrollY - scrollWidget->scrollLimits.bottom < 100) {
       app->mapsSearch->searchText("", MapsSearch::NEXTPAGE);
     }
   };
+  */
 
   Button* searchBtn = new Button(containerNode()->selectFirst(".search-btn"));
   searchBtn->onPressed = [this](){
@@ -757,23 +770,28 @@ SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
     app->mapsSearch->searchText("", MapsSearch::EDITING);
   };
 
-  Button* cancelBtn = new Button(containerNode()->selectFirst(".cancel-btn"));
+  cancelBtn = new Button(containerNode()->selectFirst(".cancel-btn"));
   cancelBtn->onClicked = [this](){
     app->mapsSearch->clearSearch();
     window()->gui()->deleteContents(autoCompList, ".listitem");
-    window()->gui()->deleteContents(resultList, ".listitem");
+    window()->gui()->deleteContents(app->resultList, ".listitem");
 
     app->resultSplitter->setVisible(false);
     app->resultPanel->setVisible(false);
+    autoCompContainer->setVisible(false);
+    textEdit->setText("");
+    cancelBtn->setVisible(false);
   };
 
-  historyIconNode.reset(new SvgUse(Rect::wh(100, 100), "", SvgGui::useFile("icons/ic_menu_clock.svg")));
-  resultIconNode.reset(new SvgUse(Rect::wh(100, 100), "", SvgGui::useFile("icons/ic_menu_zoom.svg")));
+  historyIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_clock.svg")));
+  resultIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_zoom.svg")));
 }
 
 // or should we put results in resultList and show that immediately?
 void SearchWidget::populateAutocomplete(const std::vector<std::string>& history)
 {
+  cancelBtn->setVisible(true);
+  autoCompContainer->setVisible(true);
   window()->gui()->deleteContents(autoCompList, ".listitem");
 
   for(size_t ii = 0; ii < history.size(); ++ii) {
@@ -800,14 +818,18 @@ void SearchWidget::populateResults(const std::vector<SearchResult>& results)
   app->resultSplitter->setVisible(true);
   app->resultPanel->setVisible(true);
 
-  window()->gui()->deleteContents(resultList, ".listitem");
+  window()->gui()->deleteContents(app->resultList, ".listitem");
 
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
     Button* item = new Button(searchResultProto->clone());
 
-    item->onClicked = [](){
-      // show result detail
+    item->onClicked = [this, &results, ii](){
+      // TODO: hide search result marker
+      rapidjson::StringBuffer sb;
+      rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+      results[ii].tags.Accept(writer);
+      app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), sb.GetString());
     };
 
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
@@ -820,32 +842,36 @@ void SearchWidget::populateResults(const std::vector<SearchResult>& results)
     SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
     imghost->addChild(resultIconNode->clone());
 
-    resultList->addWidget(item);
+    app->resultList->addWidget(item);
   }
 }
 
-SearchWidget* SearchWidget::create()
+SearchWidget* SearchWidget::create(MapsApp* _app)
 {
   static const char* searchBoxSVG = R"#(
     <!-- g id="searchbox" class="inputbox" layout="box" -->
-    <g id="searchbox" class="inputbox" layout="flex" flex-direction="column">
-      <g class="searchbox_content" box-anchor="fill" layout="flex" flex-direction="row">
-        <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
-          <rect class="min-width-rect" fill="none" width="150" height="36"/>
-          <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
-        </g>
-        <g class="toolbutton search-btn" layout="box" box-anchor="left">
-          <rect class="background" box-anchor="hfill" width="36" height="42"/>
-          <use class="icon" width="52" height="52" xlink:href="icons/ic_menu_zoom.svg"/>
-        </g>
-        <g class="toolbutton cancel-btn" layout="box" box-anchor="right">
-          <rect class="background" box-anchor="hfill" width="36" height="42"/>
-          <use class="icon" width="52" height="52" xlink:href="icons/ic_menu_cancel.svg"/>
+    <g id="searchbox" class="inputbox" layout="flex" flex-direction="column" box-anchor="top" margin="10 0 0 0">
+
+      <g id="toolbar" class="toolbar" box-anchor="hfill" layout="box">
+        <rect class="toolbar-bg background" box-anchor="vfill" width="400" height="20"/>
+        <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
+          <g class="toolbutton search-btn" layout="box" box-anchor="left">
+            <rect class="background" box-anchor="hfill" width="36" height="42"/>
+            <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_zoom.svg"/>
+          </g>
+          <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
+            <rect class="min-width-rect" fill="none" width="150" height="36"/>
+            <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
+          </g>
+          <g class="toolbutton cancel-btn" display="none" layout="box" box-anchor="right">
+            <rect class="background" box-anchor="hfill" width="36" height="42"/>
+            <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_cancel.svg"/>
+          </g>
         </g>
       </g>
 
       <!-- g class="scroll-container menu" display="none" position="absolute" top="100%" left="0" box-anchor="fill" layout="box" -->
-      <g class="scroll-container list" box-anchor="fill" layout="box">
+      <g class="scroll-container list" display="none" box-anchor="fill" layout="box">
         <svg class="scroll-doc" box-anchor="fill">
           <g class="scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
           </g>
@@ -855,11 +881,24 @@ SearchWidget* SearchWidget::create()
     </g>
   )#";
 
+  /*
+  Toolbar* toolbar = createToolbar();
+  Button* searchBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"));
+  ComboBox* searchText = createTextComboBox({});
+  cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
+
+  toolbar->addWidget(searchBtn);
+  toolbar->addWidget(searchText);
+  toolbar->addWidget(cancelBtn);
+  cancelBtn->setVisible(false);
+  */
+
   SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
   SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
   textEditNode->addChild(textEditInnerNode());
 
   SearchWidget* searchBox = new SearchWidget(searchBoxNode);
+  searchBox->app = _app;
   searchBox->isFocusable = true;
 
   static const char* searchResultProtoSVG = R"(
@@ -890,6 +929,8 @@ SearchWidget* SearchWidget::create()
     </g>
   )";
   searchBox->autoCompProto.reset(loadSVGFragment(listItemProtoSVG));
+
+  initSearch();
 
   return searchBox;
 }
