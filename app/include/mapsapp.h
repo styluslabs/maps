@@ -20,6 +20,7 @@ class Widget;
 class Window;
 class SearchWidget;
 class MapsWidget;
+class SvgNode;
 
 struct Location
 {
@@ -38,6 +39,8 @@ struct Location
 };
 
 namespace YAML { class Node; }
+//namespace rapidjson { class Document; }
+#include "rapidjson/fwd.h"  // don't worry, we'll be getting rid of rapidjson soon
 
 class MapsApp
 {
@@ -62,7 +65,8 @@ public:
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
-  void setPickResult(LngLat pos, std::string namestr, std::string props, int priority = 1);
+  void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority = 1);
+  void setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority = 1);
   YAML::Node readSceneValue(const std::string& yamlPath);
 
   Location loc;
@@ -104,8 +108,12 @@ public:
   Splitter* resultSplitter = NULL;
   Widget* resultPanel = NULL;
   Widget* resultList = NULL;
+  Widget* placeInfo = NULL;
+  Widget* resultListContainer = NULL;
+  Widget* placeInfoContainer = NULL;
   MapsWidget* mapsWidget = NULL;
   SearchWidget* searchWidget = NULL;
+  std::unique_ptr<SvgNode> placeInfoProto;
 
   static Platform* platform;
   static std::string baseDir;

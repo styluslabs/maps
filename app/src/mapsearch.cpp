@@ -631,6 +631,17 @@ void MapsSearch::onMapChange()
   else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
     onZoom();
   }
+
+  if(app->pickedMarkerId > 0) {
+    for(auto& res : mapResults) {
+      if(res.markerId == app->pickedMarkerId) {
+        //map->markerSetVisible(res.markerId, false);  // hide existing marker
+        app->pickedMarkerId = 0;
+        app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
+        break;
+      }
+    }
+  }
 }
 
 void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
@@ -826,10 +837,7 @@ void SearchWidget::populateResults(const std::vector<SearchResult>& results)
 
     item->onClicked = [this, &results, ii](){
       // TODO: hide search result marker
-      rapidjson::StringBuffer sb;
-      rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
-      results[ii].tags.Accept(writer);
-      app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), sb.GetString());
+      app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
     };
 
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
@@ -916,7 +924,7 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
   )";
   searchBox->searchResultProto.reset(loadSVGFragment(searchResultProtoSVG));
 
-  static const char* listItemProtoSVG = R"(
+  static const char* autoCompProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
@@ -928,7 +936,7 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
       </g>
     </g>
   )";
-  searchBox->autoCompProto.reset(loadSVGFragment(listItemProtoSVG));
+  searchBox->autoCompProto.reset(loadSVGFragment(autoCompProtoSVG));
 
   initSearch();
 

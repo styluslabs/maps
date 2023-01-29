@@ -8,6 +8,7 @@
 #include "imgui_stl.h"
 #include "glm/common.hpp"
 #include "rapidxml/rapidxml.hpp"
+#include "rapidjson/document.h"
 #include <sys/stat.h>
 
 #include "touchhandler.h"
@@ -44,13 +45,13 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
   lngLatMax.longitude = std::max(std::max(lng00, lng01), std::max(lng10, lng11));
 }
 
-void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string props, int priority)
+void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority)
 {
   if(pickResultMarker == 0)
     pickResultMarker = map->markerAdd();
   map->markerSetVisible(pickResultMarker, true);
   // 2nd value is priority (smaller number means higher priority)
-  std::replace(namestr.begin(), namestr.end(), '"', '\'');
+  //std::replace(namestr.begin(), namestr.end(), '"', '\'');
   //map->markerSetStylingFromString(pickResultMarker, fstring(searchMarkerStyleStr, "pick-marker-red").c_str());
   map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
 
@@ -60,30 +61,71 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string props, 
   map->markerSetProperties(pickResultMarker, std::move(mprops));
 
   map->markerSetPoint(pickResultMarker, pos);
-  pickResultCoord = pos;
-  pickResultProps = props;
-
-  if(props.empty()) {
-    pickLabelStr = fstring("lat = %.6f\nlon = %.6f", pos.latitude, pos.longitude);
-  }
-  else {
-    pickLabelStr.clear();
-    rapidjson::Document doc;
-    doc.Parse(props.c_str());
-    for (auto& m : doc.GetObject()) {
-      std::string val = "<object>";
-      if(m.value.IsNumber())
-        val = std::to_string(m.value.GetDouble());
-      else if(m.value.IsString())
-        val = m.value.GetString();
-      pickLabelStr += m.name.GetString() + std::string(" = ") + val + "\n";
-    }
-  }
-
   // ensure marker is visible
   double scrx, scry;
   if(!map->lngLatToScreenPosition(pos.longitude, pos.latitude, &scrx, &scry))
     map->flyTo(CameraPosition{pos.longitude, pos.latitude, 16}, 1.0);  // max(map->getZoom(), 14)
+
+  // show place info panel
+  pickResultCoord = pos;
+  //pickResultProps = propstr;
+
+  /*rapidjson::Document props;
+
+  if(propstr.empty()) {
+    //props["name"] = "Pin";
+    //pickLabelStr = fstring("lat = %.6f\nlon = %.6f", pos.latitude, pos.longitude);
+  }
+  else {
+    //pickLabelStr.clear();
+    //rapidjson::Document props;
+    props.Parse(propstr.c_str());
+    //for (auto& m : doc.GetObject()) {
+    //  std::string val = "<object>";
+    //  if(m.value.IsNumber())
+    //    val = std::to_string(m.value.GetDouble());
+    //  else if(m.value.IsString())
+    //    val = m.value.GetString();
+    //  pickLabelStr += m.name.GetString() + std::string(" = ") + val + "\n";
+    //}
+  }
+  if(!props.HasMember("name"))
+    props["name"] = namestr;*/
+
+  LngLat mapCenter;
+  map->getPosition(mapCenter.longitude, mapCenter.latitude);
+
+  gui->deleteContents(placeInfo, ".listitem");
+
+  resultListContainer->setVisible(false);
+  placeInfoContainer->setVisible(true);
+
+  Widget* item = new Widget(placeInfoProto->clone());
+
+  SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+  if(titlenode)
+    titlenode->addText(props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
+
+  SvgText* coordnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".lnglat-text"));
+  if(coordnode)
+    coordnode->addText(fstring("%.6f, %.6f", pos.latitude, pos.longitude).c_str());
+
+  SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
+  double distkm = lngLatDist(mapCenter, pos);
+  if(distnode)
+    distnode->addText(fstring("%.1f km", distkm).c_str());
+
+  //SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
+  //imghost->addChild(resultIconNode->clone());
+
+  placeInfo->addWidget(item);
+}
+
+void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority)
+{
+  rapidjson::Document props;
+  props.Parse(propstr.c_str());
+  setPickResult(pos, namestr, props, priority);
 }
 
 void MapsApp::longPressEvent(float x, float y)
@@ -635,38 +677,81 @@ Window* MapsApp::createGUI()
       <g class="window-layout" box-anchor="fill" layout="flex" flex-direction="column">
         <g id="maps-container" box-anchor="fill" layout="box">
         </g>
-        <rect id="result-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
+        <rect id="results-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
         <g id="results-container" display="none" box-anchor="fill" layout="box">
-          <rect id="result-split-sizer" fill="none" box-anchor="hfill" width="320" height="20"/>
+          <rect id="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="20"/>
+
+          <g id="list-scroll-container" class="list" display="none" box-anchor="fill" layout="box">
+            <svg id="list-scroll-doc" box-anchor="fill">
+              <g id="list-scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
+              </g>
+            </svg>
+          </g>
+
+          <g id="info-scroll-container" class="list" display="none" box-anchor="fill" layout="box">
+            <g id="info-toolbar-container"></g>
+            <svg id="info-scroll-doc" box-anchor="fill">
+              <g id="info-scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
+              </g>
+            </svg>
+          </g>
+
         </g>
       </g>
     </svg>
   )";
 
-  static const char* resultListSVG = R"(
-    <g class="scroll-container list" box-anchor="fill" layout="box">
-      <svg class="scroll-doc" box-anchor="fill">
-        <g class="scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
+  static const char* placeInfoProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g layout="flex" flex-direction="row" box-anchor="left">
+        <g class="image-container" margin="2 5"></g>
+        <g layout="flex" flex-direction="column" box-anchor="vfill">
+          <text class="title-text" margin="0 10"></text>
+          <text class="addr-text weak" margin="0 10" font-size="12"></text>
+          <text class="lnglat-text weak" margin="0 10" font-size="12"></text>
+          <text class="dist-text weak" margin="0 10" font-size="12"></text>
         </g>
-      </svg>
+      </g>
     </g>
   )";
 
+  placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
   SvgDocument* winnode = createWindowNode(mainWindowSVG);
   Window* win = new Window(winnode);
 
   // search box, bookmarks btn, map sources btn, recenter map
 
-  resultSplitter = new Splitter(winnode->selectFirst("#result-splitter"),
-      winnode->selectFirst("#result-split-sizer"), Splitter::BOTTOM, 120);
+  resultSplitter = new Splitter(winnode->selectFirst("#results-splitter"),
+      winnode->selectFirst("#results-split-sizer"), Splitter::BOTTOM, 120);
   resultPanel = win->selectFirst("#results-container");
 
-  resultPanel->addWidget(new Widget(loadSVGFragment(resultListSVG)));
-  resultList = resultPanel->selectFirst(".scroll-content");
+  resultList = resultPanel->selectFirst("#list-scroll-content");
+  SvgDocument* listScrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst("#list-scroll-doc"));
+  ScrollWidget* listScroller = new ScrollWidget(listScrollDoc, resultList);
 
-  SvgDocument* scrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst(".scroll-doc"));
-  ScrollWidget* resultScroller = new ScrollWidget(scrollDoc, resultList);
+  placeInfo = resultPanel->selectFirst("#info-scroll-content");
+  SvgDocument* infoScrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst("#info-scroll-doc"));
+  ScrollWidget* infoScroller = new ScrollWidget(infoScrollDoc, placeInfo);
+
+  resultListContainer = win->selectFirst("#list-scroll-container");
+  placeInfoContainer = win->selectFirst("#info-scroll-container");
+
+  auto infoToolbar = createToolbar();
+  auto backBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"));
+  auto minimizeBtn = createToolbutton(SvgGui::useFile(":/icons/chevron_down.svg"));
+
+  backBtn->onClicked = [this](){
+    placeInfoContainer->setVisible(false);
+    if(!resultList->containerNode()->children().empty())
+      resultListContainer->setVisible(true);
+  };
+
+  infoToolbar->addWidget(backBtn);
+  infoToolbar->addWidget(createStretch());
+  infoToolbar->addWidget(minimizeBtn);
+  resultPanel->selectFirst("#info-toolbar-container")->addWidget(infoToolbar);
 
   mapsWidget = new MapsWidget(this);
   mapsWidget->node->setAttribute("box-anchor", "fill");
