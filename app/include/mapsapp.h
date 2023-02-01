@@ -102,6 +102,8 @@ public:
 
   Map* map = NULL;
 
+  static LngLat mapCenter;
+
   // GUI
   Window* createGUI();
 

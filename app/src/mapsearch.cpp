@@ -24,7 +24,6 @@
 static sqlite3* searchDB = NULL;
 static sqlite3_stmt* insertStmt = NULL;
 
-static LngLat mapCenter;
 static bool sortByDist = false;
 
 
@@ -42,7 +41,7 @@ static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value*
   double rank = sortByDist ? -1.0 : sqlite3_value_double(argv[0]);
   double lon = sqlite3_value_double(argv[1]);  // distance from search center point in meters
   double lat = sqlite3_value_double(argv[2]);  // distance from search center point in meters
-  double dist = lngLatDist(mapCenter, LngLat(lon, lat));
+  double dist = lngLatDist(MapsApp::mapCenter, LngLat(lon, lat));
   // obviously will want a more sophisticated ranking calculation in the future
   sqlite3_result_double(context, rank/log2(1+dist));
 }
@@ -501,7 +500,6 @@ void MapsSearch::showGUI()
     //resultOffset = nextPage ? resultOffset + 20 : 0;
     //size_t markerIdx = nextPage ? results.size() : 0;
     if(searchStr.size() > 2) {
-      map->getPosition(mapCenter.longitude, mapCenter.latitude);
       if(providerIdx > 0) {
         if(ent || nextPage)
           app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
@@ -514,7 +512,7 @@ void MapsSearch::showGUI()
         LngLat minLngLat(180, 90), maxLngLat(-180, -90);
         int resultIdx = 0;
         for(auto& res : listResults) {
-          if(resultIdx <= 5 || lngLatDist(mapCenter, res.pos) < 2.0) {
+          if(resultIdx <= 5 || lngLatDist(app->mapCenter, res.pos) < 2.0) {
             minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
             minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
             maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
@@ -577,7 +575,7 @@ void MapsSearch::showGUI()
 
   std::vector<std::string> sresults;
   for (auto& res : listResults) {
-    double distkm = lngLatDist(mapCenter, res.pos);
+    double distkm = lngLatDist(app->mapCenter, res.pos);
     sresults.push_back(fstring("%s (%.1f km)", res.tags["name"].GetString(), distkm));
   }
 
@@ -664,14 +662,12 @@ void MapsSearch::resultsUpdated()
   // zoom out if necessary to show first 5 results
   if(mapResultsChanged) {
     Map* map = app->map;
-    LngLat mapCenter;
-    map->getPosition(mapCenter.longitude, mapCenter.latitude);
     createMarkers();
 
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
     int resultIdx = 0;
     for(auto& res : listResults) {
-      if(resultIdx <= 5 || lngLatDist(mapCenter, res.pos) < 2.0) {
+      if(resultIdx <= 5 || lngLatDist(app->mapCenter, res.pos) < 2.0) {
         minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
         minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
         maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
@@ -721,9 +717,6 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   }
 
   if(searchStr.size() > 2) {
-    LngLat mapCenter;
-    map->getPosition(mapCenter.longitude, mapCenter.latitude);
-
     if(phase == RETURN)
       updateMapResults(lngLat00, lngLat11);
 
@@ -787,6 +780,8 @@ SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
     window()->gui()->deleteContents(autoCompList, ".listitem");
     window()->gui()->deleteContents(app->resultList, ".listitem");
 
+    app->resultListContainer->setVisible(false);
+    app->placeInfoContainer->setVisible(false);
     app->resultSplitter->setVisible(false);
     app->resultPanel->setVisible(false);
     autoCompContainer->setVisible(false);
@@ -823,11 +818,9 @@ void SearchWidget::populateAutocomplete(const std::vector<std::string>& history)
 
 void SearchWidget::populateResults(const std::vector<SearchResult>& results)
 {
-  LngLat mapCenter;
-  app->map->getPosition(mapCenter.longitude, mapCenter.latitude);
-
   app->resultSplitter->setVisible(true);
   app->resultPanel->setVisible(true);
+  app->resultListContainer->setVisible(true);
 
   window()->gui()->deleteContents(app->resultList, ".listitem");
 
@@ -844,7 +837,7 @@ void SearchWidget::populateResults(const std::vector<SearchResult>& results)
     titlenode->addText(res.tags["name"].GetString());
 
     SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-    double distkm = lngLatDist(mapCenter, res.pos);
+    double distkm = lngLatDist(app->mapCenter, res.pos);
     distnode->addText(fstring("%.1f km", distkm).c_str());
 
     SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();

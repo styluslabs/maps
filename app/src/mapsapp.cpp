@@ -28,6 +28,7 @@ static const char* apiKeyScenePath = "+global.sdk_api_key";
 Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
 std::string MapsApp::apiKey;
+LngLat MapsApp::mapCenter;
 
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
@@ -92,9 +93,6 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(!props.HasMember("name"))
     props["name"] = namestr;*/
 
-  LngLat mapCenter;
-  map->getPosition(mapCenter.longitude, mapCenter.latitude);
-
   gui->deleteContents(placeInfo, ".listitem");
 
   resultListContainer->setVisible(false);
@@ -104,7 +102,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
   if(titlenode)
-    titlenode->addText(props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
+    titlenode->addText(props.IsObject() && props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
 
   SvgText* coordnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".lnglat-text"));
   if(coordnode)
@@ -352,6 +350,9 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
   pluginManager->onMapChange();
 
   map->render();
+
+  // update map center
+  map->getPosition(mapCenter.longitude, mapCenter.latitude);
 
   if(show_gui)
     ImGui::Render();
@@ -672,14 +673,14 @@ void MapsWidget::draw(SvgPainter* svgp) const
 
 Window* MapsApp::createGUI()
 {
-  static const char* mainWindowSVG = R"(
+  static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout" box-anchor="fill" layout="flex" flex-direction="column">
-        <g id="maps-container" box-anchor="fill" layout="box">
-        </g>
+        <g id="maps-container" box-anchor="fill" layout="box"></g>
         <rect id="results-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
-        <g id="results-container" display="none" box-anchor="fill" layout="box">
-          <rect id="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="20"/>
+        <g id="results-container" display="none" box-anchor="hfill" layout="box">
+          <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
+          <rect id="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
 
           <g id="list-scroll-container" class="list" display="none" box-anchor="fill" layout="box">
             <svg id="list-scroll-doc" box-anchor="fill">
@@ -688,8 +689,8 @@ Window* MapsApp::createGUI()
             </svg>
           </g>
 
-          <g id="info-scroll-container" class="list" display="none" box-anchor="fill" layout="box">
-            <g id="info-toolbar-container"></g>
+          <g id="info-scroll-container" class="list" display="none" box-anchor="fill" layout="flex" flex-direction="column">
+            <g id="info-toolbar-container" box-anchor="hfill" layout="box"></g>
             <svg id="info-scroll-doc" box-anchor="fill">
               <g id="info-scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
               </g>
@@ -699,9 +700,9 @@ Window* MapsApp::createGUI()
         </g>
       </g>
     </svg>
-  )";
+  )#";
 
-  static const char* placeInfoProtoSVG = R"(
+  static const char* placeInfoProtoSVG = R"#(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
@@ -714,7 +715,7 @@ Window* MapsApp::createGUI()
         </g>
       </g>
     </g>
-  )";
+  )#";
 
   placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
@@ -727,12 +728,14 @@ Window* MapsApp::createGUI()
       winnode->selectFirst("#results-split-sizer"), Splitter::BOTTOM, 120);
   resultPanel = win->selectFirst("#results-container");
 
-  resultList = resultPanel->selectFirst("#list-scroll-content");
+  //resultList = resultPanel->selectFirst("#list-scroll-content");
   SvgDocument* listScrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst("#list-scroll-doc"));
+  resultList = new Widget(listScrollDoc->selectFirst("#list-scroll-content"));
   ScrollWidget* listScroller = new ScrollWidget(listScrollDoc, resultList);
 
-  placeInfo = resultPanel->selectFirst("#info-scroll-content");
+  //placeInfo = resultPanel->selectFirst("#info-scroll-content");
   SvgDocument* infoScrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst("#info-scroll-doc"));
+  placeInfo = new Widget(infoScrollDoc->selectFirst("#info-scroll-content"));
   ScrollWidget* infoScroller = new ScrollWidget(infoScrollDoc, placeInfo);
 
   resultListContainer = win->selectFirst("#list-scroll-container");
@@ -898,7 +901,7 @@ int main(int argc, char* argv[])
   //NVGLUframebuffer* nvglFB = nvgluCreateFramebuffer(nvgContext, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
   //nvgluSetFramebufferSRGB(1);  // no-op for GLES - sRGB enabled iff FB is sRGB
   NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
-  void* swFB = NULL;
+  uint32_t* swFB = NULL;
 
   char* apiKey = getenv("NEXTZEN_API_KEY");
   MapsApp::apiKey = apiKey ? apiKey : "";
@@ -953,8 +956,16 @@ int main(int argc, char* argv[])
 
     bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
     if(!swFB || sizeChanged)
-      swFB = realloc(swFB, fbWidth*fbHeight*4);
+      swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
     nvgswSetFramebuffer(Painter::vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
+
+    // clear dirty rect to transparent pixels
+    if(SvgGui::debugDirty)
+      memset(swFB, 0, fbWidth*fbHeight*4);
+    else {
+      for(int yy = dirty.top; yy < dirty.bottom; ++yy)
+        memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
+    }
 
     dirty = Rect::wh(fbWidth, fbHeight);
     //painter->fillRect(Rect::wh(fbWidth, fbHeight), Color::RED);
