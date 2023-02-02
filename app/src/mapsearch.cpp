@@ -789,6 +789,12 @@ SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
     cancelBtn->setVisible(false);
   };
 
+  Button* restoreBtn = new Button(containerNode()->selectFirst(".restore-btn"));
+  restoreBtn->onClicked = [this](){
+    app->resultSplitter->setVisible(true);
+    app->resultPanel->setVisible(true);
+  };
+
   historyIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_clock.svg")));
   resultIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_zoom.svg")));
 }
@@ -853,10 +859,10 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
     <!-- g id="searchbox" class="inputbox" layout="box" -->
     <g id="searchbox" class="inputbox" layout="flex" flex-direction="column" box-anchor="top" margin="10 0 0 0">
 
-      <g id="toolbar" class="toolbar" box-anchor="hfill" layout="box">
+      <g class="toolbar" box-anchor="hfill" layout="box">
         <rect class="toolbar-bg background" box-anchor="vfill" width="400" height="20"/>
         <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
-          <g class="toolbutton search-btn" layout="box" box-anchor="left">
+          <g class="toolbutton search-btn" layout="box">
             <rect class="background" box-anchor="hfill" width="36" height="42"/>
             <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_zoom.svg"/>
           </g>
@@ -864,9 +870,13 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
             <rect class="min-width-rect" fill="none" width="150" height="36"/>
             <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
           </g>
-          <g class="toolbutton cancel-btn" display="none" layout="box" box-anchor="right">
+          <g class="toolbutton cancel-btn" display="none" layout="box">
             <rect class="background" box-anchor="hfill" width="36" height="42"/>
             <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_cancel.svg"/>
+          </g>
+          <g class="toolbutton restore-btn" layout="box">
+            <rect class="background" box-anchor="hfill" width="36" height="42"/>
+            <use class="icon" width="52" height="52" xlink:href=":/icons/chevron_up.svg"/>
           </g>
         </g>
       </g>

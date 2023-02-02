@@ -251,3 +251,135 @@ void MapsBookmarks::showViewsGUI()
     map->setCameraPositionEased(view, 1.0);
   }
 }
+
+
+
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+
+void MapsBookmarks::populateLists()
+{
+  app->resultSplitter->setVisible(true);
+  app->resultPanel->setVisible(true);
+  app->resultListContainer->setVisible(true);
+
+  app->gui->deleteContents(app->resultList, ".listitem");
+
+  DB_exec(bkmkDB, "SELECT list, COUNT(1) FROM bookmarks GROUP by list;", [this](sqlite3_stmt* stmt){
+    std::string list = (const char*)(sqlite3_column_text(stmt, 0));
+    int nplaces = sqlite3_column_int(stmt, 1);
+
+    Button* item = new Button(bkmkListProto->clone());
+
+    item->onClicked = [this, list](){
+      populateBkmks(list);
+    };
+
+    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(list.c_str());
+
+    SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
+    detailnode->addText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
+
+    app->resultList->addWidget(item);
+  });
+}
+
+
+void MapsBookmarks::populateBkmks(const std::string& listname)
+{
+  app->resultSplitter->setVisible(true);
+  app->resultPanel->setVisible(true);
+  app->resultListContainer->setVisible(true);
+
+  app->gui->deleteContents(app->resultList, ".listitem");
+
+  Map* map = app->map;
+  size_t markerIdx = 0;
+  const char* query = "SELECT rowid, props, notes, lng, lat FROM bookmarks WHERE list = ?;";
+  DB_exec(bkmkDB, query, [&](sqlite3_stmt* stmt){
+    double lng = sqlite3_column_double(stmt, 3);
+    double lat = sqlite3_column_double(stmt, 4);
+    //placeRowIds.push_back(sqlite3_column_int(stmt, 0));
+    rapidjson::Document doc;
+    doc.Parse((const char*)(sqlite3_column_text(stmt, 1)));
+
+    const char* notestr = (const char*)(sqlite3_column_text(stmt, 2));
+
+
+    if(markerIdx >= bkmkMarkers.size())
+      bkmkMarkers.push_back(map->markerAdd());
+    map->markerSetVisible(bkmkMarkers[markerIdx], true);
+    // note that 6th decimal place of lat/lng is 11 cm (at equator)
+    std::string namestr = doc.IsObject() && doc.HasMember("name") ?
+          doc["name"].GetString() : fstring("%.6f, %.6f", lat, lng);
+
+    map->markerSetStylingFromPath(bkmkMarkers[markerIdx], "layers.bookmark-marker.draw.marker");
+
+    Properties mprops;
+    mprops.set("priority", markerIdx);
+    mprops.set("name", namestr);
+    map->markerSetProperties(bkmkMarkers[markerIdx], std::move(mprops));
+
+    map->markerSetPoint(bkmkMarkers[markerIdx], LngLat(lng, lat));
+    ++markerIdx;
+
+
+    Button* item = new Button(placeListProto->clone());
+
+    item->onClicked = [this](){
+      app->setPickResult(LngLat(lng, lat), namestr, );
+    };
+
+    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(namestr.c_str());
+
+    SvgText* notenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".note-text"));
+    notenode->addText(notestr);
+
+    app->resultList->addWidget(item);
+
+  }, [&](sqlite3_stmt* stmt){
+    sqlite3_bind_text(stmt, 1, listname.c_str(), -1, SQLITE_STATIC);
+  });
+  // hide unused markers
+  for(; markerIdx < bkmkMarkers.size(); ++markerIdx)
+    map->markerSetVisible(bkmkMarkers[markerIdx], false);
+}
+
+void MapsBookmarks::createUI()
+{
+
+  static const char* bkmkListProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g layout="flex" flex-direction="row" box-anchor="left">
+        <g class="image-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_drawer.svg"/>
+        </g>
+        <g layout="box" box-anchor="vfill">
+          <text class="title-text" box-anchor="left" margin="0 10"></text>
+          <text class="detail-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        </g>
+      </g>
+    </g>
+  )";
+  bkmkListProto.reset(loadSVGFragment(searchResultProtoSVG));
+
+  static const char* placeListProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g layout="flex" flex-direction="row" box-anchor="left">
+        <g class="image-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_bookmark.svg"/>
+        </g>
+        <g layout="box" box-anchor="vfill">
+          <text class="title-text" box-anchor="left" margin="0 10"></text>
+          <text class="note-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        </g>
+      </g>
+    </g>
+  )";
+  placeListProto.reset(loadSVGFragment(autoCompProtoSVG));
+
+}

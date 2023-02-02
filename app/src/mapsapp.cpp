@@ -95,6 +95,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   gui->deleteContents(placeInfo, ".listitem");
 
+  resultSplitter->setVisible(true);
+  resultPanel->setVisible(true);
   resultListContainer->setVisible(false);
   placeInfoContainer->setVisible(true);
 
@@ -154,11 +156,7 @@ void MapsApp::tapEvent(float x, float y)
   map->screenPositionToLngLat(x, y, &location.longitude, &location.latitude);
   double xx, yy;
   map->lngLatToScreenPosition(location.longitude, location.latitude, &xx, &yy);
-
-  logMsg("------\n");
-  logMsg("LngLat: %f, %f\n", location.longitude, location.latitude);
-  logMsg("Clicked:  %f, %f\n", x, y);
-  logMsg("Remapped: %f, %f\n", xx, yy);
+  logMsg("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, location.longitude, location.latitude, xx, yy);
 
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
     if (!result) {
@@ -168,6 +166,7 @@ void MapsApp::tapEvent(float x, float y)
       if(pickResultMarker > 0)
         map->markerSetVisible(pickResultMarker, false);
       pickResultCoord = LngLat(NAN, NAN);
+      hidePlaceInfo();
       return;
     }
 
@@ -315,6 +314,7 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   //  textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
   //});
 
+  map->setPixelScale(pixel_scale);
   // default position: Alamo Square, SF - overriden by scene camera position if async load
   map->setPickRadius(1.0f);
   map->setZoom(15);
@@ -612,9 +612,10 @@ static int actionFromSDLFinger(unsigned int sdltype)
 MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
 {
   onApplyLayout = [this](const Rect& src, const Rect& dest){
-    if(dest.width() != viewport.width() || dest.height() != viewport.height()) {
-      real w = dest.width()/app->gui->inputScale, h = dest.height()/app->gui->inputScale;
-      app->onResize(w, h, w, h);
+    if(dest != viewport) {
+      Rect r = dest * (1/app->gui->inputScale);
+      real y = window()->winBounds().height()/app->gui->inputScale - r.bottom;
+      app->map->setViewport(r.left, y, r.width(), r.height());
     }
     if(src != dest)
       node->invalidate(true);
@@ -670,6 +671,16 @@ void MapsWidget::draw(SvgPainter* svgp) const
   app->drawFrame(currTime);
 }
 
+void MapsApp::hidePlaceInfo()
+{
+  placeInfoContainer->setVisible(false);
+  if(!resultList->containerNode()->children().empty())
+    resultListContainer->setVisible(true);
+  else {
+    resultPanel->setVisible(false);
+    resultSplitter->setVisible(false);
+  }
+}
 
 Window* MapsApp::createGUI()
 {
@@ -745,10 +756,11 @@ Window* MapsApp::createGUI()
   auto backBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"));
   auto minimizeBtn = createToolbutton(SvgGui::useFile(":/icons/chevron_down.svg"));
 
-  backBtn->onClicked = [this](){
-    placeInfoContainer->setVisible(false);
-    if(!resultList->containerNode()->children().empty())
-      resultListContainer->setVisible(true);
+  backBtn->onClicked = [this](){ hidePlaceInfo(); };
+
+  minimizeBtn->onClicked = [this](){
+    resultSplitter->setVisible(false);
+    resultPanel->setVisible(false);
   };
 
   infoToolbar->addWidget(backBtn);

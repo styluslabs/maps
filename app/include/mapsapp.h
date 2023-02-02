@@ -106,6 +106,7 @@ public:
 
   // GUI
   Window* createGUI();
+  void hidePlaceInfo();
 
   Splitter* resultSplitter = NULL;
   Widget* resultPanel = NULL;
