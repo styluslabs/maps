@@ -40,7 +40,8 @@ struct Location
 
 namespace YAML { class Node; }
 //namespace rapidjson { class Document; }
-#include "rapidjson/fwd.h"  // don't worry, we'll be getting rid of rapidjson soon
+//#include "rapidjson/fwd.h"  // don't worry, we'll be getting rid of rapidjson soon
+#include "rapidjson/document.h"
 
 class MapsApp
 {
@@ -75,7 +76,7 @@ public:
   MarkerID pickResultMarker = 0;
   MarkerID pickedMarkerId = 0;
   MarkerID locMarker = 0;
-  std::string pickResultProps;
+  rapidjson::Document pickResultProps;
   LngLat pickResultCoord = {NAN, NAN};
   std::string pickLabelStr;
   bool searchActive = false;

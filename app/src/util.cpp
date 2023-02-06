@@ -2,6 +2,8 @@
 #include "tangram.h"
 #include "scene/scene.h"
 #include "sqlite3/sqlite3.h"
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
 
 #define PLATFORMUTIL_IMPLEMENTATION
 #include "ulib/platformutil.h"
@@ -56,6 +58,22 @@ std::string yamlToStr(const YAML::Node& node)
   return std::string(emitter.c_str());
 }
 
+std::string osmIdFromProps(const rapidjson::Document& props)
+{
+  std::string osm_id;
+  if(props.IsObject() && props.HasMember("osm_id") && props.HasMember("osm_type"))
+    osm_id = props["osm_type"].GetString() + std::string(":") + props["osm_id"].GetString();
+  return osm_id;
+}
+
+std::string rapidjsonToStr(const rapidjson::Document& props)
+{
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+  props.Accept(writer);
+  return sb.GetString();
+}
+
 // note that indices for sqlite3_column_* start from 0 while indices for sqlite3_bind_* start from 1
 bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
 {
@@ -80,40 +98,3 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
   //logMsg("Query time: %.6f s for %s\n", std::chrono::duration<float>(t1 - t0).count(), sql);
   return true;
 }
-
-/*
-// from fileutil.h
-std::string readFile(const char* filename)
-{
-  std::string s;
-  readFile(&s, filename);
-  return s;
-}
-
-#include <dirent.h>
-#include <unistd.h>
-#include <sys/stat.h>
-
-std::vector<std::string> lsDirectory(const std::string& name)
-{
-  std::vector<std::string> v;
-  DIR* dirp = opendir(name.c_str());
-  if(!dirp)
-    return v;
-  struct dirent* dp;
-  while((dp = readdir(dirp)) != NULL) {
-    if(strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
-      continue;
-    v.emplace_back(dp->d_name);
-    if(dp->d_type & DT_DIR)
-      v.back().push_back('/');
-    else if(dp->d_type == DT_UNKNOWN || dp->d_type == DT_LNK) {
-      struct stat s;
-      if(stat((name + "/" + v.back()).c_str(), &s) == 0 && S_ISDIR(s.st_mode))
-        v.back().push_back('/');
-    }
-  }
-  closedir(dirp);
-  return v;
-}
-*/

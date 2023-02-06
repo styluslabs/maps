@@ -176,23 +176,22 @@ void MapsBookmarks::showPlacesGUI()
   }
 }
 
-void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat)
+void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid)
 {
-  const char* strStmt = "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
-  sqlite3_stmt* stmt;
-  if(sqlite3_prepare_v2(bkmkDB, strStmt, -1, &stmt, NULL) != SQLITE_OK) {
-    logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(bkmkDB));
-    return;
-  }
-  sqlite3_bind_text(stmt, 1, osm_id, -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 2, list, -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 3, props, -1, SQLITE_STATIC);
-  sqlite3_bind_text(stmt, 4, note, -1, SQLITE_STATIC);
-  sqlite3_bind_double(stmt, 5, lnglat.longitude);
-  sqlite3_bind_double(stmt, 6, lnglat.latitude);
-  if (sqlite3_step(stmt) != SQLITE_DONE)
-    logMsg("sqlite3_step failed: %d\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
-  sqlite3_finalize(stmt);
+
+  const char* query = rowid >= 0 ?
+      "UPDATE bookmarks SET osm_id = ?, list = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :
+      "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
+  DB_exec(bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+    sqlite3_bind_text(stmt, 1, osm_id, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, list, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, props, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, note, -1, SQLITE_STATIC);
+    sqlite3_bind_double(stmt, 5, lnglat.longitude);
+    sqlite3_bind_double(stmt, 6, lnglat.latitude);
+    if(rowid >= 0)
+      sqlite3_bind_int(stmt, 7, rowid);
+  });
 }
 
 void MapsBookmarks::showViewsGUI()
@@ -256,6 +255,7 @@ void MapsBookmarks::showViewsGUI()
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
+#include "ugui/textedit.h"
 
 void MapsBookmarks::populateLists()
 {
@@ -347,9 +347,102 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
     map->markerSetVisible(bkmkMarkers[markerIdx], false);
 }
 
+Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos)
+{
+  Widget* widget = new Button(placeInfoSectionProto->clone());
+  SvgText* listnode = static_cast<SvgText*>(widget->containerNode()->selectFirst(".list-name-text"));
+  SvgText* notenode = static_cast<SvgText*>(widget->containerNode()->selectFirst(".note-text"));
+
+  int rowid = -1;
+  std::string liststr, notestr;
+  // attempt lookup w/ osm_id if passed
+  // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
+  const char* query1 = "SELECT rowid, osm_id, list, props, notes, lng, lat FROM bookmarks WHERE osm_id = ?;";
+  DB_exec(bkmkDB, query1, [&](sqlite3_stmt* stmt){
+    rowid = sqlite3_column_int(stmt, 0);
+    liststr = (const char*)(sqlite3_column_text(stmt, 2));
+    notestr = (const char*)(sqlite3_column_text(stmt, 4));
+  }, [&](sqlite3_stmt* stmt){
+    sqlite3_bind_text(stmt, 1, osm_id.c_str(), -1, SQLITE_TRANSIENT);
+  });
+
+  if(liststr.empty()) {
+    const char* query2 = "SELECT rowid, osm_id, list, props, notes, lng, lat FROM bookmarks WHERE "
+        "lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? LIMIT 1;";
+    DB_exec(bkmkDB, query2, [&](sqlite3_stmt* stmt){
+      if(osm_id.empty() || sqlite3_column_text(stmt, 1)[0] == '\0') {
+        rowid = sqlite3_column_int(stmt, 0);
+        liststr = (const char*)(sqlite3_column_text(stmt, 2));
+        notestr = (const char*)(sqlite3_column_text(stmt, 4));
+      }
+    }, [&](sqlite3_stmt* stmt){
+      constexpr double delta = 0.00001;
+      sqlite3_bind_double(stmt, 2, pos.longitude - delta);
+      sqlite3_bind_double(stmt, 3, pos.latitude - delta);
+      sqlite3_bind_double(stmt, 4, pos.longitude + delta);
+      sqlite3_bind_double(stmt, 5, pos.latitude + delta);
+    });
+  }
+
+  listnode->addText(liststr.c_str());
+  notenode->addText(notestr.c_str());
+
+  Widget* infoStack = widget->selectFirst("bkmk-display-container");
+
+  // bookmark editing
+
+  auto editToolbar = createToolbar();
+  auto acceptBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_accept.svg"));
+  auto cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
+
+  editToolbar->addWidget(new Widget(createTextNode("Edit Bookmark")));
+  editToolbar->addWidget(createStretch());
+  editToolbar->addWidget(acceptBtn);
+  editToolbar->addWidget(cancelBtn);
+
+  std::vector<std::string> lists;
+  DB_exec(bkmkDB, "SELECT DISTINCT list FROM bookmarks;", [&](sqlite3_stmt* stmt){
+    lists.emplace_back((const char*)(sqlite3_column_text(stmt, 0)));
+  });
+  auto listsCombo = createComboBox(lists);
+  auto noteEdit = createTextEdit();
+  noteEdit->setText(notestr.c_str());
+  listsCombo->setText(liststr.c_str());
+
+  auto editStack = createColumn();
+  editStack->addWidget(editToolbar);
+  editStack->addWidget(createTitledRow("List", listsCombo));
+  editStack->addWidget(createTitledRow("Note", noteEdit));
+
+  acceptBtn->onClicked = [&, rowid](){
+    listnode->addText(listsCombo->text());
+    notenode->addText(noteEdit->text().c_str());
+    addBookmark(listsCombo->text(), osmIdFromProps(app->pickResultProps).c_str(),
+        rapidjsonToStr(app->pickResultProps).c_str(), noteEdit->text().c_str(), app->pickResultCoord, rowid);
+    // hide editing stack, show display stack
+    editStack->setVisible(false);
+    infoStack->setVisible(true);
+  };
+
+  cancelBtn->onClicked = [&](){
+    editStack->setVisible(false);
+    infoStack->setVisible(true);
+  };
+
+  editStack->setVisible(false);
+  widget->selectFirst("bkmk-edit-container")->addWidget(editStack);
+
+  Button* bkmkBtn = new Button(widget->containerNode()->selectFirst("bkmk-icon-container"));
+  bkmkBtn->onClicked = [&](){
+    editStack->setVisible(true);
+    infoStack->setVisible(false);
+  };
+
+  return widget;
+}
+
 void MapsBookmarks::createUI()
 {
-
   static const char* bkmkListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
@@ -364,7 +457,7 @@ void MapsBookmarks::createUI()
       </g>
     </g>
   )";
-  bkmkListProto.reset(loadSVGFragment(searchResultProtoSVG));
+  bkmkListProto.reset(loadSVGFragment(bkmkListProtoSVG));
 
   static const char* placeListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -380,6 +473,21 @@ void MapsBookmarks::createUI()
       </g>
     </g>
   )";
-  placeListProto.reset(loadSVGFragment(autoCompProtoSVG));
+  placeListProto.reset(loadSVGFragment(placeListProtoSVG));
 
+  static const char* placeInfoSectionProtoSVG = R"(
+    <g margin="0 5" layout="box" box-anchor="hfill">
+      <g class="bkmk-edit-container" box-anchor="hfill" layout="box"></g>
+      <g class="bkmk-display-container" layout="flex" flex-direction="row" box-anchor="left">
+        <g class="bkmk-icon-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_bookmark.svg"/>
+        </g>
+        <g layout="box" box-anchor="vfill">
+          <text class="list-name-text" box-anchor="left" margin="0 10"></text>
+          <text class="note-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        </g>
+      </g>
+    </g>
+  )";
+  placeInfoSectionProto.reset(loadSVGFragment(placeInfoSectionProtoSVG));
 }

@@ -69,29 +69,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   // show place info panel
   pickResultCoord = pos;
-  //pickResultProps = propstr;
-
-  /*rapidjson::Document props;
-
-  if(propstr.empty()) {
-    //props["name"] = "Pin";
-    //pickLabelStr = fstring("lat = %.6f\nlon = %.6f", pos.latitude, pos.longitude);
-  }
-  else {
-    //pickLabelStr.clear();
-    //rapidjson::Document props;
-    props.Parse(propstr.c_str());
-    //for (auto& m : doc.GetObject()) {
-    //  std::string val = "<object>";
-    //  if(m.value.IsNumber())
-    //    val = std::to_string(m.value.GetDouble());
-    //  else if(m.value.IsString())
-    //    val = m.value.GetString();
-    //  pickLabelStr += m.name.GetString() + std::string(" = ") + val + "\n";
-    //}
-  }
-  if(!props.HasMember("name"))
-    props["name"] = namestr;*/
+  pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
 
   gui->deleteContents(placeInfo, ".listitem");
 
@@ -115,11 +93,16 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(distnode)
     distnode->addText(fstring("%.1f km", distkm).c_str());
 
+  Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmIdFromProps(props), pos);
+  if(bkmkSection)
+    item->selectFirst(".bkmk-section")->addWidget(bkmkSection);
+
   //SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
   //imghost->addChild(resultIconNode->clone());
 
   placeInfo->addWidget(item);
 }
+
 
 void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority)
 {
@@ -723,6 +706,7 @@ Window* MapsApp::createGUI()
           <text class="addr-text weak" margin="0 10" font-size="12"></text>
           <text class="lnglat-text weak" margin="0 10" font-size="12"></text>
           <text class="dist-text weak" margin="0 10" font-size="12"></text>
+          <g class="bkmk-section" layout="box"></g>
         </g>
       </g>
     </g>
