@@ -3,6 +3,7 @@
 #include "mapscomponent.h"
 
 class SvgNode;
+class Widget;
 
 class MapsBookmarks : public MapsComponent
 {
@@ -17,6 +18,11 @@ public:
 private:
   void showPlacesGUI();
   void showViewsGUI();
+
+  Widget* bkmkPanel = NULL;
+  Widget* bkmkContent = NULL;
+  Widget* listsPanel = NULL;
+  Widget* listsContent = NULL;
 
   std::unique_ptr<SvgNode> bkmkListProto;
   std::unique_ptr<SvgNode> placeListProto;

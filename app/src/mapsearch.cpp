@@ -803,8 +803,10 @@ SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
 void SearchWidget::populateAutocomplete(const std::vector<std::string>& history)
 {
   cancelBtn->setVisible(true);
-  autoCompContainer->setVisible(true);
-  window()->gui()->deleteContents(autoCompList, ".listitem");
+  //autoCompContainer->setVisible(true);
+  //window()->gui()->deleteContents(autoCompList, ".listitem");
+  app->showPanel(resultsPanel);
+  app->gui->deleteContents(resultsContent, ".listitem");
 
   for(size_t ii = 0; ii < history.size(); ++ii) {
     Button* item = new Button(autoCompProto->clone());
@@ -818,17 +820,14 @@ void SearchWidget::populateAutocomplete(const std::vector<std::string>& history)
     SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
     imghost->addChild(historyIconNode->clone());
 
-    autoCompList->addWidget(item);
+    resultsContent->addWidget(item);
   }
 }
 
 void SearchWidget::populateResults(const std::vector<SearchResult>& results)
 {
-  app->resultSplitter->setVisible(true);
-  app->resultPanel->setVisible(true);
-  app->resultListContainer->setVisible(true);
-
-  window()->gui()->deleteContents(app->resultList, ".listitem");
+  app->showPanel(resultsPanel);
+  app->gui->deleteContents(resultsContent, ".listitem");
 
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
@@ -849,7 +848,7 @@ void SearchWidget::populateResults(const std::vector<SearchResult>& results)
     SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
     imghost->addChild(resultIconNode->clone());
 
-    app->resultList->addWidget(item);
+    resultsContent->addWidget(item);
   }
 }
 
@@ -892,25 +891,27 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
     </g>
   )#";
 
-  /*
-  Toolbar* toolbar = createToolbar();
-  Button* searchBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"));
-  ComboBox* searchText = createTextComboBox({});
-  cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
-
-  toolbar->addWidget(searchBtn);
-  toolbar->addWidget(searchText);
-  toolbar->addWidget(cancelBtn);
-  cancelBtn->setVisible(false);
-  */
-
-  SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
+  /* SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
   SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
   textEditNode->addChild(textEditInnerNode());
 
   SearchWidget* searchBox = new SearchWidget(searchBoxNode);
   searchBox->app = _app;
-  searchBox->isFocusable = true;
+  searchBox->isFocusable = true; */
+
+  resultsContent = createListContainer();
+
+  Toolbar* toolbar = createToolbar();
+  Button* searchBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"));
+  TextEdit* searchText = createTextEdit();
+  cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
+  toolbar->addWidget(searchBtn);
+  toolbar->addWidget(searchText);
+  toolbar->addWidget(cancelBtn);
+  cancelBtn->setVisible(false);
+
+  auto resultsHeader = app->createPanelHeader(NULL, toolbar);
+  resultsPanel = app->createMapPanel(resultsContent, resultsHeader);
 
   static const char* searchResultProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -943,5 +944,24 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
 
   initSearch();
 
-  return searchBox;
+  // main toolbar button
+  Menu* searchMenu = createMenu(Menu::VERT_LEFT);
+  searchMenu->autoClose = true;
+  searchMenu->addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SvgGui::VISIBLE) {
+      gui->deleteContents(searchMenu->selectFirst(".child-container"));
+
+      // TODO: recent/pinned searches - timestamp column for search history?
+
+    }
+    return false;
+  });
+
+  Button* searchBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
+  searchBtn->setMenu(searchMenu);
+  searchBtn->onClicked = [this](){
+    app->showPanel(searchPanel);
+  };
+
+  return searchBtn;
 }

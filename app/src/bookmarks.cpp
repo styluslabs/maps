@@ -178,7 +178,6 @@ void MapsBookmarks::showPlacesGUI()
 
 void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid)
 {
-
   const char* query = rowid >= 0 ?
       "UPDATE bookmarks SET osm_id = ?, list = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :
       "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
@@ -251,19 +250,34 @@ void MapsBookmarks::showViewsGUI()
   }
 }
 
-
+// New GUI
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 
+Widget* createListContainer()
+{
+  static const char* protoSVG = R"#(
+    <g id="list-scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
+    </g>
+  )#";
+
+  placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
+
+
+}
+
 void MapsBookmarks::populateLists()
 {
-  app->resultSplitter->setVisible(true);
-  app->resultPanel->setVisible(true);
-  app->resultListContainer->setVisible(true);
-
-  app->gui->deleteContents(app->resultList, ".listitem");
+  if(!listsPanel) {
+    listsContent = createListContainer();
+    auto headerTitle = createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Bookmark Lists");
+    auto listHeader = app->createPanelHeader(NULL, headerTitle, false);
+    listsPanel = app->createMapPanel(listsContent, listHeader);
+  }
+  app->showPanel(listsPanel);
+  app->gui->deleteContents(listsContent, ".listitem");
 
   DB_exec(bkmkDB, "SELECT list, COUNT(1) FROM bookmarks GROUP by list;", [this](sqlite3_stmt* stmt){
     std::string list = (const char*)(sqlite3_column_text(stmt, 0));
@@ -275,24 +289,33 @@ void MapsBookmarks::populateLists()
       populateBkmks(list);
     };
 
+    Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
+    showBtn->onClicked = [](){
+      // how to show bookmarks presistently?
+    };
+
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     titlenode->addText(list.c_str());
 
     SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
     detailnode->addText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
 
-    app->resultList->addWidget(item);
+    listsContent->addWidget(item);
   });
 }
 
-
 void MapsBookmarks::populateBkmks(const std::string& listname)
 {
-  app->resultSplitter->setVisible(true);
-  app->resultPanel->setVisible(true);
-  app->resultListContainer->setVisible(true);
+  if(!bkmkPanel) {
+    bkmkContent = createListContainer();
+    auto headerTitle = createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
+    auto bkmkHeader = app->createPanelHeader([this](){ app->showPanel(listsPanel); }, headerTitle);
+    bkmkPanel = app->createMapPanel(bkmkContent, bkmkHeader);
+  }
+  app->showPanel(bkmkPanel);
+  app->gui->deleteContents(bkmkContent, ".listitem");
 
-  app->gui->deleteContents(app->resultList, ".listitem");
+  bkmkPanel->selectFirst(".panel-title")->setText(listname.c_str());
 
   Map* map = app->map;
   size_t markerIdx = 0;
@@ -312,7 +335,7 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
     map->markerSetVisible(bkmkMarkers[markerIdx], true);
     // note that 6th decimal place of lat/lng is 11 cm (at equator)
     std::string namestr = doc.IsObject() && doc.HasMember("name") ?
-          doc["name"].GetString() : fstring("%.6f, %.6f", lat, lng);
+        doc["name"].GetString() : fstring("%.6f, %.6f", lat, lng);
 
     map->markerSetStylingFromPath(bkmkMarkers[markerIdx], "layers.bookmark-marker.draw.marker");
 
@@ -337,7 +360,7 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
     SvgText* notenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".note-text"));
     notenode->addText(notestr);
 
-    app->resultList->addWidget(item);
+    bkmkContent->addWidget(item);
 
   }, [&](sqlite3_stmt* stmt){
     sqlite3_bind_text(stmt, 1, listname.c_str(), -1, SQLITE_STATIC);
@@ -441,7 +464,7 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   return widget;
 }
 
-void MapsBookmarks::createUI()
+Widget* MapsBookmarks::createUI()
 {
   static const char* bkmkListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -454,6 +477,11 @@ void MapsBookmarks::createUI()
           <text class="title-text" box-anchor="left" margin="0 10"></text>
           <text class="detail-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
         </g>
+
+        <g class="toolbutton visibility-btn" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_pin.svg"/>
+        </g>
+
       </g>
     </g>
   )";
@@ -490,4 +518,24 @@ void MapsBookmarks::createUI()
     </g>
   )";
   placeInfoSectionProto.reset(loadSVGFragment(placeInfoSectionProtoSVG));
+
+  Menu* bkmkMenu = createMenu(Menu::VERT_LEFT);
+  bkmkMenu->autoClose = true;
+  bkmkMenu->addHandler([this, bkmkMenu](SvgGui* gui, SDL_Event* event){
+    if(event->type == SvgGui::VISIBLE) {
+      gui->deleteContents(bkmkMenu->selectFirst(".child-container"));
+
+      // TODO: show most recent bookmarks (add timestamp column to bookmark table?)
+
+    }
+    return false;
+  });
+
+  Button* bkmkBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "Places");
+  bkmkBtn->setMenu(bkmkMenu);
+  bkmkBtn->onClicked = [this](){
+    populateLists();
+  };
+
+  return bkmkBtn;
 }

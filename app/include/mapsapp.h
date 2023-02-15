@@ -109,11 +109,15 @@ public:
   Window* createGUI();
   void hidePlaceInfo();
 
-  Splitter* resultSplitter = NULL;
-  Widget* resultPanel = NULL;
-  Widget* resultList = NULL;
+  void showPanel(Widget* panel);
+  Widget* createPanelHeader(std::function<void()> backFn, Widget* titlewidget, bool canMinimize = true);
+  Widget* createMapPanel(Widget* content, Widget* header, Widget* fixedContent = NULL);
+
+  Splitter* panelSplitter = NULL;
+  Widget* panelContainer = NULL;
+  //Widget* resultList = NULL;
   Widget* placeInfo = NULL;
-  Widget* resultListContainer = NULL;
+  //Widget* resultListContainer = NULL;
   Widget* placeInfoContainer = NULL;
   MapsWidget* mapsWidget = NULL;
   SearchWidget* searchWidget = NULL;

@@ -243,3 +243,242 @@ void MapsSources::showGUI()
     ImGui::TextWrapped("Error parsing mapsources.yaml: %s", e.what());
   }
 }
+
+// New GUI
+
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
+
+constexpr int MAX_SOURCES = 8;
+//std::vector<int> currSrcIdx(MAX_SOURCES, 0);
+int nSources = 1;
+
+Widget* sourcesContent = NULL;
+
+std::vector<Widget*> layerRows;
+std::vector<ComboBox*> layerCombos;
+ComboBox* sourceCombo = NULL;
+Button* discardBtn = NULL;
+Button* saveBtn = NULL;
+
+std::vector<std::string> layerKeys;
+std::vector<std::string> sourceKeys = {""};
+
+
+void MapsSources::rebuildSource(bool fromLayers = true)
+{
+  SourceBuilder builder(mapSources);
+  if(!fromLayers)
+    builder.addLayer(sourceKeys[sourceCombo->index()]);
+  else {
+    for(int ii = 0; ii < nSources; ++ii) {
+      int idx = layerCombos[ii]->index();
+      if(idx > 0)
+        builder.addLayer(layerKeys[idx]);
+    }
+  }
+
+  if(!builder.imports.empty() || !builder.updates.empty()) {
+    app->sceneYaml = builder.getSceneYaml(baseUrl);
+    app->sceneFile = baseUrl + "__GUI_SOURCES__";
+    app->loadSceneFile(false, builder.updates);
+  }
+
+  bool multi = builder.layerkeys.size() > 1;
+  discardBtn->setEnabled(!fromLayers && multi);
+  saveBtn->setEnabled(fromLayers && multi);
+
+  size_t ii = 0;
+  nSources = std::max(int(builder.layerkeys.size()), nSources);
+  for(; ii < builder.layerkeys.size(); ++ii) {
+    for(int jj = 0; jj < sourceKeys.size(); ++jj) {
+      if(builder.layerkeys[ii] == sourceKeys[jj]) {
+        //currSrcIdx[ii] = jj;
+        layerCombos[ii]->setIndex(jj);
+        layerRows[ii]->setVisible(true);
+        break;  // next layer
+      }
+    }
+  }
+
+  layerCombos[ii]->setIndex(0);
+  layerRows[ii]->setVisible(true);
+
+  for(++ii; ii < nSources; ++ii)
+    layerRows[ii]->setVisible(false);
+}
+
+void MapsSources::createSource(std::string savekey, const std::string& newSrcTitle)
+{
+  std::stringstream fs;  //fs(sourcesFile, std::fstream::app | std::fstream::binary);
+
+  //if(currIdx > 0 && newSrcTitle == titles[currIdx] && mapSources[keys[currIdx]]["type"].Scalar() == "Multi")
+  if(savekey.empty()) {
+    // find available name
+    int ii = mapSources.size();
+    while(ii < INT_MAX && mapSources[fstring("custom-%d", ii)]) ++ii;
+    savekey = fstring("custom-%d", ii);
+    currIdx = keys.size();  // new source will be added at end of list
+  }
+  //YAML::Node node = mapSources[savekey] = YAML::Node(YAML::NodeType::Map);  node["type"] = "Multi";
+  fs << "type: Multi\n";
+  fs << "title: " << newSrcTitle << "\n";
+  fs << "layers:\n";
+  for(int ii = 0; ii < nSources; ++ii) {
+    int idx = layerCombos[ii]->index();
+    if(idx > 0)
+      fs << "  - source: " << layerKeys[idx] << "\n";
+  }
+  mapSources[savekey] = YAML::Load(fs.str());
+  // we'd set a flag here to save mapsources.yaml on exit
+}
+
+Widget* MapsSources::createPanel()
+{
+  std::vector<std::string> layerTitles = {"None"};
+  std::vector<std::string> sourceTitles;
+
+  for(const auto& src : mapSources) {
+    sourceKeys.push_back(src.first.Scalar());
+    sourceTitles.push_back(src.second["title"].Scalar());
+    if(src.second["type"].Scalar() != "Multi") {
+      layerKeys.push_back(src.first.Scalar());
+      layerTitles.push_back(src.second["title"].Scalar());
+    }
+  }
+
+  Toolbar* sourceTb = createToolbar();
+  sourceCombo = createComboBox(sourceTitles);
+  saveBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Save Source");
+  discardBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_discard.svg"), "Delete Source");
+  Button* createBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_plus.svg"), "New Source");
+  sourceTb->addWidget(sourceCombo);
+  sourceTb->addWidget(discardBtn);
+  sourceTb->addWidget(saveBtn);
+  sourceTb->addWidget(createBtn);
+
+  Toolbar* newSrcTb = createToolbar();
+  TextEdit* newSrcEdit = createTextEdit();
+  Button* newSrcAccept = createToolbutton(SvgGui::useFile(":/icons/ic_menu_accept.svg"), "OK");
+  Button* newSrcCancel = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"), "Cancel");
+  newSrcTb->addWidget(newSrcEdit);
+  newSrcTb->addWidget(newSrcAccept);
+  newSrcTb->addWidget(newSrcCancel);
+
+  newSrcCancel->onClicked = [=](){
+    newSrcTb->setVisible(false);
+    sourceTb->setVisible(true);
+  };
+
+  newSrcAccept->onClicked = [=](){
+    createSource("", newSrcEdit->text());
+    newSrcTb->setVisible(false);
+    sourceTb->setVisible(true);
+  };
+
+  sourceCombo->onChanged = [this](const char*){
+    rebuildSource(false);
+  };
+
+  createBtn->onClicked = [=](){
+    newSrcEdit->setText("");
+    newSrcTb->setVisible(true);
+    sourceTb->setVisible(false);
+  };
+
+  saveBtn->onClicked = [this](){
+    createSource(sourceKeys[sourceCombo->index()], sourceCombo->text());
+  };
+
+  discardBtn->onClicked = [this](){
+    mapSources.remove(sourceKeys[sourceCombo->index()]);
+  };
+
+  Widget* sourceRow = createRow();
+  sourceRow->addWidget(newSrcTb);
+  sourceRow->addWidget(sourceTb);
+  newSrcTb->setVisible(false);
+  sourcesContent->addWidget(createTitledRow("Source", sourceRow));
+
+  for(int ii = 0; ii < MAX_SOURCES; ++ii) {
+    layerCombos.push_back(createComboBox(layerTitles));
+    layerCombos.back()->onChanged = [this](const char*){
+      rebuildSource();
+    };
+    layerRows.push_back(createTitledRow(fstring("Layer %d", ii).c_str(), layerCombos.back()));
+    sourcesContent->addWidget(layerRows.back());
+  }
+
+  Button* offlineBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_expanddown.svg"), "Offline Maps");
+  offlineBtn->onClicked = [this](){
+    app->showPanel(offlinePanel);
+  };
+
+  auto toolbar = createToolbar();
+  toolbar->addWidget(createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Map Source"));
+  toolbar->addWidget(createStretch());
+  toolbar->addWidget(offlineBtn);
+  auto sourcesHeader = app->createPanelHeader(NULL, toolbar);
+  sourcesPanel = app->createMapPanel(layersContent, sourcesHeader, sourceContent);
+
+  // main toolbar button
+  Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
+  sourcesMenu->autoClose = true;
+  sourcesMenu->addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SvgGui::VISIBLE) {
+      gui->deleteContents(sourcesMenu->selectFirst(".child-container"));
+
+      for(int ii = 0; ii < 10 && ii < sourceKeys.size(); ++ii) {
+        sourcesMenu->addItem(mapSources[sourceKeys[ii]]["title"].Scalar(),
+            [ii](){ sourceCombo->setIndex(ii); rebuildSource(); });
+      }
+
+    }
+    return false;
+  });
+
+  Button* sourcesBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Sources");
+  sourcesBtn->setMenu(sourcesMenu);
+  sourcesBtn->onClicked = [this](){
+    app->showPanel(sourcesPanel);
+  };
+
+  return sourcesBtn;
+}
+
+void MapsOffline::createPanel()
+{
+  SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%d");
+  Button* saveBtn = createPushbutton("Save Offline Map");
+
+  saveBtn->onClicked = [](){
+    saveOfflineMap(maxZoomSpin->value());
+  };
+
+  // we need list of existing offline regions - basically save OfflineMapInfo to places.sqlite?
+  // how to identify offline maps in list? date? sources?
+
+  DB_exec(bkmkDB, "SELECT DISTINCT id, date FROM offlinemaps;", [this](sqlite3_stmt* stmt){
+    int mapid = sqlite3_column_int(stmt, 0);
+
+    Button* item = new Button(offlineListProto->clone());
+
+    item->onClicked = [this, list](){
+      // get lat, lng for offline region and show on map
+    };
+
+    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(fstring("Map %d", mapid));
+
+    SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
+    detailnode->addText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
+
+    offlineMapsContent->addWidget(item);
+  });
+
+
+  offlinePanel = app->createMapPanel(offlineContent, [this](){ app->showPanel(sourcesPanel); }, false);
+
+
+}

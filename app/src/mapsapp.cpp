@@ -570,6 +570,23 @@ void MapsApp::showPickLabelGUI()
     }
 }
 
+void MapsApp::showImGUI()
+{
+  showSceneGUI();
+  mapsSources->showGUI();
+  mapsOffline->showGUI();
+  showViewportGUI();
+  mapsTracks->showGUI();
+  showDebugFlagsGUI();
+  showSceneVarsGUI();
+  mapsSearch->showGUI();
+  mapsBookmarks->showGUI();
+  pluginManager->showGUI();
+  showPickLabelGUI();
+}
+
+// New GUI
+
 class MapsWidget : public Widget
 {
 public:
@@ -756,6 +773,21 @@ Window* MapsApp::createGUI()
   mapsWidget->node->setAttribute("box-anchor", "fill");
   mapsWidget->isFocusable = true;
 
+  // toolbar w/ buttons for search, bookmarks, tracks, sources
+  Toolbar* mainToolbar = createToolbar();
+  Button* tracksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
+
+  //Button* sourcesBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Sources");
+  Widget* searchBtn = mapsSearch->createUI();
+  Widget* sourcesBtn = mapsSources->createUI();
+  Widget* bkmkBtn = mapsBookmarks->createUI();
+
+  mainToolbar->addWidget(searchBtn);
+  mainToolbar->addWidget(bkmkBtn);
+  mainToolbar->addWidget(tracksBtn);
+  mainToolbar->addWidget(sourcesBtn);
+
+
   searchWidget = SearchWidget::create(this);
 
   Widget* mapsPanel = win->selectFirst("#maps-container");
@@ -765,6 +797,57 @@ Window* MapsApp::createGUI()
   return win;
 }
 
+void MapsApp::showPanel(Widget* panel)
+{
+  Widget* panelContainer;
+  SvgNode* oldpanel = panelContainer->containerNode()->firstChild();
+  if(oldpanel)
+    panelContainer->containerNode()->removeChild(oldpanel);
+  panelContainer->addWidget(panel);
+  panelContainer->setVisible(true);
+  panelSplitter->setVisible(true);
+}
+
+Widget* createHeaderTitle(const SvgNode* icon, const char* title)
+{
+  if(titlewidget)
+    toolbar->addWidget(new Widget(titlewidget));
+  if(title)
+    toolbar->addWidget(new Widget(createTextNode(title)));
+}
+
+Widget* MapsApp::createPanelHeader(std::function<void()> backFn, Widget* titlewidget, bool canMinimize)
+{
+  auto toolbar = createToolbar();
+  auto backBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"));
+  backBtn->onClicked = backFn ? backFn : [this](){ showPanel(NULL); };
+
+  toolbar->addWidget(backBtn);
+  toolbar->addWidget(titlewidget);
+
+  toolbar->addWidget(createStretch());
+  //if(panelToolbar)
+  //  toolbar->addWidget(panelToolbar);
+
+  if(canMinimize) {
+    auto minimizeBtn = createToolbutton(SvgGui::useFile(":/icons/chevron_down.svg"));
+    minimizeBtn->onClicked = [this](){ minimizePanel(); };
+    toolbar->addWidget(minimizeBtn);
+  }
+
+  return toolbar;
+}
+
+Widget* MapsApp::createMapPanel(Widget* content, Widget* header, Widget* fixedContent)
+{
+  auto panel = createColumn();
+  panel->addWidget(header);
+  if(fixedContent)
+    panel->addWidget(fixedContent);
+  if(content)
+    panel->addWidget(new ScrollWidget(new SvgDocument(), content));
+  return panel;
+}
 
 #if 1  //PLATFORM_DESKTOP
 #include "ugui/svggui_platform.h"
@@ -988,21 +1071,6 @@ int main(int argc, char* argv[])
   return 0;
 }
 #endif
-
-void MapsApp::showImGUI()
-{
-  showSceneGUI();
-  mapsSources->showGUI();
-  mapsOffline->showGUI();
-  showViewportGUI();
-  mapsTracks->showGUI();
-  showDebugFlagsGUI();
-  showSceneVarsGUI();
-  mapsSearch->showGUI();
-  mapsBookmarks->showGUI();
-  pluginManager->showGUI();
-  showPickLabelGUI();
-}
 
 // rasterizing SVG markers
 

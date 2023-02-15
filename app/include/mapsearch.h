@@ -33,6 +33,9 @@ public:
   void populateAutocomplete(const std::vector<std::string>& history);
   void populateResults(const std::vector<SearchResult>& results);
 
+  Widget* resultsPanel = NULL;
+  Widget* resultsContent = NULL;
+
   Widget* autoCompList;
   Widget* autoCompContainer;
   Button* cancelBtn;
