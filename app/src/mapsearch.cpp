@@ -115,7 +115,7 @@ static bool initSearch()
 
     DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
     // search history
-    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE);");
+    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);");
   }
   //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF", NULL, NULL, &errorMessage);
   //sqlite3_exec(searchDB, "PRAGMA count_changes=OFF", NULL, NULL, &errorMessage);
@@ -443,7 +443,7 @@ void MapsSearch::showGUI()
   // history (autocomplete)
   if(ent) {
     // IGNORE prevents error from UNIQUE constraint
-    DB_exec(searchDB, fstring("INSERT OR IGNORE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
+    DB_exec(searchDB, fstring("INSERT OR REPLACE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
   }
   else {
     if(edited) {
@@ -657,7 +657,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
 
 void MapsSearch::resultsUpdated()
 {
-  app->searchWidget->populateResults(listResults);
+  populateResults(listResults);
 
   // zoom out if necessary to show first 5 results
   if(mapResultsChanged) {
@@ -702,18 +702,18 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   // history (autocomplete)
   if(phase == RETURN) {
-    app->searchWidget->autoCompContainer->setVisible(false);
+    autoCompContainer->setVisible(false);
     // IGNORE prevents error from UNIQUE constraint
     DB_exec(searchDB, fstring("INSERT OR IGNORE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
   }
   else if(phase == EDITING) {
     std::vector<std::string> autocomplete;
-    std::string histq = fstring("SELECT * FROM history WHERE query LIKE '%s%%' LIMIT 5;", searchStr.c_str());
+    std::string histq = fstring("SELECT query FROM history WHERE query LIKE '%s%%' ORDER BY timestamp LIMIT 5;", searchStr.c_str());
     DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
       autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
     });
 
-    app->searchWidget->populateAutocomplete(autocomplete);
+    populateAutocomplete(autocomplete);
   }
 
   if(searchStr.size() > 2) {
@@ -735,9 +735,60 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   }
 }
 
-// SearchWidget
+// or should we put results in resultList and show that immediately?
+void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
+{
+  cancelBtn->setVisible(true);
+  //autoCompContainer->setVisible(true);
+  //window()->gui()->deleteContents(autoCompList, ".listitem");
+  app->showPanel(resultsPanel);
+  app->gui->deleteContents(resultsContent, ".listitem");
 
-SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
+  for(size_t ii = 0; ii < history.size(); ++ii) {
+    Button* item = new Button(autoCompProto->clone());
+    item->onClicked = [this, query=history[ii]](){
+      app->mapsSearch->searchText(query, MapsSearch::RETURN);
+    };
+
+    SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    textnode->addText(history[ii].c_str());
+
+    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
+    imghost->addChild(historyIconNode->clone());
+
+    resultsContent->addWidget(item);
+  }
+}
+
+void MapsSearch::populateResults(const std::vector<SearchResult>& results)
+{
+  app->showPanel(resultsPanel);
+  app->gui->deleteContents(resultsContent, ".listitem");
+
+  for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
+    const SearchResult& res = results[ii];
+    Button* item = new Button(searchResultProto->clone());
+
+    item->onClicked = [this, &results, ii](){
+      // TODO: hide search result marker
+      app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
+    };
+
+    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(res.tags["name"].GetString());
+
+    SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
+    double distkm = lngLatDist(app->mapCenter, res.pos);
+    distnode->addText(fstring("%.1f km", distkm).c_str());
+
+    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
+    imghost->addChild(resultIconNode->clone());
+
+    resultsContent->addWidget(item);
+  }
+}
+
+Widget* MapsSearch::createPanel()
 {
   textEdit = new TextEdit(containerNode()->selectFirst(".textbox"));
   setMinWidth(textEdit, 100);
@@ -797,107 +848,8 @@ SearchWidget::SearchWidget(SvgNode* n) : Widget(n)
 
   historyIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_clock.svg")));
   resultIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_zoom.svg")));
-}
 
-// or should we put results in resultList and show that immediately?
-void SearchWidget::populateAutocomplete(const std::vector<std::string>& history)
-{
-  cancelBtn->setVisible(true);
-  //autoCompContainer->setVisible(true);
-  //window()->gui()->deleteContents(autoCompList, ".listitem");
-  app->showPanel(resultsPanel);
-  app->gui->deleteContents(resultsContent, ".listitem");
 
-  for(size_t ii = 0; ii < history.size(); ++ii) {
-    Button* item = new Button(autoCompProto->clone());
-    item->onClicked = [this, query=history[ii]](){
-      app->mapsSearch->searchText(query, MapsSearch::RETURN);
-    };
-
-    SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    textnode->addText(history[ii].c_str());
-
-    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
-    imghost->addChild(historyIconNode->clone());
-
-    resultsContent->addWidget(item);
-  }
-}
-
-void SearchWidget::populateResults(const std::vector<SearchResult>& results)
-{
-  app->showPanel(resultsPanel);
-  app->gui->deleteContents(resultsContent, ".listitem");
-
-  for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
-    const SearchResult& res = results[ii];
-    Button* item = new Button(searchResultProto->clone());
-
-    item->onClicked = [this, &results, ii](){
-      // TODO: hide search result marker
-      app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
-    };
-
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(res.tags["name"].GetString());
-
-    SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-    double distkm = lngLatDist(app->mapCenter, res.pos);
-    distnode->addText(fstring("%.1f km", distkm).c_str());
-
-    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
-    imghost->addChild(resultIconNode->clone());
-
-    resultsContent->addWidget(item);
-  }
-}
-
-SearchWidget* SearchWidget::create(MapsApp* _app)
-{
-  static const char* searchBoxSVG = R"#(
-    <!-- g id="searchbox" class="inputbox" layout="box" -->
-    <g id="searchbox" class="inputbox" layout="flex" flex-direction="column" box-anchor="top" margin="10 0 0 0">
-
-      <g class="toolbar" box-anchor="hfill" layout="box">
-        <rect class="toolbar-bg background" box-anchor="vfill" width="400" height="20"/>
-        <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
-          <g class="toolbutton search-btn" layout="box">
-            <rect class="background" box-anchor="hfill" width="36" height="42"/>
-            <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_zoom.svg"/>
-          </g>
-          <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
-            <rect class="min-width-rect" fill="none" width="150" height="36"/>
-            <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
-          </g>
-          <g class="toolbutton cancel-btn" display="none" layout="box">
-            <rect class="background" box-anchor="hfill" width="36" height="42"/>
-            <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_cancel.svg"/>
-          </g>
-          <g class="toolbutton restore-btn" layout="box">
-            <rect class="background" box-anchor="hfill" width="36" height="42"/>
-            <use class="icon" width="52" height="52" xlink:href=":/icons/chevron_up.svg"/>
-          </g>
-        </g>
-      </g>
-
-      <!-- g class="scroll-container menu" display="none" position="absolute" top="100%" left="0" box-anchor="fill" layout="box" -->
-      <g class="scroll-container list" display="none" box-anchor="fill" layout="box">
-        <svg class="scroll-doc" box-anchor="fill">
-          <g class="scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
-          </g>
-        </svg>
-      </g>
-
-    </g>
-  )#";
-
-  /* SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
-  SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
-  textEditNode->addChild(textEditInnerNode());
-
-  SearchWidget* searchBox = new SearchWidget(searchBoxNode);
-  searchBox->app = _app;
-  searchBox->isFocusable = true; */
 
   resultsContent = createListContainer();
 
@@ -909,6 +861,15 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
   toolbar->addWidget(searchText);
   toolbar->addWidget(cancelBtn);
   cancelBtn->setVisible(false);
+
+
+
+  bkmkContent = createColumn(); //createListContainer();
+  auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
+  auto bkmkHeader = app->createPanelHeader([this](){ app->showPanel(listsPanel); }, headerTitle);
+  bkmkPanel = app->createMapPanel(bkmkContent, bkmkHeader);
+
+
 
   auto resultsHeader = app->createPanelHeader(NULL, toolbar);
   resultsPanel = app->createMapPanel(resultsContent, resultsHeader);
@@ -926,7 +887,7 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
       </g>
     </g>
   )";
-  searchBox->searchResultProto.reset(loadSVGFragment(searchResultProtoSVG));
+  searchResultProto.reset(loadSVGFragment(searchResultProtoSVG));
 
   static const char* autoCompProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -940,18 +901,23 @@ SearchWidget* SearchWidget::create(MapsApp* _app)
       </g>
     </g>
   )";
-  searchBox->autoCompProto.reset(loadSVGFragment(autoCompProtoSVG));
+  autoCompProto.reset(loadSVGFragment(autoCompProtoSVG));
 
   initSearch();
 
   // main toolbar button
   Menu* searchMenu = createMenu(Menu::VERT_LEFT);
   searchMenu->autoClose = true;
-  searchMenu->addHandler([this](SvgGui* gui, SDL_Event* event){
+  searchMenu->addHandler([this, searchMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(searchMenu->selectFirst(".child-container"));
 
-      // TODO: recent/pinned searches - timestamp column for search history?
+      // TODO: pinned searches - timestamp column = INF?
+      DB_exec(searchDB, "SELECT query FROM history ORDER BY timestamp LIMIT 8;", [&](sqlite3_stmt* stmt){
+        const char* s = (const char*)(sqlite3_column_text(stmt, 0));
+        searchMenu->addItem(s, historyIconNode.get(),
+            [=](){ app->mapsSearch->searchText(s, MapsSearch::RETURN); });
+      });
 
     }
     return false;

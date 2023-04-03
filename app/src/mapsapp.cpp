@@ -71,12 +71,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   pickResultCoord = pos;
   pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
 
-  gui->deleteContents(placeInfo, ".listitem");
-
-  resultSplitter->setVisible(true);
-  resultPanel->setVisible(true);
-  resultListContainer->setVisible(false);
-  placeInfoContainer->setVisible(true);
+  gui->deleteContents(infoContent);  //, ".listitem");
 
   Widget* item = new Widget(placeInfoProto->clone());
 
@@ -100,7 +95,9 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   //SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
   //imghost->addChild(resultIconNode->clone());
 
-  placeInfo->addWidget(item);
+  infoContent->addWidget(item);
+
+  showPanel(infoPanel);
 }
 
 
@@ -149,7 +146,7 @@ void MapsApp::tapEvent(float x, float y)
       if(pickResultMarker > 0)
         map->markerSetVisible(pickResultMarker, false);
       pickResultCoord = LngLat(NAN, NAN);
-      hidePlaceInfo();
+      //minimizePanel();  //hidePlaceInfo();
       return;
     }
 
@@ -671,43 +668,19 @@ void MapsWidget::draw(SvgPainter* svgp) const
   app->drawFrame(currTime);
 }
 
-void MapsApp::hidePlaceInfo()
-{
-  placeInfoContainer->setVisible(false);
-  if(!resultList->containerNode()->children().empty())
-    resultListContainer->setVisible(true);
-  else {
-    resultPanel->setVisible(false);
-    resultSplitter->setVisible(false);
-  }
-}
-
 Window* MapsApp::createGUI()
 {
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout" box-anchor="fill" layout="flex" flex-direction="column">
         <g id="maps-container" box-anchor="fill" layout="box"></g>
-        <rect id="results-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
-        <g id="results-container" display="none" box-anchor="hfill" layout="box">
+        <g id="main-tb-container" box-anchor="fill" layout="box"></g>
+        <rect id="panel-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
+        <g id="panel-container" display="none" box-anchor="hfill" layout="box">
           <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
           <rect id="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
-
-          <g id="list-scroll-container" class="list" display="none" box-anchor="fill" layout="box">
-            <svg id="list-scroll-doc" box-anchor="fill">
-              <g id="list-scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
-              </g>
-            </svg>
+          <g id="panel-content" box-anchor="fill" layout="box">
           </g>
-
-          <g id="info-scroll-container" class="list" display="none" box-anchor="fill" layout="flex" flex-direction="column">
-            <g id="info-toolbar-container" box-anchor="hfill" layout="box"></g>
-            <svg id="info-scroll-doc" box-anchor="fill">
-              <g id="info-scroll-content" box-anchor="hfill" layout="flex" flex-direction="column" flex-wrap="nowrap" justify-content="flex-start">
-              </g>
-            </svg>
-          </g>
-
         </g>
       </g>
     </svg>
@@ -736,38 +709,15 @@ Window* MapsApp::createGUI()
 
   // search box, bookmarks btn, map sources btn, recenter map
 
-  resultSplitter = new Splitter(winnode->selectFirst("#results-splitter"),
+  infoContent = createColumn(); //createListContainer();
+  auto infoTitle = createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");  // should be pin icon
+  auto infoHeader = createPanelHeader(infoTitle);
+  infoPanel = createMapPanel(infoContent, infoHeader);
+
+  panelSplitter = new Splitter(winnode->selectFirst("#panel-splitter"),
       winnode->selectFirst("#results-split-sizer"), Splitter::BOTTOM, 120);
-  resultPanel = win->selectFirst("#results-container");
-
-  //resultList = resultPanel->selectFirst("#list-scroll-content");
-  SvgDocument* listScrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst("#list-scroll-doc"));
-  resultList = new Widget(listScrollDoc->selectFirst("#list-scroll-content"));
-  ScrollWidget* listScroller = new ScrollWidget(listScrollDoc, resultList);
-
-  //placeInfo = resultPanel->selectFirst("#info-scroll-content");
-  SvgDocument* infoScrollDoc = static_cast<SvgDocument*>(resultPanel->containerNode()->selectFirst("#info-scroll-doc"));
-  placeInfo = new Widget(infoScrollDoc->selectFirst("#info-scroll-content"));
-  ScrollWidget* infoScroller = new ScrollWidget(infoScrollDoc, placeInfo);
-
-  resultListContainer = win->selectFirst("#list-scroll-container");
-  placeInfoContainer = win->selectFirst("#info-scroll-container");
-
-  auto infoToolbar = createToolbar();
-  auto backBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"));
-  auto minimizeBtn = createToolbutton(SvgGui::useFile(":/icons/chevron_down.svg"));
-
-  backBtn->onClicked = [this](){ hidePlaceInfo(); };
-
-  minimizeBtn->onClicked = [this](){
-    resultSplitter->setVisible(false);
-    resultPanel->setVisible(false);
-  };
-
-  infoToolbar->addWidget(backBtn);
-  infoToolbar->addWidget(createStretch());
-  infoToolbar->addWidget(minimizeBtn);
-  resultPanel->selectFirst("#info-toolbar-container")->addWidget(infoToolbar);
+  panelContainer = win->selectFirst("#panel-container");
+  panelContent = win->selectFirst("#panel-content");
 
   mapsWidget = new MapsWidget(this);
   mapsWidget->node->setAttribute("box-anchor", "fill");
@@ -777,50 +727,64 @@ Window* MapsApp::createGUI()
   Toolbar* mainToolbar = createToolbar();
   Button* tracksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
 
-  //Button* sourcesBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Sources");
-  Widget* searchBtn = mapsSearch->createUI();
-  Widget* sourcesBtn = mapsSources->createUI();
-  Widget* bkmkBtn = mapsBookmarks->createUI();
+  Widget* searchBtn = mapsSearch->createPanel();
+  Widget* sourcesBtn = mapsSources->createPanel();
+  Widget* bkmkBtn = mapsBookmarks->createPanel();
 
   mainToolbar->addWidget(searchBtn);
   mainToolbar->addWidget(bkmkBtn);
   mainToolbar->addWidget(tracksBtn);
   mainToolbar->addWidget(sourcesBtn);
 
-
-  searchWidget = SearchWidget::create(this);
+  mainTbContainer = win->selectFirst("#main-tb-container");
+  mainTbContainer->addWidget(mainToolbar);
 
   Widget* mapsPanel = win->selectFirst("#maps-container");
   mapsPanel->addWidget(mapsWidget);
-  mapsPanel->addWidget(searchWidget);
+  //mapsPanel->addWidget(searchWidget);
 
   return win;
 }
 
 void MapsApp::showPanel(Widget* panel)
 {
-  Widget* panelContainer;
-  SvgNode* oldpanel = panelContainer->containerNode()->firstChild();
-  if(oldpanel)
-    panelContainer->containerNode()->removeChild(oldpanel);
+  if(!panelHistory.empty()) {
+    if(panelHistory.back() == panel)
+      return;
+    panelHistory.back()->setVisible(false);
+  }
+  panelHistory.push_back(panel);
   panelContainer->addWidget(panel);
   panelContainer->setVisible(true);
   panelSplitter->setVisible(true);
+  mainTbContainer->setVisible(false);
 }
 
-Widget* createHeaderTitle(const SvgNode* icon, const char* title)
+// this should be a static method or standalone fn!
+Widget* MapsApp::createHeaderTitle(const SvgNode* icon, const char* title)
 {
-  if(titlewidget)
-    toolbar->addWidget(new Widget(titlewidget));
-  if(title)
-    toolbar->addWidget(new Widget(createTextNode(title)));
+  return createToolbutton(icon, title, true);
 }
 
-Widget* MapsApp::createPanelHeader(std::function<void()> backFn, Widget* titlewidget, bool canMinimize)
+Widget* MapsApp::createPanelHeader(Widget* titlewidget, bool canMinimize)
 {
   auto toolbar = createToolbar();
   auto backBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"));
-  backBtn->onClicked = backFn ? backFn : [this](){ showPanel(NULL); };
+  backBtn->onClicked = [this](){
+    if(panelHistory.empty())
+      LOGE("This should never happen!");
+    else {
+      panelContainer->containerNode()->removeChild(panelHistory.back()->node);
+      panelHistory.pop_back();
+      if(!panelHistory.empty())
+        panelHistory.back()->setVisible(true);
+      else {
+        panelContainer->setVisible(false);
+        panelSplitter->setVisible(false);
+        mainTbContainer->setVisible(true);
+      }
+    }
+  };
 
   toolbar->addWidget(backBtn);
   toolbar->addWidget(titlewidget);
@@ -831,7 +795,12 @@ Widget* MapsApp::createPanelHeader(std::function<void()> backFn, Widget* titlewi
 
   if(canMinimize) {
     auto minimizeBtn = createToolbutton(SvgGui::useFile(":/icons/chevron_down.svg"));
-    minimizeBtn->onClicked = [this](){ minimizePanel(); };
+    minimizeBtn->onClicked = [this](){
+      // options:
+      // 1. hide container and splitter and show a floating restore btn
+      // 2. use setSplitSize() to shrink panel to toolbar height
+      //minimizePanel();
+    };
     toolbar->addWidget(minimizeBtn);
   }
 

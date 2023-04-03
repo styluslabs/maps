@@ -26,30 +26,6 @@ struct SearchResult
 class TextEdit;
 class Button;
 
-class SearchWidget : public Widget
-{
-public:
-  SearchWidget(SvgNode* n);
-  void populateAutocomplete(const std::vector<std::string>& history);
-  void populateResults(const std::vector<SearchResult>& results);
-
-  Widget* resultsPanel = NULL;
-  Widget* resultsContent = NULL;
-
-  Widget* autoCompList;
-  Widget* autoCompContainer;
-  Button* cancelBtn;
-  //Widget* resultList;
-  MapsApp* app;
-  TextEdit* textEdit;
-  std::unique_ptr<SvgNode> searchResultProto;
-  std::unique_ptr<SvgNode> autoCompProto;
-  std::unique_ptr<SvgNode> historyIconNode;
-  std::unique_ptr<SvgNode> resultIconNode;
-
-  static SearchWidget* create(MapsApp* _app);
-};
-
 class MapsSearch : public MapsComponent
 {
 public:
@@ -78,6 +54,8 @@ public:
   void updateMapResults(LngLat lngLat00, LngLat lngLat11);
   void resultsUpdated();
 
+  Widget* createPanel();
+
 private:
   std::atomic_int tileCount;
 
@@ -104,4 +82,21 @@ private:
   MarkerID getPinMarker(const SearchResult& res, int idx);
   MarkerID getDotMarker(const SearchResult& res);
   void createMarkers();
+
+  // GUI
+  void populateAutocomplete(const std::vector<std::string>& history);
+  void populateResults(const std::vector<SearchResult>& results);
+
+  Widget* resultsPanel = NULL;
+  Widget* resultsContent = NULL;
+
+  Widget* autoCompList;
+  Widget* autoCompContainer;
+  Button* cancelBtn;
+  //Widget* resultList;
+  TextEdit* textEdit;
+  std::unique_ptr<SvgNode> searchResultProto;
+  std::unique_ptr<SvgNode> autoCompProto;
+  std::unique_ptr<SvgNode> historyIconNode;
+  std::unique_ptr<SvgNode> resultIconNode;
 };

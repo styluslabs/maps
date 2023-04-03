@@ -164,44 +164,48 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
   semOfflineWorker.post();
 }
 
+void MapsOffline::saveOfflineMap(int maxZoom)
+{
+  Map* map = app->map;
+  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
+  // don't load tiles outside visible region at any zoom level (as using TileID::getChild() recursively
+  //  would do - these could potentially outnumber the number of desired tiles!)
+  int zoom = int(map->getZoom());
+  LngLat lngLat00, lngLat11;
+  app->getMapBounds(lngLat00, lngLat11);
+  // queue offline downloads
+  int offlineId = (unsigned)time(NULL);
+  offlinePending.push_back({offlineId, lngLat00, lngLat11, zoom, maxZoom, {}});
+  auto& tileSources = map->getScene()->tileSources();
+  for(auto& src : tileSources) {
+    auto& info = src->offlineInfo();
+    if(info.cacheFile.empty())
+      LOGE("Cannot save offline tiles for source %s - no cache file specified", src->name().c_str());
+    else {
+      offlinePending.back().sources.push_back(
+          {src->name(), info.cacheFile, info.url, info.urlOptions, src->maxZoom(), {}});
+      if(!src->isRaster())
+        YamlPath("global.search_data").get(map->getScene()->config(), offlinePending.back().sources.back().searchData);
+    }
+  }
+
+  MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
+  MapsApp::platform->urlRequestsThreshold = maxOfflineDownloads - 1;
+  semOfflineWorker.post();
+  runOfflineWorker = true;
+  if(!offlineWorker)
+    offlineWorker = std::make_unique<std::thread>(offlineDLMain);
+}
+
 void MapsOffline::showGUI()
 {
   static int maxZoom = 13;
   if (!ImGui::CollapsingHeader("Offline Maps"))  //, ImGuiTreeNodeFlags_DefaultOpen))
     return;
 
-  Map* map = app->map;
   ImGui::InputInt("Max zoom level", &maxZoom);
-  if (ImGui::Button("Save Offline Map") && maxZoom > 0 && maxZoom < 20) {
-    std::unique_lock<std::mutex> lock(mutexOfflineQueue);
-    // don't load tiles outside visible region at any zoom level (as using TileID::getChild() recursively
-    //  would do - these could potentially outnumber the number of desired tiles!)
-    int zoom = int(map->getZoom());
-    LngLat lngLat00, lngLat11;
-    app->getMapBounds(lngLat00, lngLat11);
-    // queue offline downloads
-    int offlineId = (unsigned)time(NULL);
-    offlinePending.push_back({offlineId, lngLat00, lngLat11, zoom, maxZoom, {}});
-    auto& tileSources = map->getScene()->tileSources();
-    for(auto& src : tileSources) {
-      auto& info = src->offlineInfo();
-      if(info.cacheFile.empty())
-        LOGE("Cannot save offline tiles for source %s - no cache file specified", src->name().c_str());
-      else {
-        offlinePending.back().sources.push_back(
-            {src->name(), info.cacheFile, info.url, info.urlOptions, src->maxZoom(), {}});
-        if(!src->isRaster())
-          YamlPath("global.search_data").get(map->getScene()->config(), offlinePending.back().sources.back().searchData);
-      }
-    }
-
-    MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
-    MapsApp::platform->urlRequestsThreshold = maxOfflineDownloads - 1;
-    semOfflineWorker.post();
-    runOfflineWorker = true;
-    if(!offlineWorker)
-      offlineWorker = std::make_unique<std::thread>(offlineDLMain);
-  }
+  if(ImGui::Button("Save Offline Map") && maxZoom > 0 && maxZoom < 20)
+    saveOfflineMap(maxZoom);
 }
 
 MapsOffline::~MapsOffline()
@@ -211,4 +215,60 @@ MapsOffline::~MapsOffline()
     semOfflineWorker.post();
     offlineWorker->join();
   }
+}
+
+// New GUI
+
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
+
+#include "sqlite3/sqlite3.h"
+#include "mapsources.h"
+
+Widget* MapsOffline::createPanel()
+{
+  SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%d");
+  Button* saveBtn = createPushbutton("Save Offline Map");
+
+  saveBtn->onClicked = [=](){
+    saveOfflineMap(maxZoomSpin->value());
+  };
+
+  auto toolbar = createToolbar();
+  toolbar->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Offline Maps"));
+  toolbar->addWidget(createStretch());
+  toolbar->addWidget(maxZoomSpin);
+  toolbar->addWidget(saveBtn);
+  auto offlineHeader = app->createPanelHeader([this](){ app->showPanel(app->mapsSources->sourcesPanel); }, toolbar);
+
+  // we need list of existing offline regions - basically save OfflineMapInfo to places.sqlite?
+  // how to identify offline maps in list? date? sources?
+
+  DB_exec(bkmkDB, "SELECT DISTINCT id, date FROM offlinemaps;", [this](sqlite3_stmt* stmt){
+    int mapid = sqlite3_column_int(stmt, 0);
+
+    Button* item = new Button(offlineListProto->clone());
+
+    item->onClicked = [this, list](){
+      // get lat, lng for offline region and show on map
+    };
+
+    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(fstring("Map %d", mapid));
+
+    SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
+    detailnode->addText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
+
+    offlineMapsContent->addWidget(item);
+  });
+
+  offlinePanel = app->createMapPanel(offlineContent, offlineHeader);
+
+  Button* offlineBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_expanddown.svg"), "Offline Maps");
+  offlineBtn->onClicked = [this](){
+    app->showPanel(offlinePanel);
+  };
+
+  return offlineBtn;
 }

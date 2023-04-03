@@ -13,11 +13,17 @@ public:
   void hideBookmarks();
   void addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid = -1);
 
+  Widget* createPanel();
+  Widget* getPlaceInfoSection(const std::string& osm_id, LngLat pos);
+
   std::vector<MarkerID> bkmkMarkers;
 
 private:
   void showPlacesGUI();
   void showViewsGUI();
+
+  void populateBkmks(const std::string& listname);
+  void populateLists();
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;

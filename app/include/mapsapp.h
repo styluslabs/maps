@@ -18,7 +18,6 @@ class SvgGui;
 class Splitter;
 class Widget;
 class Window;
-class SearchWidget;
 class MapsWidget;
 class SvgNode;
 
@@ -107,21 +106,22 @@ public:
 
   // GUI
   Window* createGUI();
-  void hidePlaceInfo();
+  //void hidePlaceInfo();
 
   void showPanel(Widget* panel);
-  Widget* createPanelHeader(std::function<void()> backFn, Widget* titlewidget, bool canMinimize = true);
+  Widget* createHeaderTitle(const SvgNode* icon, const char* title);
+  Widget* createPanelHeader(Widget* titlewidget, bool canMinimize = true);  //std::function<void()> backFn,
   Widget* createMapPanel(Widget* content, Widget* header, Widget* fixedContent = NULL);
 
   Splitter* panelSplitter = NULL;
   Widget* panelContainer = NULL;
-  //Widget* resultList = NULL;
-  Widget* placeInfo = NULL;
-  //Widget* resultListContainer = NULL;
-  Widget* placeInfoContainer = NULL;
+  Widget* panelContent = NULL;
+  Widget* mainTbContainer = NULL;
+  Widget* infoPanel = NULL;
+  Widget* infoContent = NULL;
   MapsWidget* mapsWidget = NULL;
-  SearchWidget* searchWidget = NULL;
   std::unique_ptr<SvgNode> placeInfoProto;
+  std::vector<Widget*> panelHistory;
 
   static Platform* platform;
   static std::string baseDir;
