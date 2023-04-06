@@ -20,6 +20,7 @@ class Widget;
 class Window;
 class MapsWidget;
 class SvgNode;
+struct sqlite3;
 
 struct Location
 {
@@ -127,6 +128,8 @@ public:
   static std::string baseDir;
   static std::string apiKey;
   static SvgGui* gui;
+
+  static sqlite3* bkmkDB;
 
 private:
   void showImGUI();

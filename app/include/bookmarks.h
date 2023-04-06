@@ -9,7 +9,7 @@ class MapsBookmarks : public MapsComponent
 {
 public:
   using MapsComponent::MapsComponent;
-  void showGUI();
+  //void showGUI();
   void hideBookmarks();
   void addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid = -1);
 
@@ -19,8 +19,8 @@ public:
   std::vector<MarkerID> bkmkMarkers;
 
 private:
-  void showPlacesGUI();
-  void showViewsGUI();
+  //void showPlacesGUI();
+  //void showViewsGUI();
 
   void populateBkmks(const std::string& listname);
   void populateLists();

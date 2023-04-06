@@ -10,7 +10,7 @@
 
 // bookmarks (saved places)
 
-static sqlite3* bkmkDB = NULL;
+//static sqlite3* bkmkDB = NULL;
 
 void MapsBookmarks::hideBookmarks()
 {
@@ -18,7 +18,7 @@ void MapsBookmarks::hideBookmarks()
     app->map->markerSetVisible(mrkid, false);
 }
 
-void MapsBookmarks::showGUI()
+/*void MapsBookmarks::showGUI()
 {
   if(!bkmkDB) {
     std::string dbPath = MapsApp::baseDir + "places.sqlite";
@@ -178,23 +178,6 @@ void MapsBookmarks::showPlacesGUI()
 #endif
 }
 
-void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid)
-{
-  const char* query = rowid >= 0 ?
-      "UPDATE bookmarks SET osm_id = ?, list = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :
-      "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
-  DB_exec(bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_text(stmt, 1, osm_id, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, list, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, props, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, note, -1, SQLITE_STATIC);
-    sqlite3_bind_double(stmt, 5, lnglat.longitude);
-    sqlite3_bind_double(stmt, 6, lnglat.latitude);
-    if(rowid >= 0)
-      sqlite3_bind_int(stmt, 7, rowid);
-  });
-}
-
 void MapsBookmarks::showViewsGUI()
 {
   static int currViewIdx = 0;
@@ -251,6 +234,24 @@ void MapsBookmarks::showViewsGUI()
     map->setCameraPositionEased(view, 1.0);
   }
 }
+*/
+
+void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid)
+{
+  const char* query = rowid >= 0 ?
+      "UPDATE bookmarks SET osm_id = ?, list = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :
+      "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
+  DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+    sqlite3_bind_text(stmt, 1, osm_id, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, list, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, props, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, note, -1, SQLITE_STATIC);
+    sqlite3_bind_double(stmt, 5, lnglat.longitude);
+    sqlite3_bind_double(stmt, 6, lnglat.latitude);
+    if(rowid >= 0)
+      sqlite3_bind_int(stmt, 7, rowid);
+  });
+}
 
 // New GUI
 
@@ -273,13 +274,13 @@ void MapsBookmarks::populateLists()
   if(!listsPanel) {
     listsContent = createColumn(); //createListContainer();
     auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Bookmark Lists");
-    auto listHeader = app->createPanelHeader(NULL, headerTitle, false);
+    auto listHeader = app->createPanelHeader(headerTitle, false);
     listsPanel = app->createMapPanel(listsContent, listHeader);
   }
   app->showPanel(listsPanel);
   app->gui->deleteContents(listsContent, ".listitem");
 
-  DB_exec(bkmkDB, "SELECT list, COUNT(1) FROM bookmarks GROUP by list;", [this](sqlite3_stmt* stmt){
+  DB_exec(app->bkmkDB, "SELECT list, COUNT(1) FROM bookmarks GROUP by list;", [this](sqlite3_stmt* stmt){
     std::string list = (const char*)(sqlite3_column_text(stmt, 0));
     int nplaces = sqlite3_column_int(stmt, 1);
 
@@ -311,7 +312,7 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
   if(!bkmkPanel) {
     bkmkContent = createColumn(); //createListContainer();
     auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
-    auto bkmkHeader = app->createPanelHeader([this](){ app->showPanel(listsPanel); }, headerTitle);
+    auto bkmkHeader = app->createPanelHeader(headerTitle);
     bkmkPanel = app->createMapPanel(bkmkContent, bkmkHeader);
   }
   app->showPanel(bkmkPanel);
@@ -322,7 +323,7 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
   Map* map = app->map;
   size_t markerIdx = 0;
   const char* query = "SELECT rowid, props, notes, lng, lat FROM bookmarks WHERE list = ?;";
-  DB_exec(bkmkDB, query, [&](sqlite3_stmt* stmt){
+  DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
     double lng = sqlite3_column_double(stmt, 3);
     double lat = sqlite3_column_double(stmt, 4);
     //placeRowIds.push_back(sqlite3_column_int(stmt, 0));
@@ -382,7 +383,7 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   // attempt lookup w/ osm_id if passed
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
   const char* query1 = "SELECT rowid, osm_id, list, props, notes, lng, lat FROM bookmarks WHERE osm_id = ?;";
-  DB_exec(bkmkDB, query1, [&](sqlite3_stmt* stmt){
+  DB_exec(app->bkmkDB, query1, [&](sqlite3_stmt* stmt){
     rowid = sqlite3_column_int(stmt, 0);
     liststr = (const char*)(sqlite3_column_text(stmt, 2));
     notestr = (const char*)(sqlite3_column_text(stmt, 4));
@@ -393,7 +394,7 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   if(liststr.empty()) {
     const char* query2 = "SELECT rowid, osm_id, list, props, notes, lng, lat FROM bookmarks WHERE "
         "lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? LIMIT 1;";
-    DB_exec(bkmkDB, query2, [&](sqlite3_stmt* stmt){
+    DB_exec(app->bkmkDB, query2, [&](sqlite3_stmt* stmt){
       if(osm_id.empty() || sqlite3_column_text(stmt, 1)[0] == '\0') {
         rowid = sqlite3_column_int(stmt, 0);
         liststr = (const char*)(sqlite3_column_text(stmt, 2));
@@ -425,7 +426,7 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   editToolbar->addWidget(cancelBtn);
 
   std::vector<std::string> lists;
-  DB_exec(bkmkDB, "SELECT DISTINCT list FROM bookmarks;", [&](sqlite3_stmt* stmt){
+  DB_exec(app->bkmkDB, "SELECT DISTINCT list FROM bookmarks;", [&](sqlite3_stmt* stmt){
     lists.emplace_back((const char*)(sqlite3_column_text(stmt, 0)));
   });
   auto listsCombo = createComboBox(lists);
@@ -520,6 +521,10 @@ Widget* MapsBookmarks::createPanel()
   )";
   placeInfoSectionProto.reset(loadSVGFragment(placeInfoSectionProtoSVG));
 
+  // DB setup
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list TEXT, props TEXT, notes TEXT, lng REAL, lat REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL);");
+
   Menu* bkmkMenu = createMenu(Menu::VERT_LEFT);
   bkmkMenu->autoClose = true;
   bkmkMenu->addHandler([this, bkmkMenu](SvgGui* gui, SDL_Event* event){
@@ -528,7 +533,7 @@ Widget* MapsBookmarks::createPanel()
 
       // TODO: pinned bookmarks - timestamp column = INF?
       const char* query = "SELECT rowid, props, notes, lng, lat FROM bookmarks ORDER BY timestamp LIMIT 8;";
-      DB_exec(bkmkDB, query, [&](sqlite3_stmt* stmt){
+      DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
         std::string propstr = (const char*)(sqlite3_column_text(stmt, 1));
         double lng = sqlite3_column_double(stmt, 3);
         double lat = sqlite3_column_double(stmt, 4);

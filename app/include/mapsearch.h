@@ -87,16 +87,15 @@ private:
   void populateAutocomplete(const std::vector<std::string>& history);
   void populateResults(const std::vector<SearchResult>& results);
 
-  Widget* resultsPanel = NULL;
+  Widget* searchPanel = NULL;
   Widget* resultsContent = NULL;
-
-  Widget* autoCompList;
-  Widget* autoCompContainer;
+  ///
+  ///Widget* autoCompList;
+  ///Widget* autoCompContainer;
   Button* cancelBtn;
-  //Widget* resultList;
-  TextEdit* textEdit;
+  TextEdit* queryText;
   std::unique_ptr<SvgNode> searchResultProto;
   std::unique_ptr<SvgNode> autoCompProto;
-  std::unique_ptr<SvgNode> historyIconNode;
-  std::unique_ptr<SvgNode> resultIconNode;
+  //std::unique_ptr<SvgNode> historyIconNode;
+  //std::unique_ptr<SvgNode> resultIconNode;
 };

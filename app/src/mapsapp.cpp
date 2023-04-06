@@ -7,7 +7,8 @@
 #include "imgui.h"
 #include "imgui_stl.h"
 #include "glm/common.hpp"
-#include "rapidxml/rapidxml.hpp"
+//#include "rapidxml/rapidxml.hpp"
+#include "pugixml.hpp"
 #include "rapidjson/document.h"
 #include <sys/stat.h>
 
@@ -142,7 +143,7 @@ void MapsApp::tapEvent(float x, float y)
     if (!result) {
       logMsg("Pick Label result is null.\n");
       pickLabelStr.clear();
-      pickResultProps.clear();
+      pickResultProps.SetNull();
       if(pickResultMarker > 0)
         map->markerSetVisible(pickResultMarker, false);
       pickResultCoord = LngLat(NAN, NAN);
@@ -169,17 +170,15 @@ void MapsApp::tapEvent(float x, float y)
           return;
         }
         response.content.push_back('\0');
-        rapidxml::xml_document<> doc;
-        doc.parse<0>(response.content.data());
-        auto osmNode = doc.first_node("osm");
-        auto eleNode = osmNode ? osmNode->first_node(osmType.c_str()) : 0;
-        auto tag = eleNode ? eleNode->first_node("tag") : 0;
+        pugi::xml_document doc;
+        doc.load_string(response.content.data());
+        auto tag = doc.child("osm").child(osmType.c_str()).child("tag");
         if(tag) pickLabelStr += "\n============\nid = " + itemId + "\n";
         while(tag) {
-          auto key = tag->first_attribute("k");
-          auto val = tag->first_attribute("v");
-          pickLabelStr += key->value() + std::string(" = ") + val->value() + std::string("\n");
-          tag = tag->next_sibling("tag");
+          auto key = tag.attribute("k");
+          auto val = tag.attribute("v");
+          pickLabelStr += key.value() + std::string(" = ") + val.value() + std::string("\n");
+          tag = tag.next_sibling("tag");
         }
       });
     }
@@ -670,21 +669,35 @@ void MapsWidget::draw(SvgPainter* svgp) const
 
 Window* MapsApp::createGUI()
 {
+#if PLATFORM_MOBILE
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout" box-anchor="fill" layout="flex" flex-direction="column">
         <g id="maps-container" box-anchor="fill" layout="box"></g>
-        <g id="main-tb-container" box-anchor="fill" layout="box"></g>
         <rect id="panel-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
         <g id="panel-container" display="none" box-anchor="hfill" layout="box">
           <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
           <rect id="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
-          <g id="panel-content" box-anchor="fill" layout="box">
-          </g>
+          <g id="panel-content" box-anchor="fill" layout="box"></g>
+        </g>
+        <g id="main-tb-container" box-anchor="hfill" layout="box"></g>
+      </g>
+    </svg>
+  )#";
+#else
+  static const char* mainWindowSVG = R"#(
+    <svg class="window" layout="box">
+      <g id="maps-container" box-anchor="fill" layout="box"></g>
+      <g class="panel-layout" box-anchor="top left" margin="10 0 0 10" layout="flex" flex-direction="column">
+        <g id="main-tb-container" box-anchor="hfill" layout="box"></g>
+        <g id="panel-container" display="none" box-anchor="hfill" layout="box">
+          <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
+          <g id="panel-content" box-anchor="fill" layout="box"></g>
         </g>
       </g>
     </svg>
   )#";
+#endif
 
   static const char* placeInfoProtoSVG = R"#(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -714,8 +727,10 @@ Window* MapsApp::createGUI()
   auto infoHeader = createPanelHeader(infoTitle);
   infoPanel = createMapPanel(infoContent, infoHeader);
 
+#if PLATFORM_MOBILE
   panelSplitter = new Splitter(winnode->selectFirst("#panel-splitter"),
       winnode->selectFirst("#results-split-sizer"), Splitter::BOTTOM, 120);
+#endif
   panelContainer = win->selectFirst("#panel-container");
   panelContent = win->selectFirst("#panel-content");
 
@@ -725,8 +740,7 @@ Window* MapsApp::createGUI()
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
   Toolbar* mainToolbar = createToolbar();
-  Button* tracksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
-
+  Widget* tracksBtn = mapsTracks->createPanel();
   Widget* searchBtn = mapsSearch->createPanel();
   Widget* sourcesBtn = mapsSources->createPanel();
   Widget* bkmkBtn = mapsBookmarks->createPanel();
@@ -741,13 +755,12 @@ Window* MapsApp::createGUI()
 
   Widget* mapsPanel = win->selectFirst("#maps-container");
   mapsPanel->addWidget(mapsWidget);
-  //mapsPanel->addWidget(searchWidget);
-
   return win;
 }
 
 void MapsApp::showPanel(Widget* panel)
 {
+  panel->setVisible(true);
   if(!panelHistory.empty()) {
     if(panelHistory.back() == panel)
       return;
@@ -756,8 +769,10 @@ void MapsApp::showPanel(Widget* panel)
   panelHistory.push_back(panel);
   panelContainer->addWidget(panel);
   panelContainer->setVisible(true);
-  panelSplitter->setVisible(true);
-  mainTbContainer->setVisible(false);
+  if(panelSplitter) {
+    panelSplitter->setVisible(true);
+    mainTbContainer->setVisible(false);
+  }
 }
 
 // this should be a static method or standalone fn!
@@ -780,15 +795,16 @@ Widget* MapsApp::createPanelHeader(Widget* titlewidget, bool canMinimize)
         panelHistory.back()->setVisible(true);
       else {
         panelContainer->setVisible(false);
-        panelSplitter->setVisible(false);
-        mainTbContainer->setVisible(true);
+        if(panelSplitter) {
+          panelSplitter->setVisible(false);
+          mainTbContainer->setVisible(true);
+        }
       }
     }
   };
 
   toolbar->addWidget(backBtn);
   toolbar->addWidget(titlewidget);
-
   toolbar->addWidget(createStretch());
   //if(panelToolbar)
   //  toolbar->addWidget(panelToolbar);
@@ -835,6 +851,8 @@ Widget* MapsApp::createMapPanel(Widget* content, Widget* header, Widget* fixedCo
 #include "nanovg-2/src/nanovg_sw_utils.h"
 
 #include "../linux/src/linuxPlatform.h"
+
+#include "sqlite3/sqlite3.h"
 
 SvgGui* MapsApp::gui = NULL;
 
@@ -960,6 +978,15 @@ int main(int argc, char* argv[])
   app->map->setupGL();
   app->loadSceneFile(false);
 
+  // DB setup
+  std::string dbPath = MapsApp::baseDir + "places.sqlite";
+  if(sqlite3_open_v2(dbPath.c_str(), &MapsApp::bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+    logMsg("Error creating %s", dbPath.c_str());
+    sqlite3_close(MapsApp::bkmkDB);
+    MapsApp::bkmkDB = NULL;
+  }
+
+  // GUI setup
   Window* win = app->createGUI();
   win->sdlWindow = (SDL_Window*)glfwWin;
   win->addHandler([&](SvgGui*, SDL_Event* event){
@@ -1030,6 +1057,7 @@ int main(int argc, char* argv[])
     glfwSwapBuffers(glfwWin);
   }
 
+  sqlite3_close(MapsApp::bkmkDB);
   gui->closeWindow(win);
   delete gui;
   delete painter;

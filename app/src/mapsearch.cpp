@@ -9,7 +9,6 @@
 
 #include <deque>
 #include "rapidjson/writer.h"
-#include "rapidxml/rapidxml.hpp"
 #include "data/tileData.h"
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
@@ -702,7 +701,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   // history (autocomplete)
   if(phase == RETURN) {
-    autoCompContainer->setVisible(false);
+    //autoCompContainer->setVisible(false);
     // IGNORE prevents error from UNIQUE constraint
     DB_exec(searchDB, fstring("INSERT OR IGNORE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
   }
@@ -712,7 +711,6 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
       autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
     });
-
     populateAutocomplete(autocomplete);
   }
 
@@ -741,7 +739,7 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
   cancelBtn->setVisible(true);
   //autoCompContainer->setVisible(true);
   //window()->gui()->deleteContents(autoCompList, ".listitem");
-  app->showPanel(resultsPanel);
+  app->showPanel(searchPanel);
   app->gui->deleteContents(resultsContent, ".listitem");
 
   for(size_t ii = 0; ii < history.size(); ++ii) {
@@ -749,136 +747,99 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
     item->onClicked = [this, query=history[ii]](){
       app->mapsSearch->searchText(query, MapsSearch::RETURN);
     };
-
     SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     textnode->addText(history[ii].c_str());
-
-    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
-    imghost->addChild(historyIconNode->clone());
-
     resultsContent->addWidget(item);
   }
 }
 
 void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 {
-  app->showPanel(resultsPanel);
+  app->showPanel(searchPanel);
   app->gui->deleteContents(resultsContent, ".listitem");
 
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
     Button* item = new Button(searchResultProto->clone());
-
     item->onClicked = [this, &results, ii](){
       // TODO: hide search result marker
       app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
     };
-
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     titlenode->addText(res.tags["name"].GetString());
-
     SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
     double distkm = lngLatDist(app->mapCenter, res.pos);
     distnode->addText(fstring("%.1f km", distkm).c_str());
-
-    SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
-    imghost->addChild(resultIconNode->clone());
-
     resultsContent->addWidget(item);
   }
 }
 
 Widget* MapsSearch::createPanel()
 {
-  textEdit = new TextEdit(containerNode()->selectFirst(".textbox"));
-  setMinWidth(textEdit, 100);
+  static const char* searchBoxSVG = R"#(
+    <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
+      <rect class="toolbar-bg background" box-anchor="vfill" width="400" height="20"/>
+      <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
+        <g class="toolbutton search-btn" layout="box">
+          <rect class="background" box-anchor="hfill" width="36" height="42"/>
+          <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_zoom.svg"/>
+        </g>
+        <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
+          <rect class="min-width-rect" fill="none" width="150" height="36"/>
+          <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
+        </g>
+        <g class="toolbutton cancel-btn" display="none" layout="box">
+          <rect class="background" box-anchor="hfill" width="36" height="42"/>
+          <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_cancel.svg"/>
+        </g>
+      </g>
+    </g>
+  )#";
 
-  textEdit->onChanged = [this](const char* s){
-    app->mapsSearch->searchText(s, MapsSearch::EDITING);  //StringRef(s).trimmed().toString();
+  SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
+  SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
+  textEditNode->addChild(textEditInnerNode());
+  queryText = new TextEdit(textEditNode);
+  setMinWidth(queryText, 100);
+
+  queryText->onChanged = [this](const char* s){
+    searchText(s, MapsSearch::EDITING);  //StringRef(s).trimmed().toString();
   };
 
-  addHandler([this](SvgGui* gui, SDL_Event* event){
+  queryText->addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
-      if(!textEdit->text().empty())
-        app->mapsSearch->searchText(textEdit->text(), MapsSearch::RETURN);
+      if(!queryText->text().empty())
+        searchText(queryText->text(), MapsSearch::RETURN);
       return true;
     }
     return false;
   });
 
-  SvgDocument* scrollDoc = static_cast<SvgDocument*>(containerNode()->selectFirst(".scroll-doc"));
-  autoCompList = new Widget(containerNode()->selectFirst(".scroll-content"));
-  ScrollWidget* scrollWidget = new ScrollWidget(scrollDoc, autoCompList);
-  autoCompContainer = new Widget(containerNode()->selectFirst(".scroll-container"));
-
-  /*
-  scrollWidget->onScroll = [this, scrollWidget](){
-    if(scrollWidget->scrollY - scrollWidget->scrollLimits.bottom < 100) {
-      app->mapsSearch->searchText("", MapsSearch::NEXTPAGE);
-    }
-  };
-  */
-
-  Button* searchBtn = new Button(containerNode()->selectFirst(".search-btn"));
-  searchBtn->onPressed = [this](){
-    // show history
-    app->mapsSearch->searchText("", MapsSearch::EDITING);
-  };
-
-  cancelBtn = new Button(containerNode()->selectFirst(".cancel-btn"));
+  // this btn clears search text w/o closing panel (use back btn to close panel)
+  cancelBtn = new Button(searchBoxNode->selectFirst(".cancel-btn"));
   cancelBtn->onClicked = [this](){
-    app->mapsSearch->clearSearch();
-    window()->gui()->deleteContents(autoCompList, ".listitem");
-    window()->gui()->deleteContents(app->resultList, ".listitem");
-
-    app->resultListContainer->setVisible(false);
-    app->placeInfoContainer->setVisible(false);
-    app->resultSplitter->setVisible(false);
-    app->resultPanel->setVisible(false);
-    autoCompContainer->setVisible(false);
-    textEdit->setText("");
+    clearSearch();
+    app->gui->deleteContents(resultsContent, ".listitem");
+    queryText->setText("");
     cancelBtn->setVisible(false);
   };
-
-  Button* restoreBtn = new Button(containerNode()->selectFirst(".restore-btn"));
-  restoreBtn->onClicked = [this](){
-    app->resultSplitter->setVisible(true);
-    app->resultPanel->setVisible(true);
-  };
-
-  historyIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_clock.svg")));
-  resultIconNode.reset(new SvgUse(Rect::wh(48, 48), "", SvgGui::useFile(":/icons/ic_menu_zoom.svg")));
-
-
-
-  resultsContent = createListContainer();
-
-  Toolbar* toolbar = createToolbar();
-  Button* searchBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"));
-  TextEdit* searchText = createTextEdit();
-  cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
-  toolbar->addWidget(searchBtn);
-  toolbar->addWidget(searchText);
-  toolbar->addWidget(cancelBtn);
   cancelBtn->setVisible(false);
 
-
-
-  bkmkContent = createColumn(); //createListContainer();
-  auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
-  auto bkmkHeader = app->createPanelHeader([this](){ app->showPanel(listsPanel); }, headerTitle);
-  bkmkPanel = app->createMapPanel(bkmkContent, bkmkHeader);
-
-
-
-  auto resultsHeader = app->createPanelHeader(NULL, toolbar);
-  resultsPanel = app->createMapPanel(resultsContent, resultsHeader);
+  Widget* searchContent = createColumn(); //createListContainer();
+  resultsContent = createColumn(); //createListContainer();
+  searchContent->addWidget(new Widget(searchBoxNode));
+  searchContent->addWidget(resultsContent);
+  auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
+  auto resultsHeader = app->createPanelHeader(headerTitle);
+  searchPanel = app->createMapPanel(resultsContent, resultsHeader);
 
   static const char* searchResultProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5"></g>
+        <g class="image-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_zoom.svg"/>
+        </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
           <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
@@ -893,7 +854,9 @@ Widget* MapsSearch::createPanel()
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5"></g>
+        <g class="image-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_clock.svg"/>
+        </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
           <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
@@ -915,7 +878,7 @@ Widget* MapsSearch::createPanel()
       // TODO: pinned searches - timestamp column = INF?
       DB_exec(searchDB, "SELECT query FROM history ORDER BY timestamp LIMIT 8;", [&](sqlite3_stmt* stmt){
         const char* s = (const char*)(sqlite3_column_text(stmt, 0));
-        searchMenu->addItem(s, historyIconNode.get(),
+        searchMenu->addItem(s, SvgGui::useFile(":/icons/ic_menu_clock.svg"),
             [=](){ app->mapsSearch->searchText(s, MapsSearch::RETURN); });
       });
 
@@ -927,6 +890,8 @@ Widget* MapsSearch::createPanel()
   searchBtn->setMenu(searchMenu);
   searchBtn->onClicked = [this](){
     app->showPanel(searchPanel);
+    // show history
+    searchText("", MapsSearch::EDITING);
   };
 
   return searchBtn;

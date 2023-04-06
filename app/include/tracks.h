@@ -2,11 +2,15 @@
 
 #include "mapscomponent.h"
 
+class Widget;
+
 class MapsTracks : public MapsComponent {
 public:
   using MapsComponent::MapsComponent;
   void showGUI();
   void tapEvent(LngLat location);
+
+  Widget* createPanel();
 
   std::vector<MarkerID> trackMarkers;
   MarkerID trackHoverMarker = 0;
