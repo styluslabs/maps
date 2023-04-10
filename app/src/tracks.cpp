@@ -20,19 +20,19 @@ font:
 )RAW";
 static std::string polylineStyle = "{ style: lines, interactive: true, color: red, width: 4px, order: 5000 }";
 
-static bool add_point_marker_on_click = false;
-static bool add_polyline_marker_on_click = false;
-static bool point_markers_position_clipped = false;
+//static bool add_point_marker_on_click = false;
+//static bool add_polyline_marker_on_click = false;
+//static bool point_markers_position_clipped = false;
 
 // https://www.topografix.com/gpx_manual.asp
 void MapsTracks::addGPXPolyline(const char* gpxfile)
 {
-  //using namespace rapidxml;  // https://rapidxml.sourceforge.net/manual.html
   pugi::xml_document doc;
   doc.load_file(gpxfile);
   pugi::xml_node trk = doc.child("gpx").child("trk");
   if(!trk) logMsg("Error loading %s\n", gpxfile);
   activeTrack.clear();
+  gpxFile = gpxfile;
   while(trk) {
     pugi::xml_node trkseg = trk.child("trkseg");
     while(trkseg) {
@@ -61,6 +61,7 @@ void MapsTracks::addGPXPolyline(const char* gpxfile)
   }
 }
 
+/*
 void MapsTracks::showGUI()
 {
     static std::string gpxFile;
@@ -172,30 +173,33 @@ void MapsTracks::showGUI()
           map->markerSetVisible(trackHoverMarker, false);
     }
 }
+*/
 
 void MapsTracks::tapEvent(LngLat location)
 {
-  Map* map = app->map;
-  if (add_point_marker_on_click) {
-    auto marker = map->markerAdd();
-    map->markerSetPoint(marker, location);
-    if (markerUseStylingPath) {
-      map->markerSetStylingFromPath(marker, markerStylingPath.c_str());
-    } else {
-      map->markerSetStylingFromString(marker, markerStylingString.c_str());
-    }
+  if (!drawTrack)
+    return;
 
-    point_markers.push_back({ marker, location });
-  }
+  //if (add_point_marker_on_click) {
+  //  auto marker = map->markerAdd();
+  //  map->markerSetPoint(marker, location);
+  //  if (markerUseStylingPath) {
+  //    map->markerSetStylingFromPath(marker, markerStylingPath.c_str());
+  //  } else {
+  //    map->markerSetStylingFromString(marker, markerStylingString.c_str());
+  //  }
+  //
+  //  point_markers.push_back({ marker, location });
+  //}
 
-  if (add_polyline_marker_on_click) {
-    if (polyline_marker_coordinates.empty()) {
-      polyline_marker = map->markerAdd();
-      map->markerSetStylingFromString(polyline_marker, polylineStyle.c_str());
-    }
-    polyline_marker_coordinates.push_back(location);
-    map->markerSetPolyline(polyline_marker, polyline_marker_coordinates.data(), polyline_marker_coordinates.size());
+  if (trackMarkers.empty()) {
+    drawnTrack.clear();
+    trackMarkers.push_back(app->map->markerAdd());
+    app->map->markerSetStylingFromString(trackMarkers.back(), polylineStyle.c_str());
   }
+  double dist = activeTrack.empty() ? 0 : activeTrack.back().dist + lngLatDist(activeTrack.back().pos, location);
+  activeTrack.push_back({location, dist, 0});
+  app->map->markerSetPolyline(drawnTrackMarker, drawnTrack.data(), drawnTrack.size());
 }
 
 // New GUI
@@ -278,15 +282,30 @@ void TrackPlot::draw(SvgPainter* svgp) const
 // - file selection: use OS dialog for iOS, Android; what about desktop? Just text box for now? OS dialog?
 // elevation plot
 
+void MapsTracks::onSceneLoaded()
+{
+  trackHoverMarker = 0;
+  if(!gpxFile.empty())
+    addGPXPolyline(gpxFile.c_str());
+
+}
+
 Widget* MapsTracks::createPanel()
 {
   Widget* tracksContent = createColumn();
+
+  Button* drawTrackBtn = createPushbutton("Draw Track");
+  drawTrackBtn->onClicked = [=](){
+    drawTrack = !drawTrack;
+    drawTrackBtn->setTitle(drawTrack ? "Finish Track" : "Draw Track");
+  };
+  tracksContent->addWidget(drawTrackBtn);
 
   TrackPlot* trackPlot = new TrackPlot();
   trackPlot->node->setAttribute("box-anchor", "fill");
   trackPlot->setMargins(1, 5);
 
-#if PLATFORM_MOBILE
+#if 0  //PLATFORM_MOBILE
 #else
   TextEdit* gpxPath = createTextEdit();
   tracksContent->addWidget(createTitledRow("GPX File", gpxPath));
@@ -307,6 +326,7 @@ Widget* MapsTracks::createPanel()
   };
   clearGpxBtn->onClicked = [=](){
     activeTrack.clear();
+    gpxFile.clear();
     for (auto marker : trackMarkers)
       app->map->markerRemove(marker);
   };

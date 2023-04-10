@@ -7,22 +7,22 @@ class Widget;
 class MapsTracks : public MapsComponent {
 public:
   using MapsComponent::MapsComponent;
-  void showGUI();
+  //void showGUI();
+  Widget* createPanel();
   void tapEvent(LngLat location);
 
-  Widget* createPanel();
-
+  std::string gpxFile;
   std::vector<MarkerID> trackMarkers;
   MarkerID trackHoverMarker = 0;
 
-  struct PointMarker {
-      MarkerID markerId;
-      LngLat coordinates;
-  };
-  std::vector<PointMarker> point_markers;
+  //struct PointMarker {
+  //    MarkerID markerId;
+  //    LngLat coordinates;
+  //};
+  //std::vector<PointMarker> point_markers;
 
-  MarkerID polyline_marker = 0;
-  std::vector<LngLat> polyline_marker_coordinates;
+  MarkerID drawnTrackMarker = 0;
+  std::vector<LngLat> drawnTrack;
 
   // GPX tracks
   struct TrackPt {
@@ -34,4 +34,6 @@ public:
 
 private:
   void addGPXPolyline(const char* gpxfile);
+
+  bool drawTrack = false;
 };

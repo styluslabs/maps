@@ -128,6 +128,8 @@ public:
   static std::string baseDir;
   static std::string apiKey;
   static SvgGui* gui;
+  static YAML::Node config;
+  static std::string configFile;
 
   static sqlite3* bkmkDB;
 
@@ -140,4 +142,8 @@ private:
   void showPickLabelGUI();
 
   void dumpTileContents(float x, float y);
+  void saveConfig();
+
+  int64_t storageTotal = 0;
+  int64_t storageOffline = 0;
 };

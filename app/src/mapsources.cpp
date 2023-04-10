@@ -4,6 +4,11 @@
 #include "imgui.h"
 #include "imgui_stl.h"
 
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
+
+#include "offlinemaps.h"
 
 // Source selection
 
@@ -86,8 +91,21 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 
 // auto it = mapSources.begin();  std::advance(it, currSrcIdx[ii]-1); builder.addLayer(it->first.Scalar(), it->second);
 
-MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile) : MapsComponent(_app)
+MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::string& sourcesFile
 {
+  FSPath path = FSPath(app->configFile).parent();
+  std::string srcyaml;
+  for(auto srcfile : app->config["sources"]) {
+    FSPath srcpath = path.child(srcfile.Scalar());
+    // how to handle baseUrl if sources files are in different folders?
+    if(baseUrl.empty())
+      baseUrl = "file://" + srcpath.parentPath();
+    if(!readFile(&srcyaml, srcpath.c_str()))
+      LOGW("Unable to open map sources file %s", srcpath.c_str());
+    mapSources = YAML::Load(srcyaml.c_str());
+  }
+
+  /*
   // have to use Url request to access assets on Android
   auto cb = [&, sourcesFile](UrlResponse&& response) {
     if(response.error)
@@ -111,6 +129,7 @@ MapsSources::MapsSources(MapsApp* _app, const std::string& sourcesFile) : MapsCo
   std::size_t sep = sourcesFile.find_last_of("/\\");
   if(sep != std::string::npos)
     baseUrl = sourcesFile.substr(0, sep+1);  //"file://" +
+  */
 }
 
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
@@ -120,7 +139,7 @@ void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
   //for(auto& k : layerkeys) -- TODO: if modified layer is in use, reload
 }
 
-void MapsSources::showGUI()
+/*void MapsSources::showGUI()
 {
   static constexpr int MAX_SOURCES = 8;
   static int currIdx = 0;
@@ -242,15 +261,9 @@ void MapsSources::showGUI()
   } catch (std::exception& e) {
     ImGui::TextWrapped("Error parsing mapsources.yaml: %s", e.what());
   }
-}
+}*/
 
 // New GUI
-
-#include "ugui/svggui.h"
-#include "ugui/widgets.h"
-#include "ugui/textedit.h"
-
-#include "offlinemaps.h"
 
 constexpr int MAX_SOURCES = 8;
 //std::vector<int> currSrcIdx(MAX_SOURCES, 0);
@@ -324,6 +337,52 @@ void MapsSources::createSource(std::string savekey, const std::string& newSrcTit
 
   sourceKeys.push_back(savekey);
   sourceCombo->addItems({newSrcTitle});
+}
+
+#include "data/mbtilesDataSource.h"
+
+void MapsSources::deleteOfflineMap(int mapid)
+{
+  int64_t offlineSize = 0;
+  for(const auto& src : mapSources) {
+    std::string cachename = src["cache"] ? src["cache"].Scalar() : src.first.Scalar();
+    std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";  //options.diskCacheDir
+    if(cachename == "false" || !FSPath(cachefile).exists())  // don't create file if it doesn't exist
+      continue;
+    auto s = std::make_unique<Tangram::MBTilesDataSource>(*app->platform, src.first.Scalar(), cachefile, "", true);
+    offlineSize -= s->getOfflineSize();
+    s->deleteOfflineMap(mapid);
+    offlineSize += s->getOfflineSize();
+  }
+  app->platform->notifyStorage(0, offlineSize);  // this can trigger cache shrink, so wait until all sources processed
+}
+
+// don't run this during offline map download!
+int64_t MapsSources::shrinkCache(int64_t maxbytes)
+{
+  std::vector< std::unique_ptr<Tangram::MBTilesDataSource> > dbsources;
+  std::vector< std::pair<int, int> > tiles;
+  auto insertTile = [&](int timestamp, int size){ tiles.emplace_back(timestamp, size); };
+
+  for(const auto& src : mapSources) {
+    std::string cachename = src["cache"] ? src["cache"].Scalar() : src.first.Scalar();
+    std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";  //options.diskCacheDir
+    if(cachename == "false" || !FSPath(cachefile).exists())
+      continue;
+    dbsources.push_back(std::make_unique<Tangram::MBTilesDataSource>(*app->platform, src.first.Scalar(), cachefile, "", true));
+    dbsources.back()->getTileSizes(insertTile);
+  }
+
+  std::sort(tiles.rbegin(), tiles.rend());  // sort by timestamp, descending (newest to oldest)
+  int64_t tot = 0;
+  for(auto& x : tiles) {
+    tot += x.second;
+    if(tot > maxbytes) {
+      for(auto& src : dbsources)
+        src->deleteOldTiles(x.first);
+    }
+  }
+  return tot;
 }
 
 void MapsSources::populateSources()

@@ -30,6 +30,8 @@ Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
 std::string MapsApp::apiKey;
 LngLat MapsApp::mapCenter;
+YAML::Node MapsApp::config;
+std::string MapsApp::configFile;
 
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
@@ -186,7 +188,7 @@ void MapsApp::tapEvent(float x, float y)
 
   map->pickMarkerAt(x, y, [&](const Tangram::MarkerPickResult* result) {
     if(!result || result->id == pickResultMarker)
-    return;
+      return;
     // hide pick result marker, since there is already a marker!
     map->markerSetVisible(pickResultMarker, false);
     // looking for search marker or bookmark marker?
@@ -243,7 +245,7 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
     updates.push_back(update);
   // sceneFile will be used iff sceneYaml is empty
   Tangram::SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
-  options.diskTileCacheSize = 256*1024*1024;
+  options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
 #ifdef DEBUG
   options.debugStyles = true;
@@ -293,14 +295,57 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   //  textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
   //});
 
+  // cache management
+  storageTotal = config["storage"]["total"].as<int64_t>();
+  storageOffline = config["storage"]["offline"].as<int64_t>();
+  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>() * 1000000;
+  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>() * 1000000;
+  // easier to track total storage and offline map storage instead cached storage directly, since offline
+  //   map download/deletion can convert some tiles between cached and offline
+  platform->onNotifyStorage = [=](int64_t dtotal, int64_t doffline){
+    storageTotal += dtotal;
+    storageOffline += doffline;
+    // write out changes to offline storage total immediately since errors here can persist; errors w/ total
+    //  storage will be fixed by shrinkCache
+    if(doffline)
+      saveConfig();
+    if(storageTotal - storageOffline > storageShrinkMax && !mapsOffline->numOfflinePending()) {
+      int64_t tot = mapsSources->shrinkCache(storageShrinkMin);
+      storageTotal = tot + storageOffline;  // update storage usage
+    }
+  };
+
   map->setPixelScale(pixel_scale);
-  // default position: Alamo Square, SF - overriden by scene camera position if async load
   map->setPickRadius(1.0f);
-  map->setZoom(15);
-  map->setPosition(-122.434668, 37.776444);
+
+  // default position: Alamo Square, SF - overriden by scene camera position if async load
+  CameraPosition pos;
+  pos.longitude = config["view"]["lng"].as<double>(-122.434668);
+  pos.latitude = config["view"]["lat"].as<double>(37.776444);
+  pos.zoom = config["view"]["zoom"].as<float>(15);
+  pos.rotation = config["view"]["rotation"].as<float>(0);
+  pos.tilt = config["view"]["tilt"].as<float>(0);
+  map->setCameraPosition(pos);
 }
 
 MapsApp::~MapsApp() { delete map; }
+
+void MapsApp::saveConfig()
+{
+  config["storage"]["offline"] = storageOffline;
+  config["storage"]["total"] = storageTotal;
+
+  CameraPosition pos = map->getCameraPosition();
+  config["view"]["lng"] = pos.longitude;
+  config["view"]["lat"] = pos.latitude;
+  config["view"]["zoom"] = pos.zoom;
+  config["view"]["rotation"] = pos.rotation;
+  config["view"]["tilt"] = pos.tilt;
+
+  std::string s = YAML::Dump(config);
+  FileStream fs(configFile.c_str(), "wb");
+  fs.write(s.data(), s.size());
+}
 
 void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display_h, double current_time, bool focused)
 {
@@ -905,6 +950,10 @@ int main(int argc, char* argv[])
     if(strcmp(argv[argi], "-f") == 0 && ++argi < argc)
       sceneFile = argv[argi];
   }
+
+  // config
+  MapsApp::configFile = FSPath(SDL_GetBasePath(), "config.yaml").c_str();
+  MapsApp::config = YAML::LoadFile(MapsApp::configFile.c_str());
 
   Url baseUrl("file:///");
   char pathBuffer[PATH_MAX] = {0};

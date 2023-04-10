@@ -10,10 +10,12 @@ class Button;
 class MapsSources : public MapsComponent
 {
 public:
-  MapsSources(MapsApp* _app, const std::string& sourcesFile);
-  void showGUI();
+  MapsSources(MapsApp* _app);
+  //void showGUI();
 
   void addSource(const std::string& key, YAML::Node srcnode);
+  void deleteOfflineMap(int mapid);
+  int64_t shrinkCache(int64_t maxbytes);
 
   Widget* sourcesPanel;
 

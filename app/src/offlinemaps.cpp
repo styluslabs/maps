@@ -50,6 +50,7 @@ private:
 
     int offlineId;
     int srcMaxZoom;
+    int64_t offlineSize;
     std::deque<TileID> m_queued;
     std::vector<TileID> m_pending;
     std::mutex m_mutexQueue;
@@ -104,6 +105,7 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
   name = src.name + "-" + std::to_string(ofl.id);
   offlineId = ofl.id;
   searchData = MapsSearch::parseSearchFields(src.searchData);
+  offlineSize = mbtiles->getOfflineSize();
 
   srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
   // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
@@ -122,6 +124,11 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
         m_queued.emplace_back(x, y, 3);
     }
   }
+}
+
+OfflineDownloader::~OfflineDownloader()
+{
+  MapsApp::platform->notifyStorage(0, mbtiles->getOfflineSize() - offlineSize);
 }
 
 bool OfflineDownloader::fetchNextTile()
@@ -225,6 +232,11 @@ MapsOffline::~MapsOffline()
   }
 }
 
+int MapsOffline::numOfflinePending() const
+{
+  return offlinePending.size();
+}
+
 // New GUI
 
 #include "ugui/svggui.h"
@@ -297,7 +309,16 @@ Widget* MapsOffline::createPanel()
 
     Button* deleteBtn = new Button(item->containerNode()->selectFirst(".delete-btn"));
     deleteBtn->onClicked = [=](){
+/*
+      - deletion: select tile_id from offline_tiles where offline_id = ? and select count(1) from offline_tiles group by tile_id;
+      ... just delete offline_tiles entries, then shrink DB (how will this work?)
 
+- limiting cache size: background task to get last access time and size of each tile in each mbtiles cache, sort, and delete tiles
+ - sort list by access time, iterate through list summing tile sizes until limit reached, then instruct each MBTiles instance to delete tiles older than cutoff time
+ - can we do something continuously? every time tile loaded, add size to counter; if counter is over limit (w/ some hysterisis)
+  - I think we want to do this anyway: m_platform.notifyStorage(size)
+
+*/
     };
 
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
