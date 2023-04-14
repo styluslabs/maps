@@ -296,10 +296,10 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   //});
 
   // cache management
-  storageTotal = config["storage"]["total"].as<int64_t>();
-  storageOffline = config["storage"]["offline"].as<int64_t>();
-  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>() * 1000000;
-  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>() * 1000000;
+  storageTotal = config["storage"]["total"].as<int64_t>(0);
+  storageOffline = config["storage"]["offline"].as<int64_t>(0);
+  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>(500) * 1000000;
+  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>(250) * 1000000;
   // easier to track total storage and offline map storage instead cached storage directly, since offline
   //   map download/deletion can convert some tiles between cached and offline
   platform->onNotifyStorage = [=](int64_t dtotal, int64_t doffline){
@@ -317,6 +317,8 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
 
   map->setPixelScale(pixel_scale);
   map->setPickRadius(1.0f);
+
+  metricUnits = config["metric_units"].as<bool>(true);
 
   // default position: Alamo Square, SF - overriden by scene camera position if async load
   CameraPosition pos;
@@ -403,6 +405,8 @@ void MapsApp::updateLocation(const Location& _loc)
   }
   //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, loc.lngLat());
+
+  mapsTracks->updateLocation(_loc);
 }
 
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)

@@ -17,6 +17,22 @@ using Tangram::TileTaskCb;
 
 class MapsApp;
 
+struct Location
+{
+  double time;
+  double lat;
+  double lng;
+  float poserr;
+  double alt;
+  float alterr;
+  float dir;
+  float direrr;
+  float spd;
+  float spderr;
+
+  LngLat lngLat() const { return LngLat(lng, lat); }
+};
+
 class MapsComponent
 {
 public:

@@ -483,7 +483,7 @@ Widget* MapsSources::createPanel()
   toolbar->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Map Source"));
   toolbar->addWidget(createStretch());
   toolbar->addWidget(offlineBtn);
-  auto sourcesHeader = app->createPanelHeader(NULL, toolbar);
+  auto sourcesHeader = app->createPanelHeader(toolbar);
   sourcesPanel = app->createMapPanel(layersContent, sourcesHeader, sourcesContent);
 
   // main toolbar button

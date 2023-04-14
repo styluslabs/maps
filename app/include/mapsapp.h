@@ -22,22 +22,6 @@ class MapsWidget;
 class SvgNode;
 struct sqlite3;
 
-struct Location
-{
-  double time;
-  double lat;
-  double lng;
-  float poserr;
-  double alt;
-  float alterr;
-  float dir;
-  float direrr;
-  float spd;
-  float spderr;
-
-  LngLat lngLat() const { return LngLat(lng, lat); }
-};
-
 namespace YAML { class Node; }
 //namespace rapidjson { class Document; }
 //#include "rapidjson/fwd.h"  // don't worry, we'll be getting rid of rapidjson soon
@@ -92,6 +76,8 @@ public:
 
   float density = 1.0;
   float pixel_scale = 2.0;
+
+  bool metricUnits = true;
 
   std::unique_ptr<TouchHandler> touchHandler;
   std::unique_ptr<MapsTracks> mapsTracks;
