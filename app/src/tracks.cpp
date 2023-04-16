@@ -546,6 +546,7 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
 // NEXT: maybe work on bookmarks to help inform data model
 // - very unhappy w/ data model; some options:
 //  - only save rowid and load GPX on demand? we can keep track in activeTrack until replaced
+//  - if we are going to persist TrackLocs, we should persist through updating track list
 // - add track to DB when done recording
 // - option to always record track (i.e. save location history) (while app is in foreground)?
 

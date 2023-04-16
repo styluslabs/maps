@@ -333,7 +333,7 @@ JNI_FN(init)(JNIEnv* env, jobject obj, jobject mapsActivity, jobject assetManage
   auto p = std::make_unique<AndroidPlatform>(env, mapsActivity, assetManager);
   app = new MapsApp(std::move(p));
   app->sceneFile = "asset:///scene.yaml";
-  app->loadSceneFile(false);
+  app->loadSceneFile();
 
   mapsActivityRef = env->NewWeakGlobalRef(mapsActivity);
   //ImGui::GetIO().ImeSetInputScreenPosFn = [](int x, int y){

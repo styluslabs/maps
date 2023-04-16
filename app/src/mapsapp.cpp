@@ -1,7 +1,7 @@
 #include "mapsapp.h"
 #include "tangram.h"
 #include "scene/scene.h"
-#include "style/style.h"  // for making uniforms avail as GUI variables
+//#include "style/style.h"  // for making uniforms avail as GUI variables
 #include "resources.h"
 #include "util.h"
 #include "imgui.h"
@@ -239,7 +239,7 @@ void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, b
   }
 }
 
-void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
+void MapsApp::loadSceneFile(std::vector<SceneUpdate> updates, bool setPosition)
 {
   for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
     updates.push_back(update);
@@ -255,9 +255,6 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
   map->loadScene(std::move(options), load_async);
 
   // markers are invalidated ... not sure if we should use SceneReadyCallback for this since map->scene is replaced immediately
-  mapsTracks = std::make_unique<MapsTracks>(this);
-  mapsSearch = std::make_unique<MapsSearch>(this);
-  mapsBookmarks = std::make_unique<MapsBookmarks>(this);
   pickResultMarker = 0;
   locMarker = 0;
 }
@@ -265,7 +262,7 @@ void MapsApp::loadSceneFile(bool setPosition, std::vector<SceneUpdate> updates)
 MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(this))
 {
   MapsApp::platform = p.get();
-  sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
+  //sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
 
   // Setup style
   if(show_gui) {
@@ -289,6 +286,10 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
 #endif
   mapsOffline = std::make_unique<MapsOffline>(this);
   pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
+  // no longer recreated when scene loaded
+  mapsTracks = std::make_unique<MapsTracks>(this);
+  mapsSearch = std::make_unique<MapsSearch>(this);
+  mapsBookmarks = std::make_unique<MapsBookmarks>(this);
 
   //map->setSceneReadyListener([this](SceneID id, const SceneError*) {
   //  std::string svg = fstring(markerSVG, "#CF513D");  // note that SVG parsing is destructive
@@ -560,7 +561,7 @@ void MapsApp::showDebugFlagsGUI()
     }
 }
 
-void MapsApp::showSceneVarsGUI()
+/*void MapsApp::showSceneVarsGUI()
 {
   if (ImGui::CollapsingHeader("Scene Variables", ImGuiTreeNodeFlags_DefaultOpen)) {
     YAML::Node vars = readSceneValue("global.gui_variables");
@@ -606,7 +607,7 @@ void MapsApp::showSceneVarsGUI()
       }
     }
   }
-}
+}*/
 
 void MapsApp::showPickLabelGUI()
 {
@@ -1029,7 +1030,7 @@ int main(int argc, char* argv[])
 
   app->sceneFile = sceneUrl.string();
   app->map->setupGL();
-  app->loadSceneFile(false);
+  app->loadSceneFile();
 
   // DB setup
   std::string dbPath = MapsApp::baseDir + "places.sqlite";

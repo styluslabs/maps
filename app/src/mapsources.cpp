@@ -1,8 +1,10 @@
 #include "mapsources.h"
 #include "mapsapp.h"
 #include "util.h"
-#include "imgui.h"
-#include "imgui_stl.h"
+//#include "imgui.h"
+//#include "imgui_stl.h"
+#include "scene/scene.h"
+#include "style/style.h"  // for making uniforms avail as GUI variables
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -102,8 +104,9 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
       baseUrl = "file://" + srcpath.parentPath();
     if(!readFile(&srcyaml, srcpath.c_str()))
       LOGW("Unable to open map sources file %s", srcpath.c_str());
-    mapSources = YAML::Load(srcyaml.c_str());
+    srcyaml += "\n";  // to handle source files w/o trailing newline
   }
+  mapSources = YAML::Load(srcyaml.c_str());
 
   /*
   // have to use Url request to access assets on Android
@@ -284,7 +287,8 @@ void MapsSources::rebuildSource(bool fromLayers)
   if(!builder.imports.empty() || !builder.updates.empty()) {
     app->sceneYaml = builder.getSceneYaml(baseUrl);
     app->sceneFile = baseUrl + "__GUI_SOURCES__";
-    app->loadSceneFile(false, builder.updates);
+    app->sceneUpdates.clear();
+    app->loadSceneFile(builder.updates);
   }
 
   bool multi = builder.layerkeys.size() > 1;
@@ -332,11 +336,16 @@ void MapsSources::createSource(std::string savekey, const std::string& newSrcTit
     if(idx > 0)
       fs << "  - source: " << layerKeys[idx] << "\n";
   }
+  // scene updates
+  if(!app->sceneUpdates.empty())
+    fs << "updates:\n";
+  for(const SceneUpdate& upd : app->sceneUpdates)
+    fs << "  " << upd.path << ": " << upd.value << "\n";
   mapSources[savekey] = YAML::Load(fs.str());
   // we'd set a flag here to save mapsources.yaml on exit
 
   sourceKeys.push_back(savekey);
-  sourceCombo->addItems({newSrcTitle});
+  populateSources();  //sourceCombo->addItems({newSrcTitle}); ... doesn't work because of different sorting options
 }
 
 #include "data/mbtilesDataSource.h"
@@ -404,6 +413,68 @@ void MapsSources::populateSources()
     combo->addItems(layerTitles);
 }
 
+void MapsSources::onSceneLoaded()
+{
+  populateSceneVars();
+
+  // how to get var values when saving new source? save a SceneUpdate for each var change?
+}
+
+void MapsSources::populateSceneVars()
+{
+  app->gui->deleteContents(varsContent);
+
+  YAML::Node vars = app->readSceneValue("global.gui_variables");
+  for(const auto& var : vars) {
+    std::string name = var["name"].as<std::string>("");
+    std::string label = var["label"].as<std::string>("");
+    std::string reload = var["reload"].as<std::string>("");
+    std::string stylename = var["style"].as<std::string>("");
+    if(!stylename.empty()) {
+      // shader uniform
+      auto& styles = app->map->getScene()->styles();
+      for(auto& style : styles) {
+        if(style->getName() == stylename) {
+          for(auto& uniform : style->styleUniforms()) {
+            if(uniform.first.name == name) {
+              if(uniform.second.is<float>()) {
+                auto spinBox = createTextSpinBox(uniform.second.get<float>());
+                spinBox->onValueChanged = [=, &uniform](real val){
+                  app->sceneUpdates.push_back(SceneUpdate{"styles." + stylename + ".shaders.uniforms." + name, std::to_string(val)});
+                  uniform.second.set<float>(val);
+                };
+                varsContent->addWidget(createTitledRow(label.c_str(), spinBox));
+              }
+              else
+                LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), name.c_str());
+              return;
+            }
+          }
+          break;
+        }
+      }
+      LOGE("Cannot find style uniform %s.%s referenced in gui_variables!", stylename.c_str(), name.c_str());
+    }
+    else {
+      // global variable, accessed in scene file by JS functions
+      std::string value = app->readSceneValue("global." + name).as<std::string>("");
+      auto checkbox = createCheckBox("", value == "true");
+      checkbox->onToggled = [=](bool newval){
+
+        app->sceneUpdates.push_back(SceneUpdate{"global." + name, newval ? "true" : "false"});
+
+
+
+        if(reload == "false")  // ... so default to reloading
+          app->map->updateGlobals({app->sceneUpdates.back()});  //SceneUpdate{"global." + name, newval ? "true" : "false"}});
+        else
+          app->loadSceneFile();  //{SceneUpdate{"global." + name, newval ? "true" : "false"}});
+      };
+      varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
+    }
+  }
+}
+
 Widget* MapsSources::createPanel()
 {
   Toolbar* sourceTb = createToolbar();
@@ -467,6 +538,8 @@ Widget* MapsSources::createPanel()
   Widget* sourcesContent = createTitledRow("Source", sourceRow);
 
   Widget* layersContent = createColumn();
+  varsContent = createColumn();
+  layersContent->addWidget(varsContent);
   for(int ii = 0; ii < MAX_SOURCES; ++ii) {
     layerCombos.push_back(createComboBox({}));
     layerCombos.back()->onChanged = [this](const char*){

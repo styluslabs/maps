@@ -311,8 +311,21 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
 {
   if(!bkmkPanel) {
     bkmkContent = createColumn(); //createListContainer();
-    auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
-    auto bkmkHeader = app->createPanelHeader(headerTitle);
+    auto toolbar = createToolbar();
+    Button* mapAreaBkmksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Bookmarks in map area only");
+    mapAreaBkmksBtn->onClicked = [this](){
+      mapAreaBkmks = !mapAreaBkmks;
+      if(mapAreaBkmks)
+        onMapChange();
+      else {
+        for(Widget* item : bkmkContent->select(".listitem"))
+          item->setVisible(true);
+      }
+    };
+    toolbar->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), ""));
+    toolbar->addWidget(createStretch());
+    toolbar->addWidget(mapAreaBkmksBtn);
+    auto bkmkHeader = app->createPanelHeader(toolbar);
     bkmkPanel = app->createMapPanel(bkmkContent, bkmkHeader);
   }
   app->showPanel(bkmkPanel);
@@ -362,6 +375,8 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
     SvgText* notenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".note-text"));
     notenode->addText(notestr);
 
+    item->setUserData(LngLat(lng, lat));
+
     bkmkContent->addWidget(item);
 
   }, [&](sqlite3_stmt* stmt){
@@ -370,6 +385,19 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
   // hide unused markers
   for(; markerIdx < bkmkMarkers.size(); ++markerIdx)
     map->markerSetVisible(bkmkMarkers[markerIdx], false);
+  // if requested, hide list entries for bookmarks not visible
+  if(mapAreaBkmks)
+    onMapChange();
+}
+
+void MapsBookmarks::onMapChange()
+{
+  if(mapAreaBkmks) {
+    for(Widget* item : bkmkContent->select(".listitem")) {
+      LngLat pos = item->userData<LngLat>();
+      item->setVisible(app->map->lngLatToScreenPosition(pos.longitude, pos.latitude));
+    }
+  }
 }
 
 Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos)

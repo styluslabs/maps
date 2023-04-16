@@ -46,7 +46,7 @@ public:
   void longPressEvent(float x, float y);
   void hoverEvent(float x, float y);
 
-  void loadSceneFile(bool setPosition = false, std::vector<SceneUpdate> updates = {});
+  void loadSceneFile(std::vector<SceneUpdate> updates = {}, bool setPosition = false);
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);

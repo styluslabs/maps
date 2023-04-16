@@ -25,6 +25,7 @@ private:
   void rebuildSource(bool fromLayers = true);
   void createSource(std::string savekey, const std::string& newSrcTitle);
   void populateSources();
+  void populateSceneVars();
 
   std::mutex sourcesMutex;
   std::string baseUrl;
@@ -38,6 +39,7 @@ private:
   ComboBox* sourceCombo = NULL;
   Button* discardBtn = NULL;
   Button* saveBtn = NULL;
+  Widget* varsContent = NULL;
 
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;
