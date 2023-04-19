@@ -14,6 +14,7 @@ public:
   //void showGUI();
 
   void addSource(const std::string& key, YAML::Node srcnode);
+  void rebuildSource(const std::string& srcname = "");
   void deleteOfflineMap(int mapid);
   int64_t shrinkCache(int64_t maxbytes);
 
@@ -22,7 +23,6 @@ public:
   Widget* createPanel();
 
 private:
-  void rebuildSource(bool fromLayers = true);
   void createSource(std::string savekey, const std::string& newSrcTitle);
   void populateSources();
   void populateSceneVars();

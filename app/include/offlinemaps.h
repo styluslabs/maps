@@ -10,7 +10,7 @@ class MapsOffline : public MapsComponent
 public:
   using MapsComponent::MapsComponent;
   ~MapsOffline();
-  void showGUI();
+  //void showGUI();
   int numOfflinePending() const;
   void saveOfflineMap(int maxZoom);
 

@@ -554,13 +554,6 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
 // - aside: would it be easier to draw track by moving map and taping button to drop waypoint at map center?
 // - we also want option to trace track by dragging finger
 
-// how to handle scene reload? options:
-// - modify tangram to preserve markers when scene reloaded
-// - add wrapper fn to MapsApp to automatically handle restoring markers
-// - use a ClientDataSource instead of Markers, which can be easily added back to new scene
-// ... we can modify ClientDataSource to support removal of individual features
-// I think any of these options would be better than manually restoring markers in every MapComponent
-
 Widget* MapsTracks::createPanel()
 {
   static const char* trackListProtoSVG = R"(
@@ -716,23 +709,15 @@ Widget* MapsTracks::createPanel()
   loadTrackPanel->setVisible(false);
   tracksContent->addWidget(loadTrackPanel);
 
-  auto tracksTb = createToolbar();
-  tracksTb->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks"));
-  tracksTb->addWidget(createStretch());
+  auto tracksTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
   tracksTb->addWidget(drawTrackBtn);
   tracksTb->addWidget(loadTrackBtn);
   tracksTb->addWidget(recordTrackBtn);
-  auto tracksHeader = app->createPanelHeader(tracksTb);
-  tracksPanel = app->createMapPanel(tracksContent, tracksHeader);
+  tracksPanel = app->createMapPanel(tracksTb, tracksContent);
 
-  auto statsTb = createToolbar();
-
-  statsTb->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), ""));
-  statsTb->addWidget(createStretch());
+  auto statsTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
   statsTb->addWidget(editTrackBtn);
-  auto statsHeader = app->createPanelHeader(statsTb);
-  statsPanel = app->createMapPanel(statsContent, statsHeader);
-
+  statsPanel = app->createMapPanel(statsTb, statsContent);
 
   // main toolbar button ... quick menu - recent tracks?
   /*Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);

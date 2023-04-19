@@ -18,8 +18,8 @@ struct SearchResult
   int64_t id;
   LngLat pos;
   float rank;
-  MarkerID markerId;
-  bool isPinMarker;
+  //MarkerID markerId;
+  //bool isPinMarker;
   rapidjson::Document tags;  // will eventually be a DuktapeValue? standard osm tag names for now
 };
 
@@ -30,19 +30,20 @@ class MapsSearch : public MapsComponent
 {
 public:
   using MapsComponent::MapsComponent;
-  void showGUI();
+  //void showGUI();
   void clearSearch();
   bool indexMBTiles();
 
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
   static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
 
-  SearchResult& addListResult(int64_t id, double lng, double lat, float rank);
-  SearchResult& addMapResult(int64_t id, double lng, double lat, float rank);
+  void addListResult(int64_t id, double lng, double lat, float rank, const char* json);
+  void addMapResult(int64_t id, double lng, double lat, float rank, const char* json);
 
   std::mutex resultsMutex;
-  std::vector<MarkerID> pinMarkers;
-  std::vector<MarkerID> dotMarkers;
+  //std::vector<MarkerID> pinMarkers;
+  //std::vector<MarkerID> dotMarkers;
+  std::unique_ptr<MarkerGroup> markers;
 
   int providerIdx = 0;
   // search flags
@@ -77,11 +78,11 @@ private:
   void onlineMapSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
   void onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch);
 
-  void onZoom();
-  void clearSearchResults(std::vector<SearchResult>& results);
-  MarkerID getPinMarker(const SearchResult& res, int idx);
-  MarkerID getDotMarker(const SearchResult& res);
-  void createMarkers();
+  //void onZoom();
+  //void clearSearchResults(std::vector<SearchResult>& results);
+  //MarkerID getPinMarker(const SearchResult& res, int idx);
+  //MarkerID getDotMarker(const SearchResult& res);
+  //void createMarkers();
 
   // GUI
   void populateAutocomplete(const std::vector<std::string>& history);
@@ -89,9 +90,6 @@ private:
 
   Widget* searchPanel = NULL;
   Widget* resultsContent = NULL;
-  ///
-  ///Widget* autoCompList;
-  ///Widget* autoCompContainer;
   Button* cancelBtn;
   TextEdit* queryText;
   std::unique_ptr<SvgNode> searchResultProto;

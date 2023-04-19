@@ -4,8 +4,8 @@
 #include "mapsources.h"
 #include "bookmarks.h"
 #include "util.h"
-#include "imgui.h"
-#include "imgui_stl.h"
+//#include "imgui.h"
+//#include "imgui_stl.h"
 
 //using namespace Tangram;
 
@@ -142,14 +142,12 @@ static int addSearchResult(duk_context* ctx)
   double lng = duk_to_number(ctx, 2);
   double score = duk_to_number(ctx, 3);
   int flags = duk_to_number(ctx, 4);
+  const char* json = duk_json_encode(ctx, 5);    // duktape obj -> string -> rapidjson obj ... not ideal
 
   std::lock_guard<std::mutex> lock(PluginManager::inst->app->mapsSearch->resultsMutex);
   auto& ms = PluginManager::inst->app->mapsSearch;
-  auto& res = flags & MapsSearch::MAP_SEARCH ? ms->addMapResult(osm_id, lng, lat, score)
-                                             : ms->addListResult(osm_id, lng, lat, score);
-  // duktape obj -> string -> rapidjson obj ... not ideal
-  res.tags.Parse(duk_json_encode(ctx, 5));
-
+  flags & MapsSearch::MAP_SEARCH ? ms->addMapResult(osm_id, lng, lat, score, json)
+      : ms->addListResult(osm_id, lng, lat, score, json);
   return 0;
 }
 
@@ -194,7 +192,9 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addBookmark");
 }
 
-void PluginManager::showGUI()
+// commands should go in toolbar or menu of appropriate panel; e.g. bookmarks panel for import places plugin
+// - so we need more detailed type than just "command"
+/*void PluginManager::showGUI()
 {
   if(!ImGui::CollapsingHeader("Plugin Commands", ImGuiTreeNodeFlags_DefaultOpen))
     return;
@@ -207,4 +207,4 @@ void PluginManager::showGUI()
       duk_pop(ctx);
     }
   }
-}
+}*/

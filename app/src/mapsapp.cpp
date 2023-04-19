@@ -4,8 +4,8 @@
 //#include "style/style.h"  // for making uniforms avail as GUI variables
 #include "resources.h"
 #include "util.h"
-#include "imgui.h"
-#include "imgui_stl.h"
+//#include "imgui.h"
+//#include "imgui_stl.h"
 #include "glm/common.hpp"
 //#include "rapidxml/rapidxml.hpp"
 #include "pugixml.hpp"
@@ -29,7 +29,7 @@ static const char* apiKeyScenePath = "+global.sdk_api_key";
 Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
 std::string MapsApp::apiKey;
-LngLat MapsApp::mapCenter;
+CameraPosition MapsApp::mapCenter;
 YAML::Node MapsApp::config;
 std::string MapsApp::configFile;
 
@@ -87,7 +87,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     coordnode->addText(fstring("%.6f, %.6f", pos.latitude, pos.longitude).c_str());
 
   SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-  double distkm = lngLatDist(mapCenter, pos);
+  double distkm = lngLatDist(mapCenter.lngLat(), pos);
   if(distnode)
     distnode->addText(fstring("%.1f km", distkm).c_str());
 
@@ -239,19 +239,20 @@ void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, b
   }
 }
 
-void MapsApp::loadSceneFile(std::vector<SceneUpdate> updates, bool setPosition)
+void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> updates,
 {
-  for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
-    updates.push_back(update);
+  //for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
+  //  updates.push_back(update);
   // sceneFile will be used iff sceneYaml is empty
-  Tangram::SceneOptions options{sceneYaml, Url(sceneFile), setPosition, updates};
+  Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition);  //, updates};
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
 #ifdef DEBUG
   options.debugStyles = true;
 #endif
-  if(single_tile_worker)
-    options.numTileWorkers = 1;  // much easier to debug (alterative is gdb scheduler-locking option)
+  // single worker much easier to debug (alterative is gdb scheduler-locking option)
+  if(config["num_tile_workers"].IsScalar())
+    options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
   map->loadScene(std::move(options), load_async);
 
   // markers are invalidated ... not sure if we should use SceneReadyCallback for this since map->scene is replaced immediately
@@ -265,13 +266,13 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   //sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
 
   // Setup style
-  if(show_gui) {
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::StyleColorsDark();
-    io.FontGlobalScale = 2.0f;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
-  }
+  //if(show_gui) {
+  //  ImGuiIO& io = ImGui::GetIO();
+  //  ImGui::StyleColorsDark();
+  //  io.FontGlobalScale = 2.0f;
+  //  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  //  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
+  //}
 
   // make sure cache folder exists
   mkdir((baseDir + "cache").c_str(), 0777);
@@ -355,12 +356,10 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
   //static bool glReady = false; if(!glReady) { map->setupGL(); glReady = true; }
   static double lastFrameTime = 0;
 
-  //ImGuiIO& io = ImGui::GetIO();
-  //LOGW("Rendering frame at %f w/ btn 0 %s at %f,%f", time, io.MouseDown[0] ? "down" : "up", io.MousePos.x, io.MousePos.y);
-  if(show_gui) {
-    ImGui::NewFrame();
-    showImGUI();  // ImGui::ShowDemoWindow();
-  }
+  //if(show_gui) {
+  //  ImGui::NewFrame();
+  //  showImGUI();  // ImGui::ShowDemoWindow();
+  //}
 
   //platform->notifyRender();
   Tangram::MapState state = map->update(time - lastFrameTime);
@@ -368,6 +367,10 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
   if (state.isAnimating()) {
     platform->requestRender();
   }
+
+  // update map center
+  mapCenter = map->getCameraPosition();
+  reorientBtn->setVisible(mapCenter.tilt != 0 || mapCenter.rotation != 0);
 
   mapsTracks->onMapChange();
   mapsBookmarks->onMapChange();
@@ -378,18 +381,15 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
 
   map->render();
 
-  // update map center
-  map->getPosition(mapCenter.longitude, mapCenter.latitude);
-
-  if(show_gui)
-    ImGui::Render();
+  //if(show_gui)
+  //  ImGui::Render();
 }
 
 void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
 {
   float new_density = (float)fWidth / (float)wWidth;
   if (new_density != density) {
-    recreate_context = true;
+    //recreate_context = true;
     density = new_density;
   }
   map->setPixelScale(pixel_scale*density);
@@ -398,14 +398,14 @@ void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
 
 void MapsApp::updateLocation(const Location& _loc)
 {
-  loc = _loc;
+  currLocation = _loc;
   if(!locMarker) {
     locMarker = map->markerAdd();
     map->markerSetStylingFromString(locMarker, locMarkerStyleStr);
     map->markerSetDrawOrder(locMarker, INT_MAX);
   }
   //map->markerSetVisible(locMarker, true);
-  map->markerSetPoint(locMarker, loc.lngLat());
+  map->markerSetPoint(locMarker, currLocation.lngLat());
 
   mapsTracks->updateLocation(_loc);
 }
@@ -462,7 +462,7 @@ void MapsApp::dumpTileContents(float x, float y)
   }
 }
 
-void MapsApp::showSceneGUI()
+/*void MapsApp::showSceneGUI()
 {
     // always show map position ... what's the difference between getPosition/getZoom and getCameraPosition()?
     double lng, lat;
@@ -561,7 +561,7 @@ void MapsApp::showDebugFlagsGUI()
     }
 }
 
-/*void MapsApp::showSceneVarsGUI()
+void MapsApp::showSceneVarsGUI()
 {
   if (ImGui::CollapsingHeader("Scene Variables", ImGuiTreeNodeFlags_DefaultOpen)) {
     YAML::Node vars = readSceneValue("global.gui_variables");
@@ -607,7 +607,7 @@ void MapsApp::showDebugFlagsGUI()
       }
     }
   }
-}*/
+}
 
 void MapsApp::showPickLabelGUI()
 {
@@ -629,7 +629,7 @@ void MapsApp::showImGUI()
   mapsBookmarks->showGUI();
   pluginManager->showGUI();
   showPickLabelGUI();
-}
+}*/
 
 // New GUI
 
@@ -773,13 +773,16 @@ Window* MapsApp::createGUI()
   // search box, bookmarks btn, map sources btn, recenter map
 
   infoContent = createColumn(); //createListContainer();
-  auto infoTitle = createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");  // should be pin icon
-  auto infoHeader = createPanelHeader(infoTitle);
-  infoPanel = createMapPanel(infoContent, infoHeader);
+  auto infoHeader = createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");  // should be pin icon
+  infoPanel = createMapPanel(infoHeader, infoContent);
 
 #if PLATFORM_MOBILE
   panelSplitter = new Splitter(winnode->selectFirst("#panel-splitter"),
       winnode->selectFirst("#results-split-sizer"), Splitter::BOTTOM, 120);
+#else
+  // adjust map center to account for sidebar
+  Tangram::EdgePadding padding = {0,0,0,0};  //{200, 0, 0, 0};
+  map->setPadding(padding);
 #endif
   panelContainer = win->selectFirst("#panel-container");
   panelContent = win->selectFirst("#panel-content");
@@ -800,11 +803,37 @@ Window* MapsApp::createGUI()
   mainToolbar->addWidget(tracksBtn);
   mainToolbar->addWidget(sourcesBtn);
 
+  // main toolbar at bottom is better than top for auto-close menus (so menu isn't obstructed by finger)
   mainTbContainer = win->selectFirst("#main-tb-container");
   mainTbContainer->addWidget(mainToolbar);
 
   Widget* mapsPanel = win->selectFirst("#maps-container");
   mapsPanel->addWidget(mapsWidget);
+
+  // recenter, reorient btns
+  Toolbar* floatToolbar = createVertToolbar();
+  // we could switch to different orientation modes (travel direction, compass direction) w/ multiple taps
+  reorientBtn = createToolbutton(SvgGui::useFile(":/icons/arrow_up.svg"), "Reorient");
+  reorientBtn->onClicked = [this](){
+    CameraPosition camera = map->getCameraPosition();
+    camera.tilt = 0;
+    camera.rotation = 0;
+    map->setCameraPositionEased(camera, 1.0);
+  };
+  reorientBtn->setVisible(false);
+
+
+
+  Button* recenterBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_clock.svg"), "Recenter");
+  recenterBtn->onClicked = [this](){
+    map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
+  };
+  floatToolbar->addWidget(recenterBtn);
+  floatToolbar->addWidget(recenterBtn);
+  floatToolbar->node->setAttribute("box-anchor", "bottom right");
+  floatToolbar->setMargins(0, 10, 10, 0);
+  mapsPanel->addWidget(floatToolbar);
+
   return win;
 }
 
@@ -826,18 +855,13 @@ void MapsApp::showPanel(Widget* panel)
 }
 
 // this should be a static method or standalone fn!
-Widget* MapsApp::createHeaderTitle(const SvgNode* icon, const char* title)
+Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 {
-  return createToolbutton(icon, title, true);
-}
-
-Widget* MapsApp::createPanelHeader(Widget* titlewidget, bool canMinimize)
-{
-  auto toolbar = createToolbar();
+  Toolbar* toolbar = createToolbar();
   auto backBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"));
   backBtn->onClicked = [this](){
     if(panelHistory.empty())
-      LOGE("This should never happen!");
+      LOGE("back button clicked but panelHistory empty ... this should never happen!");
     else {
       panelContainer->containerNode()->removeChild(panelHistory.back()->node);
       panelHistory.pop_back();
@@ -852,13 +876,25 @@ Widget* MapsApp::createPanelHeader(Widget* titlewidget, bool canMinimize)
       }
     }
   };
-
   toolbar->addWidget(backBtn);
-  toolbar->addWidget(titlewidget);
-  toolbar->addWidget(createStretch());
-  //if(panelToolbar)
-  //  toolbar->addWidget(panelToolbar);
+  toolbar->addWidget(createToolbutton(icon, title, true));
 
+  Widget* stretch = createStretch();
+  stretch->addHandler([this](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
+      panelSplitter->sdlEvent(gui, event);
+      return true;
+    }
+    return false;
+  });
+
+  toolbar->addWidget(stretch);
+  return toolbar;
+}
+
+Widget* MapsApp::createMapPanel(Widget* header, Widget* content, Widget* fixedContent, bool canMinimize)
+{
+  // what about just swiping down to minimize instead of a button?
   if(canMinimize) {
     auto minimizeBtn = createToolbutton(SvgGui::useFile(":/icons/chevron_down.svg"));
     minimizeBtn->onClicked = [this](){
@@ -867,14 +903,9 @@ Widget* MapsApp::createPanelHeader(Widget* titlewidget, bool canMinimize)
       // 2. use setSplitSize() to shrink panel to toolbar height
       //minimizePanel();
     };
-    toolbar->addWidget(minimizeBtn);
+    header->addWidget(minimizeBtn);
   }
 
-  return toolbar;
-}
-
-Widget* MapsApp::createMapPanel(Widget* content, Widget* header, Widget* fixedContent)
-{
   auto panel = createColumn();
   panel->addWidget(header);
   if(fixedContent)
@@ -943,22 +974,29 @@ void PLATFORM_WakeEventLoop()
 
 int main(int argc, char* argv[])
 {
+  using Tangram::DebugFlags;
+
   bool runApplication = true;
 #if PLATFORM_WIN
   SetProcessDPIAware();
   winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
 #endif
 
-  // command line args
-  const char* sceneFile = "scenes/scene.yaml";
-  for(int argi = 1; argi < argc; ++argi) {
-    if(strcmp(argv[argi], "-f") == 0 && ++argi < argc)
-      sceneFile = argv[argi];
-  }
-
   // config
   MapsApp::configFile = FSPath(SDL_GetBasePath(), "config.yaml").c_str();
   MapsApp::config = YAML::LoadFile(MapsApp::configFile.c_str());
+
+  // command line args
+  const char* sceneFile = NULL;  //"scenes/scene.yaml";
+  for(int argi = 1; argi < argc-1; argi += 2) {
+    YAML::Node node;
+    if(strcmp(argv[argi], "-f") == 0)
+      sceneFile = argv[argi+1];
+    else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
+      node = argv[argi+1];
+    else
+      LOGE("Unknown command line argument: %s", argv[argi]);
+  }
 
   Url baseUrl("file:///");
   char pathBuffer[PATH_MAX] = {0};
@@ -966,7 +1004,7 @@ int main(int argc, char* argv[])
       baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
   }
   LOG("Base URL: %s", baseUrl.string().c_str());
-  Url sceneUrl = baseUrl.resolve(Url(sceneFile));
+  //Url sceneUrl = baseUrl.resolve(Url(sceneFile));
 
   if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
   /*glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -1028,9 +1066,27 @@ int main(int argc, char* argv[])
   MapsApp::baseDir = "/home/mwhite/maps/";
   MapsApp* app = new MapsApp(std::make_unique<Tangram::LinuxPlatform>());
 
-  app->sceneFile = sceneUrl.string();
+  // debug flags can be set in config file or from command line
+  auto debugNode = app->config["debug"];
+  if(debugNode.IsMap()) {
+    setDebugFlag(DebugFlags::freeze_tiles, debugNode["freeze_tiles"].as<bool>(false));
+    setDebugFlag(DebugFlags::proxy_colors, debugNode["proxy_colors"].as<bool>(false));
+    setDebugFlag(DebugFlags::tile_bounds, debugNode["tile_bounds"].as<bool>(false));
+    setDebugFlag(DebugFlags::tile_infos, debugNode["tile_infos"].as<bool>(false));
+    setDebugFlag(DebugFlags::labels, debugNode["labels"].as<bool>(false));
+    setDebugFlag(DebugFlags::tangram_infos, debugNode["tangram_infos"].as<bool>(false));
+    setDebugFlag(DebugFlags::draw_all_labels, debugNode["draw_all_labels"].as<bool>(false));
+    setDebugFlag(DebugFlags::tangram_stats, debugNode["tangram_stats"].as<bool>(false));
+    setDebugFlag(DebugFlags::selection_buffer, debugNode["selection_buffer"].as<bool>(false));
+  }
+
   app->map->setupGL();
-  app->loadSceneFile();
+  if(sceneFile) {
+    app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();  //"import:\n  - " +
+    app->loadSceneFile();
+  }
+  else
+    app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
 
   // DB setup
   std::string dbPath = MapsApp::baseDir + "places.sqlite";

@@ -98,3 +98,124 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
   //logMsg("Query time: %.6f s for %s\n", std::chrono::duration<float>(t1 - t0).count(), sql);
   return true;
 }
+
+// MarkerGroup
+// - we may alter this is preserve markers when reset or to use ClientDataSource (at least for alt markers)
+
+bool MarkerGroup::onPicked(MarkerID id)
+{
+  for(auto& res : places) {
+    if(res.markerId == id) {
+      res.callback();
+      return true;
+    }
+  }
+  return false;
+}
+
+MarkerID MarkerGroup::getMarker(PlaceInfo& res)
+{
+  MarkerID id = map->markerAdd();
+  map->markerSetStylingFromPath(id, res.isAltMarker ? altStyling.c_str() : styling.c_str());
+  map->markerSetVisible(id, visible);
+  map->markerSetPoint(id, res.pos);
+  map->markerSetProperties(id, Properties(res.props));
+  map->markerSetDrawOrder(res.markerId, res.props.getNumber("priority") + (res.isAltMarker ? 0x10000 : 0));
+  return id;
+}
+
+void MarkerGroup::setVisible(bool vis)
+{
+  visible = vis;
+  for(auto& res : places)
+    map->markerSetVisible(res.isAltMarker ? res.altMarkerId : res.markerId, vis);
+  onZoom();
+}
+
+
+// if isect2d is insufficient, try https://github.com/nushoin/RTree - single-header r-tree impl
+static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, double radius)
+{
+  double x, y;
+  map->lngLatToScreenPosition(pos.longitude, pos.latitude, &x, &y);
+  return isect2d::AABB<glm::vec2>(x - radius, y - radius, x + radius, y + radius);
+}
+
+MarkerGroup::MarkerGroup(Tangram::Map* _map, const std::string& _styling, const std::string _altStyling)
+    : map(_map), styling(_styling), altStyling(_altStyling)
+{
+  int w = map->getViewportWidth(), h = map->getViewportHeight();
+  collider.resize({16, 16}, {w, h});
+  prevZoom = map->getZoom();
+}
+
+
+int MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props)
+{
+  places.push_back({pos, props, cb, 0, 0, false});
+  PlaceInfo& res = places.back();
+  res.props.set("priority", places.size()-1);
+  double markerRadius = map->getZoom() >= 17 ? 25 : 50;
+  bool collided = false;
+  collider.intersect(markerAABB(map, res.pos, markerRadius),
+      [&](auto& a, auto& b) { collided = true; return false; });
+  res.isAltMarker = collided;
+  if(collided)
+    res.altMarkerId = getMarker(res);
+  else
+    res.markerId = getMarker(res);
+}
+
+void MarkerGroup::onZoom()
+{
+  float zoom = map->getZoom();
+  if(!visible || std::abs(zoom - prevZoom) < 0.5f) return;
+
+  double markerRadius = zoom >= 17 ? 25 : 50;
+  collider.clear();
+  int w = map->getViewportWidth(), h = map->getViewportHeight();
+  collider.resize({16, 16}, {w, h});
+  if(zoom < prevZoom) {
+    // if zoom decr by more than threshold, convert colliding pins to dots
+    for(auto& res : places) {
+      if(res.isAltMarker) continue;
+      bool collided = false;
+      collider.intersect(markerAABB(map, res.pos, markerRadius),
+          [&](auto& a, auto& b) { collided = true; return false; });
+      if(collided) {
+        // convert to dot marker
+        map->markerSetVisible(res.markerId, false);
+        res.isAltMarker = true;
+        if(res.altMarkerId <= 0)
+          res.altMarkerId = getMarker(res);
+        else
+          map->markerSetVisible(res.altMarkerId, true);
+      }
+    }
+  }
+  else {
+    // if zoom incr, convert dots to pins if no collision
+    for(auto& res : places) {
+      if(!res.isAltMarker)
+        collider.insert(markerAABB(map, res.pos, markerRadius));
+    }
+    for(auto& res : places) {
+      if(!res.isAltMarker) continue;
+      // don't touch offscreen markers
+      if(!map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)) continue;
+      bool collided = false;
+      collider.intersect(markerAABB(map, res.pos, markerRadius),
+          [&](auto& a, auto& b) { collided = true; return false; });
+      if(!collided) {
+        // convert to pin marker
+        map->markerSetVisible(res.altMarkerId, false);
+        res.isAltMarker = false;
+        if(res.markerId <= 0)
+          res.markerId = getMarker(res);
+        else
+          map->markerSetVisible(res.markerId, true);
+      }
+    }
+  }
+  prevZoom = zoom;
+}

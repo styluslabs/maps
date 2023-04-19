@@ -271,11 +271,11 @@ void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 constexpr int MAX_SOURCES = 8;
 //std::vector<int> currSrcIdx(MAX_SOURCES, 0);
 
-void MapsSources::rebuildSource(bool fromLayers)
+void MapsSources::rebuildSource(const std::string& srcname)
 {
   SourceBuilder builder(mapSources);
-  if(!fromLayers)
-    builder.addLayer(sourceKeys[sourceCombo->index()]);
+  if(!srcname.empty())
+    builder.addLayer(srcname);
   else {
     for(int ii = 0; ii < nSources; ++ii) {
       int idx = layerCombos[ii]->index();
@@ -285,15 +285,18 @@ void MapsSources::rebuildSource(bool fromLayers)
   }
 
   if(!builder.imports.empty() || !builder.updates.empty()) {
+    // we need this to be persistent for scene reloading (e.g., on scene variable change)
     app->sceneYaml = builder.getSceneYaml(baseUrl);
     app->sceneFile = baseUrl + "__GUI_SOURCES__";
-    app->sceneUpdates.clear();
-    app->loadSceneFile(builder.updates);
+    app->sceneUpdates = std::move(builder.updates);  //.clear();
+    app->loadSceneFile();  //builder.getSceneYaml(baseUrl), builder.updates);
+    if(!srcname.empty())
+      app->config["last_source"] = srcname;
   }
 
   bool multi = builder.layerkeys.size() > 1;
-  discardBtn->setEnabled(!fromLayers && multi);
-  saveBtn->setEnabled(fromLayers && multi);
+  discardBtn->setEnabled(!srcname.empty() && multi);
+  saveBtn->setEnabled(srcname.empty() && multi);
 
   size_t ii = 0;
   nSources = std::max(int(builder.layerkeys.size()), nSources);
@@ -460,11 +463,7 @@ void MapsSources::populateSceneVars()
       std::string value = app->readSceneValue("global." + name).as<std::string>("");
       auto checkbox = createCheckBox("", value == "true");
       checkbox->onToggled = [=](bool newval){
-
         app->sceneUpdates.push_back(SceneUpdate{"global." + name, newval ? "true" : "false"});
-
-
-
         if(reload == "false")  // ... so default to reloading
           app->map->updateGlobals({app->sceneUpdates.back()});  //SceneUpdate{"global." + name, newval ? "true" : "false"}});
         else
@@ -507,7 +506,7 @@ Widget* MapsSources::createPanel()
   };
 
   sourceCombo->onChanged = [this](const char*){
-    rebuildSource(false);
+    rebuildSource(sourceKeys[sourceCombo->index()]);
   };
 
   createBtn->onClicked = [=](){
@@ -552,12 +551,10 @@ Widget* MapsSources::createPanel()
 
   Widget* offlineBtn = app->mapsOffline->createPanel();
 
-  auto toolbar = createToolbar();
-  toolbar->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Map Source"));
+  auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Map Source");
   toolbar->addWidget(createStretch());
   toolbar->addWidget(offlineBtn);
-  auto sourcesHeader = app->createPanelHeader(toolbar);
-  sourcesPanel = app->createMapPanel(layersContent, sourcesHeader, sourcesContent);
+  sourcesPanel = app->createMapPanel(toolbar, layersContent, sourcesContent);
 
   // main toolbar button
   Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
@@ -568,7 +565,7 @@ Widget* MapsSources::createPanel()
 
       for(int ii = 0; ii < 10 && ii < sourceKeys.size(); ++ii) {
         sourcesMenu->addItem(mapSources[sourceKeys[ii]]["title"].Scalar().c_str(),
-            [ii, this](){ sourceCombo->setIndex(ii); rebuildSource(); });
+            [ii, this](){ sourceCombo->updateIndex(ii); });  // rebuildSource();
       }
 
     }

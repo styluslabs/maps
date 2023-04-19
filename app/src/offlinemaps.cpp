@@ -2,7 +2,7 @@
 #include "mapsapp.h"
 #include "mapsearch.h"
 #include "util.h"
-#include "imgui.h"
+//#include "imgui.h"
 #include <deque>
 #include "sqlite3/sqlite3.h"
 // "private" headers
@@ -212,16 +212,16 @@ void MapsOffline::saveOfflineMap(int maxZoom)
   });
 }
 
-void MapsOffline::showGUI()
-{
-  static int maxZoom = 13;
-  if (!ImGui::CollapsingHeader("Offline Maps"))  //, ImGuiTreeNodeFlags_DefaultOpen))
-    return;
+//void MapsOffline::showGUI()
+//{
+//  static int maxZoom = 13;
+//  if (!ImGui::CollapsingHeader("Offline Maps"))  //, ImGuiTreeNodeFlags_DefaultOpen))
+//    return;
 
-  ImGui::InputInt("Max zoom level", &maxZoom);
-  if(ImGui::Button("Save Offline Map") && maxZoom > 0 && maxZoom < 20)
-    saveOfflineMap(maxZoom);
-}
+//  ImGui::InputInt("Max zoom level", &maxZoom);
+//  if(ImGui::Button("Save Offline Map") && maxZoom > 0 && maxZoom < 20)
+//    saveOfflineMap(maxZoom);
+//}
 
 MapsOffline::~MapsOffline()
 {
@@ -278,17 +278,7 @@ Widget* MapsOffline::createPanel()
     saveOfflineMap(maxZoomSpin->value());
   };
 
-  auto offlineContent = createColumn();
-  auto toolbar = createToolbar();
-  toolbar->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Offline Maps"));
-  toolbar->addWidget(createStretch());
-  toolbar->addWidget(maxZoomSpin);
-  toolbar->addWidget(saveBtn);
-  auto offlineHeader = app->createPanelHeader(toolbar);
-  offlinePanel = app->createMapPanel(offlineContent, offlineHeader);
-
-  // we need list of existing offline regions - basically save OfflineMapInfo to places.sqlite?
-  // how to identify offline maps in list? date? sources?
+  Widget* offlineContent = createColumn();
 
   DB_exec(app->bkmkDB, "SELECT mapid, lng0,lat0,lng1,lat1, strftime('%x', timestamp) FROM offlinemaps;", [=](sqlite3_stmt* stmt){
     int mapid = sqlite3_column_int(stmt, 0);
@@ -302,29 +292,26 @@ Widget* MapsOffline::createPanel()
       LngLat bounds[5] = {{lng0, lat0}, {lng0, lat1}, {lng1, lat1}, {lng1, lat0}, {lng0, lat0}};
       if(!rectMarker)
         rectMarker = app->map->markerAdd();
-      //app->map->markerSetStylingFromString(polyline_marker, polylineStyle.c_str());
+      app->map->markerSetStylingFromString(rectMarker, polylineStyle.c_str());
       app->map->markerSetPolyline(rectMarker, bounds, 5);
       app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(bounds[0], bounds[2]), 0.5f);
     };
 
     Button* deleteBtn = new Button(item->containerNode()->selectFirst(".delete-btn"));
     deleteBtn->onClicked = [=](){
-/*
-      - deletion: select tile_id from offline_tiles where offline_id = ? and select count(1) from offline_tiles group by tile_id;
-      ... just delete offline_tiles entries, then shrink DB (how will this work?)
-
-- limiting cache size: background task to get last access time and size of each tile in each mbtiles cache, sort, and delete tiles
- - sort list by access time, iterate through list summing tile sizes until limit reached, then instruct each MBTiles instance to delete tiles older than cutoff time
- - can we do something continuously? every time tile loaded, add size to counter; if counter is over limit (w/ some hysterisis)
-  - I think we want to do this anyway: m_platform.notifyStorage(size)
-
-*/
+      app->mapsSources->deleteOfflineMap(mapid);
     };
 
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     titlenode->addText(titlestr);
     offlineContent->addWidget(item);
   });
+
+  auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Offline Maps");
+  toolbar->addWidget(createStretch());
+  toolbar->addWidget(maxZoomSpin);
+  toolbar->addWidget(saveBtn);
+  offlinePanel = app->createMapPanel(toolbar, offlineContent);
 
   Button* offlineBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_expanddown.svg"), "Offline Maps");
   offlineBtn->onClicked = [this](){

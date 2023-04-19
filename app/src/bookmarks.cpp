@@ -2,8 +2,8 @@
 #include "mapsapp.h"
 #include "util.h"
 #include "resources.h"
-#include "imgui.h"
-#include "imgui_stl.h"
+//#include "imgui.h"
+//#include "imgui_stl.h"
 
 #include "sqlite3/sqlite3.h"
 #include "rapidjson/document.h"
@@ -236,21 +236,41 @@ void MapsBookmarks::showViewsGUI()
 }
 */
 
-void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid)
+void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat pos, int rowid)
 {
+
+  // WITH list_id AS (SELECT rowid FROM lists where title = ?)
+
   const char* query = rowid >= 0 ?
-      "UPDATE bookmarks SET osm_id = ?, list = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :
+      "UPDATE bookmarks SET osm_id = ?, list = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :  // list = (SELECT rowid FROM lists where title = ?)
       "INSERT INTO bookmarks (osm_id,list,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
   DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
     sqlite3_bind_text(stmt, 1, osm_id, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, list, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, props, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 4, note, -1, SQLITE_STATIC);
-    sqlite3_bind_double(stmt, 5, lnglat.longitude);
-    sqlite3_bind_double(stmt, 6, lnglat.latitude);
+    sqlite3_bind_double(stmt, 5, pos.longitude);
+    sqlite3_bind_double(stmt, 6, pos.latitude);
     if(rowid >= 0)
       sqlite3_bind_int(stmt, 7, rowid);
   });
+
+
+  auto it = bkmkMarkers.find(list);
+  if(it != bkmkMarkers.end()) {
+    rapidjson::Document doc;
+    doc.Parse(props);
+
+    std::string namestr = doc.IsObject() && doc.HasMember("name") ?
+        doc["name"].GetString() : fstring("%.6f, %.6f", pos.latitude, pos.longitude);
+    Properties mprops;
+    //mprops.set("priority", markerIdx);
+    mprops.set("name", namestr);
+    std::string propstr(props);
+
+    auto onPicked = [=](){ app->setPickResult(pos, namestr, propstr); };
+    it->second->createMarker(pos, onPicked, std::move(mprops));
+  }
 }
 
 // New GUI
@@ -273,9 +293,8 @@ void MapsBookmarks::populateLists()
 {
   if(!listsPanel) {
     listsContent = createColumn(); //createListContainer();
-    auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Bookmark Lists");
-    auto listHeader = app->createPanelHeader(headerTitle, false);
-    listsPanel = app->createMapPanel(listsContent, listHeader);
+    auto headerTitle = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Bookmark Lists");
+    listsPanel = app->createMapPanel(headerTitle, listsContent);  //, NULL, false);
   }
   app->showPanel(listsPanel);
   app->gui->deleteContents(listsContent, ".listitem");
@@ -287,14 +306,31 @@ void MapsBookmarks::populateLists()
     Button* item = new Button(bkmkListProto->clone());
 
     item->onClicked = [this, list](){
-      populateBkmks(list);
+      populateBkmks(list, true);
     };
 
     Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
-    showBtn->onClicked = [](){
+    showBtn->onClicked = [this, list](){
+      auto it = bkmkMarkers.find(list);
+      if(it == bkmkMarkers.end()) {
+        populateBkmks(list, false);
+      }
+      else
+        it->second->setVisible(!it->second->visible);
+
       // how to show bookmarks presistently?
       // - where to store this flag?  DB? prefs? ... prefs seem more appropriate; we can just use yaml or json doc for prefs
       // - different colors for bookmarks? color is currently hardcoded in SVG
+
+      // how to create new list?
+      // - just enter name in text combo box when creating bookmark
+
+      // - we need way to rename list; can also use this to set color
+      // ... so we probably should use separate DB table w/ list props
+      // ... and have dialog to edit list name, color, etc.
+
+
+
     };
 
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
@@ -307,11 +343,11 @@ void MapsBookmarks::populateLists()
   });
 }
 
-void MapsBookmarks::populateBkmks(const std::string& listname)
+void MapsBookmarks::populateBkmks(const std::string& listname, bool createUI)
 {
-  if(!bkmkPanel) {
+  if(createUI && !bkmkPanel) {
     bkmkContent = createColumn(); //createListContainer();
-    auto toolbar = createToolbar();
+    auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
     Button* mapAreaBkmksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Bookmarks in map area only");
     mapAreaBkmksBtn->onClicked = [this](){
       mapAreaBkmks = !mapAreaBkmks;
@@ -322,21 +358,25 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
           item->setVisible(true);
       }
     };
-    toolbar->addWidget(app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), ""));
-    toolbar->addWidget(createStretch());
     toolbar->addWidget(mapAreaBkmksBtn);
-    auto bkmkHeader = app->createPanelHeader(toolbar);
-    bkmkPanel = app->createMapPanel(bkmkContent, bkmkHeader);
+    bkmkPanel = app->createMapPanel(toolbar, bkmkContent);
   }
-  app->showPanel(bkmkPanel);
-  app->gui->deleteContents(bkmkContent, ".listitem");
+  if(createUI) {
+    app->showPanel(bkmkPanel);
+    app->gui->deleteContents(bkmkContent, ".listitem");
+    bkmkPanel->selectFirst(".panel-title")->setText(listname.c_str());
+  }
 
-  bkmkPanel->selectFirst(".panel-title")->setText(listname.c_str());
+  MarkerGroup* markerGroup = NULL;
+  auto it = bkmkMarkers.find(listname);
+  if(it == bkmkMarkers.end())
+    markerGroup = *bkmkMarkers.emplace(listname, "layers.bookmark-marker.draw.marker").first;
 
-  Map* map = app->map;
-  size_t markerIdx = 0;
+  //Map* map = app->map;
+  //size_t markerIdx = 0;
   const char* query = "SELECT rowid, props, notes, lng, lat FROM bookmarks WHERE list = ?;";
   DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
+    const char* notestr = (const char*)(sqlite3_column_text(stmt, 2));
     double lng = sqlite3_column_double(stmt, 3);
     double lat = sqlite3_column_double(stmt, 4);
     //placeRowIds.push_back(sqlite3_column_int(stmt, 0));
@@ -344,49 +384,34 @@ void MapsBookmarks::populateBkmks(const std::string& listname)
     rapidjson::Document doc;
     doc.Parse(propstr.c_str());
 
-    const char* notestr = (const char*)(sqlite3_column_text(stmt, 2));
-
-
-    if(markerIdx >= bkmkMarkers.size())
-      bkmkMarkers.push_back(map->markerAdd());
-    map->markerSetVisible(bkmkMarkers[markerIdx], true);
-    // note that 6th decimal place of lat/lng is 11 cm (at equator)
     std::string namestr = doc.IsObject() && doc.HasMember("name") ?
         doc["name"].GetString() : fstring("%.6f, %.6f", lat, lng);
-
-    map->markerSetStylingFromPath(bkmkMarkers[markerIdx], "layers.bookmark-marker.draw.marker");
-
     Properties mprops;
-    mprops.set("priority", markerIdx);
+    //mprops.set("priority", markerIdx);
     mprops.set("name", namestr);
-    map->markerSetProperties(bkmkMarkers[markerIdx], std::move(mprops));
 
-    map->markerSetPoint(bkmkMarkers[markerIdx], LngLat(lng, lat));
-    ++markerIdx;
+    auto onPicked = [=](){ app->setPickResult(LngLat(lng, lat), namestr, propstr); };
+    if(markerGroup)
+      markerGroup->createMarker(LngLat(lng, lat), onPicked, std::move(mprops));
 
-    Button* item = new Button(placeListProto->clone());
-    item->onClicked = [=](){
-      app->setPickResult(LngLat(lng, lat), namestr, propstr);
-    };
-
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(namestr.c_str());
-
-    SvgText* notenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".note-text"));
-    notenode->addText(notestr);
-
-    item->setUserData(LngLat(lng, lat));
-
-    bkmkContent->addWidget(item);
-
+    if(createUI) {
+      Button* item = new Button(placeListProto->clone());
+      item->onClicked = onPicked;  //[=](){ app->setPickResult(LngLat(lng, lat), namestr, propstr); };
+      SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+      titlenode->addText(namestr.c_str());
+      SvgText* notenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".note-text"));
+      notenode->addText(notestr);
+      item->setUserData(LngLat(lng, lat));
+      bkmkContent->addWidget(item);
+    }
   }, [&](sqlite3_stmt* stmt){
     sqlite3_bind_text(stmt, 1, listname.c_str(), -1, SQLITE_STATIC);
   });
   // hide unused markers
-  for(; markerIdx < bkmkMarkers.size(); ++markerIdx)
-    map->markerSetVisible(bkmkMarkers[markerIdx], false);
+  //for(; markerIdx < bkmkMarkers.size(); ++markerIdx)
+  //  map->markerSetVisible(bkmkMarkers[markerIdx], false);
   // if requested, hide list entries for bookmarks not visible
-  if(mapAreaBkmks)
+  if(createUI && mapAreaBkmks)
     onMapChange();
 }
 
@@ -396,6 +421,14 @@ void MapsBookmarks::onMapChange()
     for(Widget* item : bkmkContent->select(".listitem")) {
       LngLat pos = item->userData<LngLat>();
       item->setVisible(app->map->lngLatToScreenPosition(pos.longitude, pos.latitude));
+    }
+  }
+
+  for(auto& mg : bkmkMarkers) {
+    mg.second->onZoom();
+    if(app->pickedMarkerId > 0) {
+      if(mg.second->onPicked(app->pickedMarkerId))
+        app->pickedMarkerId = 0;
     }
   }
 }
@@ -454,10 +487,10 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   editToolbar->addWidget(cancelBtn);
 
   std::vector<std::string> lists;
-  DB_exec(app->bkmkDB, "SELECT DISTINCT list FROM bookmarks;", [&](sqlite3_stmt* stmt){
+  DB_exec(app->bkmkDB, "SELECT title FROM lists;", [&](sqlite3_stmt* stmt){  //SELECT DISTINCT list FROM bookmarks;
     lists.emplace_back((const char*)(sqlite3_column_text(stmt, 0)));
   });
-  auto listsCombo = createComboBox(lists);
+  auto listsCombo = createTextComboBox(lists);
   auto noteEdit = createTextEdit();
   noteEdit->setText(notestr.c_str());
   listsCombo->setText(liststr.c_str());
@@ -550,7 +583,8 @@ Widget* MapsBookmarks::createPanel()
   placeInfoSectionProto.reset(loadSVGFragment(placeInfoSectionProtoSVG));
 
   // DB setup
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list TEXT, props TEXT, notes TEXT, lng REAL, lat REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER, title TEXT, notes TEXT, color TEXT);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list_id INTEGER, props TEXT, notes TEXT, lng REAL, lat REAL, timestamp INTEGER DEFAULT CAST(strftime('%s') AS INTEGER));");
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL);");
 
   Menu* bkmkMenu = createMenu(Menu::VERT_LEFT);

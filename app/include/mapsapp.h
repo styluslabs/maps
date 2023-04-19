@@ -17,6 +17,7 @@ class PluginManager;
 class SvgGui;
 class Splitter;
 class Widget;
+class Button;
 class Window;
 class MapsWidget;
 class SvgNode;
@@ -46,7 +47,7 @@ public:
   void longPressEvent(float x, float y);
   void hoverEvent(float x, float y);
 
-  void loadSceneFile(std::vector<SceneUpdate> updates = {}, bool setPosition = false);
+  void loadSceneFile(bool setPosition = false);
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
@@ -54,7 +55,7 @@ public:
   void setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority = 1);
   YAML::Node readSceneValue(const std::string& yamlPath);
 
-  Location loc;
+  Location currLocation;
   float orientation = 0;
 
   MarkerID pickResultMarker = 0;
@@ -69,10 +70,10 @@ public:
   std::string sceneFile;
   std::string sceneYaml;
   bool load_async = true;
-  bool show_gui = false;
-  bool recreate_context = false;
-  bool wireframe_mode = false;
-  bool single_tile_worker = false;
+  //bool show_gui = false;
+  //bool recreate_context = false;
+  //bool wireframe_mode = false;
+  //bool single_tile_worker = false;
 
   float density = 1.0;
   float pixel_scale = 2.0;
@@ -89,16 +90,13 @@ public:
 
   Map* map = NULL;
 
-  static LngLat mapCenter;
-
   // GUI
   Window* createGUI();
   //void hidePlaceInfo();
 
   void showPanel(Widget* panel);
-  Widget* createHeaderTitle(const SvgNode* icon, const char* title);
-  Widget* createPanelHeader(Widget* titlewidget, bool canMinimize = true);  //std::function<void()> backFn,
-  Widget* createMapPanel(Widget* content, Widget* header, Widget* fixedContent = NULL);
+  Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
+  Widget* createMapPanel(Widget* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
 
   Splitter* panelSplitter = NULL;
   Widget* panelContainer = NULL;
@@ -107,6 +105,7 @@ public:
   Widget* infoPanel = NULL;
   Widget* infoContent = NULL;
   MapsWidget* mapsWidget = NULL;
+  Button* reorientBtn = NULL;
   std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
 
@@ -116,16 +115,17 @@ public:
   static SvgGui* gui;
   static YAML::Node config;
   static std::string configFile;
+  static CameraPosition mapCenter;
 
   static sqlite3* bkmkDB;
 
 private:
-  void showImGUI();
-  void showSceneGUI();
-  void showViewportGUI();
-  void showDebugFlagsGUI();
-  void showSceneVarsGUI();
-  void showPickLabelGUI();
+  //void showImGUI();
+  //void showSceneGUI();
+  //void showViewportGUI();
+  //void showDebugFlagsGUI();
+  //void showSceneVarsGUI();
+  //void showPickLabelGUI();
 
   void dumpTileContents(float x, float y);
   void saveConfig();

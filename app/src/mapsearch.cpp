@@ -4,8 +4,8 @@
 #include "plugins.h"
 #include "resources.h"
 #include "util.h"
-#include "imgui.h"
-#include "imgui_stl.h"
+//#include "imgui.h"
+//#include "imgui_stl.h"
 
 #include <deque>
 #include "rapidjson/writer.h"
@@ -13,7 +13,7 @@
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
 #include "sqlite3/sqlite3.h"
-#include "isect2d.h"
+//#include "isect2d.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -40,7 +40,7 @@ static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value*
   double rank = sortByDist ? -1.0 : sqlite3_value_double(argv[0]);
   double lon = sqlite3_value_double(argv[1]);  // distance from search center point in meters
   double lat = sqlite3_value_double(argv[2]);  // distance from search center point in meters
-  double dist = lngLatDist(MapsApp::mapCenter, LngLat(lon, lat));
+  double dist = lngLatDist(MapsApp::mapCenter.lngLat(), LngLat(lon, lat));
   // obviously will want a more sophisticated ranking calculation in the future
   sqlite3_result_double(context, rank/log2(1+dist));
 }
@@ -194,31 +194,33 @@ bool MapsSearch::indexMBTiles()
   return true;
 }
 
-void MapsSearch::clearSearchResults(std::vector<SearchResult>& results)
+/*void MapsSearch::clearSearchResults(std::vector<SearchResult>& results)
 {
-  for(auto& res : results) {
-    if(res.markerId == 0) continue;
-    if(res.isPinMarker)
-      pinMarkers.push_back(res.markerId);
-    else
-      dotMarkers.push_back(res.markerId);
-    app->map->markerSetVisible(res.markerId, false);
-    res.markerId = 0;
-  }
+  //for(auto& res : results) {
+  //  if(res.markerId == 0) continue;
+  //  if(res.isPinMarker)
+  //    pinMarkers.push_back(res.markerId);
+  //  else
+  //    dotMarkers.push_back(res.markerId);
+  //  app->map->markerSetVisible(res.markerId, false);
+  //  res.markerId = 0;
+  //}
+  markers->reset();
   results.clear();
-}
+}*/
 
 void MapsSearch::clearSearch()
 {
-  clearSearchResults(mapResults);
-  clearSearchResults(listResults);
+  mapResults.clear();  //clearSearchResults(mapResults);
+  listResults.clear();  //clearSearchResults(listResults);
+  markers->clear();
 
   if(app->searchActive)
     app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
   app->searchActive = false;
 }
 
-MarkerID MapsSearch::getPinMarker(const SearchResult& res, int idx)
+/*MarkerID MapsSearch::getPinMarker(const SearchResult& res, int idx)
 {
   Map* map = app->map;
   MarkerID markerId = pinMarkers.empty() ? map->markerAdd() : pinMarkers.back();
@@ -256,22 +258,45 @@ MarkerID MapsSearch::getDotMarker(const SearchResult& res)
   map->markerSetVisible(markerId, true);
   map->markerSetPoint(markerId, res.pos);
   return markerId;
-}
+}*/
 
-SearchResult& MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank)
+void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, const char* json)
 {
+  size_t idx = mapResults.size();
+  mapResults.push_back({id, {lng, lat}, rank, {}});
+  rapidjson::Document& tags = mapResults.back().tags;
+  tags.Parse(json);
+  if(!tags.IsObject() || !tags.HasMember("name")) {
+    mapResults.pop_back();
+    return;
+  }
+  Properties props;
+  //props.set("priority", idx);
+  for(auto& m : mapResults.back().tags.GetObject()) {
+    if(m.value.IsNumber())
+      props.set(m.name.GetString(), m.value.GetDouble());
+    else if(m.value.IsString())
+      props.set(m.name.GetString(), m.value.GetString());
+  }
+  auto onPicked = [this, idx](){
+    SearchResult& res = mapResults[idx];
+    app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
+  };
+  markers->createMarker({lng, lat}, onPicked, std::move(props));
   mapResultsChanged = true;
-  mapResults.push_back({id, {lng, lat}, rank, 0, false, {}});
-  return mapResults.back();
 }
 
-SearchResult& MapsSearch::addListResult(int64_t id, double lng, double lat, float rank)
+void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, const char* json)
 {
-  listResults.push_back({id, {lng, lat}, rank, 0, false, {}});
-  return listResults.back();
+  listResults.push_back({id, {lng, lat}, rank, {}});
+  rapidjson::Document& tags = listResults.back().tags;
+  tags.Parse(json);
+  if(!tags.IsObject() || !tags.HasMember("name"))
+    mapResults.pop_back();
+  //return listResults.back();
 }
 
-static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, float radius)
+/*static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, float radius)
 {
   double x, y;
   map->lngLatToScreenPosition(pos.longitude, pos.latitude, &x, &y);
@@ -281,25 +306,45 @@ static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, float radius)
 // if isect2d is insufficient, try https://github.com/nushoin/RTree - single-header r-tree impl
 void MapsSearch::createMarkers()
 {
-  Map* map = app->map;
-  float markerRadius = map->getZoom() >= 17 ? 25 : 50;
-  isect2d::ISect2D<glm::vec2> collider;
-  int w = map->getViewportWidth(), h = map->getViewportHeight();
-  collider.resize({16, 16}, {w, h});
-  int ii = 0;
-  for(auto& res : mapResults) {
-    if(res.markerId == 0) {
-      bool collided = false;
-      collider.intersect(markerAABB(app->map, res.pos, markerRadius),
-          [&](auto& a, auto& b) { collided = true; return false; });
-      res.markerId = collided ? getDotMarker(res) : getPinMarker(res, ii);
-      res.isPinMarker = !collided;
-      map->markerSetDrawOrder(res.markerId, ii + (res.isPinMarker ? 0x10000 : 0));
+  markers->reset();
+  for(size_t ii = 0; ii < auto& res : mapResults) {
+    Properties props;
+    //props.set("priority", idx);
+    for(auto& m : res.tags.GetObject()) {
+      if(m.value.IsNumber())
+        props.set(m.name.GetString(), m.value.GetDouble());
+      else if(m.value.IsString())
+        props.set(m.name.GetString(), m.value.GetString());
     }
-    else if(res.isPinMarker)
-      collider.insert(markerAABB(app->map, res.pos, markerRadius));
-    ++ii;
+
+    app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
+    auto onPicked = [this, &res](){ app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags); };
+
+
+    markers->createMarker(res.pos, onPicked, std::move(props));
+
+
   }
+
+  //Map* map = app->map;
+  //float markerRadius = map->getZoom() >= 17 ? 25 : 50;
+  //isect2d::ISect2D<glm::vec2> collider;
+  //int w = map->getViewportWidth(), h = map->getViewportHeight();
+  //collider.resize({16, 16}, {w, h});
+  //int ii = 0;
+  //for(auto& res : mapResults) {
+  //  if(res.markerId == 0) {
+  //    bool collided = false;
+  //    collider.intersect(markerAABB(app->map, res.pos, markerRadius),
+  //        [&](auto& a, auto& b) { collided = true; return false; });
+  //    res.markerId = collided ? getDotMarker(res) : getPinMarker(res, ii);
+  //    res.isPinMarker = !collided;
+  //    map->markerSetDrawOrder(res.markerId, ii + (res.isPinMarker ? 0x10000 : 0));
+  //  }
+  //  else if(res.isPinMarker)
+  //    collider.insert(markerAABB(app->map, res.pos, markerRadius));
+  //  ++ii;
+  //}
   mapResultsChanged = false;
 }
 
@@ -354,7 +399,7 @@ void MapsSearch::onZoom()
     }
   }
   prevZoom = zoom;
-}
+}*/
 
 // online map search C++ code removed 2022-12-11 (now handled via plugins)
 
@@ -367,10 +412,8 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
     double lng = sqlite3_column_double(stmt, 2);
     double lat = sqlite3_column_double(stmt, 3);
     double score = sqlite3_column_double(stmt, 4);
-    auto& res = addMapResult(rowid, lng, lat, score);
-    res.tags.Parse((const char*)(sqlite3_column_text(stmt, 1)));
-    if(!res.tags.IsObject() || !res.tags.HasMember("name"))
-      mapResults.pop_back();
+    const char* json = (const char*)(sqlite3_column_text(stmt, 1));
+    addMapResult(rowid, lng, lat, score, json);
   }, [&](sqlite3_stmt* stmt){
     std::string s(queryStr + "*");
     std::replace(s.begin(), s.end(), '\'', ' ');
@@ -393,10 +436,8 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
     double lng = sqlite3_column_double(stmt, 2);
     double lat = sqlite3_column_double(stmt, 3);
     double score = sqlite3_column_double(stmt, 4);
-    auto& res = addListResult(rowid, lng, lat, score);
-    res.tags.Parse((const char*)(sqlite3_column_text(stmt, 1)));
-    if(!res.tags.IsObject() || !res.tags.HasMember("name"))
-      listResults.pop_back();
+    const char* json = (const char*)(sqlite3_column_text(stmt, 1));
+    addListResult(rowid, lng, lat, score, json);
   }, [&](sqlite3_stmt* stmt){
     std::string s(queryStr + "*");
     std::replace(s.begin(), s.end(), '\'', ' ');
@@ -405,7 +446,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
   });
 }
 
-void MapsSearch::showGUI()
+/*void MapsSearch::showGUI()
 {
   static std::vector<std::string> autocomplete;
   static std::string searchStr;  // imgui compares to this to determine if text is edited, so make persistant
@@ -511,7 +552,7 @@ void MapsSearch::showGUI()
         LngLat minLngLat(180, 90), maxLngLat(-180, -90);
         int resultIdx = 0;
         for(auto& res : listResults) {
-          if(resultIdx <= 5 || lngLatDist(app->mapCenter, res.pos) < 2.0) {
+          if(resultIdx <= 5 || lngLatDist(app->mapCenter.lngLat(), res.pos) < 2.0) {
             minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
             minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
             maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
@@ -574,7 +615,7 @@ void MapsSearch::showGUI()
 
   std::vector<std::string> sresults;
   for (auto& res : listResults) {
-    double distkm = lngLatDist(app->mapCenter, res.pos);
+    double distkm = lngLatDist(app->mapCenter.lngLat(), res.pos);
     sresults.push_back(fstring("%s (%.1f km)", res.tags["name"].GetString(), distkm));
   }
 
@@ -610,7 +651,7 @@ void MapsSearch::showGUI()
     pickedResult->tags.Accept(writer);
     app->setPickResult(pickedResult->pos, pickedResult->tags["name"].GetString(), sb.GetString());
   }
-}
+}*/
 
 // methods for ugui UI
 
@@ -626,19 +667,23 @@ void MapsSearch::onMapChange()
     prevZoom = map->getZoom();
   }
   else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
-    onZoom();
+    markers->onZoom();
   }
 
   if(app->pickedMarkerId > 0) {
-    for(auto& res : mapResults) {
-      if(res.markerId == app->pickedMarkerId) {
-        //map->markerSetVisible(res.markerId, false);  // hide existing marker
-        app->pickedMarkerId = 0;
-        app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
-        break;
-      }
-    }
+    if(markers->onPicked(app->pickedMarkerId))
+      app->pickedMarkerId = 0;
   }
+  //if(app->pickedMarkerId > 0) {
+  //  for(auto& res : mapResults) {
+  //    if(res.markerId == app->pickedMarkerId) {
+  //      //map->markerSetVisible(res.markerId, false);  // hide existing marker
+  //      app->pickedMarkerId = 0;
+  //      app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
+  //      break;
+  //    }
+  //  }
+  //}
 }
 
 void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
@@ -647,7 +692,8 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
   double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
   dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
   dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
-  clearSearchResults(mapResults);
+  mapResults.clear();
+  markers->clear();  //clearSearchResults(mapResults);
   if(providerIdx > 0)
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, MAP_SEARCH);
   else
@@ -661,12 +707,12 @@ void MapsSearch::resultsUpdated()
   // zoom out if necessary to show first 5 results
   if(mapResultsChanged) {
     Map* map = app->map;
-    createMarkers();
+    //createMarkers();
 
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
     int resultIdx = 0;
     for(auto& res : listResults) {
-      if(resultIdx <= 5 || lngLatDist(app->mapCenter, res.pos) < 2.0) {
+      if(resultIdx <= 5 || lngLatDist(app->mapCenter.lngLat(), res.pos) < 2.0) {
         minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
         minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
         maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
@@ -694,8 +740,11 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   app->getMapBounds(lngLat00, lngLat11);
   if(phase != NEXTPAGE) {
     searchStr = query;
-    clearSearchResults(mapResults);
-    clearSearchResults(listResults);
+    mapResults.clear();
+    listResults.clear();
+    markers->clear();
+    //clearSearchResults(mapResults);
+    //clearSearchResults(listResults);
     map->markerSetVisible(app->pickResultMarker, false);
   }
 
@@ -768,7 +817,7 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     titlenode->addText(res.tags["name"].GetString());
     SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-    double distkm = lngLatDist(app->mapCenter, res.pos);
+    double distkm = lngLatDist(app->mapCenter.lngLat(), res.pos);
     distnode->addText(fstring("%.1f km", distkm).c_str());
     resultsContent->addWidget(item);
   }
@@ -825,13 +874,25 @@ Widget* MapsSearch::createPanel()
   };
   cancelBtn->setVisible(false);
 
+  auto searchTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
+  searchTb->addWidget(createStretch());
+  if(!app->pluginManager->searchFns.empty()) {
+    std::vector<std::string> cproviders = {"Offline"};
+    for(auto& fn : app->pluginManager->searchFns)
+      cproviders.push_back(fn.title.c_str());
+
+    ComboBox* providerSel = createComboBox(cproviders);
+    providerSel->onChanged = [=](const char*){
+      providerIdx = providerSel->index();
+    };
+    searchTb->addWidget(providerSel);
+  }
+
   Widget* searchContent = createColumn(); //createListContainer();
   resultsContent = createColumn(); //createListContainer();
   searchContent->addWidget(new Widget(searchBoxNode));
   searchContent->addWidget(resultsContent);
-  auto headerTitle = app->createHeaderTitle(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
-  auto resultsHeader = app->createPanelHeader(headerTitle);
-  searchPanel = app->createMapPanel(resultsContent, resultsHeader);
+  searchPanel = app->createMapPanel(searchTb, resultsContent);
 
   static const char* searchResultProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -865,6 +926,8 @@ Widget* MapsSearch::createPanel()
     </g>
   )";
   autoCompProto.reset(loadSVGFragment(autoCompProtoSVG));
+
+  markers.reset(new MarkerGroup(map, "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
 
   initSearch();
 

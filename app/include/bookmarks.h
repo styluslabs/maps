@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mapscomponent.h"
+#include "util.h"
 
 class SvgNode;
 class Widget;
@@ -17,13 +18,14 @@ public:
   Widget* createPanel();
   Widget* getPlaceInfoSection(const std::string& osm_id, LngLat pos);
 
-  std::vector<MarkerID> bkmkMarkers;
+  //std::vector<MarkerID> bkmkMarkers;
+  std::unordered_map< std::string, std::unique_ptr<MarkerGroup> > bkmkMarkers;
 
 private:
   //void showPlacesGUI();
   //void showViewsGUI();
 
-  void populateBkmks(const std::string& listname);
+  void populateBkmks(const std::string& listname, bool createUI);
   void populateLists();
 
   Widget* bkmkPanel = NULL;
