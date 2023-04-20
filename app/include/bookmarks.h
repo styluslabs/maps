@@ -11,7 +11,8 @@ class MapsBookmarks : public MapsComponent
 public:
   using MapsComponent::MapsComponent;
   //void showGUI();
-  void hideBookmarks();
+  void hideBookmarks(const std::string& excludelist = "");
+  void restoreBookmarks();
   void addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid = -1);
   void onMapChange();
 
@@ -26,13 +27,19 @@ private:
   //void showViewsGUI();
 
   void populateBkmks(const std::string& listname, bool createUI);
-  void populateLists();
+  void populateLists(bool archived);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;
   Widget* listsPanel = NULL;
   Widget* listsContent = NULL;
+  Widget* archivedPanel = NULL;
+  Widget* archivedContent = NULL;
   bool mapAreaBkmks = false;
+  std::vector<MarkerGroup*> hiddenGroups;
+  bool bkmkPanelDirty = false;
+  bool listsDirty = false;
+  bool archiveDirty = false;
 
   std::unique_ptr<SvgNode> bkmkListProto;
   std::unique_ptr<SvgNode> placeListProto;

@@ -215,8 +215,10 @@ void MapsSearch::clearSearch()
   listResults.clear();  //clearSearchResults(listResults);
   markers->clear();
 
-  if(app->searchActive)
+  if(app->searchActive) {
     app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
+    app->mapsBookmarks->restoreBookmarks();
+  }
   app->searchActive = false;
 }
 
@@ -776,7 +778,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
     if(!app->searchActive && phase == RETURN) {
       map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
-      app->mapsBookmarks->hideBookmarks();
+      app->mapsBookmarks->hideBookmarks();  // also hide tracks?
       app->searchActive = true;
     }
   }
@@ -893,6 +895,8 @@ Widget* MapsSearch::createPanel()
   searchContent->addWidget(new Widget(searchBoxNode));
   searchContent->addWidget(resultsContent);
   searchPanel = app->createMapPanel(searchTb, resultsContent);
+
+  searchPanel->onClose = [this](){ clearSearch(); };
 
   static const char* searchResultProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
