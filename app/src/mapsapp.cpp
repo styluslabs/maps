@@ -334,6 +334,8 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
 
 MapsApp::~MapsApp() { delete map; }
 
+// note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
+//  update config as soon as change is made (vs. us having to broadcast a signal on pause)
 void MapsApp::saveConfig()
 {
   config["storage"]["offline"] = storageOffline;

@@ -28,6 +28,7 @@ private:
 
   void populateBkmks(const std::string& listname, bool createUI);
   void populateLists(bool archived);
+  Widget* getPlaceInfoSubSection(int rowid, std::string liststr, std::string notestr);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;
