@@ -22,8 +22,7 @@
 // building search DB from tiles
 static sqlite3* searchDB = NULL;
 static sqlite3_stmt* insertStmt = NULL;
-
-static bool sortByDist = false;
+//static bool sortByDist = false;
 
 
 static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv)
@@ -37,7 +36,7 @@ static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value*
     return;
   }
   // sqlite FTS5 rank is roughly -1*number_of_words_in_query; ordered from -\inf to 0
-  double rank = sortByDist ? -1.0 : sqlite3_value_double(argv[0]);
+  double rank = /*sortByDist ? -1.0 :*/ sqlite3_value_double(argv[0]);
   double lon = sqlite3_value_double(argv[1]);  // distance from search center point in meters
   double lat = sqlite3_value_double(argv[2]);  // distance from search center point in meters
   double dist = lngLatDist(MapsApp::mapCenter.lngLat(), LngLat(lon, lat));
@@ -430,10 +429,11 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
 
 void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 {
+  bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
   // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
-  const char* query = "SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
-      "MATCH ? ORDER BY osmSearchRank(rank, lng, lat) LIMIT 20 OFFSET ?;";
-  DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
+  std::string query = fstring("SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
+      "MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;", sortByDist ? "-1" : "rank");
+  DB_exec(searchDB, query.c_str(), [&](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     double lng = sqlite3_column_double(stmt, 2);
     double lat = sqlite3_column_double(stmt, 3);
@@ -877,7 +877,6 @@ Widget* MapsSearch::createPanel()
   cancelBtn->setVisible(false);
 
   auto searchTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
-  searchTb->addWidget(createStretch());
   if(!app->pluginManager->searchFns.empty()) {
     std::vector<std::string> cproviders = {"Offline"};
     for(auto& fn : app->pluginManager->searchFns)
@@ -889,6 +888,20 @@ Widget* MapsSearch::createPanel()
     };
     searchTb->addWidget(providerSel);
   }
+
+  // result sort order
+  static const char* resultSortKeys[] = {"rank", "dist"};
+  std::string initSort = app->config["search"]["sort"].as<std::string>("rank");
+  size_t initSortIdx = 0;
+  while(initSortIdx < 2 && initSort != resultSortKeys[initSortIdx]) ++initSortIdx;
+  Menu* sortMenu = createRadioMenu({"Relevence", "Distance"}, [this](size_t ii){
+    app->config["search"]["sort"] = resultSortKeys[ii];
+    if(!queryText->text().empty())
+      searchText(queryText->text(), MapsSearch::RETURN);
+  }, initSortIdx);
+  Button* sortBtn = createToolbutton(SvgGui::useFile("icons/ic_menu_settings.svg"), "Sort");
+  sortBtn->setMenu(sortMenu);
+  searchTb->addWidget(sortBtn);
 
   Widget* searchContent = createColumn(); //createListContainer();
   resultsContent = createColumn(); //createListContainer();
@@ -931,7 +944,7 @@ Widget* MapsSearch::createPanel()
   )";
   autoCompProto.reset(loadSVGFragment(autoCompProtoSVG));
 
-  markers.reset(new MarkerGroup(map, "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
+  markers.reset(new MarkerGroup(app->map, "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
 
   initSearch();
 

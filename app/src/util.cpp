@@ -99,6 +99,28 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
   return true;
 }
 
+// UI
+
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+//#include "ugui/textedit.h"
+
+Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial)
+{
+  Menu* menu = createMenu(Menu::VERT_RIGHT);
+  for(size_t ii = 0; ii < titles.size(); ++ii) {
+    Button* item = createCheckBoxMenuItem(titles[ii].c_str(), "#radiobutton");
+    item->setChecked(ii == initial);
+    menu->addItem(item);
+    item->onClicked = [=](){
+      for(Widget* btn : menu->select(".radiobutton"))
+        static_cast<Button*>(btn)->setChecked(btn == item);
+      onChanged(ii);
+    };
+  }
+  return menu;
+}
+
 // MarkerGroup
 // - we may alter this is preserve markers when reset or to use ClientDataSource (at least for alt markers)
 

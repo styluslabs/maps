@@ -822,8 +822,6 @@ Window* MapsApp::createGUI()
   };
   reorientBtn->setVisible(false);
 
-
-
   Button* recenterBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_clock.svg"), "Recenter");
   recenterBtn->onClicked = [this](){
     map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
@@ -846,7 +844,7 @@ void MapsApp::showPanel(Widget* panel)
     panelHistory.back()->setVisible(false);
   }
   panelHistory.push_back(panel);
-  panelContainer->addWidget(panel);
+  //panelContainer->addWidget(panel);
   panelContainer->setVisible(true);
   if(panelSplitter) {
     panelSplitter->setVisible(true);
@@ -863,7 +861,8 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
     if(panelHistory.empty())
       LOGE("back button clicked but panelHistory empty ... this should never happen!");
     else {
-      panelContainer->containerNode()->removeChild(panelHistory.back()->node);
+      //panelContainer->containerNode()->removeChild(panelHistory.back()->node);
+      panelHistory.back()->setVisible(false);
       panelHistory.pop_back();
       if(!panelHistory.empty())
         panelHistory.back()->setVisible(true);
@@ -912,6 +911,9 @@ Widget* MapsApp::createMapPanel(Widget* header, Widget* content, Widget* fixedCo
     panel->addWidget(fixedContent);
   if(content)
     panel->addWidget(new ScrollWidget(new SvgDocument(), content));
+
+  panel->setVisible(false);
+  panelContainer->addWidget(panel);
   return panel;
 }
 

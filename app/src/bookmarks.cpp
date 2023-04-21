@@ -7,6 +7,7 @@
 
 #include "sqlite3/sqlite3.h"
 #include "rapidjson/document.h"
+#include "yaml-cpp/yaml.h"
 
 // bookmarks (saved places)
 
@@ -284,6 +285,52 @@ void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char
   //placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 }*/
 
+// how to show bookmarks presistently?
+// - where to store this flag?  DB? prefs? ... prefs seem more appropriate; we can just use yaml or json doc for prefs
+// - different colors for bookmarks? color is currently hardcoded in SVG
+
+// if we store in prefs, how to load, save?  loading can just be done in createPanel()
+// - need to call populateBkmks(list, false) for each one
+
+// when to call saveConfig() in MapsApp? destructor?  then should we use new/delete for MapsComponents
+//  so their destructors can be called before saveConfig()?  Or update config as soon as changes are made?
+//  or separate fn called on exit?
+
+// ... for mobile, we need to save config on suspend, not destruction!  so easiest to update config immediately
+
+// how to sort bookmarks by name if name is buried inside props?  add column for name?
+
+
+
+// how to create new list?
+// - just enter name in text combo box when creating bookmark
+// place info: what if place is member of multiple lists?  use list w/ checkboxes instead of combobox?
+
+
+// how to apply color to SVG markers?
+
+
+// use list_id instead of name for bkmkMarkers map
+
+
+// what about sorting list of lists? should be reorderable by drag and drop
+// ... seems we should store order in same place as visibility flag ... config file I suppose ... or separate DB table (join)
+// ... two arrays: order and visible?  store title or rowid?
+// ... I think a separate DB table is the way to go
+
+// JOIN lists_state on list_id ORDER by list_state.order
+// what about order of archived vs non-archived
+
+// UPDATE lists_state SET order = ? WHERE list_id = ?
+
+// UPDATE lists_state SET visible = ? WHERE list_id = ?
+
+
+// how to apply order in populateLists()?  build vector of items, sort, then add to container
+// join w/ temporary tabled created with CTE
+
+
+
 void MapsBookmarks::populateLists(bool archived)
 {
   if(!listsPanel) {
@@ -324,7 +371,37 @@ void MapsBookmarks::populateLists(bool archived)
       populateBkmks(list, true);
     };
 
+
+    Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));
+    dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
+      // if finger > height above or below center, shift position
+      if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
+        Rect b = dragBtn->node->bounds();
+        real dy = event->tfinger.y - b.center().y;
+        if(std::abs(dy) > b.height()) {
+          SvgContainerNode* parent = item->parent()->containerNode();
+          auto& items = parent->children();
+          auto it = std::find(items.begin(), items.end(), item);
+          if(it == items.end() || (it == items.begin() && dy < 0)) return true;
+          if(dy < 0)
+            --it;
+          // note iterator is advanced by 2 places and we assume archived lists item is always at end
+          else if(++it == items.end() || ++it == items.end())
+            return true;
+          SvgNode* next = *it;
+          parent->removeChild(item->node);
+          parent->addChild(item->node, next);
+        }
+        return true;
+      }
+      return false;
+    });
+
+
     Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
+    auto it = bkmkMarkers.find(list);
+    if(it != bkmkMarkers.end())
+      showBtn->setChecked(it->second->visible);
     showBtn->onClicked = [this, list](){
       auto it = bkmkMarkers.find(list);
       if(it == bkmkMarkers.end()) {
@@ -332,31 +409,6 @@ void MapsBookmarks::populateLists(bool archived)
       }
       else
         it->second->setVisible(!it->second->visible);
-
-      // how to show bookmarks presistently?
-      // - where to store this flag?  DB? prefs? ... prefs seem more appropriate; we can just use yaml or json doc for prefs
-      // - different colors for bookmarks? color is currently hardcoded in SVG
-
-      // how to create new list?
-      // - just enter name in text combo box when creating bookmark
-
-      // - we need way to rename list; can also use this to set color
-      // ... so we probably should use separate DB table w/ list props
-      // ... and have dialog to edit list name, color, etc.
-
-      // how to apply color to SVG markers?
-
-
-      // NEED option to archive bookmark lists (tracks too?)
-
-      // use list_id instead of name for bkmkMarkers map
-
-      // place info: what if place is member of multiple lists?  use list w/ checkboxes instead of combobox?
-
-      // need options for sorting list: distance, date, alphabetical
-
-
-
     };
 
     Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
@@ -423,6 +475,7 @@ void MapsBookmarks::populateLists(bool archived)
   }
 }
 
+// Note each MapPanel is attached to UI tree (but invisible unless in use) and thus deleted when UI is deleted
 class MapPanel : public Widget
 {
 public:
@@ -478,6 +531,17 @@ void MapsBookmarks::populateBkmks(const std::string& listname, bool createUI)
       editListContent->setVisible(!editListContent->isVisible());
     };
 
+    static const char* bkmkSortKeys[] = {"name", "date", "dist"};
+    std::string initSort = app->config["bookmarks"]["sort"].as<std::string>("date");
+    size_t initSortIdx = 0;
+    while(initSortIdx < 3 && initSort != bkmkSortKeys[initSortIdx]) ++initSortIdx;
+    Menu* sortMenu = createRadioMenu({"Name", "Date", "Distance"}, [this](size_t ii){
+      app->config["bookmarks"]["sort"] = bkmkSortKeys[ii];
+      populateBkmks(list_name, true);  // class member to hold current list name or id?
+    }, initSortIdx);
+    Button* sortBtn = createToolbutton(SvgGui::useFile("icons/ic_menu_settings.svg"), "Sort");
+    sortBtn->setMenu(sortMenu);
+
     Button* mapAreaBkmksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Bookmarks in map area only");
     mapAreaBkmksBtn->onClicked = [this](){
       mapAreaBkmks = !mapAreaBkmks;
@@ -488,6 +552,7 @@ void MapsBookmarks::populateBkmks(const std::string& listname, bool createUI)
           item->setVisible(true);
       }
     };
+    toolbar->addWidget(sortBtn);
     toolbar->addWidget(editListBtn);
     toolbar->addWidget(mapAreaBkmksBtn);
     bkmkPanel = app->createMapPanel(toolbar, bkmkContent);
@@ -516,10 +581,10 @@ void MapsBookmarks::populateBkmks(const std::string& listname, bool createUI)
   if(it == bkmkMarkers.end())
     markerGroup = *bkmkMarkers.emplace(listname, "layers.bookmark-marker.draw.marker").first;
 
-  //Map* map = app->map;
-  //size_t markerIdx = 0;
-  const char* query = "SELECT rowid, props, notes, lng, lat FROM bookmarks WHERE list = ?;";
-  DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
+  std::string srt = app->config["bookmarks"]["sort"].as<std::string>("date");
+  std::string strStr = srt == "name" ? "title" : srt == "dist" ? "osmSearchRank(-1, lng, lat)" : "timestamp DESC";
+  std::string query = "SELECT rowid, props, notes, lng, lat FROM bookmarks WHERE list = ? ORDER BY " + strStr + ";";
+  DB_exec(app->bkmkDB, query.c_str(), [&](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     std::string propstr = (const char*)(sqlite3_column_text(stmt, 1));
     const char* notestr = (const char*)(sqlite3_column_text(stmt, 2));
@@ -696,7 +761,7 @@ Widget* MapsBookmarks::createPanel()
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5">
+        <g class="toolbutton drag-btn" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_drawer.svg"/>
         </g>
         <g layout="box" box-anchor="vfill">
