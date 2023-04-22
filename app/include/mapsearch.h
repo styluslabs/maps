@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mapscomponent.h"
+#include "util.h"
 #include "yaml-cpp/yaml.h"
 #include "rapidjson/document.h"
 
@@ -40,7 +41,7 @@ public:
   void addListResult(int64_t id, double lng, double lat, float rank, const char* json);
   void addMapResult(int64_t id, double lng, double lat, float rank, const char* json);
 
-  std::mutex resultsMutex;
+  //std::mutex resultsMutex;
   //std::vector<MarkerID> pinMarkers;
   //std::vector<MarkerID> dotMarkers;
   std::unique_ptr<MarkerGroup> markers;
@@ -77,6 +78,7 @@ private:
   void onlineListSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
   void onlineMapSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
   void onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch);
+  void clearSearchResults();
 
   //void onZoom();
   //void clearSearchResults(std::vector<SearchResult>& results);

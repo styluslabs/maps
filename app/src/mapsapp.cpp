@@ -464,177 +464,6 @@ void MapsApp::dumpTileContents(float x, float y)
   }
 }
 
-/*void MapsApp::showSceneGUI()
-{
-    // always show map position ... what's the difference between getPosition/getZoom and getCameraPosition()?
-    double lng, lat;
-    map->getPosition(lng, lat);
-    ImGui::Text("Map: lat,lng,zoom: %.7f, %.7f z%.2f", lat, lng, map->getZoom());
-    ImGui::Text("GPS: lat,lng,alt,dir: %.7f, %.7f %.1f m %.0f", loc.lat, loc.lng, loc.alt, orientation);
-    if (ImGui::Button("Recenter")) {
-      map->flyTo(CameraPosition{loc.lng, loc.lat, map->getZoom()}, 1.0);
-    }
-
-    if (ImGui::CollapsingHeader("Scene")) {
-        if (ImGui::InputText("Scene URL", &sceneFile, ImGuiInputTextFlags_EnterReturnsTrue)) {
-            sceneYaml.clear();
-            loadSceneFile();
-        }
-        if (ImGui::InputText("API key", &apiKey, ImGuiInputTextFlags_EnterReturnsTrue)) {
-          if (!apiKey.empty()) {
-              sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
-          }
-          loadSceneFile();  //, {SceneUpdate{apiKeyScenePath, apiKey}});
-        }
-        if (ImGui::Button("Reload Scene")) {
-            loadSceneFile();
-        }
-    }
-}
-
-void MapsApp::showViewportGUI()
-{
-    if (ImGui::CollapsingHeader("Viewport")) {
-        CameraPosition camera = map->getCameraPosition();
-        float lngLatZoom[3] = {static_cast<float>(camera.longitude), static_cast<float>(camera.latitude), camera.zoom};
-        if (ImGui::InputFloat3("Lng/Lat/Zoom", lngLatZoom, "%.5f", ImGuiInputTextFlags_EnterReturnsTrue)) {
-            camera.longitude = lngLatZoom[0];
-            camera.latitude = lngLatZoom[1];
-            camera.zoom = lngLatZoom[2];
-            map->setCameraPosition(camera);
-        }
-        if (ImGui::SliderAngle("Tilt", &camera.tilt, 0.f, 90.f)) {
-            map->setCameraPosition(camera);
-        }
-        if (ImGui::SliderAngle("Rotation", &camera.rotation, 0.f, 360.f)) {
-            map->setCameraPosition(camera);
-        }
-        Tangram::EdgePadding padding = map->getPadding();
-        if (ImGui::InputInt4("Left/Top/Right/Bottom", &padding.left)) {
-            map->setPadding(padding);
-        }
-    }
-}
-
-void MapsApp::showDebugFlagsGUI()
-{
-    using Tangram::DebugFlags;
-
-    if (ImGui::CollapsingHeader("Debug Flags")) {
-        bool flag;
-        flag = getDebugFlag(DebugFlags::freeze_tiles);
-        if (ImGui::Checkbox("Freeze Tiles", &flag)) {
-            setDebugFlag(DebugFlags::freeze_tiles, flag);
-        }
-        flag = getDebugFlag(DebugFlags::proxy_colors);
-        if (ImGui::Checkbox("Recolor Proxy Tiles", &flag)) {
-            setDebugFlag(DebugFlags::proxy_colors, flag);
-        }
-        flag = getDebugFlag(DebugFlags::tile_bounds);
-        if (ImGui::Checkbox("Show Tile Bounds", &flag)) {
-            setDebugFlag(DebugFlags::tile_bounds, flag);
-        }
-        flag = getDebugFlag(DebugFlags::tile_infos);
-        if (ImGui::Checkbox("Show Tile Info", &flag)) {
-            setDebugFlag(DebugFlags::tile_infos, flag);
-        }
-        flag = getDebugFlag(DebugFlags::labels);
-        if (ImGui::Checkbox("Show Label Debug Info", &flag)) {
-            setDebugFlag(DebugFlags::labels, flag);
-        }
-        flag = getDebugFlag(DebugFlags::tangram_infos);
-        if (ImGui::Checkbox("Show Map Info", &flag)) {
-            setDebugFlag(DebugFlags::tangram_infos, flag);
-        }
-        flag = getDebugFlag(DebugFlags::draw_all_labels);
-        if (ImGui::Checkbox("Show All Labels", &flag)) {
-            setDebugFlag(DebugFlags::draw_all_labels, flag);
-        }
-        flag = getDebugFlag(DebugFlags::tangram_stats);
-        if (ImGui::Checkbox("Show Frame Stats", &flag)) {
-            setDebugFlag(DebugFlags::tangram_stats, flag);
-        }
-        flag = getDebugFlag(DebugFlags::selection_buffer);
-        if (ImGui::Checkbox("Show Selection Buffer", &flag)) {
-            setDebugFlag(DebugFlags::selection_buffer, flag);
-        }
-        ImGui::Checkbox("Wireframe Mode", &wireframe_mode);
-        ImGui::Checkbox("Single Tile worker thread", &single_tile_worker);
-    }
-}
-
-void MapsApp::showSceneVarsGUI()
-{
-  if (ImGui::CollapsingHeader("Scene Variables", ImGuiTreeNodeFlags_DefaultOpen)) {
-    YAML::Node vars = readSceneValue("global.gui_variables");
-    for(const auto& var : vars) {
-      std::string name = var["name"].as<std::string>("");
-      std::string label = var["label"].as<std::string>("");
-      std::string reload = var["reload"].as<std::string>("");
-      std::string stylename = var["style"].as<std::string>("");
-      if(!stylename.empty()) {
-        // shader uniform
-        auto& styles = map->getScene()->styles();
-        for(auto& style : styles) {
-          if(style->getName() == stylename) {
-            for(auto& uniform : style->styleUniforms()) {
-              if(uniform.first.name == name) {
-                if(uniform.second.is<float>()) {
-                  float val = uniform.second.get<float>();
-                  if(ImGui::InputFloat(label.c_str(), &val)) {
-                    uniform.second.set<float>(val);
-                  }
-                }
-                else
-                  LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), name.c_str());
-                return;
-              }
-            }
-            break;
-          }
-        }
-        LOGE("Cannot find style uniform %s.%s referenced in gui_variables!", stylename.c_str(), name.c_str());
-      }
-      else {
-        // global variable, accessed in scene file by JS functions
-        std::string value = readSceneValue("global." + name).as<std::string>("");
-        bool flag = value == "true";
-        if (ImGui::Checkbox(label.c_str(), &flag)) {
-            // we expect only one checkbox to change per frame, so this is OK
-            if(reload == "false")  // ... so default to reloading
-                map->updateGlobals({SceneUpdate{"global." + name, flag ? "true" : "false"}});
-            else
-                loadSceneFile(false, {SceneUpdate{"global." + name, flag ? "true" : "false"}});
-        }
-      }
-    }
-  }
-}
-
-void MapsApp::showPickLabelGUI()
-{
-    if (ImGui::CollapsingHeader("Picked Object", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextUnformatted(pickLabelStr.c_str());
-    }
-}
-
-void MapsApp::showImGUI()
-{
-  showSceneGUI();
-  mapsSources->showGUI();
-  mapsOffline->showGUI();
-  showViewportGUI();
-  mapsTracks->showGUI();
-  showDebugFlagsGUI();
-  showSceneVarsGUI();
-  mapsSearch->showGUI();
-  mapsBookmarks->showGUI();
-  pluginManager->showGUI();
-  showPickLabelGUI();
-}*/
-
-// New GUI
-
 class MapsWidget : public Widget
 {
 public:
@@ -976,6 +805,16 @@ void PLATFORM_WakeEventLoop()
   glfwPostEmptyEvent();
 }
 
+static std::mutex taskQueueMutex;
+static std::vector< std::function<void()> > taskQueue;
+
+void MapsApp::runOnMainThread(std::function<void()> fn)
+{
+  std::lock_guard<std::mutex> lock(taskQueueMutex);
+  taskQueue.push_back(fn);
+  glfwPostEmptyEvent();
+}
+
 int main(int argc, char* argv[])
 {
   using Tangram::DebugFlags;
@@ -1121,6 +960,14 @@ int main(int argc, char* argv[])
       SDL_Event event = {0};
       event.type = SvgGui::TIMER;
       gui->sdlEvent(&event);
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(taskQueueMutex);
+      while(!taskQueue.empty()) {
+        taskQueue.back()();
+        taskQueue.pop_back();
+      }
     }
 
     int fbWidth = 0, fbHeight = 0;

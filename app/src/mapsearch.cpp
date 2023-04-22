@@ -22,7 +22,6 @@
 // building search DB from tiles
 static sqlite3* searchDB = NULL;
 static sqlite3_stmt* insertStmt = NULL;
-//static bool sortByDist = false;
 
 
 static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv)
@@ -193,27 +192,17 @@ bool MapsSearch::indexMBTiles()
   return true;
 }
 
-/*void MapsSearch::clearSearchResults(std::vector<SearchResult>& results)
+void MapsSearch::clearSearchResults()
 {
-  //for(auto& res : results) {
-  //  if(res.markerId == 0) continue;
-  //  if(res.isPinMarker)
-  //    pinMarkers.push_back(res.markerId);
-  //  else
-  //    dotMarkers.push_back(res.markerId);
-  //  app->map->markerSetVisible(res.markerId, false);
-  //  res.markerId = 0;
-  //}
-  markers->reset();
-  results.clear();
-}*/
+  app->pluginManager->cancelJsSearch();  // cancel any outstanding search requests
+  mapResults.clear();
+  listResults.clear();
+  markers->clear();
+}
 
 void MapsSearch::clearSearch()
 {
-  mapResults.clear();  //clearSearchResults(mapResults);
-  listResults.clear();  //clearSearchResults(listResults);
-  markers->clear();
-
+  clearSearchResults();
   if(app->searchActive) {
     app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
     app->mapsBookmarks->restoreBookmarks();
@@ -297,111 +286,6 @@ void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, c
   //return listResults.back();
 }
 
-/*static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, float radius)
-{
-  double x, y;
-  map->lngLatToScreenPosition(pos.longitude, pos.latitude, &x, &y);
-  return isect2d::AABB<glm::vec2>(x - radius, y - radius, x + radius, y + radius);
-}
-
-// if isect2d is insufficient, try https://github.com/nushoin/RTree - single-header r-tree impl
-void MapsSearch::createMarkers()
-{
-  markers->reset();
-  for(size_t ii = 0; ii < auto& res : mapResults) {
-    Properties props;
-    //props.set("priority", idx);
-    for(auto& m : res.tags.GetObject()) {
-      if(m.value.IsNumber())
-        props.set(m.name.GetString(), m.value.GetDouble());
-      else if(m.value.IsString())
-        props.set(m.name.GetString(), m.value.GetString());
-    }
-
-    app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
-    auto onPicked = [this, &res](){ app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags); };
-
-
-    markers->createMarker(res.pos, onPicked, std::move(props));
-
-
-  }
-
-  //Map* map = app->map;
-  //float markerRadius = map->getZoom() >= 17 ? 25 : 50;
-  //isect2d::ISect2D<glm::vec2> collider;
-  //int w = map->getViewportWidth(), h = map->getViewportHeight();
-  //collider.resize({16, 16}, {w, h});
-  //int ii = 0;
-  //for(auto& res : mapResults) {
-  //  if(res.markerId == 0) {
-  //    bool collided = false;
-  //    collider.intersect(markerAABB(app->map, res.pos, markerRadius),
-  //        [&](auto& a, auto& b) { collided = true; return false; });
-  //    res.markerId = collided ? getDotMarker(res) : getPinMarker(res, ii);
-  //    res.isPinMarker = !collided;
-  //    map->markerSetDrawOrder(res.markerId, ii + (res.isPinMarker ? 0x10000 : 0));
-  //  }
-  //  else if(res.isPinMarker)
-  //    collider.insert(markerAABB(app->map, res.pos, markerRadius));
-  //  ++ii;
-  //}
-  mapResultsChanged = false;
-}
-
-void MapsSearch::onZoom()
-{
-  Map* map = app->map;
-  float zoom = map->getZoom();
-  if(std::abs(zoom - prevZoom) < 0.5f) return;
-
-  float markerRadius = zoom >= 17 ? 25 : 50;
-  double scrx, scry;
-  int ii = 0;
-  isect2d::ISect2D<glm::vec2> collider;
-  int w = map->getViewportWidth(), h = map->getViewportHeight();
-  collider.resize({16, 16}, {w, h});
-  if(zoom < prevZoom) {
-    // if zoom decr by more than threshold, convert colliding pins to dots
-    for(auto& res : mapResults) {
-      if(!res.isPinMarker) continue;
-      bool collided = false;
-      collider.intersect(markerAABB(map, res.pos, markerRadius),
-          [&](auto& a, auto& b) { collided = true; return false; });
-      if(collided) {
-        // convert to dot marker
-        map->markerSetVisible(res.markerId, false);
-        pinMarkers.push_back(res.markerId);
-        res.markerId = getDotMarker(res);
-        res.isPinMarker = false;
-        map->markerSetDrawOrder(res.markerId, ii);
-      }
-      ++ii;
-    }
-  }
-  else {
-    // if zoom incr, convert dots to pins if no collision
-    for(auto& res : mapResults) {
-      if(res.isPinMarker) continue;
-      // don't touch offscreen markers
-      if(!map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude, &scrx, &scry)) continue;
-      bool collided = false;
-      collider.intersect(markerAABB(map, res.pos, markerRadius),
-          [&](auto& a, auto& b) { collided = true; return false; });
-      if(!collided) {
-        // convert to pin marker
-        map->markerSetVisible(res.markerId, false);
-        dotMarkers.push_back(res.markerId);
-        res.markerId = getPinMarker(res, ii);
-        res.isPinMarker = true;
-        map->markerSetDrawOrder(res.markerId, ii + 0x10000);
-        ++ii;
-      }
-    }
-  }
-  prevZoom = zoom;
-}*/
-
 // online map search C++ code removed 2022-12-11 (now handled via plugins)
 
 void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
@@ -448,215 +332,6 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
   });
 }
 
-/*void MapsSearch::showGUI()
-{
-  static std::vector<std::string> autocomplete;
-  static std::string searchStr;  // imgui compares to this to determine if text is edited, so make persistant
-  static int currItem = -1;
-  static int providerIdx = 0;
-  static LngLat dotBounds00, dotBounds11;
-  static int64_t prevPickedResultId = -1;
-
-  if(!searchDB && !initSearch())
-    return;
-  if(!ImGui::CollapsingHeader("Search", ImGuiTreeNodeFlags_DefaultOpen))
-    return;
-
-  std::vector<const char*> cproviders = {"Offline"};
-  for(auto& fn : app->pluginManager->searchFns)
-    cproviders.push_back(fn.title.c_str());
-
-  if(ImGui::Combo("Provider", &providerIdx, cproviders.data(), cproviders.size()))
-    clearSearch();
-
-  if(providerIdx == 0) {
-    ImGui::SameLine();
-    if(ImGui::Button("Rebuild")) {
-      DB_exec(searchDB, "DELETE FROM points_fts;");
-      indexMBTiles();
-    }
-  }
-
-  Map* map = app->map;
-  LngLat minLngLat(180, 90);
-  LngLat maxLngLat(-180, -90);
-  bool ent = ImGui::InputText("Query", &searchStr, ImGuiInputTextFlags_EnterReturnsTrue);
-  bool edited = ImGui::IsItemEdited();
-  // history (autocomplete)
-  if(ent) {
-    // IGNORE prevents error from UNIQUE constraint
-    DB_exec(searchDB, fstring("INSERT OR REPLACE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
-  }
-  else {
-    if(edited) {
-      autocomplete.clear();
-      std::string histq = fstring("SELECT * FROM history WHERE query LIKE '%s%%' LIMIT 5;", searchStr.c_str());
-      DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
-        autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
-      });
-    }
-    if(!autocomplete.empty()) {
-      std::vector<const char*> cautoc;
-      for(const auto& s : autocomplete)
-        cautoc.push_back(s.c_str());
-
-      int histItem = -1;
-      if(ImGui::ListBox("History", &histItem, cautoc.data(), cautoc.size())) {
-        ent = true;
-        searchStr = autocomplete[histItem];
-        //autocomplete.clear();
-      }
-    }
-  }
-
-  // online results added from different thread
-  std::lock_guard<std::mutex> lock(resultsMutex);
-
-  LngLat lngLat00, lngLat11;
-  app->getMapBounds(lngLat00, lngLat11);
-  // sort by distance only?
-  bool nextPage = false;
-  if (ImGui::Checkbox("Sort by distance", &sortByDist)) {
-    ent = true;
-  }
-  if(ImGui::Button("Clear")) {
-    //ImGui::SetKeyboardFocusHere(-1);
-    clearSearch();
-    searchStr.clear();
-    autocomplete.clear();
-    ent = true;
-  }
-  else if (!listResults.empty()) {
-    ImGui::SameLine();
-    if(ImGui::Button("More"))
-      nextPage = !ent && !edited;
-  }
-
-  if(ent || edited || nextPage) {
-    if(!nextPage) {
-      clearSearchResults(mapResults);
-      clearSearchResults(listResults);
-      map->markerSetVisible(app->pickResultMarker, false);
-      currItem = -1;
-    }
-    //resultOffset = nextPage ? resultOffset + 20 : 0;
-    //size_t markerIdx = nextPage ? results.size() : 0;
-    if(searchStr.size() > 2) {
-      if(providerIdx > 0) {
-        if(ent || nextPage)
-          app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
-      }
-      else
-        offlineListSearch(searchStr, lngLat00, lngLat11);
-
-      // zoom out if necessary to show first 5 results
-      if(ent || nextPage) {
-        LngLat minLngLat(180, 90), maxLngLat(-180, -90);
-        int resultIdx = 0;
-        for(auto& res : listResults) {
-          if(resultIdx <= 5 || lngLatDist(app->mapCenter.lngLat(), res.pos) < 2.0) {
-            minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
-            minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
-            maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
-            maxLngLat.latitude = std::max(maxLngLat.latitude, res.pos.latitude);
-          }
-          ++resultIdx;
-        }
-
-        if(minLngLat.longitude != 180) {
-          double scrx, scry;
-          if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
-              || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
-            auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);
-            pos.zoom = std::min(pos.zoom, 16.0f);
-            map->flyTo(pos, 1.0);
-          }
-        }
-      }
-
-      if(!app->searchActive && ent) {  //&& !listResults.empty()) {
-        map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
-        app->mapsBookmarks->hideBookmarks();
-        app->searchActive = true;
-      }
-    }
-  }
-
-  if(app->searchActive && (ent || (moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
-      || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
-      || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude)) {
-    double lng01 = fabs(lngLat11.longitude - lngLat00.longitude);
-    double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
-    dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
-    dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
-    clearSearchResults(mapResults);
-    if(providerIdx > 0)
-      app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, MAP_SEARCH);
-    else
-      offlineMapSearch(searchStr, dotBounds00, dotBounds11);
-    prevZoom = map->getZoom();
-  }
-  else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
-    onZoom();
-  }
-
-  if(mapResultsChanged)
-    createMarkers();
-
-  SearchResult* pickedResult = NULL;
-  if(app->pickedMarkerId > 0) {
-    for(auto& res : mapResults) {
-      if(res.markerId == app->pickedMarkerId) {
-        pickedResult = &res;
-        map->markerSetVisible(res.markerId, false);  // hide existing marker
-        app->pickedMarkerId = 0;
-        break;
-      }
-    }
-  }
-
-  std::vector<std::string> sresults;
-  for (auto& res : listResults) {
-    double distkm = lngLatDist(app->mapCenter.lngLat(), res.pos);
-    sresults.push_back(fstring("%s (%.1f km)", res.tags["name"].GetString(), distkm));
-  }
-
-  std::vector<const char*> cresults;
-  for(const auto& s : sresults)
-    cresults.push_back(s.c_str());
-
-  if(ImGui::ListBox("Results", &currItem, cresults.data(), cresults.size())) {
-    pickedResult = &listResults[currItem];
-    // find and hide existing map marker, if any
-    for(auto& res : mapResults) {
-      if(res.id == pickedResult->id) {
-        map->markerSetVisible(res.markerId, false);
-        break;
-      }
-    }
-  }
-
-  if(pickedResult) {
-    // restore normal marker for previous picked result
-    if(prevPickedResultId >= 0) {
-      for(auto& res : mapResults) {
-        if(res.id == prevPickedResultId) {
-          map->markerSetVisible(res.markerId, true);
-          break;
-        }
-      }
-    }
-    prevPickedResultId = pickedResult->id;
-
-    rapidjson::StringBuffer sb;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
-    pickedResult->tags.Accept(writer);
-    app->setPickResult(pickedResult->pos, pickedResult->tags["name"].GetString(), sb.GetString());
-  }
-}*/
-
-// methods for ugui UI
-
 void MapsSearch::onMapChange()
 {
   Map* map = app->map;
@@ -676,16 +351,6 @@ void MapsSearch::onMapChange()
     if(markers->onPicked(app->pickedMarkerId))
       app->pickedMarkerId = 0;
   }
-  //if(app->pickedMarkerId > 0) {
-  //  for(auto& res : mapResults) {
-  //    if(res.markerId == app->pickedMarkerId) {
-  //      //map->markerSetVisible(res.markerId, false);  // hide existing marker
-  //      app->pickedMarkerId = 0;
-  //      app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
-  //      break;
-  //    }
-  //  }
-  //}
 }
 
 void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
@@ -694,8 +359,9 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
   double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
   dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
   dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
+  // should we do clearJsSearch() to prevent duplicate results?
   mapResults.clear();
-  markers->clear();  //clearSearchResults(mapResults);
+  markers->clear();
   if(providerIdx > 0)
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, MAP_SEARCH);
   else
@@ -742,11 +408,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   app->getMapBounds(lngLat00, lngLat11);
   if(phase != NEXTPAGE) {
     searchStr = query;
-    mapResults.clear();
-    listResults.clear();
-    markers->clear();
-    //clearSearchResults(mapResults);
-    //clearSearchResults(listResults);
+    clearSearchResults();
     map->markerSetVisible(app->pickResultMarker, false);
   }
 
@@ -773,8 +435,10 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       offlineListSearch(searchStr, lngLat00, lngLat11);
       resultsUpdated();
     }
-    else if(phase != EDITING)
+    else if(phase != EDITING) {
+      bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
       app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
+    }
 
     if(!app->searchActive && phase == RETURN) {
       map->updateGlobals({SceneUpdate{"global.search_active", "true"}});

@@ -13,7 +13,7 @@ public:
   //void showGUI();
   void hideBookmarks(const std::string& excludelist = "");
   void restoreBookmarks();
-  void addBookmark(const char* list, const char* osm_id, const char* props, const char* note, LngLat lnglat, int rowid = -1);
+  void addBookmark(const char* list, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int rowid = -1);
   void onMapChange();
 
   Widget* createPanel();

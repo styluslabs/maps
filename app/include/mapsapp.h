@@ -109,6 +109,8 @@ public:
   std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
 
+  static void runOnMainThread(std::function<void()> fn);
+
   static Platform* platform;
   static std::string baseDir;
   static std::string apiKey;

@@ -1,8 +1,6 @@
 #include "mapsources.h"
 #include "mapsapp.h"
 #include "util.h"
-//#include "imgui.h"
-//#include "imgui_stl.h"
 #include "scene/scene.h"
 #include "style/style.h"  // for making uniforms avail as GUI variables
 
@@ -141,130 +139,6 @@ void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
   mapSources[key] = srcnode;
   //for(auto& k : layerkeys) -- TODO: if modified layer is in use, reload
 }
-
-/*void MapsSources::showGUI()
-{
-  static constexpr int MAX_SOURCES = 8;
-  static int currIdx = 0;
-  static std::vector<int> currSrcIdx(MAX_SOURCES, 0);
-  static int nSources = 1;
-  static std::string newSrcTitle;
-
-  if (!ImGui::CollapsingHeader("Sources", ImGuiTreeNodeFlags_DefaultOpen))
-    return;
-  if(!sourcesLoaded) {
-    ImGui::TextWrapped("Loading mapsources.yaml...");
-    return;
-  }
-
-  try {
-
-  std::vector<std::string> titles = {"None"};
-  std::vector<std::string> keys = {""};
-  for (const auto& src : mapSources) {
-    titles.push_back(src.second["title"].Scalar());
-    keys.push_back(src.first.Scalar());
-  }
-
-  std::vector<const char*> ctitles;
-  for(const auto& s : titles)
-    ctitles.push_back(s.c_str());
-
-  int reload = 0;
-  if(ImGui::Combo("Source", &currIdx, ctitles.data(), ctitles.size()))
-    reload = 1;  // selected source changed - reload scene
-
-  if(currIdx > 0 && mapSources[keys[currIdx]]["type"].Scalar() == "Multi") {
-    ImGui::SameLine();
-    if (ImGui::Button("Remove"))
-      mapSources.remove(keys[currIdx]);
-  }
-  ImGui::Separator();
-  for(int ii = 0; ii < nSources; ++ii) {
-    if(ImGui::Combo(fstring("Layer %d", ii+1).c_str(), &currSrcIdx[ii], ctitles.data(), ctitles.size()))
-      reload = 2;  // layer changed - reload scene
-  }
-
-  if (nSources > 1) {
-    ImGui::SameLine();
-    if (ImGui::Button("Remove")) {
-      --nSources;
-      if(currSrcIdx[nSources] > 0)
-        reload = 2;
-    }
-  }
-  if (nSources < MAX_SOURCES && ImGui::Button("Add Layer")) {
-    currSrcIdx[nSources] = 0;
-    ++nSources;
-  }
-
-  if(reload) {
-    SourceBuilder builder(mapSources);
-    if(reload == 1)
-      builder.addLayer(keys[currIdx]);
-    else {
-      for(int ii = 0; ii < nSources; ++ii) {
-        if(currSrcIdx[ii] > 0)
-          builder.addLayer(keys[currSrcIdx[ii]]);
-      }
-    }
-
-    if(!builder.imports.empty() || !builder.updates.empty()) {
-      app->sceneYaml = builder.getSceneYaml(baseUrl);
-      app->sceneFile = baseUrl + "__GUI_SOURCES__";
-      app->loadSceneFile(false, builder.updates);
-    }
-
-    if(reload == 1 && builder.layerkeys.size() > 1)
-      newSrcTitle = titles[currIdx];
-
-    nSources = std::max(int(builder.layerkeys.size()), nSources);
-    for(size_t ii = 0; ii < builder.layerkeys.size(); ++ii) {
-      for(int jj = 0; jj < keys.size(); ++jj) {
-        if(builder.layerkeys[ii] == keys[jj]) {
-          currSrcIdx[ii] = jj;
-          break;  // next layer
-        }
-      }
-    }
-    for(int ii = builder.layerkeys.size(); ii < nSources; ++ii)
-      currSrcIdx[ii] = 0;
-  }
-
-  if(nSources > 1) {
-    ImGui::InputText("Name", &newSrcTitle, ImGuiInputTextFlags_EnterReturnsTrue);
-    //ent = ImGui::Button("Save") || ent;
-    if(ImGui::Button("Save") && !newSrcTitle.empty()) {
-      std::stringstream fs;  //fs(sourcesFile, std::fstream::app | std::fstream::binary);
-
-      // find available name
-      std::string savekey;
-      if(currIdx > 0 && newSrcTitle == titles[currIdx] && mapSources[keys[currIdx]]["type"].Scalar() == "Multi")
-        savekey = keys[currIdx];
-      else {
-        int ii = mapSources.size();
-        while(ii < INT_MAX && mapSources[fstring("custom-%d", ii)]) ++ii;
-        savekey = fstring("custom-%d", ii);
-        currIdx = keys.size();  // new source will be added at end of list
-      }
-      //YAML::Node node = mapSources[savekey] = YAML::Node(YAML::NodeType::Map);  node["type"] = "Multi";
-      fs << "type: Multi\n";
-      fs << "title: " << newSrcTitle << "\n";
-      fs << "layers:\n";
-      for(int ii = 0; ii < nSources; ++ii) {
-        if(currSrcIdx[ii] > 0)
-          fs << "  - source: " << keys[currSrcIdx[ii]] << "\n";
-      }
-      newSrcTitle.clear();
-      mapSources[savekey] = YAML::Load(fs.str());
-      // we'd set a flag here to save mapsources.yaml on exit
-    }
-  }
-
-  } catch (std::exception& e) {
-    ImGui::TextWrapped("Error parsing mapsources.yaml: %s", e.what());
-  }
-}*/
 
 // New GUI
 

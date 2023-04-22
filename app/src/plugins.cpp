@@ -53,9 +53,19 @@ PluginManager::~PluginManager()
   duk_destroy_heap(jsContext);
 }
 
+void PluginManager::cancelJsSearch()
+{
+  for(auto hnd : searchRequests)
+    MapsApp::platform->cancelUrlRequest(hnd);  // no-op if request already completed
+  searchRequests.clear();
+}
+
 void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags)
 {
-  std::lock_guard<std::mutex> lock(jsMutex);
+  //std::lock_guard<std::mutex> lock(jsMutex);
+  cancelJsSearch();
+  inJsSearch = true;
+
   duk_context* ctx = jsContext;
   // fn
   duk_get_global_string(ctx, searchFns[fnIdx].name.c_str());
@@ -76,6 +86,7 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
   // call the fn
   dukTryCall(ctx, 3);
   duk_pop(ctx);
+  inJsSearch = false;
 }
 
 static int registerFunction(duk_context* ctx)
@@ -94,6 +105,26 @@ static int registerFunction(duk_context* ctx)
   return 0;
 }
 
+static void invokeHttpReqCallback(duk_context* ctx, std::string cbvar, const UrlResponse& response)
+{
+  // get the callback
+  //duk_push_global_stash(ctx);
+  //duk_get_prop_string(ctx, -2, cbvar.c_str());
+  //duk_push_null(ctx);
+  //duk_put_prop_string(ctx, -2, cbvar.c_str());  // release for GC
+  duk_get_global_string(ctx, cbvar.c_str());
+  duk_push_null(ctx);
+  duk_put_global_string(ctx, cbvar.c_str());  // release for GC
+  // parse response JSON and call callback
+  duk_push_lstring(ctx, response.content.data(), response.content.size());
+  char c0 = response.content.size() > 1 ? response.content[0] : '\0';
+  // TODO: use DUK_USE_CPP_EXCEPTIONS to catch parsing errors!
+  if(c0 == '[' || c0 == '{')
+    duk_json_decode(ctx, -1);
+  dukTryCall(ctx, 1);
+  duk_pop(ctx);
+}
+
 static int jsonHttpRequest(duk_context* ctx)
 {
   static int reqCounter = 0;
@@ -107,29 +138,16 @@ static int jsonHttpRequest(duk_context* ctx)
   //duk_push_global_stash(ctx);
   //duk_dup(ctx, 1);  // callback
   //duk_put_prop_string(ctx, -2, cbvar.c_str());
-  MapsApp::platform->startUrlRequest(url, hdrstr, [ctx, cbvar, url](UrlResponse&& response) {
-    if(response.error) {
+  auto hnd = MapsApp::platform->startUrlRequest(url, hdrstr, [ctx, cbvar, url](UrlResponse&& response) {
+    if(response.error)
       LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
-      return;
-    }
-    std::lock_guard<std::mutex> lock(PluginManager::inst->jsMutex);
-    // get the callback
-    //duk_push_global_stash(ctx);
-    //duk_get_prop_string(ctx, -2, cbvar.c_str());
-    //duk_push_null(ctx);
-    //duk_put_prop_string(ctx, -2, cbvar.c_str());  // release for GC
-    duk_get_global_string(ctx, cbvar.c_str());
-    duk_push_null(ctx);
-    duk_put_global_string(ctx, cbvar.c_str());  // release for GC
-    // parse response JSON and call callback
-    duk_push_lstring(ctx, response.content.data(), response.content.size());
-    char c0 = response.content.size() > 1 ? response.content[0] : '\0';
-    // TODO: use DUK_USE_CPP_EXCEPTIONS to catch parsing errors!
-    if(c0 == '[' || c0 == '{')
-      duk_json_decode(ctx, -1);
-    dukTryCall(ctx, 1);
-    duk_pop(ctx);
+    else
+      MapsApp::runOnMainThread([=](){ invokeHttpReqCallback(ctx, cbvar, response); });
+    //std::lock_guard<std::mutex> lock(PluginManager::inst->jsMutex);
+    //invokeHttpReqCallback(ctx, cbvar, response);
   });
+  if(PluginManager::inst->inJsSearch)
+    PluginManager::inst->searchRequests.push_back(hnd);
   return 0;
 }
 
@@ -144,7 +162,7 @@ static int addSearchResult(duk_context* ctx)
   int flags = duk_to_number(ctx, 4);
   const char* json = duk_json_encode(ctx, 5);    // duktape obj -> string -> rapidjson obj ... not ideal
 
-  std::lock_guard<std::mutex> lock(PluginManager::inst->app->mapsSearch->resultsMutex);
+  //std::lock_guard<std::mutex> lock(PluginManager::inst->app->mapsSearch->resultsMutex);
   auto& ms = PluginManager::inst->app->mapsSearch;
   flags & MapsSearch::MAP_SEARCH ? ms->addMapResult(osm_id, lng, lat, score, json)
       : ms->addListResult(osm_id, lng, lat, score, json);
@@ -167,13 +185,14 @@ static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lng
 {
   const char* list = duk_require_string(ctx, 0);
   const char* osm_id = duk_require_string(ctx, 1);
-  const char* props = duk_json_encode(ctx, 2);
-  const char* notes = duk_require_string(ctx, 3);
-  double lng = duk_to_number(ctx, 4);
-  double lat = duk_to_number(ctx, 5);
+  const char* name = duk_json_encode(ctx, 2);
+  const char* props = duk_json_encode(ctx, 3);
+  const char* notes = duk_require_string(ctx, 4);
+  double lng = duk_to_number(ctx, 5);
+  double lat = duk_to_number(ctx, 6);
 
   auto& mb = PluginManager::inst->app->mapsBookmarks;
-  mb->addBookmark(list, osm_id, props, notes, LngLat(lng, lat));
+  mb->addBookmark(list, osm_id, name, props, notes, LngLat(lng, lat));
   return 0;
 }
 
