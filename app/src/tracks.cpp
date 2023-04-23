@@ -262,7 +262,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
 //    addGPXPolyline(gpxFile.c_str());
 //}
 
-void MapsTracks::createTrackEntry(Track& track)
+Widget* MapsTracks::createTrackEntry(Track& track)
 {
   Button* item = new Button(trackListProto->clone());
 
@@ -285,48 +285,52 @@ void MapsTracks::createTrackEntry(Track& track)
     }
   };
 
+  // NEXT: overflow menu w/ delete, archive options
+
   Button* delBtn;
   delBtn->onClicked = [&](){
     DB_exec(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?", NULL, [=](sqlite3_stmt* stmt){
       sqlite3_bind_int(stmt, 1, track.rowid);
     });
-    populateTracks();
+    populateTracks(track.archived);  // refresh
   };
 
   // track detail: date? duration? distance?
   item->selectFirst(".title-text")->setText(track.title.c_str());
   item->selectFirst(".detail-text")->setText(track.detail.c_str());
-  tracksContent->addWidget(item);
+  return item;
 }
 
-void MapsTracks::populateTracks()
+void MapsTracks::populateTracks(bool archived)
 {
-  // separate fn to create list entry so we can easily include recordedTrack?
-  // HEY, we don't want to load track points until needed!
-
-  // where does track come from?
-  // - we remember index into tracks vector
-  // - we remember pointer to Track ... change tracks to vector of Track ptrs?
-  // - we build Track on demand ... then where do we persist markerID?
-
-  app->showPanel(tracksPanel);
-  app->gui->deleteContents(tracksContent, ".listitem");
+  app->showPanel(archived ? archivedPanel : tracksPanel);
+  Widget* content = archived ? archivedContent : tracksContent;
+  app->gui->deleteContents(content, ".listitem");
   tracks.clear();
 
-  DB_exec(app->bkmkDB, "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch') FROM tracks;", [this](sqlite3_stmt* stmt){
+  const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch') FROM tracks WHERE archived = ?;";
+  DB_exec(app->bkmkDB, query, [this, archived](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     std::string title = (const char*)(sqlite3_column_text(stmt, 1));
     std::string filename = (const char*)(sqlite3_column_text(stmt, 2));
     std::string date = (const char*)(sqlite3_column_text(stmt, 3));
-    tracks.push_back({title, date, filename, 0, {}, rowid});
+    tracks.push_back({title, date, filename, 0, {}, rowid, archived});
+  }, [=](sqlite3_stmt* stmt){
+    sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
 
-  if(recordTrack)
-    createTrackEntry(recordedTrack);
+  if(recordTrack && !archived)
+    content->addWidget(createTrackEntry(recordedTrack));
   for(Track& track : tracks)
-    createTrackEntry(track);
+    content->addWidget(createTrackEntry(track));
+  if(!archived) {
+    Button* item = new Button(trackListProto->clone());
+    item->selectFirst(".visibility-btn")->setVisible(false);
+    item->onClicked = [this](){ populateTracks(true); };
+    item->selectFirst(".title-text")->setText("Archived Tracks");
+    content->addWidget(item);
+  }
 }
-
 
 void MapsTracks::populateStats(Track& track)
 {
@@ -605,6 +609,10 @@ Widget* MapsTracks::createPanel()
   tracksTb->addWidget(recordTrackBtn);
   tracksPanel = app->createMapPanel(tracksTb, tracksContent);
 
+  archivedContent = createColumn();
+  auto archivedHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Archived Tracks");
+  archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
+
   auto statsTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
   statsTb->addWidget(editTrackBtn);
   statsPanel = app->createMapPanel(statsTb, statsContent);
@@ -628,7 +636,7 @@ Widget* MapsTracks::createPanel()
   Button* tracksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
   //tracksBtn->setMenu(sourcesMenu);
   tracksBtn->onClicked = [=](){
-    populateTracks();
+    populateTracks(false);
   };
 
   return tracksBtn;

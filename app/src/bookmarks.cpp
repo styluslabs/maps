@@ -59,143 +59,90 @@ void MapsBookmarks::addBookmark(const char* list, const char* osm_id, const char
 
 // use list_id instead of name for bkmkMarkers map
 
+// "+" button next to list combo box in place info section to add place to another bookmark list (shows the create bookmark section)
+
+// how to load markers.yaml for every map ... list of yaml files to add to every scene in config file
+
+// "Widget* addWidgets(std::vector<Widget*> widgets) { for(Widget* w : widgets) addWidget(w); return this; }
+
+// how to dedup drag and drop reordering of tracks, sources, bookmark lists?
+// - reorderableList widget ... not necessary
+// - createReorderingBtn() or createReorderingFn() should be sufficient
+
+// show date for bookmark: with notes and in list
+
+// NEXT: archiving tracks
 
 
-// how to create new list?
-// - just enter name in text combo box when creating bookmark
-// place info: what if place is member of multiple lists?  use list w/ checkboxes instead of combobox? ... how would we add to new list in this case?  listbox for existing lists + combo box for new one?
-// ... list box w/ checkboxes for existing lists + text box for new one?  combobox which stays open w/ checkboxes?
-// ... still use combo box if not member of any list?
-// ... only show bookmark info if accessed through bookmark?
-
-// instead of list box, just rows w/ delete button (to remove from existing lists) and combo box to add to new list
-
-// combo box isn't the best fit for mobile UI ... could switch to modal scrolling list if number of items exceeds some threshold?
-
-
-
-// combo box needs to display centered scrolling list on mobile
-
-// Menu doesn't dim background ... so let's make separate SelectDialog class for now and decide if and how to combine w/ ComboBox later
-
-// should SelectDialog include the button which opens it (in which case it is just a simple control - dialog stuff is hidden inside)? ... yes, I think so
-// - for single select, control would look just like combobox ... how could we provide option to use a different style control?  Just different svg template?
-
-// adding new item (equiv of text combo box) - "New item" item at top of list, becomes text edit + optional additional controls when tapped
-// - new item control passed to create fn?  how to reset fields to defaults if reusing?  returned from callback invoked when new item clicked?
-
-// data model for multi-select - bool vector member ... callback only called when dialog closed ... how does this work if new items added at top?
-
-
-// textcombobox is not obvious enough for creating new list - we need to do "New list" item in list of lists
-
-// I don't think we should add the extra step of having to click accept by using multi-select for the rare case of place in multiple bookmark lists
-
-
-// Note we need single-select for map sources too!
-
-
-SelectDialog::SelectDialog(std::string title, const std::vector<std::string>& _items) : Dialog(createDialogNode())
+void MapsBookmarks::chooseBookmarkList(std::function<void(std::string)> callback)  //int rowid)
 {
-  Widget* dialogBody = selectFirst(".body-container");
-
-
+  Dialog* dialog = new Dialog( setupWindowNode(chooseListProto->clone()) );
   Widget* content = createColumn();
-  addItems(_items);
 
+  Widget* newListContent = createColumn();
+  TextEdit* newListTitle = createTextEdit();
+  TextEdit* newListColor = createTextEdit();  // obviously needs to be replaced with a color picker
+  Button* createListBtn = createPushbutton("Create");
+  createListBtn->onClicked = [=](){
+    const char* query = "INSERT INTO lists (title, color) VALUES (?,?);";
+    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, newListTitle->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, newListColor->text().c_str(), -1, SQLITE_TRANSIENT);
+    });
+    dialog->finish(Dialog::ACCEPTED);
+    callback(list);
+  };
+  newListContent->addWidget(createTitledRow("Title", newListTitle));
+  newListContent->addWidget(createTitledRow("Color", newListColor));
+  newListContent->addWidget(createListBtn);
+  newListContent->setVisible(false);
+  content->addWidget(newListContent);
 
-  dialogBody->addWidget(new ScrollWidget(new SvgDocument(), content));
-}
-
-void SelectDialog::addItems(const std::vector<std::string>& _items)
-{
-  SvgNode* protonode = content->containerNode()->selectFirst(".item_proto");
-  // populate items by cloning prototype
-  for(const std::string& s : _items) {
-    int ii = items.size();
-    items.emplace_back(s);
-    Button* btn = new Button(protonode->clone());
-    btn->onClicked = [this, ii](){
-      updateIndex(ii);
-      finish();
-    };
-    btn->selectFirst("text")->setText(s.c_str());
-    btn->setVisible(true);  // prototypes have display="none"
-    content->addWidget(btn);
-  }
-}
-
-
-ComboBox::ComboBox(SvgNode* n, const std::vector<std::string>& _items) : Widget(n), currIndex(0)
-{
- comboMenu = new Menu(containerNode()->selectFirst(".combo_menu"), Menu::VERT_RIGHT);
-  //Menu* combomenu = new Menu(widgetNode("#combo_menu"), Menu::VERT_RIGHT);
-  //comboText = selectFirst(".combo_text");
-  SvgNode* textNode = containerNode()->selectFirst(".combo_text");
-  comboText = textNode->hasExt() ? static_cast<TextBox*>(textNode->ext()) : new TextBox(textNode);
-  addItems(_items);
-
-  setText(items.front().c_str());
-  // combobox dropdown behaves the same as a menu
-  SvgNode* btn = containerNode()->selectFirst(comboText->isEditable() ? ".combo_open" : ".combo_content");
-  Button* comboopen = new Button(btn);
-  comboopen->setMenu(comboMenu);
-  // when combo menu opens, set min width to match the box
-  comboopen->onPressed = [this](){
-    SvgNode* minwidthnode = containerNode()->selectFirst(".combo-menu-min-width");
-    if(minwidthnode && minwidthnode->type() == SvgNode::RECT) {
-      SvgRect* rectNode = static_cast<SvgRect*>(minwidthnode);
-      real sx = node->bounds().width()/rectNode->bounds().width();
-      rectNode->setRect(Rect::wh(sx*rectNode->getRect().width(), rectNode->getRect().height()));
-    }
+  Button* newListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_add_folder.svg"), "Create List");
+  newListBtn->onClicked = [=](){
+    newListContent->setVisible(!newListContent->isVisible());
   };
 
-  // allow stepping through items w/ up/down arrow
-  addHandler([this](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_KEYDOWN && (event->key.keysym.sym == SDLK_UP || event->key.keysym.sym == SDLK_DOWN)) {
-      updateIndex(currIndex + (event->key.keysym.sym == SDLK_UP ? -1 : 1));
-      return true;
-    }
-    if(event->type == SDL_KEYDOWN || event->type == SDL_KEYUP || event->type == SDL_TEXTINPUT
-        || event->type == SvgGui::FOCUS_GAINED || event->type == SvgGui::FOCUS_LOST)
-      return comboText->sdlEvent(gui, event);
-    return false;
+  Button* cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"), "Cancel");
+  cancelBtn->onClicked = [=](){
+    dialog->finish(Dialog::CANCELLED);
+  };
+
+  const char* query = "SELECT title FROM lists JOIN lists_state AS s ON lists.rowid = s.list_id WHERE lists.archived = 0 ORDER BY s.order;";
+  DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){
+    std::string list = (const char*)(sqlite3_column_text(stmt, 0));
+    Button* item = new Button(listSelectProto->clone());
+    item->onClicked = [=](){
+      dialog->finish(Dialog::ACCEPTED);
+      callback(list);
+    };
+    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(list.c_str());
+    content->addWidget(item);
   });
+
+  TextBox* titleText = new TextBox(createTextNode("Bookmark List"));
+  Toolbar* titleTb = createToolbar();
+  titleTb->addWidget(cancelBtn);
+  titleTb->addWidget(titleText);
+  titleTb->addWidget(createStretch());
+  titleTb->addWidget(newListBtn);
+  dialog->selectFirst(".title-container")->addWidget(titleTb);
+
+  Widget* dialogBody = dialog->selectFirst(".body-container");
+  dialogBody->addWidget(newListContent);
+  dialogBody->addWidget(new ScrollWidget(new SvgDocument(), content));
+
+  app->gui->showModal(dialog, app->gui->windows.front()->modalOrSelf());
 }
-
-
-
-
-
 
 void MapsBookmarks::populateLists(bool archived)
 {
-  if(!listsPanel) {
-    listsContent = createColumn(); //createListContainer();
-    auto listHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Bookmark Lists");
-    listsPanel = app->createMapPanel(listHeader, listsContent);
-
-    archivedContent = createColumn();
-    auto archivedHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Archived Bookmaks");
-    archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
-  }
   app->showPanel(archived ? archivedPanel : listsPanel);
   Widget* content = archived ? archivedContent : listsContent;
   app->gui->deleteContents(content, ".listitem");
 
-
-  listsPanel->onRestore = [](){
-    if(listsDirty)
-      populateLists(false);
-  };
-
-  archivedPanel->onRestore = [](){
-    if(archiveDirty)
-      populateLists(true);
-  };
-
   if(archived) archiveDirty = false; else listsDirty = false;
-
 
   const char* query = "SELECT title, COUNT(1) FROM lists JOIN bookmarks AS b ON lists.rowid = b.list_id "
       "JOIN lists_state AS s ON lists.rowid = s.list_id WHERE lists.archived = ? GROUP by lists.row_id ORDER BY s.order;";
@@ -208,7 +155,6 @@ void MapsBookmarks::populateLists(bool archived)
     item->onClicked = [this, list](){
       populateBkmks(list, true);
     };
-
 
     Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));
     dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
@@ -238,8 +184,6 @@ void MapsBookmarks::populateLists(bool archived)
             sqlite3_bind_int(stmt1, 1, dy < 0 ? ii-1 : ii+1);
           });
 
-
-
           SvgNode* next = *it;
           parent->removeChild(item->node);
           parent->addChild(item->node, next);
@@ -248,7 +192,6 @@ void MapsBookmarks::populateLists(bool archived)
       }
       return false;
     });
-
 
     Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
     auto it = bkmkMarkers.find(list);
@@ -362,60 +305,6 @@ void MapsBookmarks::restoreBookmarks()
 
 void MapsBookmarks::populateBkmks(const std::string& listname, bool createUI)
 {
-  if(createUI && !bkmkPanel) {
-    bkmkContent = createColumn(); //createListContainer();
-
-    Widget* editListContent = createColumn();
-    TextEdit* listTitle = createTextEdit();
-    TextEdit* listColor = createTextEdit();  // obviously needs to be replaced with a color picker
-    Button* saveListBtn = createPushbutton("Apply");
-    saveListBtn->onClicked = [=](){
-      const char* query = "UPDATE lists SET title = ?, color = ? WHERE rowid = ?";
-      DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-        sqlite3_bind_text(stmt, 1, listTitle->text().c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, listColor->text().c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 3, rowid);
-      });
-    };
-    editListContent->addWidget(createTitledRow("Title", listTitle));
-    editListContent->addWidget(createTitledRow("Color", listColor));
-    editListContent->addWidget(saveListBtn);
-    editListContent->setVisible(false);
-    bkmkContent->addWidget(editListContent);
-
-    auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
-    Button* editListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit List");
-    editListBtn->onClicked = [=](){
-      editListContent->setVisible(!editListContent->isVisible());
-    };
-
-    static const char* bkmkSortKeys[] = {"name", "date", "dist"};
-    std::string initSort = app->config["bookmarks"]["sort"].as<std::string>("date");
-    size_t initSortIdx = 0;
-    while(initSortIdx < 3 && initSort != bkmkSortKeys[initSortIdx]) ++initSortIdx;
-    Menu* sortMenu = createRadioMenu({"Name", "Date", "Distance"}, [this](size_t ii){
-      app->config["bookmarks"]["sort"] = bkmkSortKeys[ii];
-      populateBkmks(list_name, true);  // class member to hold current list name or id?
-    }, initSortIdx);
-    Button* sortBtn = createToolbutton(SvgGui::useFile("icons/ic_menu_settings.svg"), "Sort");
-    sortBtn->setMenu(sortMenu);
-
-    Button* mapAreaBkmksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Bookmarks in map area only");
-    mapAreaBkmksBtn->onClicked = [this](){
-      mapAreaBkmks = !mapAreaBkmks;
-      if(mapAreaBkmks)
-        onMapChange();
-      else {
-        for(Widget* item : bkmkContent->select(".listitem"))
-          item->setVisible(true);
-      }
-    };
-    toolbar->addWidget(sortBtn);
-    toolbar->addWidget(editListBtn);
-    toolbar->addWidget(mapAreaBkmksBtn);
-    bkmkPanel = app->createMapPanel(toolbar, bkmkContent);
-  }
-
   if(createUI) {
     app->showPanel(bkmkPanel);
     app->gui->deleteContents(bkmkContent, ".listitem");
@@ -555,67 +444,83 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, std::string liststr, st
   listText->setText(liststr.c_str());
   noteText->setText(notestr.c_str());
 
-  Widget* infoStack = widget->selectFirst("bkmk-display-container");
+  Widget* bkmkStack = widget->selectFirst("bkmk-display-container");
+  Button* createBkmkBtn = new Button(widget->containerNode()->selectFirst(".addbkmk-btn"));
   // bookmark editing
   auto editToolbar = createToolbar();
-  auto acceptBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_accept.svg"));
-  auto cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
-  auto removeBtn = createPushbutton("Remove");
-
-  editToolbar->addWidget(new Widget(createTextNode("Edit Bookmark")));
-  editToolbar->addWidget(createStretch());
-  editToolbar->addWidget(acceptBtn);
-  editToolbar->addWidget(cancelBtn);
-
-  std::vector<std::string> lists;  // = {"None"};
-  DB_exec(app->bkmkDB, "SELECT title FROM lists WHERE archived = 0;", [&](sqlite3_stmt* stmt){  //SELECT DISTINCT list FROM bookmarks;
-    lists.emplace_back((const char*)(sqlite3_column_text(stmt, 0)));
-  });
-  auto listsCombo = createComboBox(lists);  // createTextComboBox not sufficiently obvious for creating new list
   auto noteEdit = createTextEdit();
-  noteEdit->setText(notestr.c_str());
-  listsCombo->setText(liststr.c_str());
+  auto acceptNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_accept.svg"));
+  auto cancelNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
 
-  auto editStack = createColumn();
-  editStack->addWidget(editToolbar);
-  editStack->addWidget(createTitledRow("List", listsCombo, removeBtn));
-  editStack->addWidget(createTitledRow("Note", noteEdit));
+  editToolbar->addWidget(noteEdit);
+  editToolbar->addWidget(acceptNoteBtn);
+  editToolbar->addWidget(cancelNoteBtn);
+  editToolbar->setVisible(false);
+  widget->selectFirst("bkmk-edit-container")->addWidget(editToolbar);
 
-  acceptBtn->onClicked = [&, rowid](){
-    std::string listname = listsCombo->text();
-    rapidjson::Document& doc = app->pickResultProps;
-    std::string title = doc.IsObject() && doc.HasMember("name") ?  doc["name"].GetString()
-        : fstring("Pin: %.6f, %.6f", app->pickResultCoord.latitude, app->pickResultCoord.longitude);
-    addBookmark(listsCombo->text(), osmIdFromProps(doc).c_str(), title.c_str(),
-        rapidjsonToStr(doc).c_str(), noteEdit->text().c_str(), app->pickResultCoord, rowid);
-    listText->setText(listsCombo->text());
+  acceptNoteBtn->onClicked = [=](){
+    DB_exec(app->bkmkDB, "UPDATE bookmarks SET notes = ? WHERE rowid = ?", NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, noteEdit->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_int(stmt, 2, rowid);
+    });
     noteText->setText(noteEdit->text().c_str());
-    // hide editing stack, show display stack
-    editStack->setVisible(false);
-    infoStack->setVisible(true);
+    editToolbar->setVisible(false);
+    noteText->setVisible(true);
   };
 
-  cancelBtn->onClicked = [&](){
-    editStack->setVisible(false);
-    infoStack->setVisible(true);
+  cancelNoteBtn->onClicked = [&](){
+    editToolbar->setVisible(false);
+    noteText->setVisible(true);
   };
 
-  removeBtn->onClicked = [&](){
+  auto removeBtn = new Button(widget->containerNode()->selectFirst(".discard-btn"));
+  removeBtn->onClicked = [=](){
     DB_exec(app->bkmkDB, "DELETE FROM bookmarks WHERE rowid = ?;", NULL, [&](sqlite3_stmt* stmt){
       sqlite3_bind_int(stmt, 1, rowid);
     });
-    editStack->setVisible(false);  // note that we do not redisplay info stack
+    editToolbar->setVisible(false);  // note that we do not redisplay info stack
+    noteText->setVisible(false);
+    createBkmkBtn->setVisible(true);
+    bkmkStack->setVisible(false);
   };
 
-  editStack->setVisible(false);
-  widget->selectFirst("bkmk-edit-container")->addWidget(editStack);
-
-  Button* bkmkBtn = new Button(widget->containerNode()->selectFirst("bkmk-icon-container"));
-  bkmkBtn->onClicked = [&](){
-    editStack->setVisible(true);
-    infoStack->setVisible(false);
+  auto addNoteBtn = new Button(widget->containerNode()->selectFirst(".addnote-btn"));
+  addNoteBtn->setVisible(notestr.empty());
+  addNoteBtn->onClicked = [=](){
+    editToolbar->setVisible(true);
+    app->gui->setFocused(noteEdit);
   };
 
+  auto setListFn = [=](std::string list){
+    DB_exec(app->bkmkDB, "UPDATE bookmarks SET list = ? WHERE rowid = ?", NULL, [=](sqlite3_stmt* stmt1){
+      sqlite3_bind_text(stmt1, 1, list.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_int(stmt1, 2, rowid);
+    });
+    listText->setText(list.c_str());
+  };
+
+  Button* chooseListBtn = new Button(widget->containerNode()->selectFirst(".combobox"));
+  chooseListBtn->onClicked = [=](){
+    chooseBookmarkList(setListFn);  //rowid);
+  };
+
+  auto createBkmkFn = [&, rowid](std::string list){
+    rapidjson::Document& doc = app->pickResultProps;
+    std::string title = doc.IsObject() && doc.HasMember("name") ?  doc["name"].GetString()
+        : fstring("Pin: %.6f, %.6f", app->pickResultCoord.latitude, app->pickResultCoord.longitude);
+    addBookmark(list.c_str(), osmIdFromProps(doc).c_str(), title.c_str(),
+        rapidjsonToStr(doc).c_str(), "", app->pickResultCoord, rowid);
+    listText->setText(list.c_str());
+    createBkmkBtn->setVisible(false);
+    bkmkStack->setVisible(true);
+  };
+
+  createBkmkBtn->onClicked = [=](){
+    chooseBookmarkList(createBkmkFn);  //rowid);
+  };
+
+  createBkmkBtn->setVisible(rowid < 0);
+  bkmkStack->setVisible(rowid >= 0);
   return widget;
 }
 
@@ -648,6 +553,21 @@ Widget* MapsBookmarks::createPanel()
   )";
   bkmkListProto.reset(loadSVGFragment(bkmkListProtoSVG));
 
+  static const char* listSelectProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g layout="flex" flex-direction="row" box-anchor="left">
+        <g class="image-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_drawer.svg"/>
+        </g>
+        <g layout="box" box-anchor="vfill">
+          <text class="title-text" box-anchor="left" margin="0 10"></text>
+        </g>
+      </g>
+    </g>
+  )";
+  listSelectProto.reset(loadSVGFragment(listSelectProtoSVG));
+
   static const char* placeListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
@@ -671,26 +591,152 @@ Widget* MapsBookmarks::createPanel()
   placeListProto.reset(loadSVGFragment(placeListProtoSVG));
 
   static const char* placeInfoSectionProtoSVG = R"(
-    <g margin="0 5" layout="box" box-anchor="hfill">
-      <g class="bkmk-edit-container" box-anchor="hfill" layout="box"></g>
+    <g margin="0 5" box-anchor="hfill" layout="flex" flex-direction="column">
+      <g class="pushbutton addbkmk-btn" margin="2 5">
+        <text>Add Bookmark<text/>
+      </g>
       <g class="bkmk-display-container" layout="flex" flex-direction="row" box-anchor="left">
         <g class="bkmk-icon-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_bookmark.svg"/>
         </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="list-name-text" box-anchor="left" margin="0 10"></text>
-          <text class="note-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        <g class="inputbox combobox" layout="box" box-anchor="left" margin="0 10">
+          <rect class="min-width-rect" width="150" height="36" fill="none"/>
+          <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
+
+          <g class="combo_content" box-anchor="fill" layout="flex" flex-direction="row" margin="0 2">
+            <g class="textbox combo_text" box-anchor="fill" layout="box">
+              <text class="list-name-text"></text>
+            </g>
+
+            <g class="combo_open" box-anchor="vfill" layout="box">
+              <rect fill="none" box-anchor="vfill" width="28" height="28"/>
+              <use class="icon" width="28" height="28" xlink:href=":/icons/chevron_down.svg" />
+            </g>
+          </g>
+        </g>
+        <g class="toolbutton discard-btn" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_discard.svg"/>
+        </g>
+        <g class="pushbutton addnote-btn" margin="2 5">
+          <text>Add Note<text/>
         </g>
       </g>
+      <g class="bkmk-edit-container" box-anchor="hfill" layout="box"></g>
+      <text class="note-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
     </g>
   )";
   placeInfoSectionProto.reset(loadSVGFragment(placeInfoSectionProtoSVG));
+
+  static const char* chooseListProtoSVG = R"(
+    <svg id="dialog" class="window dialog" layout="box">
+      <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
+      <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
+        <g class="title-container" box-anchor="fill" layout="box"></g>
+        <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
+        <g class="body-container" box-anchor="fill" layout="flex" flex-direction="column"></g>
+      </g>
+    </svg>
+  )";
+  chooseListProto.reset(static_cast<SvgDocument*>(loadSVGFragment(chooseListProtoSVG)));
 
   // DB setup
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER, title TEXT, notes TEXT, color TEXT, archived INTEGER DEFAULT 0);");
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists_state(list_id INTEGER, order INTEGER, visible INTEGER);");
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list_id INTEGER, title TEXT, props TEXT, notes TEXT, lng REAL, lat REAL, timestamp INTEGER DEFAULT CAST(strftime('%s') AS INTEGER));");
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL);");
+
+  // Bookmark lists panel (main and archived lists)
+  listsContent = createColumn(); //createListContainer();
+  auto listHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Bookmark Lists");
+  listsPanel = app->createMapPanel(listHeader, listsContent);
+
+  Widget* newListContent = createColumn();
+  TextEdit* newListTitle = createTextEdit();
+  TextEdit* newListColor = createTextEdit();  // obviously needs to be replaced with a color picker
+  Button* createListBtn = createPushbutton("Create");
+  createListBtn->onClicked = [=](){
+    const char* query = "INSERT INTO lists (title, color) VALUES (?,?);";
+    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, newListTitle->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, newListColor->text().c_str(), -1, SQLITE_TRANSIENT);
+    });
+  };
+  newListContent->addWidget(createTitledRow("Title", newListTitle));
+  newListContent->addWidget(createTitledRow("Color", newListColor));
+  newListContent->addWidget(createListBtn);
+  newListContent->setVisible(false);
+  listsContent->addWidget(newListContent);
+
+  Button* newListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_add_folder.svg"), "Create List");
+  newListBtn->onClicked = [=](){
+    newListContent->setVisible(!newListContent->isVisible());
+  };
+
+  archivedContent = createColumn();
+  auto archivedHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Archived Bookmaks");
+  archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
+
+  listsPanel->onRestore = [](){
+    if(listsDirty)
+      populateLists(false);
+  };
+
+  archivedPanel->onRestore = [](){
+    if(archiveDirty)
+      populateLists(true);
+  };
+
+  // Bookmarks panel
+  bkmkContent = createColumn(); //createListContainer();
+  Widget* editListContent = createColumn();
+  TextEdit* listTitle = createTextEdit();
+  TextEdit* listColor = createTextEdit();  // obviously needs to be replaced with a color picker
+  Button* saveListBtn = createPushbutton("Apply");
+  saveListBtn->onClicked = [=](){
+    const char* query = "UPDATE lists SET title = ?, color = ? WHERE rowid = ?";
+    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, listTitle->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, listColor->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_int(stmt, 3, rowid);
+    });
+  };
+  editListContent->addWidget(createTitledRow("Title", listTitle));
+  editListContent->addWidget(createTitledRow("Color", listColor));
+  editListContent->addWidget(saveListBtn);
+  editListContent->setVisible(false);
+  bkmkContent->addWidget(editListContent);
+
+  auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
+  Button* editListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit List");
+  editListBtn->onClicked = [=](){
+    editListContent->setVisible(!editListContent->isVisible());
+  };
+
+  static const char* bkmkSortKeys[] = {"name", "date", "dist"};
+  std::string initSort = app->config["bookmarks"]["sort"].as<std::string>("date");
+  size_t initSortIdx = 0;
+  while(initSortIdx < 3 && initSort != bkmkSortKeys[initSortIdx]) ++initSortIdx;
+  Menu* sortMenu = createRadioMenu({"Name", "Date", "Distance"}, [this](size_t ii){
+    app->config["bookmarks"]["sort"] = bkmkSortKeys[ii];
+    populateBkmks(list_name, true);  // class member to hold current list name or id?
+  }, initSortIdx);
+  Button* sortBtn = createToolbutton(SvgGui::useFile("icons/ic_menu_settings.svg"), "Sort");
+  sortBtn->setMenu(sortMenu);
+
+  Button* mapAreaBkmksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Bookmarks in map area only");
+  mapAreaBkmksBtn->onClicked = [this](){
+    mapAreaBkmks = !mapAreaBkmks;
+    if(mapAreaBkmks)
+      onMapChange();
+    else {
+      for(Widget* item : bkmkContent->select(".listitem"))
+        item->setVisible(true);
+    }
+  };
+  toolbar->addWidget(sortBtn);
+  toolbar->addWidget(editListBtn);
+  toolbar->addWidget(mapAreaBkmksBtn);
+  bkmkPanel = app->createMapPanel(toolbar, bkmkContent);
 
   // handle visible bookmark lists
   DB_exec(app->bkmkDB, "SELECT list_id FROM lists_state WHERE visible = 1;", [&](sqlite3_stmt* stmt){

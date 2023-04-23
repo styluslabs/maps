@@ -4,6 +4,7 @@
 #include "util.h"
 
 class SvgNode;
+class SvgDocument;
 class Widget;
 
 class MapsBookmarks : public MapsComponent
@@ -29,6 +30,7 @@ private:
   void populateBkmks(const std::string& listname, bool createUI);
   void populateLists(bool archived);
   Widget* getPlaceInfoSubSection(int rowid, std::string liststr, std::string notestr);
+  void chooseBookmarkList(std::function<void(std::string)> callback);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;
@@ -43,7 +45,9 @@ private:
   bool archiveDirty = false;
 
   std::unique_ptr<SvgNode> bkmkListProto;
+  std::unique_ptr<SvgNode> listSelectProto;
   std::unique_ptr<SvgNode> placeListProto;
   std::unique_ptr<SvgNode> placeInfoSectionProto;
+  std::unique_ptr<SvgDocument> chooseListProto;
 };
 

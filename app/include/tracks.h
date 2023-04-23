@@ -39,6 +39,7 @@ public:
     MarkerID marker;
     std::vector<TrackLoc> locs;
     int rowid;
+    bool archived;
   };
 
   std::vector<Track> tracks;
@@ -54,6 +55,8 @@ public:
 
   Widget* tracksContent = NULL;
   Widget* tracksPanel = NULL;
+  Widget* archivedContent = NULL;
+  Widget* archivedPanel = NULL;
   Widget* statsContent = NULL;
   Widget* statsPanel = NULL;
   TrackPlot* trackPlot = NULL;
@@ -66,9 +69,9 @@ private:
   Track loadGPX(const char* gpxfile);
   bool saveGPX(Track& track);
   void showTrack(Track& track);
-  void populateTracks();
+  void populateTracks(bool archived);
   void populateStats(Track& track);
-  void createTrackEntry(Track& track);
+  Widget* createTrackEntry(Track& track);
 
   Track* activeTrack = NULL;
   double recordLastSave = 0;
