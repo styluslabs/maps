@@ -197,7 +197,7 @@ void MapsSearch::clearSearchResults()
   app->pluginManager->cancelJsSearch();  // cancel any outstanding search requests
   mapResults.clear();
   listResults.clear();
-  markers->clear();
+  markers->reset();
 }
 
 void MapsSearch::clearSearch()
@@ -361,7 +361,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
   dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
   // should we do clearJsSearch() to prevent duplicate results?
   mapResults.clear();
-  markers->clear();
+  markers->reset();
   if(providerIdx > 0)
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, MAP_SEARCH);
   else
@@ -573,7 +573,11 @@ Widget* MapsSearch::createPanel()
   searchContent->addWidget(resultsContent);
   searchPanel = app->createMapPanel(searchTb, resultsContent);
 
-  searchPanel->onClose = [this](){ clearSearch(); };
+  searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SvgGui::INVISIBLE)
+      clearSearch();
+    return false;
+  });
 
   static const char* searchResultProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -630,7 +634,7 @@ Widget* MapsSearch::createPanel()
     return false;
   });
 
-  Button* searchBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
+  Button* searchBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
   searchBtn->setMenu(searchMenu);
   searchBtn->onClicked = [this](){
     app->showPanel(searchPanel);

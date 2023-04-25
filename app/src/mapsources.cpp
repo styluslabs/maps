@@ -77,15 +77,17 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
 
 std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 {
-  // main.cpp prepends file://<cwd>/ to sceneFile!
   // we'll probably want to skip curl for reading from filesystem in scene/importer.cpp - see tests/src/mockPlatform.cpp
   // or maybe add a Url getParent() method to Url class
-  if(imports.empty())
-    return "global:\n\nsources:\n\nlayers:\n";
-
   std::string importstr;
   for(auto& url : imports)
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
+  for(auto& imp : MapsApp::config["common_imports"]) {
+    std::string url = imp.Scalar();
+    importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
+  }
+  if(importstr.empty())
+    return "global:\n\nsources:\n\nlayers:\n";
   return "import:\n" + importstr;  //+ "\nglobal:\n\nsources:\n\nstyles:\n\nlayers:\n";
 }
 
@@ -271,6 +273,161 @@ int64_t MapsSources::shrinkCache(int64_t maxbytes)
   return tot;
 }
 
+
+class SelectBox : public Widget
+{
+public:
+  SelectBox(SvgNode* boxnode, SvgDocument* dialognode, const std::vector<std::string>& _items = {});
+  void setText(const char* s) { comboText->setText(s); }
+  int index() const { return currIndex; }
+  void setIndex(int idx);
+  void updateIndex(int idx);
+  void addItems(const std::vector<std::string>& _items, bool replace = true);
+
+  std::function<void(int)> onChanged;
+
+private:
+  Dialog* dialog;
+  Widget* content;
+  TextBox* comboText;
+  int currIndex;
+
+  std::vector<std::string> items;
+};
+
+SelectBox::SelectBox(SvgNode* boxnode, SvgDocument* dialognode, const std::vector<std::string>& _items)
+    : Widget(boxnode), currIndex(0)
+{
+  comboText = new TextBox(containerNode()->selectFirst(".combo_text"));
+  Button* comboopen = new Button(containerNode()->selectFirst(".combo_content"));
+
+  dialog = new Dialog( setupWindowNode(dialognode) );
+  content = createColumn();
+
+  Button* cancelBtn = new Button(dialog->containerNode()->selectFirst(".cancel-btn"));
+  cancelBtn->onClicked = [=](){ dialog->finish(Dialog::CANCELLED); };
+
+  Widget* dialogBody = dialog->selectFirst(".body-container");
+  dialogBody->addWidget(new ScrollWidget(new SvgDocument(), content));
+
+  comboopen->onClicked = [this](){
+    SvgGui* gui = window()->gui();
+    gui->showModal(dialog, gui->windows.front()->modalOrSelf());
+  };
+
+  addItems(_items);
+  setText(items.front().c_str());
+}
+
+void SelectBox::addItems(const std::vector<std::string>& _items, bool replace)
+{
+  if(replace) {
+    window()->gui()->deleteContents(content);
+    items.clear();
+  }
+  SvgNode* proto = dialog->containerNode()->selectFirst(".listitem-proto");
+  for(int ii = 0; ii < int(_items.size()); ++ii) {
+    Button* btn = new Button(proto->clone());
+    btn->setVisible(true);
+    btn->onClicked = [=](){
+      dialog->finish(Dialog::ACCEPTED);
+      updateIndex(ii);
+    };
+    SvgText* titlenode = static_cast<SvgText*>(btn->containerNode()->selectFirst(".title-text"));
+    titlenode->addText(_items[ii].c_str());
+    content->addWidget(btn);
+    items.emplace_back(_items[ii]);
+  }
+}
+
+void SelectBox::updateIndex(int idx)
+{
+  setIndex(idx);
+  if(onChanged)
+    onChanged(idx);
+}
+
+void SelectBox::setIndex(int idx)
+{
+  if(idx >= 0 && idx < int(items.size())) {
+    const char* s = items[idx].c_str();
+    setText(s);
+    currIndex = idx;
+  }
+}
+
+SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items)
+{
+  static const char* boxProtoSVG = R"#(
+    <g class="inputbox combobox" layout="box" box-anchor="left" margin="0 10">
+      <rect class="min-width-rect" width="150" height="36" fill="none"/>
+      <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
+
+      <g class="combo_content" box-anchor="fill" layout="flex" flex-direction="row" margin="0 2">
+        <g class="textbox combo_text" box-anchor="fill" layout="box">
+          <text box-anchor="left" margin="3 6"></text>
+        </g>
+        <g class="combo_open" box-anchor="vfill" layout="box">
+          <rect fill="none" box-anchor="vfill" width="28" height="28"/>
+          <use class="icon" width="28" height="28" xlink:href=":/icons/chevron_down.svg" />
+        </g>
+      </g>
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> boxProto;
+  if(!boxProto)
+    boxProto.reset(loadSVGFragment(boxProtoSVG));
+
+  static const char* dialogProtoSVG = R"#(
+    <svg id="dialog" class="window dialog" layout="box">
+      <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
+      <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
+        <g class="titlebar-container" box-anchor="hfill" layout="box">
+          <g class="title-container" box-anchor="hfill" layout="flex" flex-direction="row" justify-content="center">
+            <text class="dialog-title"></text>
+          </g>
+          <g class="button-container toolbar" box-anchor="hfill" layout="flex" flex-direction="row">
+            <g class="toolbutton cancel-btn" layout="box">
+              <rect class="background" box-anchor="hfill" width="36" height="42"/>
+              <g margin="0 3" box-anchor="fill" layout="flex" flex-direction="row">
+                <use class="icon" height="36" xlink:href=":/icons/ic_menu_back.svg" />
+                <text class="title" display="none" margin="0 9">Cancel</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
+        <g class="body-container" box-anchor="fill" layout="box"></g>
+      </g>
+
+      <g class="listitem-proto listitem" display="none" margin="0 5" layout="box" box-anchor="hfill">
+        <rect box-anchor="fill" width="48" height="48"/>
+        <g layout="flex" flex-direction="row" box-anchor="left">
+          <g class="image-container" margin="2 5">
+            <use class="listitem-icon" width="36" height="36" xlink:href=""/>
+          </g>
+          <g layout="box" box-anchor="vfill">
+            <text class="title-text" box-anchor="left" margin="0 10"></text>
+          </g>
+        </g>
+      </g>
+
+    </svg>
+  )#";
+  static std::unique_ptr<SvgDocument> dialogProto;
+  if(!dialogProto)
+    dialogProto.reset(static_cast<SvgDocument*>(loadSVGFragment(dialogProtoSVG)));
+
+  SvgDocument* dialog = dialogProto->clone();
+  static_cast<SvgText*>(dialog->selectFirst(".dialog-title"))->addText("title");
+  static_cast<SvgUse*>(dialog->selectFirst(".listitem-icon"))->setTarget(itemicon);
+  SelectBox* widget = new SelectBox(boxProto->clone(), dialog, items);
+  //widget->isFocusable = true;
+  return widget;
+}
+
+// createSelectBox(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Choose Source", {})
+
 void MapsSources::populateSources()
 {
   std::vector<std::string> layerTitles = {"None"};
@@ -290,12 +447,10 @@ void MapsSources::populateSources()
     combo->addItems(layerTitles);
 }
 
-void MapsSources::onSceneLoaded()
-{
-  populateSceneVars();
-
-  // how to get var values when saving new source? save a SceneUpdate for each var change?
-}
+//void MapsSources::onSceneLoaded()
+//{
+//  populateSceneVars();
+//}
 
 void MapsSources::populateSceneVars()
 {
@@ -446,7 +601,7 @@ Widget* MapsSources::createPanel()
     return false;
   });
 
-  Button* sourcesBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Sources");
+  Button* sourcesBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Sources");
   sourcesBtn->setMenu(sourcesMenu);
   sourcesBtn->onClicked = [this](){
     app->showPanel(sourcesPanel);

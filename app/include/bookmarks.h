@@ -12,25 +12,26 @@ class MapsBookmarks : public MapsComponent
 public:
   using MapsComponent::MapsComponent;
   //void showGUI();
-  void hideBookmarks(const std::string& excludelist = "");
+  void hideBookmarks(int excludelist = -1);
   void restoreBookmarks();
-  void addBookmark(const char* list, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int rowid = -1);
+  void addBookmark(int list_id, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int rowid = -1);
+  int getListId(const char* listname, bool create = false);
   void onMapChange();
 
   Widget* createPanel();
   Widget* getPlaceInfoSection(const std::string& osm_id, LngLat pos);
 
   //std::vector<MarkerID> bkmkMarkers;
-  std::unordered_map< std::string, std::unique_ptr<MarkerGroup> > bkmkMarkers;
+  std::unordered_map< int, std::unique_ptr<MarkerGroup> > bkmkMarkers;
 
 private:
   //void showPlacesGUI();
   //void showViewsGUI();
 
-  void populateBkmks(const std::string& listname, bool createUI);
+  void populateBkmks(int list_id, bool createUI);
   void populateLists(bool archived);
   Widget* getPlaceInfoSubSection(int rowid, std::string liststr, std::string notestr);
-  void chooseBookmarkList(std::function<void(std::string)> callback);
+  void chooseBookmarkList(std::function<void(int, std::string)> callback);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;
@@ -43,6 +44,7 @@ private:
   bool bkmkPanelDirty = false;
   bool listsDirty = false;
   bool archiveDirty = false;
+  int activeListId = -1;
 
   std::unique_ptr<SvgNode> bkmkListProto;
   std::unique_ptr<SvgNode> listSelectProto;

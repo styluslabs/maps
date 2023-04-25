@@ -15,7 +15,7 @@ public:
 
   void updateLocation(const Location& _loc);
 
-  std::string gpxFile;
+  //std::string gpxFile;
   //std::vector<MarkerID> trackMarkers;
   MarkerID trackHoverMarker = 0;
 
@@ -25,8 +25,8 @@ public:
   //};
   //std::vector<PointMarker> point_markers;
 
-  MarkerID drawnTrackMarker = 0;
-  std::vector<LngLat> drawnTrack;
+  //MarkerID drawnTrackMarker = 0;
+  //std::vector<LngLat> drawnTrack;
 
   struct TrackLoc : public Location {
     double dist;
@@ -39,11 +39,14 @@ public:
     MarkerID marker;
     std::vector<TrackLoc> locs;
     int rowid;
+    bool visible;
     bool archived;
   };
 
   std::vector<Track> tracks;
   Track recordedTrack;
+
+  Track drawnTrack;
 
   // GPX tracks
   //struct TrackPt {
@@ -67,11 +70,11 @@ public:
 
 private:
   Track loadGPX(const char* gpxfile);
-  bool saveGPX(Track& track);
-  void showTrack(Track& track);
+  bool saveGPX(Track* track);
+  void showTrack(Track* track);  //, const char* styling);
   void populateTracks(bool archived);
-  void populateStats(Track& track);
-  Widget* createTrackEntry(Track& track);
+  void populateStats(Track* track);
+  Widget* createTrackEntry(Track* track);
 
   Track* activeTrack = NULL;
   double recordLastSave = 0;

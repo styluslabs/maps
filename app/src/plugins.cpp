@@ -183,7 +183,7 @@ static int addMapSource(duk_context* ctx)
 
 static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lnglat[1])
 {
-  const char* list = duk_require_string(ctx, 0);
+  const char* listname = duk_require_string(ctx, 0);
   const char* osm_id = duk_require_string(ctx, 1);
   const char* name = duk_json_encode(ctx, 2);
   const char* props = duk_json_encode(ctx, 3);
@@ -192,7 +192,8 @@ static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lng
   double lat = duk_to_number(ctx, 6);
 
   auto& mb = PluginManager::inst->app->mapsBookmarks;
-  mb->addBookmark(list, osm_id, name, props, notes, LngLat(lng, lat));
+  int list_id = mb->getListId(listname, true);
+  mb->addBookmark(list_id, osm_id, name, props, notes, LngLat(lng, lat));
   return 0;
 }
 

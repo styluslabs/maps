@@ -19,6 +19,7 @@ class Splitter;
 class Widget;
 class Button;
 class Window;
+class Toolbar;
 class MapsWidget;
 class SvgNode;
 struct sqlite3;
@@ -78,8 +79,6 @@ public:
   float density = 1.0;
   float pixel_scale = 2.0;
 
-  bool metricUnits = true;
-
   std::unique_ptr<TouchHandler> touchHandler;
   std::unique_ptr<MapsTracks> mapsTracks;
   std::unique_ptr<MapsBookmarks> mapsBookmarks;
@@ -96,6 +95,7 @@ public:
 
   void showPanel(Widget* panel);
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
+  Button* createPanelButton(const SvgNode* icon, const char* title);
   Widget* createMapPanel(Widget* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
 
   Splitter* panelSplitter = NULL;
@@ -120,6 +120,8 @@ public:
   static CameraPosition mapCenter;
 
   static sqlite3* bkmkDB;
+
+  static bool metricUnits;
 
 private:
   //void showImGUI();

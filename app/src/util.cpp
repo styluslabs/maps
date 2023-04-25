@@ -171,6 +171,21 @@ MarkerGroup::MarkerGroup(Tangram::Map* _map, const std::string& _styling, const 
   prevZoom = map->getZoom();
 }
 
+MarkerGroup::~MarkerGroup()
+{
+  reset();
+}
+
+void MarkerGroup::reset()
+{
+  for(auto& res : places) {
+    map->markerRemove(res.markerId);
+    map->markerRemove(res.altMarkerId);
+  }
+  places.clear();
+  collider.clear();
+  prevZoom = -1;
+}
 
 int MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props)
 {

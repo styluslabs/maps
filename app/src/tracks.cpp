@@ -1,168 +1,17 @@
 #include "tracks.h"
 #include "mapsapp.h"
 #include "util.h"
-//#include "imgui.h"
-//#include "imgui_stl.h"
 
 #include <ctime>
 #include <iomanip>
 #include "pugixml.hpp"
 #include "sqlite3/sqlite3.h"
 
-static bool markerUseStylingPath = true;
-static std::string markerStylingPath = "layers.touch.point.draw.icons";
-static std::string markerStylingString = R"RAW(
-style: text
-text_source: "function() { return 'MARKER'; }"
-font:
-    family: Open Sans
-    size: 12px
-    fill: white
-)RAW";
-static std::string polylineStyle = "{ style: lines, interactive: true, color: red, width: 4px, order: 5000 }";
-
-//static bool add_point_marker_on_click = false;
-//static bool add_polyline_marker_on_click = false;
-//static bool point_markers_position_clipped = false;
-
-// https://www.topografix.com/gpx_manual.asp
-MapsTracks::Track MapsTracks::loadGPX(const char* gpxfile)
-{
-  Track track;
-  double dist = 0;
-  pugi::xml_document doc;
-  doc.load_file(gpxfile);
-  pugi::xml_node trk = doc.child("gpx").child("trk");
-  if(!trk) logMsg("Error loading %s\n", gpxfile);
-  track.title = trk.child("name").child_value();
-  track.gpxFile = gpxfile;
-  //activeTrack.clear();
-  gpxFile = gpxfile;
-  while(trk) {
-    pugi::xml_node trkseg = trk.child("trkseg");
-    while(trkseg) {
-      //std::vector<LngLat> track;
-      pugi::xml_node trkpt = trkseg.child("trkpt");
-      while(trkpt) {
-        double lat = trkpt.attribute("lat").as_double();
-        double lng = trkpt.attribute("lon").as_double();
-        //track.emplace_back(lng, lat);
-        pugi::xml_node elenode = trkpt.child("ele");
-        double ele = atof(elenode.child_value());
-        dist += track.locs.empty() ? 0 : lngLatDist(LngLat(lng, lat), track.locs.back().lngLat());
-        //activeTrack.push_back({track.back(), dist, atof(ele.child_value())});
-        double time = 0;
-        pugi::xml_node timenode = trkpt.child("time");
-        if(timenode) {
-          std::tm tmb;
-          std::stringstream(timenode.child_value()) >> std::get_time(&tmb, "%Y-%m-%dT%TZ");  //2023-03-31T20:19:15Z
-          time = mktime(&tmb);
-        }
-        track.locs.push_back({{time, lat, lng, 0, ele, 0, /*dir*/0, 0, /*spd*/0, 0}, dist});
-        trkpt = trkpt.next_sibling("trkpt");
-      }
-      trkseg = trkseg.next_sibling("trkseg");
-    }
-    trk = trk.next_sibling("trk");
-  }
-  return track;
-}
-
-void MapsTracks::tapEvent(LngLat location)
-{
-  if (!drawTrack)
-    return;
-
-  //if (add_point_marker_on_click) {
-  //  auto marker = map->markerAdd();
-  //  map->markerSetPoint(marker, location);
-  //  if (markerUseStylingPath) {
-  //    map->markerSetStylingFromPath(marker, markerStylingPath.c_str());
-  //  } else {
-  //    map->markerSetStylingFromString(marker, markerStylingString.c_str());
-  //  }
-  //
-  //  point_markers.push_back({ marker, location });
-  //}
-
-  // clear track btn?  How to save drawn track?
-
-  if (trackMarkers.empty()) {
-    drawnTrack.clear();
-    trackMarkers.push_back(app->map->markerAdd());
-    app->map->markerSetStylingFromString(trackMarkers.back(), polylineStyle.c_str());
-  }
-  double dist = activeTrack.empty() ? 0 : activeTrack.back().dist + lngLatDist(activeTrack.back().pos, location);
-  activeTrack.push_back({location, dist, 0});
-  drawnTrack.push_back(location);
-  app->map->markerSetPolyline(drawnTrackMarker, drawnTrack.data(), drawnTrack.size());
-}
-
-void MapsTracks::updateLocation(const Location& _loc)
-{
-  if(!recordTrack)
-    return;
-  if(recordedTrack.locs.empty())
-    recordedTrack.locs.push_back({_loc, 0});
-  else {
-    auto& prev = recordedTrack.locs.back();
-    // since altitude is less precise than pos, I don't think we should do sqrt(dist^2 + vert^2)
-    double dist = lngLatDist(_loc.lngLat(), prev.lngLat());
-    double vert = _loc.alt - prev.alt;
-    double dt = _loc.time - prev.time;
-    if(dist > minTrackDist || dt > minTrackTime || vert > minTrackDist) {
-      recordedTrack.locs.push_back({_loc, recordedTrack.locs.back().dist + dist});
-      if(activeTrack == &recordedTrack && !app->panelHistory.empty() && app->panelHistory.back() == statsPanel)
-        populateStats(recordedTrack);
-      if(recordedTrack.marker > 0)
-        showTrack(recordedTrack);
-      if(_loc.time > recordLastSave + 60) {
-        saveGPX(recordedTrack);
-        recordLastSave = _loc.time;
-      }
-    }
-  }
-}
-
-void MapsTracks::showTrack(Track& track)
-{
-  std::vector<LngLat> pts;
-  for(const TrackLoc& loc : track.locs)
-    pts.push_back(loc.lngLat());
-  // choose unused color automatically, but allow user to change color (line width, dash too?)
-  if(track.marker <= 0)
-    track.marker = app->map->markerAdd();
-  app->map->markerSetStylingFromString(track.marker, polylineStyle.c_str());
-  app->map->markerSetPolyline(track.marker, pts.data(), pts.size());
-}
-
-bool MapsTracks::saveGPX(Track& track)
-{
-  // saving track
-  char timebuf[256];
-  pugi::xml_document doc;
-  pugi::xml_node trk = doc.append_child("gpx").append_child("trk");
-  trk.append_child("name").append_child(pugi::node_pcdata).set_value(track.title.c_str());
-  pugi::xml_node seg = trk.append_child("trkseg");
-  for(const TrackLoc& loc : track.locs) {
-    pugi::xml_node trkpt = seg.append_child("trkpt");
-    trkpt.append_attribute("lng").set_value(loc.lng);
-    trkpt.append_attribute("lat").set_value(loc.lat);
-    trkpt.append_child("ele").append_child(pugi::node_pcdata).set_value(fstring("%.1f", loc.alt).c_str());
-    time_t t = time_t(loc.time);
-    strftime(timebuf, sizeof(timebuf), "%FT%TZ", gmtime(&t));
-    trkpt.append_child("time").append_child(pugi::node_pcdata).set_value(timebuf);
-    // should we save direction or speed? position, altitude error?
-  }
-  return doc.save_file(track.gpxFile.c_str(), "  ");
-}
-
-// New GUI
-
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
+
 
 class TrackPlot : public Widget
 {
@@ -170,7 +19,7 @@ public:
   TrackPlot();
   void draw(SvgPainter* svgp) const override;
   Rect bounds(SvgPainter* svgp) const override;
-  void setTrack(MapsTracks::Track& track);
+  void setTrack(MapsTracks::Track* track);
 
   std::function<void(real x)> onHovered;
 
@@ -205,14 +54,14 @@ TrackPlot::TrackPlot() : Widget(new SvgCustomNode), mBounds(Rect::wh(200, 70))
   });
 }
 
-void TrackPlot::setTrack(MapsTracks::Track& track)
+void TrackPlot::setTrack(MapsTracks::Track* track)
 {
   minAlt = FLT_MAX;
   maxAlt = 0;
-  maxDist = track.locs.back().dist;
+  maxDist = track->locs.back().dist;
   plot.clear();
-  for(auto& tpt : track.locs) {
-    plot.addPoint(Point(tpt.dist, app->metricUnits ? tpt.alt : tpt.alt*3.28084));
+  for(auto& tpt : track->locs) {
+    plot.addPoint(Point(tpt.dist, MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084));
     minAlt = std::min(minAlt, tpt.alt);
     maxAlt = std::max(maxAlt, tpt.alt);
   }
@@ -255,49 +104,168 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->drawPath(plot);
 }
 
-//void MapsTracks::onSceneLoaded()
-//{
-//  trackHoverMarker = 0;
-//  if(!gpxFile.empty())
-//    addGPXPolyline(gpxFile.c_str());
-//}
+// https://www.topografix.com/gpx_manual.asp
+MapsTracks::Track MapsTracks::loadGPX(const char* gpxfile)
+{
+  double dist = 0;
+  pugi::xml_document doc;
+  doc.load_file(gpxfile);
+  pugi::xml_node trk = doc.child("gpx").child("trk");
+  if(!trk) logMsg("Error loading %s\n", gpxfile);
+  Track track = {trk.child("name").child_value(), "", gpxfile, 0, {}, -1, false, false};
+  //activeTrack.clear();
+  //gpxFile = gpxfile;
+  while(trk) {
+    pugi::xml_node trkseg = trk.child("trkseg");
+    while(trkseg) {
+      //std::vector<LngLat> track;
+      pugi::xml_node trkpt = trkseg.child("trkpt");
+      while(trkpt) {
+        double lat = trkpt.attribute("lat").as_double();
+        double lng = trkpt.attribute("lon").as_double();
+        //track.emplace_back(lng, lat);
+        pugi::xml_node elenode = trkpt.child("ele");
+        double ele = atof(elenode.child_value());
+        dist += track.locs.empty() ? 0 : lngLatDist(LngLat(lng, lat), track.locs.back().lngLat());
+        //activeTrack.push_back({track.back(), dist, atof(ele.child_value())});
+        double time = 0;
+        pugi::xml_node timenode = trkpt.child("time");
+        if(timenode) {
+          std::tm tmb;
+          std::stringstream(timenode.child_value()) >> std::get_time(&tmb, "%Y-%m-%dT%TZ");  //2023-03-31T20:19:15Z
+          time = mktime(&tmb);
+        }
+        track.locs.push_back({{time, lat, lng, 0, ele, 0, /*dir*/0, 0, /*spd*/0, 0}, dist});
+        trkpt = trkpt.next_sibling("trkpt");
+      }
+      trkseg = trkseg.next_sibling("trkseg");
+    }
+    trk = trk.next_sibling("trk");
+  }
+  return track;
+}
 
-Widget* MapsTracks::createTrackEntry(Track& track)
+void MapsTracks::tapEvent(LngLat location)
+{
+  if(!drawTrack)
+    return;
+  auto& locs = drawnTrack.locs;
+  double dist = locs.empty() ? 0 : locs.back().dist + lngLatDist(locs.back().lngLat(), location);
+  double time = 0;
+  locs.push_back({{time, location.latitude, location.longitude, 0, /*ele*/0, 0, /*dir*/0, 0, /*spd*/0, 0}, dist});
+  showTrack(&drawnTrack);  //, "layers.track.draw.selected-track");
+}
+
+void MapsTracks::updateLocation(const Location& _loc)
+{
+  if(!recordTrack)
+    return;
+  if(recordedTrack.locs.empty())
+    recordedTrack.locs.push_back({_loc, 0});
+  else {
+    auto& prev = recordedTrack.locs.back();
+    // since altitude is less precise than pos, I don't think we should do sqrt(dist^2 + vert^2)
+    double dist = lngLatDist(_loc.lngLat(), prev.lngLat());
+    double vert = _loc.alt - prev.alt;
+    double dt = _loc.time - prev.time;
+    if(dist > minTrackDist || dt > minTrackTime || vert > minTrackDist) {
+      recordedTrack.locs.push_back({_loc, recordedTrack.locs.back().dist + dist});
+      if(activeTrack == &recordedTrack)
+        populateStats(&recordedTrack);
+      else if(recordedTrack.visible)  //if(recordedTrack.marker > 0)
+        showTrack(&recordedTrack);  //, "layers.track.draw.recorded-track");
+      if(_loc.time > recordLastSave + 60) {
+        saveGPX(&recordedTrack);
+        recordLastSave = _loc.time;
+      }
+    }
+  }
+}
+
+void MapsTracks::showTrack(Track* track)  //, const char* styling)
+{
+  if(track->locs.empty() && !track->gpxFile.empty())
+    track->locs = std::move(loadGPX(track->gpxFile.c_str()).locs);
+  std::vector<LngLat> pts;
+  for(const TrackLoc& loc : track->locs)
+    pts.push_back(loc.lngLat());
+  // choose unused color automatically, but allow user to change color (line width, dash too?)
+  if(track->marker <= 0) {
+    track->marker = app->map->markerAdd();
+    app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  //styling);
+  }
+  app->map->markerSetPolyline(track->marker, pts.data(), pts.size());
+}
+
+bool MapsTracks::saveGPX(Track* track)
+{
+  // saving track
+  char timebuf[256];
+  pugi::xml_document doc;
+  pugi::xml_node trk = doc.append_child("gpx").append_child("trk");
+  trk.append_child("name").append_child(pugi::node_pcdata).set_value(track->title.c_str());
+  pugi::xml_node seg = trk.append_child("trkseg");
+  for(const TrackLoc& loc : track->locs) {
+    pugi::xml_node trkpt = seg.append_child("trkpt");
+    trkpt.append_attribute("lng").set_value(loc.lng);
+    trkpt.append_attribute("lat").set_value(loc.lat);
+    trkpt.append_child("ele").append_child(pugi::node_pcdata).set_value(fstring("%.1f", loc.alt).c_str());
+    time_t t = time_t(loc.time);
+    strftime(timebuf, sizeof(timebuf), "%FT%TZ", gmtime(&t));
+    trkpt.append_child("time").append_child(pugi::node_pcdata).set_value(timebuf);
+    // should we save direction or speed? position, altitude error?
+  }
+  return doc.save_file(track->gpxFile.c_str(), "  ");
+}
+
+Widget* MapsTracks::createTrackEntry(Track* track)
 {
   Button* item = new Button(trackListProto->clone());
-
-  item->onClicked = [&](){
-    if(track.locs.empty() && !track.gpxFile.empty())
-      track.locs = std::move(loadGPX(track.gpxFile.c_str()).locs);
-    populateStats(track);
-  };
-
+  item->onClicked = [&](){ populateStats(track); };
   Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
-  showBtn->onClicked = [&](){
-    if(track.marker > 0) {
-      app->map->markerRemove(track.marker);
-      track.marker = 0;
-    }
-    else {
-      if(track.locs.empty() && !track.gpxFile.empty())
-        track.locs = std::move(loadGPX(track.gpxFile.c_str()).locs);
-      showTrack(track);
-    }
+  showBtn->onClicked = [=](){
+    track->visible = !showBtn->checked();
+    showBtn->setChecked(track->visible);
+    //std::string q1 = fstring("UPDATE lists_state SET visible = %d WHERE list_id = ?;", visible ? 1 : 0);
+    //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
+    if(!track->visible || track->marker > 0)
+      app->map->markerSetVisible(track->marker, track->visible);
+    else
+      showTrack(track);  //, "layers.track.draw.track");
   };
 
-  // NEXT: overflow menu w/ delete, archive options
+  if(track->rowid >= 0) {
+    Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
+    Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
+    overflowMenu->addItem(track->archived ? "Unarchive" : "Archive", [=](){
+      //std::string q1 = fstring("UPDATE lists_state SET order = (SELECT COUNT(1) FROM lists WHERE archived = %d) WHERE list_id = ?;", archived ? 0 : 1);
+      //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
+      std::string q2 = fstring("UPDATE tracks SET archived = %d WHERE rowid = ?;", track->archived ? 0 : 1);
+      DB_exec(app->bkmkDB, q2.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, track->rowid); });
+      app->gui->deleteWidget(item);
+      track->archived = !track->archived;
 
-  Button* delBtn;
-  delBtn->onClicked = [&](){
-    DB_exec(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?", NULL, [=](sqlite3_stmt* stmt){
-      sqlite3_bind_int(stmt, 1, track.rowid);
+      if(archived) listsDirty = true; else archiveDirty = true;
     });
-    populateTracks(track.archived);  // refresh
-  };
+
+    overflowMenu->addItem("Delete", [=](){
+      DB_exec(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?", NULL, [=](sqlite3_stmt* stmt){
+        sqlite3_bind_int(stmt, 1, track->rowid);
+      });
+
+      for(auto it = tracks.begin(); it != tracks.end(); ++it) {
+        if(it->rowid == track->rowid)
+          tracks.erase(it);
+      }
+
+      app->gui->deleteWidget(item);  //populateTracks(track.archived);  // refresh
+    });
+    overflowBtn->setMenu(overflowMenu);
+  }
 
   // track detail: date? duration? distance?
-  item->selectFirst(".title-text")->setText(track.title.c_str());
-  item->selectFirst(".detail-text")->setText(track.detail.c_str());
+  item->selectFirst(".title-text")->setText(track->title.c_str());
+  item->selectFirst(".detail-text")->setText(track->detail.c_str());
   return item;
 }
 
@@ -306,7 +274,6 @@ void MapsTracks::populateTracks(bool archived)
   app->showPanel(archived ? archivedPanel : tracksPanel);
   Widget* content = archived ? archivedContent : tracksContent;
   app->gui->deleteContents(content, ".listitem");
-  tracks.clear();
 
   const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch') FROM tracks WHERE archived = ?;";
   DB_exec(app->bkmkDB, query, [this, archived](sqlite3_stmt* stmt){
@@ -314,15 +281,19 @@ void MapsTracks::populateTracks(bool archived)
     std::string title = (const char*)(sqlite3_column_text(stmt, 1));
     std::string filename = (const char*)(sqlite3_column_text(stmt, 2));
     std::string date = (const char*)(sqlite3_column_text(stmt, 3));
-    tracks.push_back({title, date, filename, 0, {}, rowid, archived});
+    for(auto& track : tracks) {
+      if(track.rowid == rowid)
+        return;
+    }
+    tracks.push_back({title, date, filename, 0, {}, rowid, false, archived});
   }, [=](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
 
   if(recordTrack && !archived)
-    content->addWidget(createTrackEntry(recordedTrack));
+    content->addWidget(createTrackEntry(&recordedTrack));
   for(Track& track : tracks)
-    content->addWidget(createTrackEntry(track));
+    content->addWidget(createTrackEntry(&track));
   if(!archived) {
     Button* item = new Button(trackListProto->clone());
     item->selectFirst(".visibility-btn")->setVisible(false);
@@ -332,23 +303,24 @@ void MapsTracks::populateTracks(bool archived)
   }
 }
 
-void MapsTracks::populateStats(Track& track)
+void MapsTracks::populateStats(Track* track)
 {
   app->showPanel(statsPanel);
-  statsPanel->selectFirst(".panel-title")->setText(track.title.c_str());
+  statsPanel->selectFirst(".panel-title")->setText(track->title.c_str());
   trackPlot->setTrack(track);
-  activeTrack = &track;
+  activeTrack = track;
 
-  if(track.marker <= 0)
-    showTrack(track);
-  app->map->markerSetStylingFromString(track.marker, activeTrackStyle.c_str());
+  if(track->marker <= 0)
+    showTrack(track);  //, "layers.track.draw.selected-track");
+  if(track != &recordedTrack)
+    app->map->markerSetStylingFromString(track->marker, "layers.track.draw.selected-track");
 
   // how to calculate max speed?
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
   double currSpeed = 0, maxSpeed = 0;
-  Location prev = track.locs.front();
-  for(size_t ii = 1; ii < track.locs.size(); ++ii) {
-    const Location& loc = track.locs[ii];
+  Location prev = track->locs.front();
+  for(size_t ii = 1; ii < track->locs.size(); ++ii) {
+    const Location& loc = track->locs[ii];
     double dist = lngLatDist(loc.lngLat(), prev.lngLat());
     double vert = loc.alt - prev.alt;
     double dt = loc.time - prev.time;
@@ -370,51 +342,49 @@ void MapsTracks::populateStats(Track& track)
     descentTime += vert < 0 ? dt : 0;
   }
 
-  Widget* trackStatsPanel = statsContent;
-
-  const Location& loc = track.locs.back();
+  const Location& loc = track->locs.back();
   std::string posStr = fstring("%.6f, %.6f", loc.lat, loc.lng);
-  trackStatsPanel->selectFirst(".track-position")->setText(posStr.c_str());
+  statsContent->selectFirst(".track-position")->setText(posStr.c_str());
 
   std::string altStr = app->metricUnits ? fstring("%.0f m", loc.alt) : fstring("%.0f ft", loc.alt*3.28084);
-  trackStatsPanel->selectFirst(".track-altitude")->setText(altStr.c_str());
+  statsContent->selectFirst(".track-altitude")->setText(altStr.c_str());
 
   // m/s -> kph or mph
   std::string speedStr = app->metricUnits ? fstring("%.2f km/h", currSpeed*3.6) : fstring("%.2f mph", currSpeed*2.23694);
-  trackStatsPanel->selectFirst(".track-speed")->setText(speedStr.c_str());
+  statsContent->selectFirst(".track-speed")->setText(speedStr.c_str());
 
-  double ttot = track.locs.back().time - track.locs.front().time;
+  double ttot = track->locs.back().time - track->locs.front().time;
   int hours = int(ttot/3600);
   int mins = int((ttot - hours*3600)/60);
   int secs = int(ttot - hours*3600 - mins*60);
-  trackStatsPanel->selectFirst(".track-time")->setText(fstring("%dh %dm %ds", hours, mins, secs).c_str());
+  statsContent->selectFirst(".track-time")->setText(fstring("%dh %dm %ds", hours, mins, secs).c_str());
 
   ttot = movingTime;
   hours = int(ttot/3600);
   mins = int((ttot - hours*3600)/60);
   secs = int(ttot - hours*3600 - mins*60);
-  trackStatsPanel->selectFirst(".track-moving-time")->setText(fstring("%dh %dm %ds", hours, mins, secs).c_str());
+  statsContent->selectFirst(".track-moving-time")->setText(fstring("%dh %dm %ds", hours, mins, secs).c_str());
 
   double distUser = app->metricUnits ? trackDist/1000 : trackDist*0.000621371;
   std::string distStr = fstring(app->metricUnits ? "%.2f km" : "%.2f mi", distUser);
-  trackStatsPanel->selectFirst(".track-dist")->setText(distStr.c_str());
+  statsContent->selectFirst(".track-dist")->setText(distStr.c_str());
 
   std::string avgSpeedStr = fstring(app->metricUnits ? "%.2f km/h" : "%.2f mph", distUser/(movingTime/3600));
-  trackStatsPanel->selectFirst(".track-avg-speed")->setText(avgSpeedStr.c_str());
+  statsContent->selectFirst(".track-avg-speed")->setText(avgSpeedStr.c_str());
 
   std::string ascentStr = app->metricUnits ? fstring("%.0f m", trackAscent) : fstring("%.0f ft", trackAscent*3.28084);
-  trackStatsPanel->selectFirst(".track-ascent")->setText(ascentStr.c_str());
+  statsContent->selectFirst(".track-ascent")->setText(ascentStr.c_str());
 
   std::string ascentSpdStr = app->metricUnits ? fstring("%.0f m/h", trackAscent/(ascentTime/3600))
       : fstring("%.0f ft/h", (trackAscent*3.28084)/(ascentTime/3600));
-  trackStatsPanel->selectFirst(".track-ascent-speed")->setText(ascentSpdStr.c_str());
+  statsContent->selectFirst(".track-ascent-speed")->setText(ascentSpdStr.c_str());
 
   std::string descentStr = app->metricUnits ? fstring("%.0f m", trackDescent) : fstring("%.0f ft", trackDescent*3.28084);
-  trackStatsPanel->selectFirst(".track-descent")->setText(descentStr.c_str());
+  statsContent->selectFirst(".track-descent")->setText(descentStr.c_str());
 
   std::string descentSpdStr = app->metricUnits ? fstring("%.0f m/h", trackDescent/(descentTime/3600))
       : fstring("%.0f ft/h", (trackDescent*3.28084)/(descentTime/3600));
-  trackStatsPanel->selectFirst(".track-descent-speed")->setText(descentSpdStr.c_str());
+  statsContent->selectFirst(".track-descent-speed")->setText(descentSpdStr.c_str());
 }
 
 static Widget* createStatsRow(std::vector<const char*> items)  // const char* title1, const char* class1, const char* title2, const char* class2)
@@ -433,17 +403,11 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
 }
 
 // Issues:
-
-// - when viewing stats panel for a track, hide other tracks on map
-// - option to archive tracks (as with bookmark lists)
-
-// NEXT: maybe work on bookmarks to help inform data model
-// - very unhappy w/ data model; some options:
-//  - only save rowid and load GPX on demand? we can keep track in activeTrack until replaced
-//  - if we are going to persist TrackLocs, we should persist through updating track list
-// - add track to DB when done recording
+// - "+" button next to list combo box in place info section to add place to another bookmark list (shows the create bookmark section)
+// - "Widget* addWidgets(std::vector<Widget*> widgets) { for(Widget* w : widgets) addWidget(w); return this; }
+// - show date for bookmark: with notes and in list
+// - track styling: allow setting color in UI (like bookmarks)?  what about line width, dash?
 // - option to always record track (i.e. save location history) (while app is in foreground)?
-
 // draw track: we could show distance (length)
 // - aside: would it be easier to draw track by moving map and taping button to drop waypoint at map center?
 // - we also want option to trace track by dragging finger
@@ -466,10 +430,17 @@ Widget* MapsTracks::createPanel()
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_pin.svg"/>
         </g>
 
+        <g class="toolbutton overflow-btn" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_overflow.svg"/>
+        </g>
+
       </g>
     </g>
   )";
   trackListProto.reset(loadSVGFragment(trackListProtoSVG));
+
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks(title TEXT, filename TEXT, style TEXT, timestamp INTEGER DEFAULT CAST(strftime('%s') AS INTEGER), archived INTEGER DEFAULT 0);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks_state(track_id INTEGER, order INTEGER, visible INTEGER);");
 
   // Stats panel
   statsContent = createColumn();
@@ -483,7 +454,7 @@ Widget* MapsTracks::createPanel()
     std::string prevFile = recordedTrack.gpxFile;
     recordedTrack.title = saveTitle->text();
     recordedTrack.gpxFile = savePath->text();
-    if(saveGPX(recordedTrack)) {
+    if(saveGPX(&recordedTrack)) {
       removeFile(prevFile);
       saveTrackContent->setVisible(false);
     }
@@ -524,8 +495,7 @@ Widget* MapsTracks::createPanel()
     double lon = f*locs[jj].lng + (1-f)*locs[jj-1].lng;
     if(trackHoverMarker == 0) {
       trackHoverMarker = app->map->markerAdd();
-      //map->markerSetStylingFromPath(trackHoverMarker, markerStylingPath.c_str());
-      app->map->markerSetStylingFromString(trackHoverMarker, markerStylingString.c_str());
+      app->map->markerSetStylingFromPath(trackHoverMarker, "layers.track-marker.draw.marker");
     }
     app->map->markerSetVisible(trackHoverMarker, true);
     app->map->markerSetPoint(trackHoverMarker, LngLat(lon, lat));
@@ -558,16 +528,24 @@ Widget* MapsTracks::createPanel()
       char timestr[64];
       time_t t = mSecSinceEpoch();
       strftime(timestr, sizeof(timestr), "%FT%T", localtime(&t));  //"%Y-%m-%d %HH%M"
-      recordedTrack = Track{timestr, "", std::string(timestr) + ".gpx", 0, {}, -1};
-      //tracks.insert(tracks.begin(), {"Title", "default filename", 0, {}});
+      recordedTrack = Track{timestr, "", std::string(timestr) + ".gpx", 0, {}, -1, true, false};
+      recordedTrack.marker = app->map->markerAdd();
+      app->map->markerSetStylingFromPath(recordedTrack.marker, "layers.track.draw.recorded-track");
       saveTrackContent->setVisible(true);
-      populateTracks();
-      populateStats(recordedTrack);
+      populateTracks(false);
+      populateStats(&recordedTrack);
     }
     else {
-      // create DB entry for track
-      populateTracks();
+      saveGPX(&recordedTrack);
+      const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
+      DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+        sqlite3_bind_text(stmt, 1, recordedTrack.title.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, recordedTrack.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
+      });
+      recordedTrack.rowid = sqlite3_last_insert_rowid(app->bkmkDB);
+      tracks.push_back(std::move(recordedTrack));
       recordedTrack = Track{};
+      populateTracks(false);
     }
   };
 
@@ -579,19 +557,14 @@ Widget* MapsTracks::createPanel()
   addGpxBtn->onClicked = [=](){
     auto track = loadGPX(gpxPath->text().c_str());
     if(!track.locs.empty()) {
-
-      const char* query = "INSERT INTO tracks (osm_id,filename) VALUES (?,?);";
+      const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
       DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-        sqlite3_bind_text(stmt, 1, osm_id, -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 2, list, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, track.title.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, track.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
       });
-
-      //tracks.push_back(std::move(track));
-      populateTracks();
-
-      showTrack(tracks.back());
-      populateStats(tracks.back());
-      //trackPlot->setTrack(activeTrack);
+      tracks.push_back(std::move(track));
+      populateTracks(false);
+      populateStats(&tracks.back());
       loadTrackPanel->setVisible(false);
     }
   };
@@ -617,6 +590,17 @@ Widget* MapsTracks::createPanel()
   statsTb->addWidget(editTrackBtn);
   statsPanel = app->createMapPanel(statsTb, statsContent);
 
+  statsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SvgGui::INVISIBLE) {
+      if(activeTrack != &recordedTrack)
+        app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track-marker.draw.marker");
+      if(!activeTrack->visible)
+        app->map->markerSetVisible(activeTrack->marker, false);
+      activeTrack = NULL;
+    }
+    return false;
+  });
+
   // main toolbar button ... quick menu - recent tracks?
   /*Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
   sourcesMenu->autoClose = true;
@@ -633,7 +617,7 @@ Widget* MapsTracks::createPanel()
     return false;
   });*/
 
-  Button* tracksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
+  Button* tracksBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
   //tracksBtn->setMenu(sourcesMenu);
   tracksBtn->onClicked = [=](){
     populateTracks(false);

@@ -32,7 +32,7 @@ std::string MapsApp::apiKey;
 CameraPosition MapsApp::mapCenter;
 YAML::Node MapsApp::config;
 std::string MapsApp::configFile;
-
+bool MapsApp::metricUnits = true;
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 {
@@ -720,6 +720,28 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 
   toolbar->addWidget(stretch);
   return toolbar;
+}
+
+Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title)
+{
+  static const char* protoSVG = R"#(
+    <g id="toolbutton" class="toolbutton" layout="box">
+      <rect class="background" box-anchor="hfill" width="36" height="42"/>
+      <rect class="checkmark" box-anchor="bottom hfill" margin="0 2" fill="none" width="36" height="3"/>
+      <g margin="0 3" box-anchor="fill" layout="flex" flex-direction="column">
+        <use class="icon" height="36" xlink:href="" />
+        <text class="title" display="none" margin="0 9"></text>
+      </g>
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> proto;
+  if(!proto)
+    proto.reset(loadSVGFragment(protoSVG));
+
+  Button* widget = new Button(proto->clone());
+  widget->setIcon(icon);
+  widget->setTitle(title);
+  return widget;
 }
 
 Widget* MapsApp::createMapPanel(Widget* header, Widget* content, Widget* fixedContent, bool canMinimize)

@@ -13,6 +13,7 @@
 static bool runOfflineWorker = false;
 static std::unique_ptr<std::thread> offlineWorker;
 static Semaphore semOfflineWorker(1);
+static const char* polylineStyle = "{ style: lines, interactive: true, color: red, width: 4px, order: 5000 }";
 
 
 // Offline maps
@@ -41,6 +42,7 @@ class OfflineDownloader
 {
 public:
     OfflineDownloader(Platform& _platform, const OfflineMapInfo& ofl, const OfflineSourceInfo& src);
+    ~OfflineDownloader();
     size_t remainingTiles() const { return m_queued.size() + m_pending.size(); }
     bool fetchNextTile();
     std::string name;
@@ -292,7 +294,7 @@ Widget* MapsOffline::createPanel()
       LngLat bounds[5] = {{lng0, lat0}, {lng0, lat1}, {lng1, lat1}, {lng1, lat0}, {lng0, lat0}};
       if(!rectMarker)
         rectMarker = app->map->markerAdd();
-      app->map->markerSetStylingFromString(rectMarker, polylineStyle.c_str());
+      app->map->markerSetStylingFromString(rectMarker, polylineStyle);
       app->map->markerSetPolyline(rectMarker, bounds, 5);
       app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(bounds[0], bounds[2]), 0.5f);
     };
