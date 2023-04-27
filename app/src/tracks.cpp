@@ -1,6 +1,7 @@
 #include "tracks.h"
 #include "mapsapp.h"
 #include "util.h"
+#include "mapwidgets.h"
 
 #include <ctime>
 #include <iomanip>
@@ -28,7 +29,15 @@ public:
   double minAlt;
   double maxAlt;
   double maxDist;
+
+  real zoomScale = 1;
+  real zoomOffset = 0;
+
   static Color bgColor;
+
+private:
+  real prevCOM = 0;
+  real prevPinchDist = 0;
 };
 
 TrackPlot::TrackPlot() : Widget(new SvgCustomNode), mBounds(Rect::wh(200, 70))
@@ -44,7 +53,28 @@ TrackPlot::TrackPlot() : Widget(new SvgCustomNode), mBounds(Rect::wh(200, 70))
   };
 
   addHandler([this](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_FINGERMOTION && !gui->pressedWidget)
+    if(event->type == SvgGui::MULTITOUCH) {
+      auto points = static_cast<std::vector<SDL_Finger>*>(event->user.data2);
+      if(points->size() != 2) return false;
+      SDL_Finger& pt1 = points->front();
+      SDL_Finger& pt2 = points->back();
+      real pinchcenter = (pt1.x - pt2.x)/2;
+      real pinchdist = std::abs(pt1.x - pt2.x);
+      SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
+      if(fevent->tfinger.type == SDL_FINGERMOTION) {
+        zoomOffset += pinchcenter - prevCOM;
+        zoomScale *= pinchdist/prevPinchDist;
+        redraw();
+      }
+      prevCOM = pinchcenter;
+      prevPinchDist = pinchdist;
+    }
+    else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == this) {
+      zoomOffset += event->tfinger.x - prevCOM;
+      prevCOM = event->tfinger.x;
+      redraw();
+    }
+    else if(event->type == SDL_FINGERMOTION && !gui->pressedWidget)
       onHovered((event->tfinger.x - mBounds.left)/mBounds.width());
     else if(event->type == SvgGui::LEAVE)
       onHovered(-1);
@@ -83,25 +113,152 @@ void TrackPlot::draw(SvgPainter* svgp) const
   // use color of current page as background
   p->fillRect(Rect::wh(w, h), bgColor);  //doc->getCurrPageColor());
 
-  // vertical axis
+  // labels
+  p->setFillBrush(Color::BLACK);
   real labelw = 0;
   int nvert = 5;
   double dh = (maxAlt - minAlt)/nvert;
   for(int ii = 0; ii < nvert; ++ii)
     labelw = std::max(labelw, p->drawText(0, ii*h/nvert, fstring("%.0f", minAlt + ii*dh).c_str()));
-  p->drawLine(Point(labelw + 5, 15), Point(labelw + 5, h));
-  // horz axis
   int nhorz = 5;
   for(int ii = 0; ii < nhorz; ++ii)
     p->drawText(ii*w/nhorz, 0, fstring("%.0f", ii*maxDist).c_str());
+
+  // TODO: need to flip y direction!
+  // axes
+  //drawCheckerboard(p, w, h, 4, 0x18000000);
+  p->setStroke(Color::BLUE, 1.5);
+  p->setFillBrush(Brush::NONE);
+  p->drawLine(Point(labelw + 5, 15), Point(labelw + 5, h));
   p->drawLine(Point(labelw + 5, 15), Point(w, 15));
 
+  // markers
+  p->setStroke(Color::GREEN, 1.5);
+  for(real x : markers)
+    p->drawLine(Point(x, 15), Point(x, h));
+
+  // plot
+  p->clipRect(Rect::ltrb(labelw + 10, 15, w, h));  // clip plot to axes
+
+  p->setStroke(Color::RED, 2.0);
   p->translate(-minAlt, 0);
   p->scale(w/maxDist, h/dh);
   p->translate(labelw + 10, 15);
 
-  //drawCheckerboard(p, w, h, 4, 0x18000000);
+  p->translate(zoomOffset, 0);
+  p->scale(zoomScale, 1);
+
   p->drawPath(plot);
+}
+
+
+class TrackSliders : public Slider
+{
+public:
+  TrackSliders(SvgNode* n);
+  std::function<void()> onCropHandlesChanged;
+
+  real startHandlePos = 0;
+  real endHandlePos = 1;
+
+private:
+  Widget* startHandle;
+  Widget* endHandle;
+};
+
+// how would begin + end sliders interact w/ middle slider?  move through it?  push it along? moving begin/end slider hides middle slider?
+// ... if middle slider hidden, how to get it back?
+// - begin/end slider pushes other along?
+
+TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
+{
+  startHandle = new Button(containerNode()->selectFirst(".start-handle"));
+  endHandle = new Button(containerNode()->selectFirst(".end-handle"));
+
+  startHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == startHandle) {
+      Rect rect = sliderBg->node->bounds();
+      startHandlePos = (event->tfinger.x - rect.left)/rect.width();
+      startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
+      if(startHandlePos > endHandlePos) {
+        endHandlePos = startHandlePos;
+        endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
+      }
+      if(onCropHandlesChanged)
+        onCropHandlesChanged();
+      return true;
+    }
+    return false;
+  });
+
+  endHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == startHandle) {
+      Rect rect = sliderBg->node->bounds();
+      endHandlePos = (event->tfinger.x - rect.left)/rect.width();
+      endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
+      if(startHandlePos > endHandlePos) {
+        startHandlePos = endHandlePos;
+        startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
+      }
+      if(onCropHandlesChanged)
+        onCropHandlesChanged();
+      return true;
+    }
+    return false;
+  });
+
+  auto sliderOnApplyLayout = onApplyLayout;
+  onApplyLayout = [this, sliderOnApplyLayout](const Rect& src, const Rect& dest){
+    sliderOnApplyLayout(src, dest);
+    if(src.toSize() != dest.toSize()) {
+      Rect rect = sliderBg->node->bounds();
+      startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
+      endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
+    }
+    return false;  // we do not replace the normal layout (although that should be a no-op)
+  };
+}
+
+Slider* createSlider()
+{
+  Slider* slider = new Slider(widgetNode("#slider"));
+  slider->isFocusable = true;
+  return slider;
+}
+
+
+
+TrackPlot* createTrackPlot()
+{
+  static const char* slidersSVG = R"#(
+    <g id="slider" class="slider" box-anchor="hfill" layout="box">
+      <rect class="slider-bg background" box-anchor="hfill" width="200" height="48"/>
+      <g class="left-slider-handle">
+        <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
+        <rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/>
+      </g>
+
+      <g class="right-slider-handle">
+        <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
+        <rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/>
+      </g>
+
+    </g>
+  )#";
+
+  sliderHandle = new Button(containerNode()->selectFirst(".slider-handle"));
+  // prevent global layout when moving slider handle - note that container bounds change when handle moves
+  selectFirst(".slider-handle-container")->setLayoutIsolate(true);
+
+  sliderHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == sliderHandle) {
+      Rect rect = sliderBg->node->bounds();
+      updateValue((event->tfinger.x - rect.left)/rect.width());  //event->motion.x
+      return true;
+    }
+    return false;
+  });
+
 }
 
 // https://www.topografix.com/gpx_manual.asp
@@ -244,8 +401,7 @@ Widget* MapsTracks::createTrackEntry(Track* track)
       DB_exec(app->bkmkDB, q2.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, track->rowid); });
       app->gui->deleteWidget(item);
       track->archived = !track->archived;
-
-      if(archived) listsDirty = true; else archiveDirty = true;
+      if(!track->archived) tracksDirty = true;
     });
 
     overflowMenu->addItem("Delete", [=](){
@@ -412,6 +568,49 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
 // - aside: would it be easier to draw track by moving map and taping button to drop waypoint at map center?
 // - we also want option to trace track by dragging finger
 
+MapsTracks::TrackLoc MapsTracks::interpLoc(const TrackLoc& a, const TrackLoc& b, double f)
+{
+  float g = float(f);
+  return TrackLoc{{
+      f*b.time + (1-f)*a.time,
+      f*b.lat + (1-f)*a.lat,
+      f*b.lng + (1-f)*a.lng,
+      g*b.poserr + (1-g)*a.poserr,
+      f*b.alt + (1-f)*a.alt,
+      g*b.alterr + (1-g)*a.alterr,
+      g*b.dir + (1-g)*a.dir,
+      g*b.direrr + (1-g)*a.direrr,
+      g*b.spd + (1-g)*a.spd,
+      g*b.spderr + (1-g)*a.spderr
+    }, f*b.dist + (1-f)*a.dist};
+}
+
+MapsTracks::TrackLoc MapsTracks::interpTrackDist(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
+{
+  double sd = s*locs.back().dist;
+  size_t jj = 0;
+  while(locs[jj].dist < sd) ++jj;
+  if(idxout) *idxout = jj;
+  double f = (sd - locs[jj-1].dist)/(locs[jj].dist - locs[jj-1].dist);
+  return interpLoc(locs[jj-1], locs[jj], f);
+}
+
+MapsTracks::TrackLoc MapsTracks::interpTrackTime(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
+{
+  double st = s*locs.back().time + (1-s)*locs.front().time;
+  size_t jj = 0;
+  while(locs[jj].time < st) ++jj;
+  if(idxout) *idxout = jj;
+  double f = (st - locs[jj-1].time)/(locs[jj].time - locs[jj-1].time);
+  return interpLoc(locs[jj-1], locs[jj], f);
+}
+
+MapsTracks::TrackLoc MapsTracks::interpTrack(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
+{
+  return trackPlotDist ? interpTrackDist(locs, s, idxout) : interpTrackTime(locs, s, idxout);
+}
+
+
 Widget* MapsTracks::createPanel()
 {
   static const char* trackListProtoSVG = R"(
@@ -481,24 +680,106 @@ Widget* MapsTracks::createPanel()
 
   statsContent->addWidget(trackPlot);
 
+  TrackSliders* trackSliders = createTrackSliders();
+  statsContent->addWidget(trackSliders);
+
+  trackSliders->onCropHandlesChanged = [=](){
+    TrackLoc startloc = interpTrack(activeTrack->locs, trackSliders->startHandlePos);
+    if(trackStartMarker == 0) {
+      trackStartMarker = app->map->markerAdd();
+      app->map->markerSetStylingFromPath(trackStartMarker, "layers.track-marker.draw.marker");
+    }
+    app->map->markerSetVisible(trackStartMarker, true);
+    app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
+
+    TrackLoc endloc = interpTrack(activeTrack->locs, trackSliders->endHandlePos);
+    if(trackEndMarker == 0) {
+      trackEndMarker = app->map->markerAdd();
+      app->map->markerSetStylingFromPath(trackEndMarker, "layers.track-marker.draw.marker");
+    }
+    app->map->markerSetVisible(trackEndMarker, true);
+    app->map->markerSetPoint(trackEndMarker, endloc.lngLat());
+  };
+
+  Button* cropTrackBtn = createToolbutton(NULL, "Crop to segment", true);
+  Button* appendTrackBtn = createToolbutton(NULL, "Append track", true);
+  Button* moreTrackOptionsBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More options");
+
+  Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT);
+  trackPlotOverflow->addItem("Reverse Track", [this](){
+    std::reverse(activeTrack->locs.begin(), activeTrack->locs.end());
+    populateStats(activeTrack);
+  });
+
+  trackPlotOverflow->addItem("Delete Segment", [=](){
+    const std::vector<TrackLoc>& locs = activeTrack->locs;
+    std::vector<TrackLoc> newlocs;
+    size_t restartidx, endidx;
+    auto endloc = interpTrack(locs, trackSliders->startHandlePos, &endidx));
+    auto restartloc = interpTrack(locs, trackSliders->endHandlePos, &restartidx);
+    newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + endidx);
+    newlocs.push_back(endloc);
+    newlocs.push_back(restartloc);
+    newlocs.insert(newlocs.end(), locs.begin() + restartidx, locs.end());
+    activeTrack->locs.swap(newlocs);
+    trackSliders->startHandlePos = 0;
+    trackSliders->endHandlePos = 1;
+    populateStats(activeTrack);
+  });
+
+  moreTrackOptionsBtn->setMenu(trackPlotOverflow);
+
+  Toolbar* trackOptionsTb = createToolbar();
+  trackOptionsTb->addWidget(cropTrackBtn);
+  trackOptionsTb->addWidget(appendTrackBtn);
+  trackOptionsTb->addWidget(moreTrackOptionsBtn);
+
+  statsContent->addWidget(trackOptionsTb);
+
+  // controlling what's plotted:
+  // speed, altitude vs. time, dist ... tap on axis to show selector?
+
+  // marker locations could be in distance or time!
+  cropTrackBtn->onClicked = [=](){
+    const std::vector<TrackLoc>& locs = activeTrack->locs;
+    std::vector<TrackLoc> newlocs;
+    size_t startidx, endidx;
+    newlocs.push_back(interpTrack(locs, trackSliders->startHandlePos, &startidx));
+    auto endloc = interpTrack(locs, trackSliders->endHandlePos, &endidx);
+    newlocs.insert(newlocs.end(), locs.begin() + startidx, locs.begin() + endidx);
+    newlocs.push_back(endloc);
+    activeTrack->locs.swap(newlocs);
+    trackSliders->startHandlePos = 0;
+    trackSliders->endHandlePos = 1;
+    populateStats(activeTrack);
+  };
+
+  appendTrackBtn->onClicked = [this](){
+    if(!selectTrackDialog) {
+      selectTrackDialog.reset(createSelectDialog("Choose Track", SvgGui::useFile(":/icons/ic_menu_select_path.svg")));
+      selectTrackDialog->onSelected = [this](int idx){
+        activeTrack->locs.insert(activeTrack->locs.end(), tracks[idx].locs.begin(), tracks[idx].locs.end());
+        populateStats(activeTrack);
+      };
+    }
+    selectTrackDialog->addItems({});
+    for(auto& track : tracks)
+      selectTrackDialog->addItems({track.title});
+    MapsApp::gui->showModal(selectTrackDialog.get(), MapsApp::gui->windows.front()->modalOrSelf());
+  };
+
   trackPlot->onHovered = [this](real s){
     if(s < 0 || s > 1 || !activeTrack) {
       app->map->markerSetVisible(trackHoverMarker, false);
       return;
     }
-    const std::vector<TrackLoc>& locs = activeTrack->locs;
-    double sd = s*locs.back().dist;
-    size_t jj = 0;
-    while(locs[jj].dist < sd) ++jj;
-    double f = (sd - locs[jj-1].dist)/(locs[jj].dist - locs[jj-1].dist);
-    double lat = f*locs[jj].lat + (1-f)*locs[jj-1].lat;
-    double lon = f*locs[jj].lng + (1-f)*locs[jj-1].lng;
+    TrackLoc loc = interpTrack(activeTrack->locs, s);
     if(trackHoverMarker == 0) {
       trackHoverMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(trackHoverMarker, "layers.track-marker.draw.marker");
     }
     app->map->markerSetVisible(trackHoverMarker, true);
-    app->map->markerSetPoint(trackHoverMarker, LngLat(lon, lat));
+    app->map->markerSetPoint(trackHoverMarker, loc.lngLat());
   };
 
   Button* editTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit Track");
@@ -581,6 +862,15 @@ Widget* MapsTracks::createPanel()
   tracksTb->addWidget(loadTrackBtn);
   tracksTb->addWidget(recordTrackBtn);
   tracksPanel = app->createMapPanel(tracksTb, tracksContent);
+
+  tracksPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SvgGui::VISIBLE) {
+      if(tracksDirty)
+        populateTracks(false);
+      tracksDirty = false;
+    }
+    return false;
+  });
 
   archivedContent = createColumn();
   auto archivedHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Archived Tracks");

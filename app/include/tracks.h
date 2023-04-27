@@ -5,6 +5,7 @@
 class Widget;
 class SvgNode;
 class TrackPlot;
+class SelectDialog;
 
 class MapsTracks : public MapsComponent {
 public:
@@ -18,6 +19,8 @@ public:
   //std::string gpxFile;
   //std::vector<MarkerID> trackMarkers;
   MarkerID trackHoverMarker = 0;
+  MarkerID trackStartMarker = 0;
+  MarkerID trackEndMarker = 0;
 
   //struct PointMarker {
   //    MarkerID markerId;
@@ -80,5 +83,7 @@ private:
   double recordLastSave = 0;
   bool recordTrack = false;
   bool drawTrack = false;
+  bool tracksDirty = false;
   std::unique_ptr<SvgNode> trackListProto;
+  std::unique_ptr<SelectDialog> selectTrackDialog;
 };
