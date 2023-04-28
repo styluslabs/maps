@@ -13,6 +13,8 @@
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
 
+using Track = MapsTracks::Track;
+using TrackLoc = MapsTracks::TrackLoc;
 
 class TrackPlot : public Widget
 {
@@ -24,11 +26,15 @@ public:
 
   std::function<void(real x)> onHovered;
 
-  Path2D plot;
+  Path2D altDistPlot, altTimePlot, spdDistPlot, spdTimePlot;
   Rect mBounds;
-  double minAlt;
-  double maxAlt;
+  double minAlt, maxAlt;
+  float minSpd, maxSpd;
+  double minTime, maxTime;
   double maxDist;
+  bool plotVsDist = false;
+  bool plotAlt = true;
+  bool plotSpd = false;
 
   real zoomScale = 1;
   real zoomOffset = 0;
@@ -87,13 +93,25 @@ TrackPlot::TrackPlot() : Widget(new SvgCustomNode), mBounds(Rect::wh(200, 70))
 void TrackPlot::setTrack(MapsTracks::Track* track)
 {
   minAlt = FLT_MAX;
-  maxAlt = 0;
+  maxAlt = -FLT_MAX;
+  minSpd = FLT_MAX;
+  maxSpd = -FLT_MAX;
+  minTime = track->locs.front().time;
+  maxTime = track->locs.back().time;
   maxDist = track->locs.back().dist;
-  plot.clear();
+  altDistPlot.clear();
+  altTimePlot.clear();
+  spdDistPlot.clear();
+  spdTimePlot.clear();
   for(auto& tpt : track->locs) {
-    plot.addPoint(Point(tpt.dist, MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084));
+    altDistPlot.addPoint(Point(tpt.dist, MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084));
+    altTimePlot.addPoint(Point(tpt.time, MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084));
     minAlt = std::min(minAlt, tpt.alt);
     maxAlt = std::max(maxAlt, tpt.alt);
+    spdDistPlot.addPoint(Point(tpt.dist, MapsApp::metricUnits ? tpt.spd*3600*0.001 : tpt.spd*3600*0.000621371));
+    spdTimePlot.addPoint(Point(tpt.time, MapsApp::metricUnits ? tpt.spd*3600*0.001 : tpt.spd*3600*0.000621371));
+    minSpd = std::min(minSpd, tpt.spd);
+    maxSpd = std::max(maxSpd, tpt.spd);
   }
 }
 
@@ -140,15 +158,25 @@ void TrackPlot::draw(SvgPainter* svgp) const
   // plot
   p->clipRect(Rect::ltrb(labelw + 10, 15, w, h));  // clip plot to axes
 
-  p->setStroke(Color::RED, 2.0);
-  p->translate(-minAlt, 0);
-  p->scale(w/maxDist, h/dh);
+  p->scale(plotVsDist ? w/maxDist : w/(maxTime - minTime), h/dh);
   p->translate(labelw + 10, 15);
 
   p->translate(zoomOffset, 0);
   p->scale(zoomScale, 1);
 
-  p->drawPath(plot);
+  p->translate(-minAlt, 0);
+  if(plotAlt) {
+    p->setFillBrush(Color(0, 0, 255, 128));
+    p->setStroke(Color::NONE);
+    p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
+  }
+  p->translate(minAlt, 0);
+  if(plotSpd) {
+    p->setFillBrush(Brush::NONE);
+    p->setStroke(Color::RED, 2.0);
+    p->drawPath(plotVsDist ? spdDistPlot : spdTimePlot);
+  }
+
 }
 
 
@@ -219,50 +247,33 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
   };
 }
 
-Slider* createSlider()
-{
-  Slider* slider = new Slider(widgetNode("#slider"));
-  slider->isFocusable = true;
-  return slider;
-}
-
-
-
-TrackPlot* createTrackPlot()
+TrackSliders* createTrackSliders()
 {
   static const char* slidersSVG = R"#(
     <g id="slider" class="slider" box-anchor="hfill" layout="box">
       <rect class="slider-bg background" box-anchor="hfill" width="200" height="48"/>
-      <g class="left-slider-handle">
+      <g class="start-handle">
+        <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
+        <rect fill="green" x="-4" y="0" width="8" height="12"/>
+      </g>
+
+      <g class="slider-handle">
         <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
         <rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/>
       </g>
 
-      <g class="right-slider-handle">
+      <g class="end-handle">
         <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
-        <rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/>
+        <rect fill="red" x="-4" y="0" width="8" height="12"/>
       </g>
-
     </g>
   )#";
 
-  sliderHandle = new Button(containerNode()->selectFirst(".slider-handle"));
-  // prevent global layout when moving slider handle - note that container bounds change when handle moves
-  selectFirst(".slider-handle-container")->setLayoutIsolate(true);
-
-  sliderHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == sliderHandle) {
-      Rect rect = sliderBg->node->bounds();
-      updateValue((event->tfinger.x - rect.left)/rect.width());  //event->motion.x
-      return true;
-    }
-    return false;
-  });
-
+  return new TrackSliders(loadSVGFragment(slidersSVG));
 }
 
 // https://www.topografix.com/gpx_manual.asp
-MapsTracks::Track MapsTracks::loadGPX(const char* gpxfile)
+Track MapsTracks::loadGPX(const char* gpxfile)
 {
   double dist = 0;
   pugi::xml_document doc;
@@ -292,7 +303,10 @@ MapsTracks::Track MapsTracks::loadGPX(const char* gpxfile)
           std::stringstream(timenode.child_value()) >> std::get_time(&tmb, "%Y-%m-%dT%TZ");  //2023-03-31T20:19:15Z
           time = mktime(&tmb);
         }
-        track.locs.push_back({{time, lat, lng, 0, ele, 0, /*dir*/0, 0, /*spd*/0, 0}, dist});
+        float spd = 0;
+        if(time > 0 && !track.locs.empty())
+          spd = (dist - track.locs.back().dist)/(time - track.locs.back().time);
+        track.locs.push_back({{time, lat, lng, 0, ele, 0, /*dir*/0, 0, spd, 0}, dist});
         trkpt = trkpt.next_sibling("trkpt");
       }
       trkseg = trkseg.next_sibling("trkseg");
@@ -313,27 +327,29 @@ void MapsTracks::tapEvent(LngLat location)
   showTrack(&drawnTrack);  //, "layers.track.draw.selected-track");
 }
 
-void MapsTracks::updateLocation(const Location& _loc)
+void MapsTracks::updateLocation(const Location& loc)
 {
   if(!recordTrack)
     return;
   if(recordedTrack.locs.empty())
-    recordedTrack.locs.push_back({_loc, 0});
+    recordedTrack.locs.push_back({loc, 0});
   else {
     auto& prev = recordedTrack.locs.back();
     // since altitude is less precise than pos, I don't think we should do sqrt(dist^2 + vert^2)
-    double dist = lngLatDist(_loc.lngLat(), prev.lngLat());
-    double vert = _loc.alt - prev.alt;
-    double dt = _loc.time - prev.time;
+    double dist = lngLatDist(loc.lngLat(), prev.lngLat());
+    double vert = loc.alt - prev.alt;
+    double dt = loc.time - prev.time;
     if(dist > minTrackDist || dt > minTrackTime || vert > minTrackDist) {
-      recordedTrack.locs.push_back({_loc, recordedTrack.locs.back().dist + dist});
+      recordedTrack.locs.push_back({loc, recordedTrack.locs.back().dist + dist});
+      if(loc.spd == 0)
+        recordedTrack.locs.back().spd = dist/dt;
       if(activeTrack == &recordedTrack)
         populateStats(&recordedTrack);
       else if(recordedTrack.visible)  //if(recordedTrack.marker > 0)
         showTrack(&recordedTrack);  //, "layers.track.draw.recorded-track");
-      if(_loc.time > recordLastSave + 60) {
+      if(loc.time > recordLastSave + 60) {
         saveGPX(&recordedTrack);
-        recordLastSave = _loc.time;
+        recordLastSave = loc.time;
       }
     }
   }
@@ -568,7 +584,10 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
 // - aside: would it be easier to draw track by moving map and taping button to drop waypoint at map center?
 // - we also want option to trace track by dragging finger
 
-MapsTracks::TrackLoc MapsTracks::interpLoc(const TrackLoc& a, const TrackLoc& b, double f)
+// controlling what's plotted:
+// speed, altitude vs. time, dist ... tap on axis to show selector?
+
+static TrackLoc interpLoc(const TrackLoc& a, const TrackLoc& b, double f)
 {
   float g = float(f);
   return TrackLoc{{
@@ -585,7 +604,7 @@ MapsTracks::TrackLoc MapsTracks::interpLoc(const TrackLoc& a, const TrackLoc& b,
     }, f*b.dist + (1-f)*a.dist};
 }
 
-MapsTracks::TrackLoc MapsTracks::interpTrackDist(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
+static TrackLoc interpTrackDist(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
 {
   double sd = s*locs.back().dist;
   size_t jj = 0;
@@ -595,7 +614,7 @@ MapsTracks::TrackLoc MapsTracks::interpTrackDist(const std::vector<TrackLoc>& lo
   return interpLoc(locs[jj-1], locs[jj], f);
 }
 
-MapsTracks::TrackLoc MapsTracks::interpTrackTime(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
+static TrackLoc interpTrackTime(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
 {
   double st = s*locs.back().time + (1-s)*locs.front().time;
   size_t jj = 0;
@@ -605,11 +624,10 @@ MapsTracks::TrackLoc MapsTracks::interpTrackTime(const std::vector<TrackLoc>& lo
   return interpLoc(locs[jj-1], locs[jj], f);
 }
 
-MapsTracks::TrackLoc MapsTracks::interpTrack(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
+TrackLoc MapsTracks::interpTrack(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
 {
-  return trackPlotDist ? interpTrackDist(locs, s, idxout) : interpTrackTime(locs, s, idxout);
+  return trackPlot->plotVsDist ? interpTrackDist(locs, s, idxout) : interpTrackTime(locs, s, idxout);
 }
-
 
 Widget* MapsTracks::createPanel()
 {
@@ -647,18 +665,40 @@ Widget* MapsTracks::createPanel()
   Widget* saveTrackContent = createColumn();
   TextEdit* saveTitle = createTextEdit();
   TextEdit* savePath = createTextEdit();
+  CheckBox* replaceTrackCb = createCheckBox("Replace track", true);
   Button* saveTrackBtn = createPushbutton("Apply");
+
+  savePath->onChanged = [=](const char* path){
+    bool newfile = path != activeTrack->gpxFile;
+    replaceTrackCb->setEnabled(newfile);
+    if(newfile) {
+      bool pathexists = FSPath(path).exists();
+      fileExistsMsg->setVisible(pathexists);
+      saveTrackBtn->setEnabled(!pathexists);
+    }
+    else
+      replaceTrackCb->setChecked(true);
+  };
+
   saveTrackBtn->onClicked = [=](){
+    const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
+    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, recordedTrack.title.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, recordedTrack.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
+    });
+
+
     // save under new filename, then delete old file
-    std::string prevFile = recordedTrack.gpxFile;
-    recordedTrack.title = saveTitle->text();
-    recordedTrack.gpxFile = savePath->text();
-    if(saveGPX(&recordedTrack)) {
-      removeFile(prevFile);
+    std::string prevFile = activeTrack->gpxFile;
+    activeTrack->title = saveTitle->text();
+    activeTrack->gpxFile = savePath->text();
+    if(saveGPX(activeTrack)) {
+      if(replaceTrackCb->isChecked() && !prevFile.empty() && prevFile != activeTrack->gpxFile)
+        removeFile(prevFile);
       saveTrackContent->setVisible(false);
     }
     else
-      recordedTrack.gpxFile = prevFile;
+      activeTrack->gpxFile = prevFile;
   };
   // TODO: also include track update interval
   saveTrackContent->addWidget(createTitledRow("Title", saveTitle));
@@ -715,7 +755,7 @@ Widget* MapsTracks::createPanel()
     const std::vector<TrackLoc>& locs = activeTrack->locs;
     std::vector<TrackLoc> newlocs;
     size_t restartidx, endidx;
-    auto endloc = interpTrack(locs, trackSliders->startHandlePos, &endidx));
+    auto endloc = interpTrack(locs, trackSliders->startHandlePos, &endidx);
     auto restartloc = interpTrack(locs, trackSliders->endHandlePos, &restartidx);
     newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + endidx);
     newlocs.push_back(endloc);
@@ -727,6 +767,12 @@ Widget* MapsTracks::createPanel()
     populateStats(activeTrack);
   });
 
+  trackPlotOverflow->addItem("Create bookmark", [=](){
+    TrackLoc loc = interpTrack(activeTrack->locs, trackSliders->value());
+    // TODO: how to open with add bookmark section expanded?  pass flag forwarded to getPlaceInfoSubSection()?
+    app->setPickResult(loc.lngLat(), activeTrack->title + " waypoint", "");
+  });
+
   moreTrackOptionsBtn->setMenu(trackPlotOverflow);
 
   Toolbar* trackOptionsTb = createToolbar();
@@ -735,9 +781,6 @@ Widget* MapsTracks::createPanel()
   trackOptionsTb->addWidget(moreTrackOptionsBtn);
 
   statsContent->addWidget(trackOptionsTb);
-
-  // controlling what's plotted:
-  // speed, altitude vs. time, dist ... tap on axis to show selector?
 
   // marker locations could be in distance or time!
   cropTrackBtn->onClicked = [=](){
@@ -768,7 +811,7 @@ Widget* MapsTracks::createPanel()
     MapsApp::gui->showModal(selectTrackDialog.get(), MapsApp::gui->windows.front()->modalOrSelf());
   };
 
-  trackPlot->onHovered = [this](real s){
+  auto hoverFn = [this](real s){
     if(s < 0 || s > 1 || !activeTrack) {
       app->map->markerSetVisible(trackHoverMarker, false);
       return;
@@ -781,6 +824,8 @@ Widget* MapsTracks::createPanel()
     app->map->markerSetVisible(trackHoverMarker, true);
     app->map->markerSetPoint(trackHoverMarker, loc.lngLat());
   };
+  trackPlot->onHovered = hoverFn;
+  trackSliders->onValueChanged = hoverFn;
 
   Button* editTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit Track");
   editTrackBtn->onClicked = [=](){

@@ -14,7 +14,7 @@ public:
   Widget* createPanel();
   void tapEvent(LngLat location);
 
-  void updateLocation(const Location& _loc);
+  void updateLocation(const Location& loc);
 
   //std::string gpxFile;
   //std::vector<MarkerID> trackMarkers;
@@ -78,6 +78,7 @@ private:
   void populateTracks(bool archived);
   void populateStats(Track* track);
   Widget* createTrackEntry(Track* track);
+  TrackLoc interpTrack(const std::vector<TrackLoc>& locs, double s, size_t* idxout = NULL);
 
   Track* activeTrack = NULL;
   double recordLastSave = 0;
