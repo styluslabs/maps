@@ -429,28 +429,39 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, std::string liststr, st
   Button* createBkmkBtn = new Button(widget->containerNode()->selectFirst(".addbkmk-btn"));
   // bookmark editing
   auto editToolbar = createToolbar();
+  auto titleEdit = createTextEdit();
   auto noteEdit = createTextEdit();
   auto acceptNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_accept.svg"));
   auto cancelNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
 
-  editToolbar->addWidget(noteEdit);
+  Widget* editContent = createColumn();
+  widget->selectFirst("bkmk-edit-container")->addWidget(editContent);
+  editContent->addWidget(titleEdit);
+  editContent->addWidget(noteEdit);
   editToolbar->addWidget(acceptNoteBtn);
   editToolbar->addWidget(cancelNoteBtn);
-  editToolbar->setVisible(false);
-  widget->selectFirst("bkmk-edit-container")->addWidget(editToolbar);
+  editContent->addWidget(editToolbar);
+  editContent->setVisible(false);
 
   acceptNoteBtn->onClicked = [=](){
-    DB_exec(app->bkmkDB, "UPDATE bookmarks SET notes = ? WHERE rowid = ?", NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, noteEdit->text().c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_int(stmt, 2, rowid);
+    const char* q = "UPDATE bookmarks SET title = ?, notes = ? WHERE rowid = ?";
+    DB_exec(app->bkmkDB, q, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, titleEdit->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, noteEdit->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_int(stmt, 3, rowid);
     });
+    // update title
+    SvgText* titlenode = static_cast<SvgText*>(app->infoContent->containerNode()->selectFirst(".title-text"));
+    titlenode->clearText();
+    titlenode->addText(titleEdit->text().c_str());
+
     noteText->setText(noteEdit->text().c_str());
-    editToolbar->setVisible(false);
+    editContent->setVisible(false);
     noteText->setVisible(true);
   };
 
   cancelNoteBtn->onClicked = [&](){
-    editToolbar->setVisible(false);
+    editContent->setVisible(false);
     noteText->setVisible(true);
   };
 
@@ -459,16 +470,16 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, std::string liststr, st
     DB_exec(app->bkmkDB, "DELETE FROM bookmarks WHERE rowid = ?;", NULL, [&](sqlite3_stmt* stmt){
       sqlite3_bind_int(stmt, 1, rowid);
     });
-    editToolbar->setVisible(false);  // note that we do not redisplay info stack
+    editContent->setVisible(false);  // note that we do not redisplay info stack
     noteText->setVisible(false);
     createBkmkBtn->setVisible(true);
     bkmkStack->setVisible(false);
   };
 
   auto addNoteBtn = new Button(widget->containerNode()->selectFirst(".addnote-btn"));
-  addNoteBtn->setVisible(notestr.empty());
+  //addNoteBtn->setVisible(notestr.empty());
   addNoteBtn->onClicked = [=](){
-    editToolbar->setVisible(true);
+    editContent->setVisible(true);
     app->gui->setFocused(noteEdit);
   };
 
@@ -599,7 +610,7 @@ Widget* MapsBookmarks::createPanel()
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_discard.svg"/>
         </g>
         <g class="pushbutton addnote-btn" margin="2 5">
-          <text>Add Note<text/>
+          <text>Edit<text/>
         </g>
       </g>
       <g class="bkmk-edit-container" box-anchor="hfill" layout="box"></g>

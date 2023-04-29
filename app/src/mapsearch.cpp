@@ -4,8 +4,7 @@
 #include "plugins.h"
 #include "resources.h"
 #include "util.h"
-//#include "imgui.h"
-//#include "imgui_stl.h"
+#include "mapwidgets.h"
 
 #include <deque>
 #include "rapidjson/writer.h"

@@ -120,7 +120,7 @@ Rect TrackPlot::bounds(SvgPainter* svgp) const
   return svgp->p->getTransform().mapRect(mBounds);
 }
 
-// we'll assume pen can't be changed when preview is displayed, and thus never call redraw()
+// should we highlight zoomed region of track on map?
 void TrackPlot::draw(SvgPainter* svgp) const
 {
   Painter* p = svgp->p;
@@ -151,9 +151,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->drawLine(Point(labelw + 5, 15), Point(w, 15));
 
   // markers
-  p->setStroke(Color::GREEN, 1.5);
-  for(real x : markers)
-    p->drawLine(Point(x, 15), Point(x, h));
+  //p->setStroke(Color::GREEN, 1.5);
+  //for(real x : markers)
+  //  p->drawLine(Point(x, 15), Point(x, h));
 
   // plot
   p->clipRect(Rect::ltrb(labelw + 10, 15, w, h));  // clip plot to axes
@@ -184,6 +184,8 @@ class TrackSliders : public Slider
 {
 public:
   TrackSliders(SvgNode* n);
+  void setEditMode(bool editmode);
+  void setCropHandles(real start, real end);
   std::function<void()> onCropHandlesChanged;
 
   real startHandlePos = 0;
@@ -194,24 +196,18 @@ private:
   Widget* endHandle;
 };
 
-// how would begin + end sliders interact w/ middle slider?  move through it?  push it along? moving begin/end slider hides middle slider?
-// ... if middle slider hidden, how to get it back?
-// - begin/end slider pushes other along?
-
 TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
 {
   startHandle = new Button(containerNode()->selectFirst(".start-handle"));
   endHandle = new Button(containerNode()->selectFirst(".end-handle"));
+  //startHandle->setLayoutIsolate(true);
+  //endHandle->setLayoutIsolate(true);
 
   startHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_FINGERMOTION && gui->pressedWidget == startHandle) {
       Rect rect = sliderBg->node->bounds();
-      startHandlePos = (event->tfinger.x - rect.left)/rect.width();
-      startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
-      if(startHandlePos > endHandlePos) {
-        endHandlePos = startHandlePos;
-        endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
-      }
+      real startpos = (event->tfinger.x - rect.left)/rect.width();
+      setCropHandles(startpos, std::max(startpos, endHandlePos));
       if(onCropHandlesChanged)
         onCropHandlesChanged();
       return true;
@@ -222,12 +218,8 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
   endHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_FINGERMOTION && gui->pressedWidget == startHandle) {
       Rect rect = sliderBg->node->bounds();
-      endHandlePos = (event->tfinger.x - rect.left)/rect.width();
-      endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
-      if(startHandlePos > endHandlePos) {
-        startHandlePos = endHandlePos;
-        startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
-      }
+      real endpos = (event->tfinger.x - rect.left)/rect.width();
+      setCropHandles(std::min(startHandlePos, endpos), endpos);
       if(onCropHandlesChanged)
         onCropHandlesChanged();
       return true;
@@ -245,6 +237,26 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
     }
     return false;  // we do not replace the normal layout (although that should be a no-op)
   };
+}
+
+void TrackSliders::setCropHandles(real start, real end)
+{
+  Rect rect = sliderBg->node->bounds();
+  if(startHandlePos != start) {
+    startHandlePos = start;
+    startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
+  }
+  if(endHandlePos != end) {
+    endHandlePos = end;
+    endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
+  }
+}
+
+void TrackSliders::setEditMode(bool editmode)
+{
+  selectFirst(".start-handle")->setVisible(editmode);
+  selectFirst(".end-handle")->setVisible(editmode);
+  selectFirst(".slider-handle")->setVisible(!editmode);
 }
 
 TrackSliders* createTrackSliders()
@@ -673,33 +685,13 @@ Widget* MapsTracks::createPanel()
     replaceTrackCb->setEnabled(newfile);
     if(newfile) {
       bool pathexists = FSPath(path).exists();
-      fileExistsMsg->setVisible(pathexists);
+      //fileExistsMsg->setVisible(pathexists);
       saveTrackBtn->setEnabled(!pathexists);
     }
     else
       replaceTrackCb->setChecked(true);
   };
 
-  saveTrackBtn->onClicked = [=](){
-    const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
-    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, recordedTrack.title.c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 2, recordedTrack.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
-    });
-
-
-    // save under new filename, then delete old file
-    std::string prevFile = activeTrack->gpxFile;
-    activeTrack->title = saveTitle->text();
-    activeTrack->gpxFile = savePath->text();
-    if(saveGPX(activeTrack)) {
-      if(replaceTrackCb->isChecked() && !prevFile.empty() && prevFile != activeTrack->gpxFile)
-        removeFile(prevFile);
-      saveTrackContent->setVisible(false);
-    }
-    else
-      activeTrack->gpxFile = prevFile;
-  };
   // TODO: also include track update interval
   saveTrackContent->addWidget(createTitledRow("Title", saveTitle));
   saveTrackContent->addWidget(createTitledRow("File", savePath));
@@ -724,7 +716,8 @@ Widget* MapsTracks::createPanel()
   statsContent->addWidget(trackSliders);
 
   trackSliders->onCropHandlesChanged = [=](){
-    TrackLoc startloc = interpTrack(activeTrack->locs, trackSliders->startHandlePos);
+    real startpos = trackSliders->startHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    TrackLoc startloc = interpTrack(activeTrack->locs, startpos);
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(trackStartMarker, "layers.track-marker.draw.marker");
@@ -732,7 +725,8 @@ Widget* MapsTracks::createPanel()
     app->map->markerSetVisible(trackStartMarker, true);
     app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
 
-    TrackLoc endloc = interpTrack(activeTrack->locs, trackSliders->endHandlePos);
+    real endpos = trackSliders->endHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    TrackLoc endloc = interpTrack(activeTrack->locs, endpos);
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(trackEndMarker, "layers.track-marker.draw.marker");
@@ -741,62 +735,30 @@ Widget* MapsTracks::createPanel()
     app->map->markerSetPoint(trackEndMarker, endloc.lngLat());
   };
 
-  Button* cropTrackBtn = createToolbutton(NULL, "Crop to segment", true);
-  Button* appendTrackBtn = createToolbutton(NULL, "Append track", true);
-  Button* moreTrackOptionsBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More options");
-
-  Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT);
-  trackPlotOverflow->addItem("Reverse Track", [this](){
-    std::reverse(activeTrack->locs.begin(), activeTrack->locs.end());
-    populateStats(activeTrack);
-  });
-
-  trackPlotOverflow->addItem("Delete Segment", [=](){
-    const std::vector<TrackLoc>& locs = activeTrack->locs;
-    std::vector<TrackLoc> newlocs;
-    size_t restartidx, endidx;
-    auto endloc = interpTrack(locs, trackSliders->startHandlePos, &endidx);
-    auto restartloc = interpTrack(locs, trackSliders->endHandlePos, &restartidx);
-    newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + endidx);
-    newlocs.push_back(endloc);
-    newlocs.push_back(restartloc);
-    newlocs.insert(newlocs.end(), locs.begin() + restartidx, locs.end());
-    activeTrack->locs.swap(newlocs);
-    trackSliders->startHandlePos = 0;
-    trackSliders->endHandlePos = 1;
-    populateStats(activeTrack);
-  });
-
-  trackPlotOverflow->addItem("Create bookmark", [=](){
+  Button* createBkmkBtn = createToolbutton(NULL, "Create bookmark", true);
+  createBkmkBtn->onClicked = [=](){
     TrackLoc loc = interpTrack(activeTrack->locs, trackSliders->value());
     // TODO: how to open with add bookmark section expanded?  pass flag forwarded to getPlaceInfoSubSection()?
     app->setPickResult(loc.lngLat(), activeTrack->title + " waypoint", "");
-  });
+  };
 
-  moreTrackOptionsBtn->setMenu(trackPlotOverflow);
-
-  Toolbar* trackOptionsTb = createToolbar();
-  trackOptionsTb->addWidget(cropTrackBtn);
-  trackOptionsTb->addWidget(appendTrackBtn);
-  trackOptionsTb->addWidget(moreTrackOptionsBtn);
-
-  statsContent->addWidget(trackOptionsTb);
-
-  // marker locations could be in distance or time!
+  Button* cropTrackBtn = createToolbutton(NULL, "Crop to segment", true);
   cropTrackBtn->onClicked = [=](){
     const std::vector<TrackLoc>& locs = activeTrack->locs;
     std::vector<TrackLoc> newlocs;
     size_t startidx, endidx;
-    newlocs.push_back(interpTrack(locs, trackSliders->startHandlePos, &startidx));
-    auto endloc = interpTrack(locs, trackSliders->endHandlePos, &endidx);
+    real startpos = trackSliders->startHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    newlocs.push_back(interpTrack(locs, startpos, &startidx));
+    real endpos = trackSliders->endHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    auto endloc = interpTrack(locs, endpos, &endidx);
     newlocs.insert(newlocs.end(), locs.begin() + startidx, locs.begin() + endidx);
     newlocs.push_back(endloc);
     activeTrack->locs.swap(newlocs);
-    trackSliders->startHandlePos = 0;
-    trackSliders->endHandlePos = 1;
+    trackSliders->setCropHandles(0, 1);
     populateStats(activeTrack);
   };
 
+  Button* appendTrackBtn = createToolbutton(NULL, "Append track", true);
   appendTrackBtn->onClicked = [this](){
     if(!selectTrackDialog) {
       selectTrackDialog.reset(createSelectDialog("Choose Track", SvgGui::useFile(":/icons/ic_menu_select_path.svg")));
@@ -809,6 +771,72 @@ Widget* MapsTracks::createPanel()
     for(auto& track : tracks)
       selectTrackDialog->addItems({track.title});
     MapsApp::gui->showModal(selectTrackDialog.get(), MapsApp::gui->windows.front()->modalOrSelf());
+  };
+
+  Button* moreTrackOptionsBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More options");
+  Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT);
+  moreTrackOptionsBtn->setMenu(trackPlotOverflow);
+
+  trackPlotOverflow->addItem("Reverse Track", [this](){
+    std::reverse(activeTrack->locs.begin(), activeTrack->locs.end());
+    populateStats(activeTrack);
+  });
+
+  trackPlotOverflow->addItem("Delete Segment", [=](){
+    const std::vector<TrackLoc>& locs = activeTrack->locs;
+    std::vector<TrackLoc> newlocs;
+    size_t startidx, endidx;
+    real startpos = trackSliders->startHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    auto startloc = interpTrack(locs, startpos, &startidx);
+    real endpos = trackSliders->endHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    auto endloc = interpTrack(locs, endpos, &endidx);
+    newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + startidx);
+    newlocs.push_back(startloc);
+    newlocs.push_back(endloc);
+    newlocs.insert(newlocs.end(), locs.begin() + endidx, locs.end());
+    activeTrack->locs.swap(newlocs);
+    trackSliders->setCropHandles(0, 1);
+    populateStats(activeTrack);
+  });
+
+  Toolbar* editTrackTb = createToolbar();
+  editTrackTb->addWidget(cropTrackBtn);
+  editTrackTb->addWidget(appendTrackBtn);
+  editTrackTb->addWidget(moreTrackOptionsBtn);
+  statsContent->addWidget(editTrackTb);
+
+  Toolbar* trackOptionsTb = createToolbar();
+  trackOptionsTb->addWidget(createBkmkBtn);
+  statsContent->addWidget(trackOptionsTb);
+
+  Button* editTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit Track");
+  editTrackBtn->onClicked = [=](){
+    bool show = !editTrackBtn->isChecked();
+    editTrackBtn->setChecked(show);
+    saveTrackContent->setVisible(show);
+    editTrackTb->setVisible(show);
+    trackOptionsTb->setVisible(show);
+    trackSliders->setEditMode(show);
+  };
+
+  saveTrackBtn->onClicked = [=](){
+    // save under new filename, then delete old file
+    std::string prevFile = activeTrack->gpxFile;
+    activeTrack->title = saveTitle->text();
+    activeTrack->gpxFile = savePath->text();
+    if(saveGPX(activeTrack)) {
+      const char* query = "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;";
+      DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+        sqlite3_bind_text(stmt, 1, activeTrack->title.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, activeTrack->gpxFile.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 3, activeTrack->rowid);
+      });
+      if(replaceTrackCb->isChecked() && !prevFile.empty() && prevFile != activeTrack->gpxFile)
+        removeFile(prevFile);
+      editTrackBtn->onClicked();  // close edit track view
+    }
+    else
+      activeTrack->gpxFile = prevFile;
   };
 
   auto hoverFn = [this](real s){
@@ -826,11 +854,6 @@ Widget* MapsTracks::createPanel()
   };
   trackPlot->onHovered = hoverFn;
   trackSliders->onValueChanged = hoverFn;
-
-  Button* editTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit Track");
-  editTrackBtn->onClicked = [=](){
-    saveTrackContent->setVisible(!saveTrackContent->isVisible());
-  };
 
   // Tracks panel
   tracksContent = createColumn();
