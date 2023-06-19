@@ -10,16 +10,17 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
+#include "mapwidgets.h"
 
 // bookmarks (saved places)
 
-void MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int rowid)
+void MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* name, const char* props,
+    const char* note, LngLat pos, int timestamp)//, int rowid)
 {
   // WITH list_id AS (SELECT rowid FROM lists where title = ?)
 
-  const char* query = rowid >= 0 ?
-      "UPDATE bookmarks SET list_id = ?, osm_id = ?, title = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :  // list = (SELECT rowid FROM lists where title = ?)
-      "INSERT INTO bookmarks (list_id,osm_id,props,notes,lng,lat) VALUES (?,?,?,?,?,?);";
+  //rowid >= 0 ? "UPDATE bookmarks SET list_id = ?, osm_id = ?, title = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
   DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, list_id);
     sqlite3_bind_text(stmt, 2, osm_id, -1, SQLITE_STATIC);
@@ -28,13 +29,14 @@ void MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* nam
     sqlite3_bind_text(stmt, 5, note, -1, SQLITE_STATIC);
     sqlite3_bind_double(stmt, 6, pos.longitude);
     sqlite3_bind_double(stmt, 7, pos.latitude);
-    if(rowid >= 0)
-      sqlite3_bind_int(stmt, 8, rowid);
+    sqlite3_bind_int(stmt, 8, timestamp > 0 ? timestamp : int(mSecSinceEpoch()/1000));
+    //if(rowid >= 0)
+    //  sqlite3_bind_int(stmt, 9, rowid);
   });
 
   bkmkPanelDirty = true;
-  if(rowid >= 0)
-    return;
+  //if(rowid >= 0)
+  //  return;
 
   auto it = bkmkMarkers.find(list_id);
   if(it != bkmkMarkers.end()) {
@@ -48,7 +50,7 @@ void MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* nam
 int MapsBookmarks::getListId(const char* listname, bool create)
 {
   int list_id = -1;
-  DB_exec(app->bkmkDB, "SELECT rowid FROM lists WHERE title = ?;",
+  DB_exec(app->bkmkDB, "SELECT id FROM lists WHERE title = ?;",
       [&](sqlite3_stmt* stmt){ list_id = sqlite3_column_int(stmt, 0);},
       [&](sqlite3_stmt* stmt){ sqlite3_bind_text(stmt, 1, listname, -1, SQLITE_STATIC); });
   if(list_id < 0 && create) {
@@ -66,8 +68,10 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
 {
   Dialog* dialog = new Dialog( setupWindowNode(chooseListProto->clone()) );
   Widget* content = createColumn();
+  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
 
   Widget* newListContent = createColumn();
+  newListContent->node->setAttribute("box-anchor", "hfill");
   TextEdit* newListTitle = createTextEdit();
   TextEdit* newListColor = createTextEdit();  // obviously needs to be replaced with a color picker
   Button* createListBtn = createPushbutton("Create");
@@ -86,7 +90,6 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   newListContent->addWidget(createTitledRow("Color", newListColor));
   newListContent->addWidget(createListBtn);
   newListContent->setVisible(false);
-  content->addWidget(newListContent);
 
   Button* newListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_add_folder.svg"), "Create List");
   newListBtn->onClicked = [=](){
@@ -98,7 +101,8 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
     dialog->finish(Dialog::CANCELLED);
   };
 
-  const char* query = "SELECT rowid, title FROM lists JOIN lists_state AS s ON lists.rowid = s.list_id WHERE lists.archived = 0 ORDER BY s.order;";
+  //const char* query = "SELECT id, title FROM lists JOIN lists_state AS s ON lists.id = s.list_id WHERE lists.archived = 0 ORDER BY s.ordering;";
+  const char* query = "SELECT id, title FROM lists WHERE archived = 0 ORDER BY id;";
   DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     std::string listname = (const char*)(sqlite3_column_text(stmt, 1));
@@ -122,7 +126,11 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
 
   Widget* dialogBody = dialog->selectFirst(".body-container");
   dialogBody->addWidget(newListContent);
-  dialogBody->addWidget(new ScrollWidget(new SvgDocument(), content));
+  auto scrollWidget = new ScrollWidget(new SvgDocument(), content);
+  scrollWidget->node->setAttribute("box-anchor", "fill");
+  dialogBody->addWidget(scrollWidget);
+
+  dialog->setWinBounds(Rect::ltwh(400,400,500,700));
 
   app->gui->showModal(dialog, app->gui->windows.front()->modalOrSelf());
 }
@@ -131,14 +139,15 @@ void MapsBookmarks::populateLists(bool archived)
 {
   if(archived) archiveDirty = false; else listsDirty = false;
 
-  app->showPanel(archived ? archivedPanel : listsPanel);
+  app->showPanel(archived ? archivedPanel : listsPanel, archived);
   Widget* content = archived ? archivedContent : listsContent;
   app->gui->deleteContents(content, ".listitem");
 
-  const char* query = "SELECT rowid, title FROM lists "
-      "JOIN lists_state AS s ON lists.rowid = s.list_id WHERE lists.archived = ? ORDER BY s.order;";
-  //const char* query = "SELECT title, COUNT(1) FROM lists JOIN bookmarks AS b ON lists.rowid = b.list_id "
-  //    "JOIN lists_state AS s ON lists.rowid = s.list_id WHERE lists.archived = ? GROUP by lists.row_id ORDER BY s.order;";
+  const char* query = "SELECT id, title FROM lists WHERE archived = ? ORDER BY id;";
+  //const char* query = "SELECT id, title FROM lists "
+  //    "JOIN lists_state AS s ON lists.id = s.list_id WHERE lists.archived = ? ORDER BY s.ordering;";
+  //const char* query = "SELECT title, COUNT(1) FROM lists JOIN bookmarks AS b ON lists.id = b.list_id "
+  //    "JOIN lists_state AS s ON lists.id = s.list_id WHERE lists.archived = ? GROUP by lists.row_id ORDER BY s.ordering;";
   DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){  //"SELECT list, COUNT(1) FROM bookmarks GROUP by list;"
     int rowid = sqlite3_column_int(stmt, 0);
     std::string list = (const char*)(sqlite3_column_text(stmt, 1));
@@ -168,11 +177,11 @@ void MapsBookmarks::populateLists(bool archived)
           else if(++it == items.end() || ++it == items.end())
             return true;
 
-          const char* q = "UPDATE lists_state SET order = (CASE order WHEN ?1 THEN ?2 WHEN ?2 THEN ?1) WHERE order in (?1, ?2);";
+          /*const char* q = "UPDATE lists_state SET ordering = (CASE ordering WHEN ?1 THEN ?2 WHEN ?2 THEN ?1) WHERE ordering in (?1, ?2);";
           DB_exec(app->bkmkDB, q, NULL, [&](sqlite3_stmt* stmt1){
             sqlite3_bind_int(stmt1, 1, ii);
             sqlite3_bind_int(stmt1, 1, dy < 0 ? ii-1 : ii+1);
-          });
+          });*/
 
           SvgNode* next = *it;
           parent->removeChild(item->node);
@@ -190,8 +199,10 @@ void MapsBookmarks::populateLists(bool archived)
     showBtn->onClicked = [=](){
       bool visible = !showBtn->isChecked();
       showBtn->setChecked(visible);
-      std::string q1 = fstring("UPDATE lists_state SET visible = %d WHERE list_id = ?;", visible ? 1 : 0);
-      DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
+
+      //std::string q1 = fstring("UPDATE lists_state SET visible = %d WHERE list_id = ?;", visible ? 1 : 0);
+      //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
+
       if(bkmkMarkers.find(rowid) == bkmkMarkers.end())
         populateBkmks(rowid, false);
       else
@@ -202,10 +213,10 @@ void MapsBookmarks::populateLists(bool archived)
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
 
-      std::string q1 = fstring("UPDATE lists_state SET order = (SELECT COUNT(1) FROM lists WHERE archived = %d) WHERE list_id = ?;", archived ? 0 : 1);
-      DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
+      //std::string q1 = fstring("UPDATE lists_state SET ordering = (SELECT COUNT(1) FROM lists WHERE archived = %d) WHERE list_id = ?;", archived ? 0 : 1);
+      //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
 
-      std::string q2 = fstring("UPDATE lists SET archived = %d WHERE rowid = ?;", archived ? 0 : 1);
+      std::string q2 = fstring("UPDATE lists SET archived = %d WHERE id = ?;", archived ? 0 : 1);
       DB_exec(app->bkmkDB, q2.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
       app->gui->deleteWidget(item);
       if(archived) listsDirty = true; else archiveDirty = true;
@@ -216,7 +227,7 @@ void MapsBookmarks::populateLists(bool archived)
       const char* q = "DELETE FROM bookmarks WHERE list_id = ?";
       DB_exec(app->bkmkDB, q, NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
 
-      const char* q1 = "DELETE FROM lists WHERE rowid = ?";
+      const char* q1 = "DELETE FROM lists WHERE id = ?";
       DB_exec(app->bkmkDB, q1, NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
 
       auto it1 = bkmkMarkers.find(rowid);
@@ -289,9 +300,9 @@ void MapsBookmarks::restoreBookmarks()
 void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 {
   std::string listname;
-  DB_exec(app->bkmkDB, "SELECT title FROM lists WHERE rowid = ?;", [&](sqlite3_stmt* stmt){
+  DB_exec(app->bkmkDB, "SELECT title FROM lists WHERE id = ?;", [&](sqlite3_stmt* stmt){
     listname = (const char*)(sqlite3_column_text(stmt, 0));
-  });
+  }, [&](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, list_id); });
 
   if(createUI) {
     bkmkPanelDirty = false;
@@ -305,12 +316,14 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 
   MarkerGroup* markerGroup = NULL;
   auto it = bkmkMarkers.find(list_id);
-  if(it == bkmkMarkers.end())
-    markerGroup = bkmkMarkers.emplace(list_id, "layers.bookmark-marker.draw.marker").first->second.get();
+  if(it == bkmkMarkers.end()) {
+    auto mg = std::make_unique<MarkerGroup>(app->map, "layers.bookmark-marker.draw.marker");
+    markerGroup = bkmkMarkers.emplace(list_id, std::move(mg)).first->second.get();
+  }
 
   std::string srt = app->config["bookmarks"]["sort"].as<std::string>("date");
   std::string strStr = srt == "name" ? "title" : srt == "dist" ? "osmSearchRank(-1, lng, lat)" : "timestamp DESC";
-  std::string query = "SELECT rowid, title, props, notes, lng, lat FROM bookmarks WHERE rowid = ? ORDER BY " + strStr + ";";
+  std::string query = "SELECT rowid, title, props, notes, lng, lat FROM bookmarks WHERE list_id = ? ORDER BY " + strStr + ";";
   DB_exec(app->bkmkDB, query.c_str(), [&](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     std::string namestr = (const char*)(sqlite3_column_text(stmt, 1));
@@ -382,25 +395,25 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
   // - if this gives us too many false positives, we could add "Nearby bookmarks" title to section
   // - in the case of multiple bookmarks for a given osm_id, we just stack multiple subsections
-  const char* query1 = "SELECT rowid, osm_id, list, props, notes, lng, lat FROM bookmarks WHERE osm_id = ?;";
+  const char* query1 = "SELECT rowid, osm_id, list_id, props, notes, lng, lat FROM bookmarks WHERE osm_id = ?;";
   DB_exec(app->bkmkDB, query1, [&](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
-    const char* liststr = (const char*)(sqlite3_column_text(stmt, 2));
+    int listid = sqlite3_column_int(stmt, 2);
     const char* notestr = (const char*)(sqlite3_column_text(stmt, 4));
-    content->addWidget(getPlaceInfoSubSection(rowid, liststr, notestr));
+    content->addWidget(getPlaceInfoSubSection(rowid, listid, notestr));
   }, [&](sqlite3_stmt* stmt){
     sqlite3_bind_text(stmt, 1, osm_id.c_str(), -1, SQLITE_TRANSIENT);
   });
 
   if(content->containerNode()->children().empty()) {
-    const char* query2 = "SELECT rowid, osm_id, list, props, notes, lng, lat FROM bookmarks WHERE "
+    const char* query2 = "SELECT rowid, osm_id, list_id, props, notes, lng, lat FROM bookmarks WHERE "
         "lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? LIMIT 1;";
     DB_exec(app->bkmkDB, query2, [&](sqlite3_stmt* stmt){
       if(osm_id.empty() || sqlite3_column_text(stmt, 1)[0] == '\0') {
         int rowid = sqlite3_column_int(stmt, 0);
-        const char* liststr = (const char*)(sqlite3_column_text(stmt, 2));
+        int listid = sqlite3_column_int(stmt, 2);
         const char* notestr = (const char*)(sqlite3_column_text(stmt, 4));
-        content->addWidget(getPlaceInfoSubSection(rowid, liststr, notestr));
+        content->addWidget(getPlaceInfoSubSection(rowid, listid, notestr));
       }
     }, [&](sqlite3_stmt* stmt){
       constexpr double delta = 0.00001;
@@ -412,20 +425,25 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   }
 
   if(content->containerNode()->children().empty())
-    content->addWidget(getPlaceInfoSubSection(-1, "", ""));  // for adding to bookmark list
+    content->addWidget(getPlaceInfoSubSection(-1, -1, ""));  // for adding to bookmark list
 
   return content;
 }
 
-Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, std::string liststr, std::string notestr)
+Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string notestr)
 {
+  std::string liststr;
+  DB_exec(app->bkmkDB, "SELECT title FROM lists WHERE id = ?;", [&](sqlite3_stmt* stmt){
+    liststr = (const char*)(sqlite3_column_text(stmt, 0));
+  }, [&](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, listid); });
+
   Widget* widget = new Widget(placeInfoSectionProto->clone());
   TextBox* listText = new TextBox(static_cast<SvgText*>(widget->containerNode()->selectFirst(".list-name-text")));
   TextBox* noteText = new TextBox(static_cast<SvgText*>(widget->containerNode()->selectFirst(".note-text")));
   listText->setText(liststr.c_str());
   noteText->setText(notestr.c_str());
 
-  Widget* bkmkStack = widget->selectFirst("bkmk-display-container");
+  Widget* bkmkStack = widget->selectFirst(".bkmk-display-container");
   Button* createBkmkBtn = new Button(widget->containerNode()->selectFirst(".addbkmk-btn"));
   // bookmark editing
   auto editToolbar = createToolbar();
@@ -435,7 +453,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, std::string liststr, st
   auto cancelNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
 
   Widget* editContent = createColumn();
-  widget->selectFirst("bkmk-edit-container")->addWidget(editContent);
+  widget->selectFirst(".bkmk-edit-container")->addWidget(editContent);
   editContent->addWidget(titleEdit);
   editContent->addWidget(noteEdit);
   editToolbar->addWidget(acceptNoteBtn);
@@ -460,7 +478,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, std::string liststr, st
     noteText->setVisible(true);
   };
 
-  cancelNoteBtn->onClicked = [&](){
+  cancelNoteBtn->onClicked = [=](){
     editContent->setVisible(false);
     noteText->setVisible(true);
   };
@@ -496,12 +514,12 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, std::string liststr, st
     chooseBookmarkList(setListFn);  //rowid);
   };
 
-  auto createBkmkFn = [&, rowid](int list_id, std::string listname){
+  auto createBkmkFn = [=](int list_id, std::string listname){
     rapidjson::Document& doc = app->pickResultProps;
     std::string title = doc.IsObject() && doc.HasMember("name") ?  doc["name"].GetString()
         : fstring("Pin: %.6f, %.6f", app->pickResultCoord.latitude, app->pickResultCoord.longitude);
     addBookmark(list_id, osmIdFromProps(doc).c_str(), title.c_str(),
-        rapidjsonToStr(doc).c_str(), "", app->pickResultCoord, rowid);
+        rapidjsonToStr(doc).c_str(), "", app->pickResultCoord);
     listText->setText(listname.c_str());
     createBkmkBtn->setVisible(false);
     bkmkStack->setVisible(true);
@@ -585,7 +603,7 @@ Widget* MapsBookmarks::createPanel()
   static const char* placeInfoSectionProtoSVG = R"(
     <g margin="0 5" box-anchor="hfill" layout="flex" flex-direction="column">
       <g class="pushbutton addbkmk-btn" margin="2 5">
-        <text>Add Bookmark<text/>
+        <text>Add Bookmark</text>
       </g>
       <g class="bkmk-display-container" layout="flex" flex-direction="row" box-anchor="left">
         <g class="bkmk-icon-container" margin="2 5">
@@ -610,7 +628,7 @@ Widget* MapsBookmarks::createPanel()
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_discard.svg"/>
         </g>
         <g class="pushbutton addnote-btn" margin="2 5">
-          <text>Edit<text/>
+          <text>Edit</text>
         </g>
       </g>
       <g class="bkmk-edit-container" box-anchor="hfill" layout="box"></g>
@@ -623,7 +641,7 @@ Widget* MapsBookmarks::createPanel()
     <svg id="dialog" class="window dialog" layout="box">
       <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
       <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
-        <g class="title-container" box-anchor="fill" layout="box"></g>
+        <g class="title-container" box-anchor="hfill" layout="box"></g>
         <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
         <g class="body-container" box-anchor="fill" layout="flex" flex-direction="column"></g>
       </g>
@@ -632,10 +650,13 @@ Widget* MapsBookmarks::createPanel()
   chooseListProto.reset(static_cast<SvgDocument*>(loadSVGFragment(chooseListProtoSVG)));
 
   // DB setup
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER, title TEXT, notes TEXT, color TEXT, archived INTEGER DEFAULT 0);");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists_state(list_id INTEGER, order INTEGER, visible INTEGER);");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list_id INTEGER, title TEXT, props TEXT, notes TEXT, lng REAL, lat REAL, timestamp INTEGER DEFAULT CAST(strftime('%s') AS INTEGER));");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL, rotation REAL, tilt REAL, width REAL, height REAL);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY, title TEXT NOT NULL,"
+      " notes TEXT DEFAULT '', color TEXT NOT NULL, archived INTEGER DEFAULT 0);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists_state(list_id INTEGER, ordering INTEGER, visible INTEGER);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list_id INTEGER, title TEXT NOT NULL, props TEXT,"
+      " notes TEXT NOT NULL, lng REAL, lat REAL, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL,"
+      " rotation REAL, tilt REAL, width REAL, height REAL);");
 
   // Bookmark lists panel (main and archived lists)
   listsContent = createColumn(); //createListContainer();
@@ -691,7 +712,7 @@ Widget* MapsBookmarks::createPanel()
   TextEdit* listColor = createTextEdit();  // obviously needs to be replaced with a color picker
   Button* saveListBtn = createPushbutton("Apply");
   saveListBtn->onClicked = [=](){
-    const char* query = "UPDATE lists SET title = ?, color = ? WHERE rowid = ?";
+    const char* query = "UPDATE lists SET title = ?, color = ? WHERE id = ?";
     DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
       sqlite3_bind_text(stmt, 1, listTitle->text().c_str(), -1, SQLITE_TRANSIENT);
       sqlite3_bind_text(stmt, 2, listColor->text().c_str(), -1, SQLITE_TRANSIENT);
@@ -718,7 +739,7 @@ Widget* MapsBookmarks::createPanel()
     app->config["bookmarks"]["sort"] = bkmkSortKeys[ii];
     populateBkmks(activeListId, true);  // class member to hold current list name or id?
   }, initSortIdx);
-  Button* sortBtn = createToolbutton(SvgGui::useFile("icons/ic_menu_settings.svg"), "Sort");
+  Button* sortBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_settings.svg"), "Sort");
   sortBtn->setMenu(sortMenu);
 
   Button* mapAreaBkmksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Bookmarks in map area only");
@@ -743,17 +764,18 @@ Widget* MapsBookmarks::createPanel()
       if(bkmkPanelDirty)
         populateBkmks(activeListId, true);
     }
-    else if(event->type == SvgGui::INVISIBLE) {
+    else if(event->type == MapsApp::PANEL_CLOSED) {
       restoreBookmarks();
       activeListId = -1;
+      return true;
     }
     return false;
   });
 
   // handle visible bookmark lists
-  DB_exec(app->bkmkDB, "SELECT list_id FROM lists_state WHERE visible = 1;", [&](sqlite3_stmt* stmt){
-    populateBkmks(sqlite3_column_int(stmt, 0), false);
-  });
+  //DB_exec(app->bkmkDB, "SELECT list_id FROM lists_state WHERE visible = 1;", [&](sqlite3_stmt* stmt){
+  //  populateBkmks(sqlite3_column_int(stmt, 0), false);
+  //});
 
   Menu* bkmkMenu = createMenu(Menu::VERT_LEFT);
   bkmkMenu->autoClose = true;

@@ -190,10 +190,11 @@ static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lng
   const char* notes = duk_require_string(ctx, 4);
   double lng = duk_to_number(ctx, 5);
   double lat = duk_to_number(ctx, 6);
+  int date = duk_to_number(ctx, 7);
 
   auto& mb = PluginManager::inst->app->mapsBookmarks;
   int list_id = mb->getListId(listname, true);
-  mb->addBookmark(list_id, osm_id, name, props, notes, LngLat(lng, lat));
+  mb->addBookmark(list_id, osm_id, name, props, notes, LngLat(lng, lat), date);
   return 0;
 }
 

@@ -30,6 +30,7 @@ struct Location
   float direrr;
   float spd;
   float spderr;
+  double dist;  // for tracks
 
   LngLat lngLat() const { return LngLat(lng, lat); }
 };

@@ -271,7 +271,8 @@ Widget* MapsOffline::createPanel()
   offlineListProto.reset(loadSVGFragment(offlineListProtoSVG));
 
   // should we include zoom? total bytes?
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER, lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER, lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL,"
+      " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
 
   SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%d");
   Button* saveBtn = createPushbutton("Save Offline Map");

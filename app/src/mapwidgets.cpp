@@ -29,7 +29,6 @@ SelectDialog::SelectDialog(SvgDocument* n, const std::vector<std::string>& _item
     addItems(_items, false);
 }
 
-
 void SelectDialog::addItems(const std::vector<std::string>& _items, bool replace)
 {
   if(replace)

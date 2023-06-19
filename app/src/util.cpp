@@ -81,7 +81,7 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
   auto t0 = std::chrono::high_resolution_clock::now();
   int res;
   sqlite3_stmt* stmt;
-  if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) {
+  if(sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) {
     LOGE("sqlite3_prepare_v2 error: %s", sqlite3_errmsg(db));
     return false;
   }
@@ -165,7 +165,7 @@ void MarkerGroup::reset()
   prevZoom = -1;
 }
 
-int MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props)
+void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props)
 {
   places.push_back({pos, props, cb, 0, 0, false});
   PlaceInfo& res = places.back();

@@ -31,9 +31,8 @@ public:
   //MarkerID drawnTrackMarker = 0;
   //std::vector<LngLat> drawnTrack;
 
-  struct TrackLoc : public Location {
-    double dist;
-  };
+  //struct TrackLoc : public Location { double dist; };
+  using TrackLoc = Location;
 
   struct Track {
     std::string title;

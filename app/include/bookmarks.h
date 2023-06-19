@@ -14,7 +14,7 @@ public:
   //void showGUI();
   void hideBookmarks(int excludelist = -1);
   void restoreBookmarks();
-  void addBookmark(int list_id, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int rowid = -1);
+  void addBookmark(int list_id, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int timestamp = -1); //, int rowid = -1);
   int getListId(const char* listname, bool create = false);
   void onMapChange();
 
@@ -30,7 +30,7 @@ private:
 
   void populateBkmks(int list_id, bool createUI);
   void populateLists(bool archived);
-  Widget* getPlaceInfoSubSection(int rowid, std::string liststr, std::string notestr);
+  Widget* getPlaceInfoSubSection(int rowid, int listid, std::string notestr);
   void chooseBookmarkList(std::function<void(int, std::string)> callback);
 
   Widget* bkmkPanel = NULL;

@@ -32,7 +32,7 @@ namespace YAML { class Node; }
 class MapsApp
 {
 public:
-  MapsApp(std::unique_ptr<Platform> p);
+  MapsApp(Map* _map);
   ~MapsApp();  // impl must be outside header to allow unique_ptr members w/ incomplete types
 
   void drawFrame(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
@@ -93,10 +93,10 @@ public:
   Window* createGUI();
   //void hidePlaceInfo();
 
-  void showPanel(Widget* panel);
+  void showPanel(Widget* panel, bool isSubPanel = false);
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
   Button* createPanelButton(const SvgNode* icon, const char* title);
-  Widget* createMapPanel(Widget* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
+  Widget* createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
 
   Splitter* panelSplitter = NULL;
   Widget* panelContainer = NULL;
@@ -108,6 +108,8 @@ public:
   Button* reorientBtn = NULL;
   std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
+
+  enum EventTypes { PANEL_CLOSED=0xE001 };
 
   static void runOnMainThread(std::function<void()> fn);
 

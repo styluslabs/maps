@@ -39,7 +39,7 @@ public:
   real zoomScale = 1;
   real zoomOffset = 0;
 
-  static Color bgColor;
+  //static Color bgColor;
 
 private:
   real prevCOM = 0;
@@ -129,7 +129,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->translate(2, 2);
   p->clipRect(Rect::wh(w, h));
   // use color of current page as background
-  p->fillRect(Rect::wh(w, h), bgColor);  //doc->getCurrPageColor());
+  p->fillRect(Rect::wh(w, h), Color::WHITE);  //bgColor);  //doc->getCurrPageColor());
 
   // labels
   p->setFillBrush(Color::BLACK);
@@ -318,7 +318,7 @@ Track MapsTracks::loadGPX(const char* gpxfile)
         float spd = 0;
         if(time > 0 && !track.locs.empty())
           spd = (dist - track.locs.back().dist)/(time - track.locs.back().time);
-        track.locs.push_back({{time, lat, lng, 0, ele, 0, /*dir*/0, 0, spd, 0}, dist});
+        track.locs.push_back({time, lat, lng, 0, ele, 0, /*dir*/0, 0, spd, 0, dist});
         trkpt = trkpt.next_sibling("trkpt");
       }
       trkseg = trkseg.next_sibling("trkseg");
@@ -335,7 +335,7 @@ void MapsTracks::tapEvent(LngLat location)
   auto& locs = drawnTrack.locs;
   double dist = locs.empty() ? 0 : locs.back().dist + lngLatDist(locs.back().lngLat(), location);
   double time = 0;
-  locs.push_back({{time, location.latitude, location.longitude, 0, /*ele*/0, 0, /*dir*/0, 0, /*spd*/0, 0}, dist});
+  locs.push_back({time, location.latitude, location.longitude, 0, /*ele*/0, 0, /*dir*/0, 0, /*spd*/0, 0, dist});
   showTrack(&drawnTrack);  //, "layers.track.draw.selected-track");
 }
 
@@ -343,8 +343,10 @@ void MapsTracks::updateLocation(const Location& loc)
 {
   if(!recordTrack)
     return;
-  if(recordedTrack.locs.empty())
-    recordedTrack.locs.push_back({loc, 0});
+  if(recordedTrack.locs.empty()) {
+    recordedTrack.locs.push_back(loc);
+    recordedTrack.locs.back().dist = 0;
+  }
   else {
     auto& prev = recordedTrack.locs.back();
     // since altitude is less precise than pos, I don't think we should do sqrt(dist^2 + vert^2)
@@ -352,7 +354,9 @@ void MapsTracks::updateLocation(const Location& loc)
     double vert = loc.alt - prev.alt;
     double dt = loc.time - prev.time;
     if(dist > minTrackDist || dt > minTrackTime || vert > minTrackDist) {
-      recordedTrack.locs.push_back({loc, recordedTrack.locs.back().dist + dist});
+      double d0 = recordedTrack.locs.back().dist;
+      recordedTrack.locs.push_back(loc);
+      recordedTrack.locs.back().dist = d0 + dist;
       if(loc.spd == 0)
         recordedTrack.locs.back().spd = dist/dt;
       if(activeTrack == &recordedTrack)
@@ -455,7 +459,7 @@ Widget* MapsTracks::createTrackEntry(Track* track)
 
 void MapsTracks::populateTracks(bool archived)
 {
-  app->showPanel(archived ? archivedPanel : tracksPanel);
+  app->showPanel(archived ? archivedPanel : tracksPanel, archived);
   Widget* content = archived ? archivedContent : tracksContent;
   app->gui->deleteContents(content, ".listitem");
 
@@ -489,7 +493,7 @@ void MapsTracks::populateTracks(bool archived)
 
 void MapsTracks::populateStats(Track* track)
 {
-  app->showPanel(statsPanel);
+  app->showPanel(statsPanel, true);
   statsPanel->selectFirst(".panel-title")->setText(track->title.c_str());
   trackPlot->setTrack(track);
   activeTrack = track;
@@ -602,7 +606,7 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
 static TrackLoc interpLoc(const TrackLoc& a, const TrackLoc& b, double f)
 {
   float g = float(f);
-  return TrackLoc{{
+  return TrackLoc{
       f*b.time + (1-f)*a.time,
       f*b.lat + (1-f)*a.lat,
       f*b.lng + (1-f)*a.lng,
@@ -612,8 +616,8 @@ static TrackLoc interpLoc(const TrackLoc& a, const TrackLoc& b, double f)
       g*b.dir + (1-g)*a.dir,
       g*b.direrr + (1-g)*a.direrr,
       g*b.spd + (1-g)*a.spd,
-      g*b.spderr + (1-g)*a.spderr
-    }, f*b.dist + (1-f)*a.dist};
+      g*b.spderr + (1-g)*a.spderr,
+      f*b.dist + (1-f)*a.dist};
 }
 
 static TrackLoc interpTrackDist(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
@@ -668,8 +672,9 @@ Widget* MapsTracks::createPanel()
   )";
   trackListProto.reset(loadSVGFragment(trackListProtoSVG));
 
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks(title TEXT, filename TEXT, style TEXT, timestamp INTEGER DEFAULT CAST(strftime('%s') AS INTEGER), archived INTEGER DEFAULT 0);");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks_state(track_id INTEGER, order INTEGER, visible INTEGER);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks(title TEXT, filename TEXT, style TEXT,"
+      " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)), archived INTEGER DEFAULT 0);");
+  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks_state(track_id INTEGER, ordering INTEGER, visible INTEGER);");
 
   // Stats panel
   statsContent = createColumn();
@@ -949,7 +954,7 @@ Widget* MapsTracks::createPanel()
   statsPanel = app->createMapPanel(statsTb, statsContent);
 
   statsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SvgGui::INVISIBLE) {
+    if(event->type == MapsApp::PANEL_CLOSED) {
       if(activeTrack != &recordedTrack)
         app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track-marker.draw.marker");
       if(!activeTrack->visible)

@@ -35,7 +35,7 @@ public:
 
   MarkerGroup(Map* _map, const std::string& _styling, const std::string _altStyling = "");
   ~MarkerGroup();
-  int createMarker(LngLat pos, OnPickedFn cb, Properties&& props = {});
+  void createMarker(LngLat pos, OnPickedFn cb, Properties&& props = {});
   void reset();
   void setVisible(bool vis);
   bool onPicked(MarkerID id);

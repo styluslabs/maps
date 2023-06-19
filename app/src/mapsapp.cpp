@@ -23,6 +23,7 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
+#include "mapwidgets.h"
 
 static const char* apiKeyScenePath = "+global.sdk_api_key";
 
@@ -33,6 +34,8 @@ CameraPosition MapsApp::mapCenter;
 YAML::Node MapsApp::config;
 std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
+sqlite3* MapsApp::bkmkDB = NULL;
+static Tooltips tooltipsInst;
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 {
@@ -100,7 +103,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   infoContent->addWidget(item);
 
-  showPanel(infoPanel);
+  showPanel(infoPanel, true);
 }
 
 
@@ -260,9 +263,8 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
   locMarker = 0;
 }
 
-MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(this))
+MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(this))
 {
-  MapsApp::platform = p.get();
   //sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
 
   // Setup style
@@ -278,13 +280,7 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   mkdir((baseDir + "cache").c_str(), 0777);
 
   // Setup tangram
-  map = new Tangram::Map(std::move(p));
-
-#ifdef TANGRAM_ANDROID
-  mapsSources = std::make_unique<MapsSources>(this, "asset:///mapsources.yaml");
-#else
-  mapsSources = std::make_unique<MapsSources>(this, "file://" + baseDir + "tangram-es/scenes/mapsources.yaml");
-#endif
+  mapsSources = std::make_unique<MapsSources>(this);
   mapsOffline = std::make_unique<MapsOffline>(this);
   pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
   // no longer recreated when scene loaded
@@ -332,7 +328,7 @@ MapsApp::MapsApp(std::unique_ptr<Platform> p) : touchHandler(new TouchHandler(th
   map->setCameraPosition(pos);
 }
 
-MapsApp::~MapsApp() { delete map; }
+MapsApp::~MapsApp() {}
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)
@@ -572,7 +568,7 @@ Window* MapsApp::createGUI()
       <g class="panel-layout" box-anchor="top left" margin="10 0 0 10" layout="flex" flex-direction="column">
         <g id="main-tb-container" box-anchor="hfill" layout="box"></g>
         <g id="panel-container" display="none" box-anchor="hfill" layout="box">
-          <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
+          <rect class="background" box-anchor="hfill" x="0" y="0" width="300" height="800"/>
           <g id="panel-content" box-anchor="fill" layout="box"></g>
         </g>
       </g>
@@ -581,31 +577,29 @@ Window* MapsApp::createGUI()
 #endif
 
   static const char* placeInfoProtoSVG = R"#(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+    <g layout="flex" flex-direction="column" box-anchor="fill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5"></g>
+        <g class="image-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_pin.svg"/>
+        </g>
         <g layout="flex" flex-direction="column" box-anchor="vfill">
           <text class="title-text" margin="0 10"></text>
           <text class="addr-text weak" margin="0 10" font-size="12"></text>
           <text class="lnglat-text weak" margin="0 10" font-size="12"></text>
           <text class="dist-text weak" margin="0 10" font-size="12"></text>
-          <g class="bkmk-section" layout="box"></g>
         </g>
       </g>
+      <g class="bkmk-section" layout="box"></g>
     </g>
   )#";
 
   placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
+  Tooltips::inst = &tooltipsInst;
+
   SvgDocument* winnode = createWindowNode(mainWindowSVG);
   Window* win = new Window(winnode);
-
-  // search box, bookmarks btn, map sources btn, recenter map
-
-  infoContent = createColumn(); //createListContainer();
-  auto infoHeader = createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");  // should be pin icon
-  infoPanel = createMapPanel(infoHeader, infoContent);
 
 #if PLATFORM_MOBILE
   panelSplitter = new Splitter(winnode->selectFirst("#panel-splitter"),
@@ -621,6 +615,10 @@ Window* MapsApp::createGUI()
   mapsWidget = new MapsWidget(this);
   mapsWidget->node->setAttribute("box-anchor", "fill");
   mapsWidget->isFocusable = true;
+
+  infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));  //createColumn(); //createListContainer();
+  auto infoHeader = createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");  // should be pin icon
+  infoPanel = createMapPanel(infoHeader, infoContent);
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
   Toolbar* mainToolbar = createToolbar();
@@ -657,7 +655,7 @@ Window* MapsApp::createGUI()
   recenterBtn->onClicked = [this](){
     map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
   };
-  floatToolbar->addWidget(recenterBtn);
+  floatToolbar->addWidget(reorientBtn);
   floatToolbar->addWidget(recenterBtn);
   floatToolbar->node->setAttribute("box-anchor", "bottom right");
   floatToolbar->setMargins(0, 10, 10, 0);
@@ -666,13 +664,18 @@ Window* MapsApp::createGUI()
   return win;
 }
 
-void MapsApp::showPanel(Widget* panel)
+void MapsApp::showPanel(Widget* panel, bool isSubPanel)
 {
   panel->setVisible(true);
   if(!panelHistory.empty()) {
     if(panelHistory.back() == panel)
       return;
     panelHistory.back()->setVisible(false);
+    if(!isSubPanel) {
+      for(Widget* w : panelHistory)
+        w->sdlUserEvent(gui, PANEL_CLOSED);
+      panelHistory.clear();
+    }
   }
   panelHistory.push_back(panel);
   //panelContainer->addWidget(panel);
@@ -693,6 +696,7 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
       LOGE("back button clicked but panelHistory empty ... this should never happen!");
     else {
       //panelContainer->containerNode()->removeChild(panelHistory.back()->node);
+      panelHistory.back()->sdlUserEvent(gui, PANEL_CLOSED);
       panelHistory.back()->setVisible(false);
       panelHistory.pop_back();
       if(!panelHistory.empty())
@@ -741,10 +745,11 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title)
   Button* widget = new Button(proto->clone());
   widget->setIcon(icon);
   widget->setTitle(title);
+  setupTooltip(widget, title);
   return widget;
 }
 
-Widget* MapsApp::createMapPanel(Widget* header, Widget* content, Widget* fixedContent, bool canMinimize)
+Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent, bool canMinimize)
 {
   // what about just swiping down to minimize instead of a button?
   if(canMinimize) {
@@ -762,8 +767,12 @@ Widget* MapsApp::createMapPanel(Widget* header, Widget* content, Widget* fixedCo
   panel->addWidget(header);
   if(fixedContent)
     panel->addWidget(fixedContent);
-  if(content)
-    panel->addWidget(new ScrollWidget(new SvgDocument(), content));
+  if(content) {
+    content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
+    auto scrollWidget = new ScrollWidget(new SvgDocument(), content);
+    scrollWidget->node->setAttribute("box-anchor", "fill");
+    panel->addWidget(scrollWidget);
+  }
 
   panel->setVisible(false);
   panelContainer->addWidget(panel);
@@ -816,7 +825,12 @@ const char* getResource(const std::string& name)
 void glfwSDLEvent(SDL_Event* event)
 {
   event->common.timestamp = SDL_GetTicks();
-  MapsApp::gui->sdlEvent(event);
+  if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
+    SvgGui::debugLayout = true;
+  else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)
+    SvgGui::debugDirty = !SvgGui::debugDirty;
+  else
+    MapsApp::gui->sdlEvent(event);
 }
 
 static bool timerEventFired = false;
@@ -848,11 +862,12 @@ int main(int argc, char* argv[])
 #endif
 
   // config
-  MapsApp::configFile = FSPath(SDL_GetBasePath(), "config.yaml").c_str();
+  MapsApp::baseDir = "/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
+  MapsApp::configFile = FSPath(MapsApp::baseDir, "tangram-es/scenes/config.yaml").c_str();
   MapsApp::config = YAML::LoadFile(MapsApp::configFile.c_str());
 
   // command line args
-  const char* sceneFile = NULL;  //"scenes/scene.yaml";
+  const char* sceneFile = NULL;  // -f scenes/scene-omt.yaml
   for(int argi = 1; argi < argc-1; argi += 2) {
     YAML::Node node;
     if(strcmp(argv[argi], "-f") == 0)
@@ -928,8 +943,9 @@ int main(int argc, char* argv[])
 
   char* apiKey = getenv("NEXTZEN_API_KEY");
   MapsApp::apiKey = apiKey ? apiKey : "";
-  MapsApp::baseDir = "/home/mwhite/maps/";
-  MapsApp* app = new MapsApp(std::make_unique<Tangram::LinuxPlatform>());
+  Tangram::Map* tangramMap = new Tangram::Map(std::make_unique<Tangram::LinuxPlatform>());
+  MapsApp::platform = &tangramMap->getPlatform();
+  MapsApp* app = new MapsApp(tangramMap);
 
   // debug flags can be set in config file or from command line
   auto debugNode = app->config["debug"];
@@ -944,14 +960,7 @@ int main(int argc, char* argv[])
     setDebugFlag(DebugFlags::tangram_stats, debugNode["tangram_stats"].as<bool>(false));
     setDebugFlag(DebugFlags::selection_buffer, debugNode["selection_buffer"].as<bool>(false));
   }
-
   app->map->setupGL();
-  if(sceneFile) {
-    app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();  //"import:\n  - " +
-    app->loadSceneFile();
-  }
-  else
-    app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
 
   // DB setup
   std::string dbPath = MapsApp::baseDir + "places.sqlite";
@@ -967,13 +976,19 @@ int main(int argc, char* argv[])
   win->addHandler([&](SvgGui*, SDL_Event* event){
     if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
       runApplication = false;
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
-      SvgGui::debugLayout = true;
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)
-      SvgGui::debugDirty = !SvgGui::debugDirty;
     return false;
   });
   gui->showWindow(win, NULL);
+
+  if(sceneFile) {
+    app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();  //"import:\n  - " +
+    app->loadSceneFile();
+  }
+  else
+    app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
+
+  // Alamo square
+  app->updateLocation(Location{0, 37.776444, -122.434668, 0, 100, 0, 0, 0, 0, 0, 0});
 
   while(runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
@@ -1045,6 +1060,7 @@ int main(int argc, char* argv[])
   delete gui;
   delete painter;
   delete app;
+  delete tangramMap;
   nvgswuDeleteBlitter(swBlitter);
   nvgswDelete(nvgContext);
   glfwTerminate();

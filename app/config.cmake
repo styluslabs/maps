@@ -11,6 +11,7 @@ add_library(maps-app
   app/src/tracks.cpp
   app/src/util.cpp
   app/src/plugins.cpp
+  app/src/mapwidgets.cpp
   # ugui
   app/styluslabs/ugui/svggui.cpp
   app/styluslabs/ugui/widgets.cpp

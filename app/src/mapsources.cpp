@@ -96,12 +96,13 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::string& sourcesFile
 {
   FSPath path = FSPath(app->configFile).parent();
+  baseUrl = "file://" + path.path;
   std::string srcyaml;
   for(auto srcfile : app->config["sources"]) {
     FSPath srcpath = path.child(srcfile.Scalar());
     // how to handle baseUrl if sources files are in different folders?
-    if(baseUrl.empty())
-      baseUrl = "file://" + srcpath.parentPath();
+    //if(baseUrl.empty())
+    //  baseUrl = "file://" + srcpath.parentPath();
     if(!readFile(&srcyaml, srcpath.c_str()))
       LOGW("Unable to open map sources file %s", srcpath.c_str());
     srcyaml += "\n";  // to handle source files w/o trailing newline
@@ -279,8 +280,8 @@ void MapsSources::populateSources()
 {
   std::vector<std::string> layerTitles = {"None"};
   std::vector<std::string> sourceTitles = {};
-  sourceKeys = {""};
-  layerKeys = {};
+  layerKeys = {""};
+  sourceKeys = {};
   for(const auto& src : mapSources) {
     sourceKeys.push_back(src.first.Scalar());
     sourceTitles.push_back(src.second["title"].Scalar());

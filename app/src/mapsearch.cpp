@@ -111,7 +111,7 @@ static bool initSearch()
 
     DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
     // search history
-    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);");
+    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
   }
   //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF", NULL, NULL, &errorMessage);
   //sqlite3_exec(searchDB, "PRAGMA count_changes=OFF", NULL, NULL, &errorMessage);
@@ -459,6 +459,7 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
   for(size_t ii = 0; ii < history.size(); ++ii) {
     Button* item = new Button(autoCompProto->clone());
     item->onClicked = [this, query=history[ii]](){
+      queryText->setText(query.c_str());
       app->mapsSearch->searchText(query, MapsSearch::RETURN);
     };
     SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
@@ -482,7 +483,7 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     titlenode->addText(res.tags["name"].GetString());
     SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-    double distkm = lngLatDist(app->mapCenter.lngLat(), res.pos);
+    double distkm = lngLatDist(app->currLocation.lngLat(), res.pos);
     distnode->addText(fstring("%.1f km", distkm).c_str());
     resultsContent->addWidget(item);
   }
@@ -562,21 +563,30 @@ Widget* MapsSearch::createPanel()
     if(!queryText->text().empty())
       searchText(queryText->text(), MapsSearch::RETURN);
   }, initSortIdx);
-  Button* sortBtn = createToolbutton(SvgGui::useFile("icons/ic_menu_settings.svg"), "Sort");
+  Button* sortBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_settings.svg"), "Sort");
   sortBtn->setMenu(sortMenu);
   searchTb->addWidget(sortBtn);
 
-  Widget* searchContent = createColumn(); //createListContainer();
+  //Widget* searchContent = createColumn(); //createListContainer();
   resultsContent = createColumn(); //createListContainer();
-  searchContent->addWidget(new Widget(searchBoxNode));
-  searchContent->addWidget(resultsContent);
-  searchPanel = app->createMapPanel(searchTb, resultsContent);
+  //searchContent->addWidget(new Widget(searchBoxNode));
+  //searchContent->addWidget(resultsContent);
+  searchPanel = app->createMapPanel(searchTb, resultsContent, new Widget(searchBoxNode));
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SvgGui::INVISIBLE)
+    if(event->type == MapsApp::PANEL_CLOSED) {
       clearSearch();
+      return true;
+    }
     return false;
   });
+
+  auto scrollWidget = static_cast<ScrollWidget*>(resultsContent->parent());
+  scrollWidget->onScroll = [=](){
+    if(scrollWidget->scrollY == scrollWidget->scrollLimits.bottom) {
+      // get more list results ... use searchStr
+    }
+  };
 
   static const char* searchResultProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
