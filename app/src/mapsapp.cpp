@@ -250,6 +250,7 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
   Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition, sceneUpdates);  //, updates};
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
+  options.preserveMarkers = true;
 #ifdef DEBUG
   options.debugStyles = true;
 #endif
