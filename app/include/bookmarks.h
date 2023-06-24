@@ -30,7 +30,7 @@ private:
 
   void populateBkmks(int list_id, bool createUI);
   void populateLists(bool archived);
-  Widget* getPlaceInfoSubSection(int rowid, int listid, std::string notestr);
+  Widget* getPlaceInfoSubSection(int rowid, int listid, std::string namestr, std::string notestr);
   void chooseBookmarkList(std::function<void(int, std::string)> callback);
 
   Widget* bkmkPanel = NULL;
@@ -40,7 +40,7 @@ private:
   Widget* archivedPanel = NULL;
   Widget* archivedContent = NULL;
   bool mapAreaBkmks = false;
-  std::vector<MarkerGroup*> hiddenGroups;
+  //std::vector<MarkerGroup*> hiddenGroups;
   bool bkmkPanelDirty = false;
   bool listsDirty = false;
   bool archiveDirty = false;

@@ -126,6 +126,7 @@ MarkerID MarkerGroup::getMarker(PlaceInfo& res)
 
 void MarkerGroup::setVisible(bool vis)
 {
+  if(visible == vis) return;
   visible = vis;
   for(auto& res : places)
     map->markerSetVisible(res.isAltMarker ? res.altMarkerId : res.markerId, vis);

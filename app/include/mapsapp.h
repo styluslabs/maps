@@ -35,7 +35,7 @@ public:
   MapsApp(Map* _map);
   ~MapsApp();  // impl must be outside header to allow unique_ptr members w/ incomplete types
 
-  void drawFrame(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
+  void mapUpdate(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
   void onMouseButton(double time, double x, double y, int button, int action, int mods);
   void onMouseMove(double time, double x, double y, bool pressed);
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
@@ -91,8 +91,6 @@ public:
 
   // GUI
   Window* createGUI();
-  //void hidePlaceInfo();
-
   void showPanel(Widget* panel, bool isSubPanel = false);
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
   Button* createPanelButton(const SvgNode* icon, const char* title);
@@ -126,13 +124,6 @@ public:
   static bool metricUnits;
 
 private:
-  //void showImGUI();
-  //void showSceneGUI();
-  //void showViewportGUI();
-  //void showDebugFlagsGUI();
-  //void showSceneVarsGUI();
-  //void showPickLabelGUI();
-
   void dumpTileContents(float x, float y);
   void saveConfig();
 

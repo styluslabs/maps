@@ -20,10 +20,13 @@ Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t
 SelectDialog::SelectDialog(SvgDocument* n, const std::vector<std::string>& _items) : Dialog(setupWindowNode(n))
 {
   content = createColumn();
+  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
   Button* cancelBtn = new Button(containerNode()->selectFirst(".cancel-btn"));
   cancelBtn->onClicked = [=](){ finish(Dialog::CANCELLED); };
   Widget* dialogBody = selectFirst(".body-container");
-  dialogBody->addWidget(new ScrollWidget(new SvgDocument(), content));
+  ScrollWidget* scrollWidget = new ScrollWidget(new SvgDocument(), content);
+  scrollWidget->node->setAttribute("box-anchor", "fill");
+  dialogBody->addWidget(scrollWidget);
 
   if(!_items.empty())
     addItems(_items, false);
@@ -56,19 +59,24 @@ SelectBox::SelectBox(SvgNode* boxnode, SelectDialog* _dialog, const std::vector<
 
   comboopen->onClicked = [this](){
     SvgGui* gui = window()->gui();
-    gui->showModal(dialog.get(), gui->windows.front()->modalOrSelf());
+    Window* win = gui->windows.front();  //->modalOrSelf();
+    Rect pbbox = win->winBounds();
+    dialog->setWinBounds(Rect::centerwh(pbbox.center(), std::min(pbbox.width() - 20, real(500)), pbbox.height() - 60));
+    gui->showModal(dialog.get(), win);
   };
 
   dialog->onSelected = [this](int idx){ updateIndex(idx); };
 
   addItems(_items);
-  setText(items.front().c_str());
 }
 
 void SelectBox::addItems(const std::vector<std::string>& _items, bool replace)
 {
-  if(replace)
+  if(replace) {
     items.clear();
+    if(!_items.empty())
+      setText(_items.front().c_str());
+  }
   items.insert(items.end(), _items.begin(), _items.end());
   dialog->addItems(_items, replace);
 }
@@ -99,7 +107,7 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
           <g class="title-container" box-anchor="hfill" layout="flex" flex-direction="row" justify-content="center">
             <text class="dialog-title"></text>
           </g>
-          <g class="button-container toolbar" box-anchor="hfill" layout="flex" flex-direction="row">
+          <g class="button-container toolbar" box-anchor="left" layout="flex" flex-direction="row">
             <g class="toolbutton cancel-btn" layout="box">
               <rect class="background" box-anchor="hfill" width="36" height="42"/>
               <g margin="0 3" box-anchor="fill" layout="flex" flex-direction="row">
@@ -124,7 +132,6 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
           </g>
         </g>
       </g>
-
     </svg>
   )#";
   static std::unique_ptr<SvgDocument> dialogProto;
@@ -132,9 +139,9 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
     dialogProto.reset(static_cast<SvgDocument*>(loadSVGFragment(dialogProtoSVG)));
 
   SvgDocument* dialog = dialogProto->clone();
-  static_cast<SvgText*>(dialog->selectFirst(".dialog-title"))->addText("title");
+  static_cast<SvgText*>(dialog->selectFirst(".dialog-title"))->addText(title);
   static_cast<SvgUse*>(dialog->selectFirst(".listitem-icon"))->setTarget(itemicon);
-  return new SelectDialog(dialogProto->clone(), items);
+  return new SelectDialog(dialog, items);
 }
 
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items)

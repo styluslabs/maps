@@ -202,6 +202,7 @@ void MapsSearch::clearSearchResults()
 void MapsSearch::clearSearch()
 {
   clearSearchResults();
+  queryText->setText("");
   if(app->searchActive) {
     app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
     app->mapsBookmarks->restoreBookmarks();
@@ -312,6 +313,7 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
 
 void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 {
+  int offset = listResults.size();
   bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
   // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
   std::string query = fstring("SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
@@ -327,8 +329,9 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
     std::string s(queryStr + "*");
     std::replace(s.begin(), s.end(), '\'', ' ');
     sqlite3_bind_text(stmt, 1, s.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 2, listResults.size());  //resultOffset);
+    sqlite3_bind_int(stmt, 2, offset);
   });
+  moreListResultsAvail = listResults.size() - offset >= 20;
 }
 
 void MapsSearch::onMapChange()
@@ -535,7 +538,6 @@ Widget* MapsSearch::createPanel()
   cancelBtn->onClicked = [this](){
     clearSearch();
     app->gui->deleteContents(resultsContent, ".listitem");
-    queryText->setText("");
     cancelBtn->setVisible(false);
   };
   cancelBtn->setVisible(false);
@@ -583,9 +585,9 @@ Widget* MapsSearch::createPanel()
 
   auto scrollWidget = static_cast<ScrollWidget*>(resultsContent->parent());
   scrollWidget->onScroll = [=](){
-    if(scrollWidget->scrollY == scrollWidget->scrollLimits.bottom) {
-      // get more list results ... use searchStr
-    }
+    // get more list results
+    if(moreListResultsAvail && scrollWidget->scrollY >= scrollWidget->scrollLimits.bottom)
+      searchText(searchStr, NEXTPAGE);
   };
 
   static const char* searchResultProtoSVG = R"(
@@ -634,9 +636,11 @@ Widget* MapsSearch::createPanel()
 
       // TODO: pinned searches - timestamp column = INF?
       DB_exec(searchDB, "SELECT query FROM history ORDER BY timestamp LIMIT 8;", [&](sqlite3_stmt* stmt){
-        const char* s = (const char*)(sqlite3_column_text(stmt, 0));
-        searchMenu->addItem(s, SvgGui::useFile(":/icons/ic_menu_clock.svg"),
-            [=](){ app->mapsSearch->searchText(s, MapsSearch::RETURN); });
+        std::string s = (const char*)(sqlite3_column_text(stmt, 0));
+        searchMenu->addItem(s.c_str(), SvgGui::useFile(":/icons/ic_menu_clock.svg"), [=](){
+          queryText->setText(s.c_str());
+          app->mapsSearch->searchText(s, MapsSearch::RETURN);
+        });
       });
 
     }

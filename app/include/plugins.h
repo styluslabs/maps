@@ -4,6 +4,8 @@
 //#include "js/JavaScript.h"
 #include "duktape/duktape.h"
 
+class Widget;
+
 struct PluginFn
 {
   std::string name;  //Tangram::JSFunctionIndex jsFnIdx;
@@ -16,8 +18,11 @@ public:
   PluginManager(MapsApp* _app, const std::string& pluginDir);
   ~PluginManager();
   void createFns(duk_context* ctx);
+  std::string evalJS(const char* s);
   void cancelJsSearch();
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
+
+  Widget* createPanel();
 
   duk_context* jsContext;
   //std::mutex jsMutex;

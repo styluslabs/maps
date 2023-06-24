@@ -247,7 +247,7 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
   //for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
   //  updates.push_back(update);
   // sceneFile will be used iff sceneYaml is empty
-  Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition);  //, updates};
+  Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition, sceneUpdates);  //, updates};
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
 #ifdef DEBUG
@@ -277,9 +277,9 @@ MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(
   //}
 
   // make sure cache folder exists
-  mkdir((baseDir + "cache").c_str(), 0777);
+  mkdir(FSPath(baseDir, "cache").c_str(), 0777);
 
-  // Setup tangram
+  // Setup UI panels
   mapsSources = std::make_unique<MapsSources>(this);
   mapsOffline = std::make_unique<MapsOffline>(this);
   pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
@@ -288,9 +288,12 @@ MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(
   mapsSearch = std::make_unique<MapsSearch>(this);
   mapsBookmarks = std::make_unique<MapsBookmarks>(this);
 
-  //map->setSceneReadyListener([this](SceneID id, const SceneError*) {
-  //  std::string svg = fstring(markerSVG, "#CF513D");  // note that SVG parsing is destructive
-  //  textureFromSVG("pick-marker-red", (char*)svg.data(), 1.5f);  // slightly bigger
+  // Scene::onReady() remains false until after first call to Map::update()!
+  //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {
+  //  runOnMainThread([=](){
+  //    // if other panels need scene loaded event, we could send to a common widget (MapsWidget?)
+  //    mapsSources->onSceneLoaded();  //sourcePanel->sdlUserEvent(gui, SCENE_LOADED);
+  //  });
   //});
 
   // cache management
@@ -349,16 +352,9 @@ void MapsApp::saveConfig()
   fs.write(s.data(), s.size());
 }
 
-void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display_h, double current_time, bool focused)
+void MapsApp::mapUpdate(double time)
 {
-  //static bool glReady = false; if(!glReady) { map->setupGL(); glReady = true; }
   static double lastFrameTime = 0;
-
-  //if(show_gui) {
-  //  ImGui::NewFrame();
-  //  showImGUI();  // ImGui::ShowDemoWindow();
-  //}
-
   //platform->notifyRender();
   Tangram::MapState state = map->update(time - lastFrameTime);
   lastFrameTime = time;
@@ -376,11 +372,6 @@ void MapsApp::drawFrame(double time)  //int w, int h, int display_w, int display
   mapsSources->onMapChange();
   mapsSearch->onMapChange();
   pluginManager->onMapChange();
-
-  map->render();
-
-  //if(show_gui)
-  //  ImGui::Render();
 }
 
 void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
@@ -539,9 +530,7 @@ Rect MapsWidget::dirtyRect() const
 
 void MapsWidget::draw(SvgPainter* svgp) const
 {
-  auto t0 = std::chrono::high_resolution_clock::now();
-  double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
-  app->drawFrame(currTime);
+  //app->map->render();
 }
 
 Window* MapsApp::createGUI()
@@ -568,7 +557,7 @@ Window* MapsApp::createGUI()
       <g class="panel-layout" box-anchor="top left" margin="10 0 0 10" layout="flex" flex-direction="column">
         <g id="main-tb-container" box-anchor="hfill" layout="box"></g>
         <g id="panel-container" display="none" box-anchor="hfill" layout="box">
-          <rect class="background" box-anchor="hfill" x="0" y="0" width="300" height="800"/>
+          <rect class="background" x="0" y="0" width="300" height="800"/>
           <g id="panel-content" box-anchor="fill" layout="box"></g>
         </g>
       </g>
@@ -626,11 +615,13 @@ Window* MapsApp::createGUI()
   Widget* searchBtn = mapsSearch->createPanel();
   Widget* sourcesBtn = mapsSources->createPanel();
   Widget* bkmkBtn = mapsBookmarks->createPanel();
+  Widget* pluginBtn = pluginManager->createPanel();
 
   mainToolbar->addWidget(searchBtn);
   mainToolbar->addWidget(bkmkBtn);
   mainToolbar->addWidget(tracksBtn);
   mainToolbar->addWidget(sourcesBtn);
+  mainToolbar->addWidget(pluginBtn);
 
   // main toolbar at bottom is better than top for auto-close menus (so menu isn't obstructed by finger)
   mainTbContainer = win->selectFirst("#main-tb-container");
@@ -711,16 +702,20 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
     }
   };
   toolbar->addWidget(backBtn);
-  toolbar->addWidget(createToolbutton(icon, title, true));
+  Button* titleBtn = createToolbutton(icon, title, true);
+  titleBtn->node->addClass("panel-title");
+  toolbar->addWidget(titleBtn);
 
   Widget* stretch = createStretch();
-  stretch->addHandler([this](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
-      panelSplitter->sdlEvent(gui, event);
-      return true;
-    }
-    return false;
-  });
+  if(panelSplitter) {
+    stretch->addHandler([this](SvgGui* gui, SDL_Event* event) {
+      if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
+        panelSplitter->sdlEvent(gui, event);
+        return true;
+      }
+      return false;
+    });
+  }
 
   toolbar->addWidget(stretch);
   return toolbar;
@@ -763,7 +758,8 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
     header->addWidget(minimizeBtn);
   }
 
-  auto panel = createColumn();
+  Widget* panel = createColumn();
+  panel->node->setAttribute("box-anchor", "fill");
   panel->addWidget(header);
   if(fixedContent)
     panel->addWidget(fixedContent);
@@ -1011,8 +1007,13 @@ int main(int argc, char* argv[])
     glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
     painter->deviceRect = Rect::wh(fbWidth, fbHeight);
 
-    if(MapsApp::platform->notifyRender())
+    if(MapsApp::platform->notifyRender()) {
+      auto t0 = std::chrono::high_resolution_clock::now();
+      double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
+      app->mapUpdate(currTime);
       app->mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);
+      app->map->render();  // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
+    }
 
     Rect dirty = gui->layoutAndDraw(painter);
     if(SvgGui::debugLayout) {
@@ -1075,6 +1076,8 @@ int main(int argc, char* argv[])
 #define NANOSVGRAST_IMPLEMENTATION
 #include "nanosvg/nanosvgrast.h"
 
+#include "usvg/svgpainter.h"
+
 namespace Tangram {
 
 bool userLoadSvg(char* svg, Texture* texture)  //float scale, int& w, int& h)
@@ -1109,6 +1112,34 @@ bool userLoadSvg(char* svg, Texture* texture)  //float scale, int& w, int& h)
   nsvgDelete(image);
   nsvgDeleteRasterizer(rast);
   texture->setPixelData(w, h, 4, img.data(), img.size());
+  return true;
+}
+
+bool userLoadSvg2(char* svg, Texture* texture)
+{
+  std::unique_ptr<SvgDocument> doc(SvgParser().parseString(svg));
+  if(!doc) return false;
+
+  int w = int(doc->width().px(96) + 0.5), h = int(doc->height().px(96) + 0.5);
+  Image img(w, h);
+  Painter painter(&img);
+  painter.beginFrame();
+  SvgPainter(&painter).drawNode(doc.get());  //, dirty);
+  painter.endFrame();
+
+  auto atlas = std::make_unique<SpriteAtlas>();
+  bool hasSprites = false;
+  for(auto pair : doc->m_namedNodes) {
+    if(pair.second->isVisible()) continue;
+    hasSprites = true;
+    Rect b = pair.second->bounds();
+    glm::vec2 pos(b.left, b.top);
+    glm::vec2 size(b.width(), b.height());
+    atlas->addSpriteNode(pair.first.c_str(), pos, size);
+  }
+  if(hasSprites)
+    texture->setSpriteAtlas(std::move(atlas));
+  texture->setPixelData(w, h, 4, img.bytes(), img.dataLen());
   return true;
 }
 

@@ -19,8 +19,6 @@ struct SearchResult
   int64_t id;
   LngLat pos;
   float rank;
-  //MarkerID markerId;
-  //bool isPinMarker;
   rapidjson::Document tags;  // will eventually be a DuktapeValue? standard osm tag names for now
 };
 
@@ -41,14 +39,13 @@ public:
   void addListResult(int64_t id, double lng, double lat, float rank, const char* json);
   void addMapResult(int64_t id, double lng, double lat, float rank, const char* json);
 
-  //std::mutex resultsMutex;
-  //std::vector<MarkerID> pinMarkers;
-  //std::vector<MarkerID> dotMarkers;
   std::unique_ptr<MarkerGroup> markers;
 
   int providerIdx = 0;
+  bool moreMapResultsAvail = false;
+  bool moreListResultsAvail = false;
   // search flags
-  enum { MAP_SEARCH = 1, SORT_BY_DIST = 2 };
+  enum { MAP_SEARCH = 1, SORT_BY_DIST = 2, MORE_RESULTS = 0x8000 };
 
   enum SearchPhase { EDITING, RETURN, NEXTPAGE };
   void searchText(std::string query, SearchPhase phase);
@@ -68,8 +65,6 @@ private:
   float prevZoom = 0;
   LngLat dotBounds00, dotBounds11;
   std::string searchStr;
-
-  bool moreMapResultsAvail = false;
   bool mapResultsChanged = false;  // protected by resultsMutex
 
   void offlineListSearch(std::string queryStr, LngLat, LngLat);
@@ -79,12 +74,6 @@ private:
   void onlineMapSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
   void onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch);
   void clearSearchResults();
-
-  //void onZoom();
-  //void clearSearchResults(std::vector<SearchResult>& results);
-  //MarkerID getPinMarker(const SearchResult& res, int idx);
-  //MarkerID getDotMarker(const SearchResult& res);
-  //void createMarkers();
 
   // GUI
   void populateAutocomplete(const std::vector<std::string>& history);

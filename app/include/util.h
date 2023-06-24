@@ -45,6 +45,7 @@ public:
   std::string styling;
   std::string altStyling;
   bool visible = true;
+  bool defaultVis = false;
 
   struct PlaceInfo {
     LngLat pos;

@@ -4,10 +4,6 @@
 #include "mapsources.h"
 #include "bookmarks.h"
 #include "util.h"
-//#include "imgui.h"
-//#include "imgui_stl.h"
-
-//using namespace Tangram;
 
 
 PluginManager* PluginManager::inst = NULL;
@@ -89,6 +85,18 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
   inJsSearch = false;
 }
 
+std::string PluginManager::evalJS(const char* s)
+{
+  std::string result;
+  duk_context* ctx = jsContext;
+  if (duk_peval_string(ctx, s) != 0)
+    result = fstring("JS eval error: %s", duk_safe_to_string(ctx, -1));
+  else
+    result = duk_safe_to_string(ctx, -1);
+  duk_pop(ctx);
+  return result;
+}
+
 static int registerFunction(duk_context* ctx)
 {
   // alternative is to pass fn object instead of name, which we can then add to globals w/ generated name
@@ -164,8 +172,14 @@ static int addSearchResult(duk_context* ctx)
 
   //std::lock_guard<std::mutex> lock(PluginManager::inst->app->mapsSearch->resultsMutex);
   auto& ms = PluginManager::inst->app->mapsSearch;
-  flags & MapsSearch::MAP_SEARCH ? ms->addMapResult(osm_id, lng, lat, score, json)
-      : ms->addListResult(osm_id, lng, lat, score, json);
+  if(flags & MapsSearch::MAP_SEARCH) {
+    ms->addMapResult(osm_id, lng, lat, score, json);
+    ms->moreMapResultsAvail = flags & MapsSearch::MORE_RESULTS;
+  }
+  else {
+    ms->addListResult(osm_id, lng, lat, score, json);
+    ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
+  }
   return 0;
 }
 
@@ -185,7 +199,7 @@ static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lng
 {
   const char* listname = duk_require_string(ctx, 0);
   const char* osm_id = duk_require_string(ctx, 1);
-  const char* name = duk_json_encode(ctx, 2);
+  const char* name = duk_require_string(ctx, 2);
   const char* props = duk_json_encode(ctx, 3);
   const char* notes = duk_require_string(ctx, 4);
   double lng = duk_to_number(ctx, 5);
@@ -209,7 +223,7 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addSearchResult");
   duk_push_c_function(ctx, addMapSource, 2);
   duk_put_global_string(ctx, "addMapSource");
-  duk_push_c_function(ctx, addBookmark, 6);
+  duk_push_c_function(ctx, addBookmark, 8);
   duk_put_global_string(ctx, "addBookmark");
 }
 
@@ -229,3 +243,47 @@ void PluginManager::createFns(duk_context* ctx)
     }
   }
 }*/
+
+// for now, we need somewhere to put TextEdit for entering JS commands; probably would be opened from
+//  overflow menu, assuming we even keep it
+
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
+#include "usvg/svgpainter.h"
+
+#include "mapsources.h"
+
+Widget* PluginManager::createPanel()
+{
+  Widget* pluginContent = createColumn();
+  pluginContent->node->setAttribute("box-anchor", "hfill");
+
+  TextEdit* jsEdit = createTextEdit();
+  jsEdit->node->setAttribute("box-anchor", "hfill");
+  Button* runBtn = createPushbutton("Run");
+  SvgText* resultTextNode = createTextNode("");
+  TextBox* resultText = new TextBox(resultTextNode);
+
+  runBtn->onClicked = [=](){
+    resultText->setText( evalJS(jsEdit->text().c_str()).c_str() );
+    std::string bmsg = SvgPainter::breakText(resultTextNode, 300);
+    resultText->setText( bmsg.c_str() );
+  };
+
+  pluginContent->addWidget(new TextBox(createTextNode("Javascript command:")));
+  pluginContent->addWidget(jsEdit);
+  pluginContent->addWidget(runBtn);
+  pluginContent->addWidget(resultText);
+
+  auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_editbox.svg"), "Plugins");
+  //toolbar->addWidget(createStretch());
+  //toolbar->addWidget(maxZoomSpin);
+  Widget* pluginPanel = app->createMapPanel(toolbar, NULL, pluginContent);
+
+  Button* pluginBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_editbox.svg"), "Offline Maps");
+  pluginBtn->onClicked = [=](){
+    app->showPanel(pluginPanel, true);
+  };
+  return pluginBtn;
+}

@@ -25,7 +25,7 @@ add_library(maps-app
   app/styluslabs/usvg/svgparser.cpp
   app/styluslabs/usvg/svgpainter.cpp
   app/styluslabs/usvg/svgwriter.cpp
-  app/styluslabs/usvg/pdfwriter.cpp
+  #app/styluslabs/usvg/pdfwriter.cpp
   app/styluslabs/usvg/cssparser.cpp
   app/styluslabs/nanovg-2/src/nanovg.c
   app/styluslabs/pugixml/src/pugixml.cpp

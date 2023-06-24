@@ -5,6 +5,7 @@
 
 class Widget;
 class ComboBox;
+class SelectBox;
 class Button;
 
 class MapsSources : public MapsComponent
@@ -17,6 +18,7 @@ public:
   void rebuildSource(const std::string& srcname = "");
   void deleteOfflineMap(int mapid);
   int64_t shrinkCache(int64_t maxbytes);
+  void onMapChange();
 
   Widget* sourcesPanel;
 
@@ -35,11 +37,12 @@ private:
   int nSources = 1;
 
   std::vector<Widget*> layerRows;
-  std::vector<ComboBox*> layerCombos;
+  std::vector<SelectBox*> layerCombos;
   ComboBox* sourceCombo = NULL;
   Button* discardBtn = NULL;
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
+  bool sceneVarsLoaded = false;
 
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;

@@ -7,6 +7,7 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
+#include "mapwidgets.h"
 
 #include "offlinemaps.h"
 
@@ -167,6 +168,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->sceneFile = baseUrl + "__GUI_SOURCES__";
     app->sceneUpdates = std::move(builder.updates);  //.clear();
     app->loadSceneFile();  //builder.getSceneYaml(baseUrl), builder.updates);
+    sceneVarsLoaded = false;
     if(!srcname.empty())
       app->config["last_source"] = srcname;
   }
@@ -179,7 +181,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
   nSources = std::max(int(builder.layerkeys.size()), nSources);
   for(; ii < builder.layerkeys.size(); ++ii) {
     for(int jj = 0; jj < sourceKeys.size(); ++jj) {
-      if(builder.layerkeys[ii] == sourceKeys[jj]) {
+      if(builder.layerkeys[ii] == layerKeys[jj]) {
         //currSrcIdx[ii] = jj;
         layerCombos[ii]->setIndex(jj);
         layerRows[ii]->setVisible(true);
@@ -191,7 +193,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
   layerCombos[ii]->setIndex(0);
   layerRows[ii]->setVisible(true);
 
-  for(++ii; ii < nSources; ++ii)
+  for(++ii; ii < layerRows.size(); ++ii)
     layerRows[ii]->setVisible(false);
 }
 
@@ -283,25 +285,30 @@ void MapsSources::populateSources()
   layerKeys = {""};
   sourceKeys = {};
   for(const auto& src : mapSources) {
-    sourceKeys.push_back(src.first.Scalar());
-    sourceTitles.push_back(src.second["title"].Scalar());
+    if(!src.second["layer"].as<bool>(false) && src.second["type"].Scalar() != "Update") {
+      sourceKeys.push_back(src.first.Scalar());
+      sourceTitles.push_back(src.second["title"].Scalar());
+    }
     if(src.second["type"].Scalar() != "Multi") {
       layerKeys.push_back(src.first.Scalar());
       layerTitles.push_back(src.second["title"].Scalar());
     }
   }
+  //app->gui->deleteContents(sourceCombo->selectFirst(".child-container"));
   sourceCombo->addItems(sourceTitles);
-  for(ComboBox* combo : layerCombos)
+  for(SelectBox* combo : layerCombos)
     combo->addItems(layerTitles);
 }
 
-//void MapsSources::onSceneLoaded()
-//{
-//  populateSceneVars();
-//}
+void MapsSources::onMapChange()
+{
+  if(!sceneVarsLoaded && app->map->getScene()->isReady())
+    populateSceneVars();
+}
 
 void MapsSources::populateSceneVars()
 {
+  sceneVarsLoaded = true;
   app->gui->deleteContents(varsContent);
 
   YAML::Node vars = app->readSceneValue("global.gui_variables");
@@ -398,9 +405,6 @@ Widget* MapsSources::createPanel()
 
   discardBtn->onClicked = [this](){
     mapSources.remove(sourceKeys[sourceCombo->index()]);
-    app->gui->deleteContents(sourceCombo->selectFirst(".child-container"));
-    for(ComboBox* combo : layerCombos)
-      app->gui->deleteContents(combo->selectFirst(".child-container"));
     populateSources();
   };
 
@@ -416,9 +420,9 @@ Widget* MapsSources::createPanel()
   Widget* layersContent = createColumn();
   varsContent = createColumn();
   layersContent->addWidget(varsContent);
-  for(int ii = 0; ii < MAX_SOURCES; ++ii) {
-    layerCombos.push_back(createComboBox({}));
-    layerCombos.back()->onChanged = [this](const char*){
+  for(int ii = 1; ii <= MAX_SOURCES; ++ii) {
+    layerCombos.push_back(createSelectBox(fstring("Layer %d", ii).c_str(), SvgGui::useFile(":/icons/ic_menu_cloud.svg") , {}));
+    layerCombos.back()->onChanged = [this](int){
       rebuildSource();
     };
     layerRows.push_back(createTitledRow(fstring("Layer %d", ii).c_str(), layerCombos.back()));
