@@ -210,46 +210,6 @@ void MapsSearch::clearSearch()
   app->searchActive = false;
 }
 
-/*MarkerID MapsSearch::getPinMarker(const SearchResult& res, int idx)
-{
-  Map* map = app->map;
-  MarkerID markerId = pinMarkers.empty() ? map->markerAdd() : pinMarkers.back();
-  if(!pinMarkers.empty())
-    pinMarkers.pop_back();
-  else
-    map->markerSetStylingFromPath(markerId, "layers.search-marker.draw.marker");
-    //map->markerSetStylingFromString(markerId, fstring(searchMarkerStyleStr, "pois-search").c_str());
-
-  map->markerSetVisible(markerId, true);
-  map->markerSetPoint(markerId, res.pos);
-
-  Properties props;
-  props.set("priority", idx);
-  for(auto& m : res.tags.GetObject()) {
-    if(m.value.IsNumber())
-      props.set(m.name.GetString(), m.value.GetDouble());
-    else if(m.value.IsString())
-      props.set(m.name.GetString(), m.value.GetString());
-  }
-  map->markerSetProperties(markerId, std::move(props));
-
-  return markerId;
-}
-
-MarkerID MapsSearch::getDotMarker(const SearchResult& res)
-{
-  Map* map = app->map;
-  MarkerID markerId = dotMarkers.empty() ? map->markerAdd() : dotMarkers.back();
-  if(!dotMarkers.empty())
-    dotMarkers.pop_back();
-  else
-    map->markerSetStylingFromPath(markerId, "layers.search-dot.draw.marker");
-    //map->markerSetStylingFromString(markerId, dotMarkerStyleStr);
-  map->markerSetVisible(markerId, true);
-  map->markerSetPoint(markerId, res.pos);
-  return markerId;
-}*/
-
 void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, const char* json)
 {
   size_t idx = mapResults.size();

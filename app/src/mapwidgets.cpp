@@ -170,3 +170,54 @@ SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std
   //widget->isFocusable = true;
   return widget;
 }
+
+Widget* createColorPicker(const std::vector<Color>& colors, Color initialColor, std::function<void(Color)> onColor)
+{
+  static const char* menuSVG = R"#(
+    <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
+      <rect box-anchor="fill" width="20" height="20"/>
+      <g class="child-container" box-anchor="fill"
+          layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
+      </g>
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> menuNode;
+  if(!menuNode)
+    menuNode.reset(loadSVGFragment(menuSVG));
+
+  static const char* colorBtnSVG = R"#(
+    <g class="color_preview previewbtn">
+      <pattern id="checkerboard" x="0" y="0" width="18" height="18"
+          patternUnits="userSpaceOnUse" patternContentUnits="userSpaceOnUse">
+        <rect fill="black" fill-opacity="0.1" x="0" y="0" width="9" height="9"/>
+        <rect fill="black" fill-opacity="0.1" x="9" y="9" width="9" height="9"/>
+      </pattern>
+
+      <rect fill="white" x="1" y="1" width="35" height="35" />
+      <rect fill="url(#checkerboard)" x="1" y="1" width="35" height="35" />
+      <rect class="current-color" stroke="currentColor" stroke-width="2" fill="blue" x="1" y="1" width="35" height="35" />
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> colorBtnNode;
+  if(!colorBtnNode)
+    colorBtnNode.reset(loadSVGFragment(colorBtnSVG));
+
+  Menu* menu = new Menu(menuNode->clone(), Menu::VERT_LEFT);
+  Button* widget = new Button(colorBtnNode->clone());
+  widget->selectFirst(".current-color")->node->setAttr<color_t>("fill", initialColor.color);
+  widget->setMenu(menu);
+
+  for(size_t ii = 0; ii < colors.size(); ++ii) {
+    Color color = colors[ii];
+    Button* btn = new Button(colorBtnNode->clone());
+    btn->selectFirst(".current-color")->node->setAttr<color_t>("fill", color.color);
+    if(ii > 0 && ii % 4 == 0)
+      btn->node->setAttribute("flex-break", "before");
+    btn->onClicked = [=](){
+      widget->selectFirst(".current-color")->node->setAttr<color_t>("fill", color.color);
+      onColor(color);
+    };
+    menu->addWidget(btn);  // use addItem() to support press-drag-release?
+  }
+  return widget;
+}

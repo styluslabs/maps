@@ -61,13 +61,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   //std::replace(namestr.begin(), namestr.end(), '"', '\'');
   //map->markerSetStylingFromString(pickResultMarker, fstring(searchMarkerStyleStr, "pick-marker-red").c_str());
   map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
-
-  Properties mprops;
-  mprops.set("priority", priority);
-  mprops.set("name", namestr);
-  map->markerSetProperties(pickResultMarker, std::move(mprops));
-
+  // geometry must be set before properties for new marker!
   map->markerSetPoint(pickResultMarker, pos);
+  map->markerSetProperties(pickResultMarker, {{{"priority", priority}, {"name", namestr}}});
+
   // ensure marker is visible
   double scrx, scry;
   if(!map->lngLatToScreenPosition(pos.longitude, pos.latitude, &scrx, &scry))
@@ -244,8 +241,6 @@ void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, b
 
 void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> updates,
 {
-  //for (auto& update : sceneUpdates)  // add persistent updates (e.g. API key)
-  //  updates.push_back(update);
   // sceneFile will be used iff sceneYaml is empty
   Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition, sceneUpdates);  //, updates};
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
@@ -267,15 +262,6 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
 MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(this))
 {
   //sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
-
-  // Setup style
-  //if(show_gui) {
-  //  ImGuiIO& io = ImGui::GetIO();
-  //  ImGui::StyleColorsDark();
-  //  io.FontGlobalScale = 2.0f;
-  //  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-  //  //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
-  //}
 
   // make sure cache folder exists
   mkdir(FSPath(baseDir, "cache").c_str(), 0777);

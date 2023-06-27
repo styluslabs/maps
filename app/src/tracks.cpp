@@ -6,12 +6,15 @@
 #include <ctime>
 #include <iomanip>
 #include "pugixml.hpp"
+#include "yaml-cpp/yaml.h"
 #include "sqlite3/sqlite3.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
+#include "usvg/svgparser.h"  // for parseColor
+#include "usvg/svgwriter.h"  // for serializeColor
 
 using Track = MapsTracks::Track;
 using TrackLoc = MapsTracks::TrackLoc;
@@ -38,6 +41,7 @@ public:
 
   real zoomScale = 1;
   real zoomOffset = 0;
+  real maxZoom = 1;
 
   //static Color bgColor;
 
@@ -75,13 +79,17 @@ TrackPlot::TrackPlot() : Widget(new SvgCustomNode), mBounds(Rect::wh(200, 200))
       prevCOM = pinchcenter;
       prevPinchDist = pinchdist;
     }
+    else if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
+      prevCOM = event->tfinger.x;
+      gui->setPressed(this);
+    }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == this) {
       zoomOffset += event->tfinger.x - prevCOM;
       prevCOM = event->tfinger.x;
       redraw();
     }
     else if(event->type == SDL_MOUSEWHEEL) {
-      zoomScale = std::max(1.0, zoomScale*std::exp(event->wheel.y/120.0));
+      zoomScale = std::min(std::max(1.0, zoomScale*std::exp(0.25*event->wheel.y/120.0)), maxZoom);
       redraw();
     }
     else if(onHovered && event->type == SDL_FINGERMOTION && !gui->pressedWidget)
@@ -127,6 +135,7 @@ void TrackPlot::setTrack(MapsTracks::Track* track)
   real elev = maxAlt - minAlt;
   minAlt -= 0.05*elev;
   maxAlt += 0.05*elev;
+  maxZoom = track->locs.size()/8;  // min 8 points in view
 }
 
 Rect TrackPlot::bounds(SvgPainter* svgp) const
@@ -142,8 +151,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   int h = mBounds.height() - 4;
   p->translate(2, 2);
   p->clipRect(Rect::wh(w, h));
-  // use color of current page as background
-  p->fillRect(Rect::wh(w, h), Color::WHITE);  //bgColor);  //doc->getCurrPageColor());
+  p->fillRect(Rect::wh(w, h), Color::WHITE);
 
   // labels
   p->setFillBrush(Color::BLACK);
@@ -156,10 +164,26 @@ void TrackPlot::draw(SvgPainter* svgp) const
 
   int plotw = w - (labelw + 10);
   int ploth = h - 15;
-
   int nhorz = 5;
-  for(int ii = 0; ii < nhorz; ++ii)
-    p->drawText(ii*plotw/nhorz + labelw + 10, h, fstring("%.0f", ii*maxDist/1000/nhorz).c_str());
+  if(plotVsDist) {
+    real xMin = zoomOffset;
+    real xMax = xMin + maxDist/1000/zoomScale;
+    real dw = (xMax - xMin)/nhorz;
+    int prec = std::max(0, -int(std::floor(std::log10(dw))));
+    for(int ii = 0; ii < nhorz; ++ii)
+      p->drawText(ii*plotw/nhorz + labelw + 10, h, fstring("%.*f", prec, xMin + ii*dw).c_str());
+  }
+  else {
+    real xMin = minTime + zoomOffset;
+    real xMax = xMin + (maxTime - minTime)/zoomScale;
+    real dw = (xMax - xMin)/nhorz;
+    for(int ii = 0; ii < nhorz; ++ii) {
+      real secs = xMin + ii*dw;
+      real hrs = std::floor(secs/3600);
+      real mins = (secs - hrs*3600)/60;
+      p->drawText(ii*plotw/nhorz + labelw + 10, h, fstring("%.0f:%.0f", hrs, mins).c_str());
+    }
+  }
 
   // axes
   //drawCheckerboard(p, w, h, 4, 0x18000000);
@@ -207,7 +231,7 @@ public:
   std::function<void()> onCropHandlesChanged;
 
   real startHandlePos = 0;
-  real endHandlePos = 1;
+  real endHandlePos = 0;  // this reflects initial state of widget
 
 private:
   Widget* startHandle;
@@ -260,6 +284,8 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
 
 void TrackSliders::setCropHandles(real start, real end)
 {
+  start = std::min(std::max(start, 0.0), 1.0);
+  end = std::min(std::max(end, 0.0), 1.0);
   Rect rect = sliderBg->node->bounds();
   if(startHandlePos != start) {
     startHandlePos = start;
@@ -407,6 +433,7 @@ void MapsTracks::showTrack(Track* track)  //, const char* styling)
     app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  //styling);
   }
   app->map->markerSetPolyline(track->marker, pts.data(), pts.size());
+  app->map->markerSetProperties(track->marker, {{{"color", track->style}}});
 }
 
 bool MapsTracks::saveGPX(Track* track)
@@ -447,6 +474,20 @@ Widget* MapsTracks::createTrackEntry(Track* track)
     else
       showTrack(track);  //, "layers.track.draw.track");
   };
+
+  Button* colorBtn;
+  auto onColor = [this, track](Color color){
+    char buff[64];
+    SvgWriter::serializeColor(buff, color);
+    app->map->markerSetProperties(track->marker, {{{"color", buff}}});
+    std::string q1 = fstring("UPDATE tracks SET style = %s WHERE rowid = ?;", buff);
+    DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, track->rowid); });
+  };
+
+
+  createColorPicker(markerColors, parseColor(track->style), onColor);
+
+
 
   if(track->rowid >= 0) {
     Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
@@ -491,17 +532,18 @@ void MapsTracks::populateTracks(bool archived)
   Widget* content = archived ? archivedContent : tracksContent;
   app->gui->deleteContents(content, ".listitem");
 
-  const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch') FROM tracks WHERE archived = ?;";
+  const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch'), style FROM tracks WHERE archived = ?;";
   DB_exec(app->bkmkDB, query, [this, archived](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     std::string title = (const char*)(sqlite3_column_text(stmt, 1));
     std::string filename = (const char*)(sqlite3_column_text(stmt, 2));
     std::string date = (const char*)(sqlite3_column_text(stmt, 3));
+    std::string style = (const char*)(sqlite3_column_text(stmt, 4));
     for(Track& track : tracks) {
       if(track.rowid == rowid)
         return;
     }
-    tracks.push_back({title, date, filename, 0, {}, rowid, false, archived});
+    tracks.push_back({title, date, filename, style, 0, {}, rowid, false, archived});
   }, [=](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
@@ -525,7 +567,6 @@ void MapsTracks::populateStats(Track* track)
 {
   app->showPanel(statsPanel, true);
   statsPanel->selectFirst(".panel-title")->setText(track->title.c_str());
-  activeTrack = track;
 
   if(track->marker <= 0)
     showTrack(track);  //, "layers.track.draw.selected-track");
@@ -539,6 +580,7 @@ void MapsTracks::populateStats(Track* track)
   // how to calculate max speed?
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
   double currSpeed = 0, maxSpeed = 0;
+  LngLat minLngLat(track->locs.front().lngLat()), maxLngLat(track->locs.front().lngLat());
   for(size_t ii = 1; ii < track->locs.size(); ++ii) {
     const Location& prev = track->locs[ii-1];
     const Location& loc = track->locs[ii];
@@ -561,6 +603,19 @@ void MapsTracks::populateStats(Track* track)
     trackDescent += std::min(0.0, vert);
     ascentTime += vert > 0 ? dt : 0;
     descentTime += vert < 0 ? dt : 0;
+
+    minLngLat.longitude = std::min(minLngLat.longitude, loc.lng);
+    minLngLat.latitude = std::min(minLngLat.latitude, loc.lat);
+    maxLngLat.longitude = std::max(maxLngLat.longitude, loc.lng);
+    maxLngLat.latitude = std::max(maxLngLat.latitude, loc.lat);
+  }
+
+  if(activeTrack != track) {
+    if(!app->map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude)
+        || !app->map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude)) {
+      app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(minLngLat, maxLngLat), 0.5f);
+    }
+    activeTrack = track;
   }
 
   const Location& loc = track->locs.back();
@@ -674,6 +729,7 @@ static TrackLoc interpTrackTime(const std::vector<TrackLoc>& locs, double s, siz
 
 TrackLoc MapsTracks::interpTrack(const std::vector<TrackLoc>& locs, double s, size_t* idxout)
 {
+  s = std::min(std::max(s, 0.0), 1.0);
   return trackPlot->plotVsDist ? interpTrackDist(locs, s, idxout) : interpTrackTime(locs, s, idxout);
 }
 
@@ -710,13 +766,17 @@ Widget* MapsTracks::createPanel()
       " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)), archived INTEGER DEFAULT 0);");
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks_state(track_id INTEGER, ordering INTEGER, visible INTEGER);");
 
+  // colors for tracks; currently shared with bookmarks - if the remains the case, we should dedup
+  for(const auto& colorstr : app->config["colors"])
+    markerColors.push_back(parseColor(colorstr.Scalar()));
+
   // Stats panel
   statsContent = createColumn();
 
   Widget* saveTrackContent = createColumn();
   TextEdit* saveTitle = createTextEdit();
   TextEdit* savePath = createTextEdit();
-  CheckBox* replaceTrackCb = createCheckBox("Replace track", true);
+  CheckBox* replaceTrackCb = createCheckBox("Replace track", false);
   Button* saveTrackBtn = createPushbutton("Apply");
 
   savePath->onChanged = [=](const char* path){
@@ -728,12 +788,13 @@ Widget* MapsTracks::createPanel()
       saveTrackBtn->setEnabled(!pathexists);
     }
     else
-      replaceTrackCb->setChecked(true);
+      replaceTrackCb->setChecked(false);
   };
 
   // TODO: also include track update interval
   saveTrackContent->addWidget(createTitledRow("Title", saveTitle));
   saveTrackContent->addWidget(createTitledRow("File", savePath));
+  saveTrackContent->addWidget(replaceTrackCb);
   saveTrackContent->addWidget(saveTrackBtn);
   saveTrackContent->setVisible(false);
   statsContent->addWidget(saveTrackContent);
@@ -761,21 +822,25 @@ Widget* MapsTracks::createPanel()
     TrackLoc startloc = interpTrack(activeTrack->locs, startpos);
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
-      app->map->markerSetProperties(trackEndMarker, {{{"color", "#008000"}}});
+      app->map->markerSetPoint(trackStartMarker, startloc.lngLat());  // must set geometry before properties
+      app->map->markerSetProperties(trackStartMarker, {{{"color", "#008000"}}});
       app->map->markerSetStylingFromPath(trackStartMarker, "layers.track-marker.draw.marker");
+    } else {
+      app->map->markerSetVisible(trackStartMarker, true);
+      app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
     }
-    app->map->markerSetVisible(trackStartMarker, true);
-    app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
 
     real endpos = trackSliders->endHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
     TrackLoc endloc = interpTrack(activeTrack->locs, endpos);
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
+      app->map->markerSetPoint(trackEndMarker, endloc.lngLat());  // must set geometry before properties
       app->map->markerSetProperties(trackEndMarker, {{{"color", "#FF0000"}}});
       app->map->markerSetStylingFromPath(trackEndMarker, "layers.track-marker.draw.marker");
+    } else {
+      app->map->markerSetVisible(trackEndMarker, true);
+      app->map->markerSetPoint(trackEndMarker, endloc.lngLat());
     }
-    app->map->markerSetVisible(trackEndMarker, true);
-    app->map->markerSetPoint(trackEndMarker, endloc.lngLat());
   };
 
   Button* createBkmkBtn = createToolbutton(NULL, "Create bookmark", true);
@@ -883,23 +948,28 @@ Widget* MapsTracks::createPanel()
   editTrackBtn->onClicked = toggleTrackEdit;
 
   saveTrackBtn->onClicked = [=](){
-    // save under new filename, then delete old file
     std::string prevFile = activeTrack->gpxFile;
     activeTrack->title = saveTitle->text();
     activeTrack->gpxFile = savePath->text();
     if(saveGPX(activeTrack)) {
-      const char* query = "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;";
+      bool replace = replaceTrackCb->isChecked();
+      const char* query = replace ? "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;"
+          : "INSERT INTO tracks (title,filename) VALUES (?,?);";
       DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
         sqlite3_bind_text(stmt, 1, activeTrack->title.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 2, activeTrack->gpxFile.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 3, activeTrack->rowid);
+        if(replace)
+          sqlite3_bind_int(stmt, 3, activeTrack->rowid);
       });
-      if(replaceTrackCb->isChecked() && !prevFile.empty() && prevFile != activeTrack->gpxFile)
+      if(!replace)
+        activeTrack->rowid = sqlite3_last_insert_rowid(app->bkmkDB);
+      else if(!prevFile.empty() && prevFile != activeTrack->gpxFile)
         removeFile(prevFile);
       editTrackBtn->onClicked();  // close edit track view
     }
     else
       activeTrack->gpxFile = prevFile;
+    tracksDirty = true;
   };
 
   auto hoverFn = [this](real s){

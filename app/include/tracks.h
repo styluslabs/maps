@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mapscomponent.h"
+#include "ulib/painter.h"  // for Color
 
 class Widget;
 class SvgNode;
@@ -10,26 +11,13 @@ class SelectDialog;
 class MapsTracks : public MapsComponent {
 public:
   using MapsComponent::MapsComponent;
-  //void showGUI();
   Widget* createPanel();
   void tapEvent(LngLat location);
-
   void updateLocation(const Location& loc);
 
-  //std::string gpxFile;
-  //std::vector<MarkerID> trackMarkers;
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;
   MarkerID trackEndMarker = 0;
-
-  //struct PointMarker {
-  //    MarkerID markerId;
-  //    LngLat coordinates;
-  //};
-  //std::vector<PointMarker> point_markers;
-
-  //MarkerID drawnTrackMarker = 0;
-  //std::vector<LngLat> drawnTrack;
 
   //struct TrackLoc : public Location { double dist; };
   using TrackLoc = Location;
@@ -38,6 +26,7 @@ public:
     std::string title;
     std::string detail;
     std::string gpxFile;
+    std::string style;
     MarkerID marker;
     std::vector<TrackLoc> locs;
     int rowid;
@@ -47,16 +36,7 @@ public:
 
   std::vector<Track> tracks;
   Track recordedTrack;
-
   Track drawnTrack;
-
-  // GPX tracks
-  //struct TrackPt {
-  //  LngLat pos;
-  //  double dist;
-  //  double elev;
-  //};
-  //std::vector<TrackPt> activeTrack;
 
   Widget* tracksContent = NULL;
   Widget* tracksPanel = NULL;
@@ -84,6 +64,7 @@ private:
   bool recordTrack = false;
   bool drawTrack = false;
   bool tracksDirty = false;
+  std::vector<Color> markerColors;
   std::unique_ptr<SvgNode> trackListProto;
   std::unique_ptr<SelectDialog> selectTrackDialog;
 };
