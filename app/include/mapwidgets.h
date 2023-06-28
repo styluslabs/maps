@@ -37,4 +37,4 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
-Widget* createColorPicker(const std::vector<Color>& colors, Color initialColor, std::function<void(Color)> onColor);
+Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, std::function<void(Color)> onColor);

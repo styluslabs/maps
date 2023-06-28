@@ -361,7 +361,7 @@ void MapsSources::populateSceneVars()
 Widget* MapsSources::createPanel()
 {
   Toolbar* sourceTb = createToolbar();
-  sourceCombo = createComboBox({});
+  sourceCombo = createSelectBox("Map source", SvgGui::useFile(":/icons/ic_menu_cloud.svg") , {});
   saveBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Save Source");
   discardBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_discard.svg"), "Delete Source");
   Button* createBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_plus.svg"), "New Source");
@@ -389,8 +389,8 @@ Widget* MapsSources::createPanel()
     sourceTb->setVisible(true);
   };
 
-  sourceCombo->onChanged = [this](const char*){
-    rebuildSource(sourceKeys[sourceCombo->index()]);
+  sourceCombo->onChanged = [this](int idx){
+    rebuildSource(sourceKeys[idx]);
   };
 
   createBtn->onClicked = [=](){
@@ -400,7 +400,8 @@ Widget* MapsSources::createPanel()
   };
 
   saveBtn->onClicked = [this](){
-    createSource(sourceKeys[sourceCombo->index()], sourceCombo->text());
+    std::string key = sourceKeys[sourceCombo->index()];
+    createSource(key, mapSources[key]["title"].Scalar());
   };
 
   discardBtn->onClicked = [this](){

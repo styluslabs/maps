@@ -87,7 +87,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     coordnode->addText(fstring("%.6f, %.6f", pos.latitude, pos.longitude).c_str());
 
   SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-  double distkm = lngLatDist(mapCenter.lngLat(), pos);
+  double distkm = lngLatDist(currLocation.lngLat(), pos);
   if(distnode)
     distnode->addText(fstring("%.1f km", distkm).c_str());
 
@@ -375,6 +375,8 @@ void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
 void MapsApp::updateLocation(const Location& _loc)
 {
   currLocation = _loc;
+  if(currLocation.time <= 0)
+    currLocation.time = mSecSinceEpoch()/1000;
   if(!locMarker) {
     locMarker = map->markerAdd();
     map->markerSetStylingFromString(locMarker, locMarkerStyleStr);
@@ -383,7 +385,7 @@ void MapsApp::updateLocation(const Location& _loc)
   //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, currLocation.lngLat());
 
-  mapsTracks->updateLocation(_loc);
+  mapsTracks->updateLocation(currLocation);
 }
 
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
@@ -971,7 +973,16 @@ int main(int argc, char* argv[])
     app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
 
   // Alamo square
+
   app->updateLocation(Location{0, 37.776444, -122.434668, 0, 100, 0, 0, 0, 0, 0, 0});
+  // fake location updates to test track recording
+  auto locFn = [&](){
+    real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
+    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0, 0});
+  };
+  gui->setTimer(2000, win, [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
 
   while(runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();

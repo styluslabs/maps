@@ -60,6 +60,7 @@ private:
   TrackLoc interpTrack(const std::vector<TrackLoc>& locs, double s, size_t* idxout = NULL);
 
   Track* activeTrack = NULL;
+  std::vector<TrackLoc> origLocs;
   double recordLastSave = 0;
   bool recordTrack = false;
   bool drawTrack = false;

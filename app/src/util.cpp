@@ -113,6 +113,12 @@ bool MarkerGroup::onPicked(MarkerID id)
   return false;
 }
 
+// icons and text are linked by set Label::setRelative() in PointStyleBuilder::addFeature()
+// labels are collected and collided by LabelManager::updateLabelSet() - sorted by priority (lower number
+//  is higher priority), collided, then sorted by order set by markerSetDrawOrder (not YAML "order") - higher
+//  order means drawn later, i.e., on top
+// blend_order only supported for style blocks: https://github.com/tangrams/tangram-es/issues/2039
+
 MarkerID MarkerGroup::getMarker(PlaceInfo& res)
 {
   MarkerID id = map->markerAdd();
@@ -120,7 +126,7 @@ MarkerID MarkerGroup::getMarker(PlaceInfo& res)
   map->markerSetVisible(id, visible);
   map->markerSetPoint(id, res.pos);
   map->markerSetProperties(id, Properties(res.props));
-  map->markerSetDrawOrder(res.markerId, res.props.getNumber("priority") + (res.isAltMarker ? 0x10000 : 0));
+  map->markerSetDrawOrder(id, res.props.getNumber("priority") + (res.isAltMarker ? 0 : 0x10000));
   return id;
 }
 

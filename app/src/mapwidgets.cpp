@@ -171,7 +171,7 @@ SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std
   return widget;
 }
 
-Widget* createColorPicker(const std::vector<Color>& colors, Color initialColor, std::function<void(Color)> onColor)
+Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, std::function<void(Color)> onColor)
 {
   static const char* menuSVG = R"#(
     <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
@@ -217,7 +217,7 @@ Widget* createColorPicker(const std::vector<Color>& colors, Color initialColor, 
       widget->selectFirst(".current-color")->node->setAttr<color_t>("fill", color.color);
       onColor(color);
     };
-    menu->addWidget(btn);  // use addItem() to support press-drag-release?
+    menu->addItem(btn);  //addWidget(btn);  // use addItem() to support press-drag-release?
   }
   return widget;
 }

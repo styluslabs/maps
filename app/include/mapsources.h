@@ -4,7 +4,6 @@
 #include "yaml-cpp/yaml.h"
 
 class Widget;
-class ComboBox;
 class SelectBox;
 class Button;
 
@@ -38,7 +37,7 @@ private:
 
   std::vector<Widget*> layerRows;
   std::vector<SelectBox*> layerCombos;
-  ComboBox* sourceCombo = NULL;
+  SelectBox* sourceCombo = NULL;
   Button* discardBtn = NULL;
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
