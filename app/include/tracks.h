@@ -4,6 +4,7 @@
 #include "ulib/painter.h"  // for Color
 
 class Widget;
+class Button;
 class SvgNode;
 class TrackPlot;
 class SelectDialog;
@@ -45,6 +46,8 @@ public:
   Widget* statsContent = NULL;
   Widget* statsPanel = NULL;
   TrackPlot* trackPlot = NULL;
+  Button* pauseRecordBtn = NULL;
+  Button* stopRecordBtn = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters

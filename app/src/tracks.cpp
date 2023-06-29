@@ -596,7 +596,10 @@ void MapsTracks::populateStats(Track* track)
   else if(!track->visible)
     app->map->markerSetVisible(track->marker, true);
 
-  if(track != &recordedTrack)
+  bool isRecTrack = track == &recordedTrack;
+  pauseRecordBtn->setVisible(isRecTrack);
+  stopRecordBtn->setVisible(isRecTrack);
+  if(!isRecTrack)
     app->map->markerSetStylingFromPath(track->marker, "layers.selected-track.draw.track");
 
   if(!origLocs.empty())
@@ -950,25 +953,16 @@ Widget* MapsTracks::createPanel()
   statsContent->addWidget(trackOptionsTb);
 
   Button* editTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit Track");
-  Button* pauseRecordBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_ruled.svg"), "Pause");
-  Button* stopRecordBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select.svg"), "Stop");
+  pauseRecordBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_ruled.svg"), "Pause");
+  stopRecordBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select.svg"), "Stop");
 
-  pauseRecordBtn->onClicked = [=](){
-    recordTrack = !recordTrack;
-    pauseRecordBtn->setChecked(!recordTrack);  // should actually toggle between play and pause icons
-  };
-
-  auto toggleTrackEdit = [=](){
-    bool show = !editTrackBtn->isChecked();
-    editTrackBtn->setChecked(show);
-    saveTrackContent->setVisible(show);
+  auto setTrackEdit = [=](bool show){
+    //editTrackBtn->setChecked(show);
+    //saveTrackContent->setVisible(show);
     editTrackTb->setVisible(show);
     trackOptionsTb->setVisible(show);
     trackSliders->setEditMode(show);
     if(show) {
-      saveTitle->setText(activeTrack->title.c_str());
-      savePath->setText(activeTrack->gpxFile.c_str());
-      saveTrackBtn->setEnabled(false);
       trackSliders->setCropHandles(0, 1);
       trackSliders->onCropHandlesChanged();  // show crop markers
     }
@@ -984,8 +978,42 @@ Widget* MapsTracks::createPanel()
     }
   };
 
-  editTrackBtn->onClicked = toggleTrackEdit;
-  restoreTrackBtn->onClicked = toggleTrackEdit;
+  pauseRecordBtn->onClicked = [=](){
+    recordTrack = !recordTrack;
+    pauseRecordBtn->setChecked(!recordTrack);  // should actually toggle between play and pause icons
+    // show/hide track editing controls
+    if(recordTrack && editTrackTb->isVisible())
+      setTrackEdit(false);
+  };
+
+  stopRecordBtn->onClicked = [=](){
+    saveGPX(&recordedTrack);
+    const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
+    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, recordedTrack.title.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, recordedTrack.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
+    });
+    recordedTrack.rowid = sqlite3_last_insert_rowid(app->bkmkDB);
+    tracks.push_back(std::move(recordedTrack));
+    recordedTrack = Track{};
+    tracksDirty = true;
+    pauseRecordBtn->setChecked(false);
+    pauseRecordBtn->setVisible(false);
+    stopRecordBtn->setVisible(false);
+  };
+
+  editTrackBtn->onClicked = [=](){
+    bool show = !editTrackBtn->isChecked();
+    saveTrackContent->setVisible(show);
+    if(!recordTrack)
+      setTrackEdit(show);
+    if(show) {
+      saveTitle->setText(activeTrack->title.c_str());
+      savePath->setText(activeTrack->gpxFile.c_str());
+      saveTrackBtn->setEnabled(false);
+    }
+  };
+  restoreTrackBtn->onClicked = [=](){ editTrackBtn->onClicked(); };
 
   saveTrackBtn->onClicked = [=](){
     std::string prevFile = activeTrack->gpxFile;
@@ -993,17 +1021,19 @@ Widget* MapsTracks::createPanel()
     activeTrack->gpxFile = savePath->text();
     if(saveGPX(activeTrack)) {
       bool replace = replaceTrackCb->isChecked();
-      const char* query = replace ? "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;"
-          : "INSERT INTO tracks (title,filename) VALUES (?,?);";
-      DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-        sqlite3_bind_text(stmt, 1, activeTrack->title.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, activeTrack->gpxFile.c_str(), -1, SQLITE_TRANSIENT);
-        if(replace)
-          sqlite3_bind_int(stmt, 3, activeTrack->rowid);
-      });
-      if(!replace)
-        activeTrack->rowid = sqlite3_last_insert_rowid(app->bkmkDB);
-      else if(!prevFile.empty() && prevFile != activeTrack->gpxFile)
+      if(activeTrack->rowid >= 0) {
+        const char* query = replace ? "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;"
+            : "INSERT INTO tracks (title,filename) VALUES (?,?);";
+        DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+          sqlite3_bind_text(stmt, 1, activeTrack->title.c_str(), -1, SQLITE_TRANSIENT);
+          sqlite3_bind_text(stmt, 2, activeTrack->gpxFile.c_str(), -1, SQLITE_TRANSIENT);
+          if(replace)
+            sqlite3_bind_int(stmt, 3, activeTrack->rowid);
+        });
+        if(!replace)
+          activeTrack->rowid = sqlite3_last_insert_rowid(app->bkmkDB);
+      }
+      if(replace && !prevFile.empty() && prevFile != activeTrack->gpxFile)
         removeFile(prevFile);
       origLocs.clear();
       editTrackBtn->onClicked();  // close edit track view
@@ -1046,8 +1076,10 @@ Widget* MapsTracks::createPanel()
 
   Button* recordTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Record Track");
   recordTrackBtn->onClicked = [=](){
-    recordTrack = !recordTrack;
-    if(recordTrack) {
+    if(recordedTrack.marker > 0)
+      populateStats(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
+    else {
+      recordTrack = true;
       char timestr[64];
       time_t t = mSecSinceEpoch()/1000;
       strftime(timestr, sizeof(timestr), "%FT%T", localtime(&t));  //"%Y-%m-%d %HH%M"
@@ -1060,18 +1092,6 @@ Widget* MapsTracks::createPanel()
       saveTitle->setText(recordedTrack.title.c_str());
       savePath->setText(recordedTrack.gpxFile.c_str());
       saveTrackContent->setVisible(true);
-    }
-    else {
-      saveGPX(&recordedTrack);
-      const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
-      DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-        sqlite3_bind_text(stmt, 1, recordedTrack.title.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, recordedTrack.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
-      });
-      recordedTrack.rowid = sqlite3_last_insert_rowid(app->bkmkDB);
-      tracks.push_back(std::move(recordedTrack));
-      recordedTrack = Track{};
-      populateTracks(false);
     }
   };
 

@@ -377,8 +377,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   // history (autocomplete)
   if(phase == RETURN) {
     //autoCompContainer->setVisible(false);
-    // IGNORE prevents error from UNIQUE constraint
-    DB_exec(searchDB, fstring("INSERT OR IGNORE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
+    DB_exec(searchDB, fstring("INSERT OR REPLACE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
   }
   else if(phase == EDITING) {
     std::vector<std::string> autocomplete;
@@ -420,10 +419,25 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
   app->gui->deleteContents(resultsContent, ".listitem");
 
   for(size_t ii = 0; ii < history.size(); ++ii) {
+    std::string query = history[ii];
     Button* item = new Button(autoCompProto->clone());
-    item->onClicked = [this, query=history[ii]](){
+
+    Button* discardBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_discard.svg"), "Remove");
+
+    discardBtn->onClicked = [=](){
+      DB_exec(searchDB, "DELETE FROM history WHERE query = ?;", NULL, [&](sqlite3_stmt* stmt){
+        sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
+      });
+    };
+
+    Widget* container = item->selectFirst(".child-container");
+    container->addWidget(createStretch());
+    container->addWidget(discardBtn);
+
+
+    item->onClicked = [=](){
       queryText->setText(query.c_str());
-      app->mapsSearch->searchText(query, MapsSearch::RETURN);
+      searchText(query, MapsSearch::RETURN);
     };
     SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     textnode->addText(history[ii].c_str());
@@ -570,7 +584,7 @@ Widget* MapsSearch::createPanel()
   static const char* autoCompProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="left">
+      <g class="child-container" layout="flex" flex-direction="row" box-anchor="left">
         <g class="image-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_clock.svg"/>
         </g>
@@ -599,7 +613,7 @@ Widget* MapsSearch::createPanel()
         std::string s = (const char*)(sqlite3_column_text(stmt, 0));
         searchMenu->addItem(s.c_str(), SvgGui::useFile(":/icons/ic_menu_clock.svg"), [=](){
           queryText->setText(s.c_str());
-          app->mapsSearch->searchText(s, MapsSearch::RETURN);
+          searchText(s, MapsSearch::RETURN);
         });
       });
 
