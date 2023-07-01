@@ -107,6 +107,9 @@ public:
   std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
 
+  int64_t storageTotal = 0;
+  int64_t storageOffline = 0;
+
   enum EventTypes { PANEL_CLOSED=0xE001 };
 
   static void runOnMainThread(std::function<void()> fn);
@@ -126,7 +129,4 @@ public:
 private:
   void dumpTileContents(float x, float y);
   void saveConfig();
-
-  int64_t storageTotal = 0;
-  int64_t storageOffline = 0;
 };

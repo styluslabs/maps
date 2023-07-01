@@ -16,9 +16,11 @@ public:
 
   Widget* createPanel();
 
-  Widget* offlinePanel;
+  Widget* offlinePanel = NULL;
 
 private:
-  std::unique_ptr<SvgNode> offlineListProto;
   MarkerID rectMarker = 0;
+  Widget* offlineContent = NULL;
+
+  void populateOffline();
 };

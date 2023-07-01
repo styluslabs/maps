@@ -28,11 +28,11 @@ public:
     std::string detail;
     std::string gpxFile;
     std::string style;
-    MarkerID marker;
+    MarkerID marker = 0;
     std::vector<TrackLoc> locs;
-    int rowid;
-    bool visible;
-    bool archived;
+    int rowid = -1;
+    bool visible = true;
+    bool archived = false;
   };
 
   std::vector<Track> tracks;

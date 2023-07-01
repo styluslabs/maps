@@ -431,11 +431,18 @@ Widget* MapsSources::createPanel()
   }
   populateSources();
 
+  Button* clearCacheBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_erase.svg"), "Clear cache");
+  clearCacheBtn->onClicked = [=](){
+    shrinkCache(0);
+    app->storageTotal = app->storageOffline;
+  };
+
   Widget* offlineBtn = app->mapsOffline->createPanel();
 
   auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Map Source");
   toolbar->addWidget(createStretch());
   toolbar->addWidget(offlineBtn);
+  toolbar->addWidget(clearCacheBtn);
   sourcesPanel = app->createMapPanel(toolbar, layersContent, sourcesContent);
 
   // main toolbar button

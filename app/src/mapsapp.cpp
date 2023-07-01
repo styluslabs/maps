@@ -253,10 +253,6 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
   map->loadScene(std::move(options), load_async);
-
-  // markers are invalidated ... not sure if we should use SceneReadyCallback for this since map->scene is replaced immediately
-  pickResultMarker = 0;
-  locMarker = 0;
 }
 
 MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(this))
@@ -334,9 +330,12 @@ void MapsApp::saveConfig()
   config["view"]["rotation"] = pos.rotation;
   config["view"]["tilt"] = pos.tilt;
 
-  std::string s = YAML::Dump(config);
+  //std::string s = YAML::Dump(config);
+  YAML::Emitter emitter;
+  emitter.SetStringFormat(YAML::DoubleQuoted);
+  emitter << config;
   FileStream fs(configFile.c_str(), "wb");
-  fs.write(s.data(), s.size());
+  fs.write(emitter.c_str(), emitter.size());
 }
 
 void MapsApp::mapUpdate(double time)
@@ -348,6 +347,7 @@ void MapsApp::mapUpdate(double time)
   if (state.isAnimating()) {
     platform->requestRender();
   }
+  //LOG("MapState: %d", state.flags);
 
   // update map center
   mapCenter = map->getCameraPosition();

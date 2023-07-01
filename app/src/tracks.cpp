@@ -26,8 +26,9 @@ public:
   void draw(SvgPainter* svgp) const override;
   Rect bounds(SvgPainter* svgp) const override;
   void setTrack(MapsTracks::Track* track);
+  real plotPosToTrackPos(real s);
 
-  std::function<void(real x)> onHovered;
+  std::function<void(real)> onHovered;
 
   Path2D altDistPlot, altTimePlot, spdDistPlot, spdTimePlot;
   Rect mBounds;
@@ -112,6 +113,12 @@ void TrackPlot::updateZoomOffset(real dx)
 {
   real w = plotVsDist ? maxDist : maxTime - minTime;
   zoomOffset = std::min(std::max((1/zoomScale - 1)*w, zoomOffset + dx*w/plotWidth/zoomScale), 0.0);
+}
+
+real TrackPlot::plotPosToTrackPos(real s)
+{
+  real w = plotVsDist ? maxDist : maxTime - minTime;
+  return s/zoomScale - zoomOffset/w;
 }
 
 void TrackPlot::setTrack(MapsTracks::Track* track)
@@ -668,7 +675,7 @@ void MapsTracks::populateStats(Track* track)
   int secs = int(ttot - hours*3600 - mins*60);
   statsContent->selectFirst(".track-time")->setText(fstring("%dh %dm %ds", hours, mins, secs).c_str());
 
-  const char* notime = ttot <= 0 ? u8"\u2014" : NULL;  // emdash
+  static const char* notime = u8"\u2014";  // emdash
 
   ttot = movingTime;
   hours = int(ttot/3600);
@@ -681,21 +688,21 @@ void MapsTracks::populateStats(Track* track)
   statsContent->selectFirst(".track-dist")->setText(distStr.c_str());
 
   std::string avgSpeedStr = fstring(app->metricUnits ? "%.2f km/h" : "%.2f mph", distUser/(movingTime/3600));
-  statsContent->selectFirst(".track-avg-speed")->setText(notime ? notime : avgSpeedStr.c_str());
+  statsContent->selectFirst(".track-avg-speed")->setText(ttot > 0 ? avgSpeedStr.c_str() : notime);
 
   std::string ascentStr = app->metricUnits ? fstring("%.0f m", trackAscent) : fstring("%.0f ft", trackAscent*3.28084);
   statsContent->selectFirst(".track-ascent")->setText(ascentStr.c_str());
 
   std::string ascentSpdStr = app->metricUnits ? fstring("%.0f m/h", trackAscent/(ascentTime/3600))
       : fstring("%.0f ft/h", (trackAscent*3.28084)/(ascentTime/3600));
-  statsContent->selectFirst(".track-ascent-speed")->setText(ascentTime > 0 ? notime : ascentSpdStr.c_str());
+  statsContent->selectFirst(".track-ascent-speed")->setText(ascentTime > 0 ? ascentSpdStr.c_str() : notime);
 
   std::string descentStr = app->metricUnits ? fstring("%.0f m", trackDescent) : fstring("%.0f ft", trackDescent*3.28084);
   statsContent->selectFirst(".track-descent")->setText(descentStr.c_str());
 
   std::string descentSpdStr = app->metricUnits ? fstring("%.0f m/h", trackDescent/(descentTime/3600))
       : fstring("%.0f ft/h", (trackDescent*3.28084)/(descentTime/3600));
-  statsContent->selectFirst(".track-descent-speed")->setText(descentTime > 0 ? notime : descentSpdStr.c_str());
+  statsContent->selectFirst(".track-descent-speed")->setText(descentTime > 0 ? descentSpdStr.c_str() : notime);
 }
 
 static Widget* createStatsRow(std::vector<const char*> items)  // const char* title1, const char* class1, const char* title2, const char* class2)
@@ -841,7 +848,7 @@ Widget* MapsTracks::createPanel()
   statsContent->addWidget(trackSliders);
 
   trackSliders->onCropHandlesChanged = [=](){
-    real startpos = trackSliders->startHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    real startpos = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
     TrackLoc startloc = interpTrack(activeTrack->locs, startpos);
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
@@ -853,7 +860,7 @@ Widget* MapsTracks::createPanel()
       app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
     }
 
-    real endpos = trackSliders->endHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    real endpos = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
     TrackLoc endloc = interpTrack(activeTrack->locs, endpos);
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
@@ -879,9 +886,9 @@ Widget* MapsTracks::createPanel()
     const std::vector<TrackLoc>& locs = activeTrack->locs;
     std::vector<TrackLoc> newlocs;
     size_t startidx, endidx;
-    real startpos = trackSliders->startHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    real startpos = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
     newlocs.push_back(interpTrack(locs, startpos, &startidx));
-    real endpos = trackSliders->endHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    real endpos = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
     auto endloc = interpTrack(locs, endpos, &endidx);
     newlocs.insert(newlocs.end(), locs.begin() + startidx, locs.begin() + endidx);
     newlocs.push_back(endloc);
@@ -926,9 +933,9 @@ Widget* MapsTracks::createPanel()
     const std::vector<TrackLoc>& locs = activeTrack->locs;
     std::vector<TrackLoc> newlocs;
     size_t startidx, endidx;
-    real startpos = trackSliders->startHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    real startpos = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
     auto startloc = interpTrack(locs, startpos, &startidx);
-    real endpos = trackSliders->endHandlePos/trackPlot->zoomScale + trackPlot->zoomOffset;
+    real endpos = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
     auto endloc = interpTrack(locs, endpos, &endidx);
     newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + startidx);
     newlocs.push_back(startloc);
@@ -996,14 +1003,17 @@ Widget* MapsTracks::createPanel()
     recordedTrack.rowid = sqlite3_last_insert_rowid(app->bkmkDB);
     tracks.push_back(std::move(recordedTrack));
     recordedTrack = Track{};
+    recordTrack = false;
     tracksDirty = true;
     pauseRecordBtn->setChecked(false);
     pauseRecordBtn->setVisible(false);
     stopRecordBtn->setVisible(false);
+    populateStats(&tracks.back());
   };
 
   editTrackBtn->onClicked = [=](){
     bool show = !editTrackBtn->isChecked();
+    editTrackBtn->setChecked(show);
     saveTrackContent->setVisible(show);
     if(!recordTrack)
       setTrackEdit(show);
@@ -1076,17 +1086,18 @@ Widget* MapsTracks::createPanel()
 
   Button* recordTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Record Track");
   recordTrackBtn->onClicked = [=](){
-    if(recordedTrack.marker > 0)
+    if(!recordedTrack.locs.empty())
       populateStats(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
     else {
       recordTrack = true;
       char timestr[64];
       time_t t = mSecSinceEpoch()/1000;
-      strftime(timestr, sizeof(timestr), "%FT%T", localtime(&t));  //"%Y-%m-%d %HH%M"
-      recordedTrack = Track{timestr, "", std::string(timestr) + ".gpx", "", 0, {}, -1, true, false};
+      strftime(timestr, sizeof(timestr), "%FT%H.%M.%S", localtime(&t));  //"%Y-%m-%d %HH%M"
+      FSPath gpxPath(app->baseDir, std::string(timestr) + ".gpx");
+      recordedTrack = Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
       recordedTrack.locs.push_back(app->currLocation);
       recordedTrack.marker = app->map->markerAdd();
-      app->map->markerSetStylingFromPath(recordedTrack.marker, "layers.recorded-track.draw.track");
+      app->map->markerSetStylingFromPath(recordedTrack.marker, "layers.recording-track.draw.track");
       populateTracks(false);
       populateStats(&recordedTrack);
       saveTitle->setText(recordedTrack.title.c_str());
@@ -1149,7 +1160,7 @@ Widget* MapsTracks::createPanel()
   statsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_CLOSED) {
       if(editTrackBtn->isChecked())
-        toggleTrackEdit();
+        editTrackBtn->onClicked();
       app->map->markerSetVisible(trackHoverMarker, false);
       if(activeTrack != &recordedTrack)
         app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.marker");

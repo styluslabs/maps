@@ -22,6 +22,7 @@
 static sqlite3* searchDB = NULL;
 static sqlite3_stmt* insertStmt = NULL;
 
+static LngLat searchOrigin;
 
 static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv)
 {
@@ -35,9 +36,9 @@ static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value*
   }
   // sqlite FTS5 rank is roughly -1*number_of_words_in_query; ordered from -\inf to 0
   double rank = /*sortByDist ? -1.0 :*/ sqlite3_value_double(argv[0]);
-  double lon = sqlite3_value_double(argv[1]);  // distance from search center point in meters
-  double lat = sqlite3_value_double(argv[2]);  // distance from search center point in meters
-  double dist = lngLatDist(MapsApp::mapCenter.lngLat(), LngLat(lon, lat));
+  double lon = sqlite3_value_double(argv[1]);
+  double lat = sqlite3_value_double(argv[2]);
+  double dist = lngLatDist(searchOrigin, LngLat(lon, lat));  // in kilometers
   // obviously will want a more sophisticated ranking calculation in the future
   sqlite3_result_double(context, rank/log2(1+dist));
 }
@@ -372,25 +373,35 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     searchStr = query;
     clearSearchResults();
     map->markerSetVisible(app->pickResultMarker, false);
+    app->showPanel(searchPanel);
+    app->gui->deleteContents(resultsContent, ".listitem");
+    cancelBtn->setVisible(!searchStr.empty());
   }
 
-  // history (autocomplete)
-  if(phase == RETURN) {
-    //autoCompContainer->setVisible(false);
-    DB_exec(searchDB, fstring("INSERT OR REPLACE INTO history (query) VALUES ('%s');", searchStr.c_str()).c_str());
-  }
-  else if(phase == EDITING) {
+  if(phase == EDITING) {
     std::vector<std::string> autocomplete;
-    std::string histq = fstring("SELECT query FROM history WHERE query LIKE '%s%%' ORDER BY timestamp LIMIT 5;", searchStr.c_str());
+    //std::string histq = fstring("SELECT query FROM history WHERE query LIKE '%s%%' ORDER BY timestamp LIMIT 5;", searchStr.c_str());
+    std::string histq = "SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;";
     DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
       autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
+    }, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, (searchStr + "%").c_str(), -1, SQLITE_TRANSIENT);
+      // LIMIT 5 - leave room for results if running live search
+      sqlite3_bind_int(stmt, 2, searchStr.size() > 2 && providerIdx == 0 ? 5 : 25);
     });
     populateAutocomplete(autocomplete);
   }
 
   if(searchStr.size() > 2) {
-    if(phase == RETURN)
+    // use map center for origin if current location is offscreen
+    LngLat loc = app->currLocation.lngLat();
+    searchOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->mapCenter.lngLat();
+    if(phase == RETURN) {
+      DB_exec(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);", NULL, [&](sqlite3_stmt* stmt){
+        sqlite3_bind_text(stmt, 1, searchStr.c_str(), -1, SQLITE_TRANSIENT);
+      });
       updateMapResults(lngLat00, lngLat11);
+    }
 
     if(providerIdx == 0) {
       offlineListSearch(searchStr, lngLat00, lngLat11);
@@ -412,28 +423,20 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 // or should we put results in resultList and show that immediately?
 void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
 {
-  cancelBtn->setVisible(true);
   //autoCompContainer->setVisible(true);
   //window()->gui()->deleteContents(autoCompList, ".listitem");
-  app->showPanel(searchPanel);
-  app->gui->deleteContents(resultsContent, ".listitem");
 
   for(size_t ii = 0; ii < history.size(); ++ii) {
     std::string query = history[ii];
     Button* item = new Button(autoCompProto->clone());
 
     Button* discardBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_discard.svg"), "Remove");
-
     discardBtn->onClicked = [=](){
       DB_exec(searchDB, "DELETE FROM history WHERE query = ?;", NULL, [&](sqlite3_stmt* stmt){
         sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
       });
+      searchText(searchStr, EDITING);  // refresh
     };
-
-    Widget* container = item->selectFirst(".child-container");
-    container->addWidget(createStretch());
-    container->addWidget(discardBtn);
-
 
     item->onClicked = [=](){
       queryText->setText(query.c_str());
@@ -441,15 +444,16 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
     };
     SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     textnode->addText(history[ii].c_str());
+    Widget* container = item->selectFirst(".child-container");
+    container->addWidget(createStretch());
+    container->addWidget(discardBtn);
+
     resultsContent->addWidget(item);
   }
 }
 
 void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 {
-  app->showPanel(searchPanel);
-  app->gui->deleteContents(resultsContent, ".listitem");
-
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
     Button* item = new Button(searchResultProto->clone());
@@ -468,21 +472,41 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 
 Widget* MapsSearch::createPanel()
 {
+  //static const char* searchBoxSVG = R"#(
+  //  <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
+  //    <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
+  //    <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
+  //      <g class="toolbutton search-btn" layout="box">
+  //        <rect class="background" box-anchor="hfill" width="36" height="42"/>
+  //        <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_zoom.svg"/>
+  //      </g>
+  //      <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
+  //        <rect class="min-width-rect" fill="none" width="150" height="36"/>
+  //        <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
+  //      </g>
+  //      <g class="toolbutton cancel-btn" display="none" layout="box">
+  //        <rect class="background" box-anchor="hfill" width="36" height="42"/>
+  //        <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_cancel.svg"/>
+  //      </g>
+  //    </g>
+  //  </g>
+  //)#";
+
   static const char* searchBoxSVG = R"#(
     <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
-      <rect class="toolbar-bg background" box-anchor="vfill" width="400" height="20"/>
+      <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
+      <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
       <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
         <g class="toolbutton search-btn" layout="box">
-          <rect class="background" box-anchor="hfill" width="36" height="42"/>
-          <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_zoom.svg"/>
+          <rect class="background" box-anchor="hfill" width="36" height="34"/>
+          <use class="icon" height="30" xlink:href=":/icons/ic_menu_zoom.svg"/>
         </g>
         <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
           <rect class="min-width-rect" fill="none" width="150" height="36"/>
-          <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
         </g>
         <g class="toolbutton cancel-btn" display="none" layout="box">
-          <rect class="background" box-anchor="hfill" width="36" height="42"/>
-          <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_cancel.svg"/>
+          <rect class="background" box-anchor="hfill" width="36" height="34"/>
+          <use class="icon" height="30" xlink:href=":/icons/ic_menu_cancel.svg"/>
         </g>
       </g>
     </g>
@@ -511,8 +535,7 @@ Widget* MapsSearch::createPanel()
   cancelBtn = new Button(searchBoxNode->selectFirst(".cancel-btn"));
   cancelBtn->onClicked = [this](){
     clearSearch();
-    app->gui->deleteContents(resultsContent, ".listitem");
-    cancelBtn->setVisible(false);
+    searchText("", MapsSearch::EDITING);  // show history
   };
   cancelBtn->setVisible(false);
 
@@ -584,7 +607,7 @@ Widget* MapsSearch::createPanel()
   static const char* autoCompProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
-      <g class="child-container" layout="flex" flex-direction="row" box-anchor="left">
+      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_clock.svg"/>
         </g>
@@ -625,6 +648,7 @@ Widget* MapsSearch::createPanel()
   searchBtn->setMenu(searchMenu);
   searchBtn->onClicked = [this](){
     app->showPanel(searchPanel);
+    //app->gui->setFocused(queryText);
     // show history
     searchText("", MapsSearch::EDITING);
   };

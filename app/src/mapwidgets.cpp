@@ -151,12 +151,13 @@ SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std
       <rect class="min-width-rect" width="150" height="36" fill="none"/>
       <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
 
-      <g class="combo_content" box-anchor="fill" layout="flex" flex-direction="row" margin="0 2">
+      <g class="combo_content toolbutton" box-anchor="fill" layout="flex" flex-direction="row" margin="0 2">
         <g class="textbox combo_text" box-anchor="fill" layout="box">
+          <rect box-anchor="fill" width="28" height="28"/>
           <text box-anchor="left" margin="3 6"></text>
         </g>
         <g class="combo_open" box-anchor="vfill" layout="box">
-          <rect fill="none" box-anchor="vfill" width="28" height="28"/>
+          <rect box-anchor="vfill" width="28" height="28"/>
           <use class="icon" width="28" height="28" xlink:href=":/icons/chevron_down.svg" />
         </g>
       </g>
