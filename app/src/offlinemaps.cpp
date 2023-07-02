@@ -10,6 +10,12 @@
 #include "data/mbtilesDataSource.h"
 #include "data/networkDataSource.h"
 
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
+
+#include "mapsources.h"
+
 static bool runOfflineWorker = false;
 static std::unique_ptr<std::thread> offlineWorker;
 static Semaphore semOfflineWorker(1);
@@ -86,6 +92,13 @@ static void offlineDLStep()
       offlineDownloaders.pop_back();
     }
     LOGW("completed offline tile downloads for map %d", offlinePending.front().id);
+
+    // update DB to indicate compeletion of download
+    MapsApp::runOnMainThread([id=offlinePending.front().id](){
+      DB_exec(MapsApp::bkmkDB, "UPDATE offlinemaps SET done = 1 WHERE mapid = ?;", NULL,
+          [id](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, id); });
+    });
+
     offlinePending.pop_front();
   }
   platform.onUrlRequestsThreshold = nullptr;  // all done!
@@ -204,26 +217,17 @@ void MapsOffline::saveOfflineMap(int maxZoom)
   if(!offlineWorker)
     offlineWorker = std::make_unique<std::thread>(offlineDLMain);
 
-  const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1) VALUES (?,?,?,?,?);";
+  const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,source,done) VALUES (?,?,?,?,?,?,?);";
   DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, offlineId);
     sqlite3_bind_double(stmt, 2, lngLat00.longitude);
     sqlite3_bind_double(stmt, 3, lngLat00.latitude);
     sqlite3_bind_double(stmt, 4, lngLat11.longitude);
     sqlite3_bind_double(stmt, 5, lngLat11.latitude);
+    sqlite3_bind_text(stmt, 6, app->mapsSources->currSource.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 7, 0);
   });
 }
-
-//void MapsOffline::showGUI()
-//{
-//  static int maxZoom = 13;
-//  if (!ImGui::CollapsingHeader("Offline Maps"))  //, ImGuiTreeNodeFlags_DefaultOpen))
-//    return;
-
-//  ImGui::InputInt("Max zoom level", &maxZoom);
-//  if(ImGui::Button("Save Offline Map") && maxZoom > 0 && maxZoom < 20)
-//    saveOfflineMap(maxZoom);
-//}
 
 MapsOffline::~MapsOffline()
 {
@@ -239,20 +243,14 @@ int MapsOffline::numOfflinePending() const
   return offlinePending.size();
 }
 
-// New GUI
-
-#include "ugui/svggui.h"
-#include "ugui/widgets.h"
-#include "ugui/textedit.h"
-
-#include "mapsources.h"
+// GUI
 
 void MapsOffline::populateOffline()
 {
   static const char* offlineListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="left">
+      <g layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_bookmark.svg"/>
         </g>
@@ -276,27 +274,35 @@ void MapsOffline::populateOffline()
 
   app->gui->deleteContents(offlineContent, ".listitem");
 
-  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, strftime('%x', timestamp) FROM offlinemaps;";
+  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, strftime('%Y-%m-%d', timestamp, 'unixepoch') FROM offlinemaps;";
   DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
     int mapid = sqlite3_column_int(stmt, 0);
     double lng0 = sqlite3_column_double(stmt, 1), lat0 = sqlite3_column_double(stmt, 2);
     double lng1 = sqlite3_column_double(stmt, 3), lat1 = sqlite3_column_double(stmt, 4);
-    const char* titlestr = (const char*)(sqlite3_column_text(stmt, 5));
+    std::string sourcestr = (const char*)(sqlite3_column_text(stmt, 5));
+    std::string titlestr = (const char*)(sqlite3_column_text(stmt, 6));
 
     Button* item = new Button(offlineListProto->clone());
     item->onClicked = [=](){
+      item->setChecked(true);  // TODO: clear previously checked item!
       // show bounds of offline region on map
       LngLat bounds[5] = {{lng0, lat0}, {lng0, lat1}, {lng1, lat1}, {lng1, lat0}, {lng0, lat0}};
       if(!rectMarker)
         rectMarker = app->map->markerAdd();
+      else
+        app->map->markerSetVisible(rectMarker, true);
       app->map->markerSetStylingFromString(rectMarker, polylineStyle);
       app->map->markerSetPolyline(rectMarker, bounds, 5);
-      app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(bounds[0], bounds[2]), 0.5f);
+      app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(bounds[0], bounds[2], {32}), 0.5f);
+      if(app->mapsSources->currSource != sourcestr)
+        app->mapsSources->rebuildSource(sourcestr);
     };
 
     Button* deleteBtn = new Button(item->containerNode()->selectFirst(".delete-btn"));
     deleteBtn->onClicked = [=](){
       app->mapsSources->deleteOfflineMap(mapid);
+      if(rectMarker)
+        app->map->markerSetVisible(rectMarker, false);
       DB_exec(app->bkmkDB, "DELETE FROM offlinemaps WHERE mapid = ?;", NULL, [&](sqlite3_stmt* stmt1){
         sqlite3_bind_int(stmt1, 1, mapid);
       });
@@ -304,7 +310,10 @@ void MapsOffline::populateOffline()
     };
 
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(titlestr);
+    titlenode->addText(titlestr.c_str());
+    SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
+    detailnode->addText(sourcestr.c_str());
+
     offlineContent->addWidget(item);
   });
 }
@@ -313,7 +322,8 @@ Widget* MapsOffline::createPanel()
 {
   // should we include zoom? total bytes?
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER PRIMARY KEY,"
-      " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+      " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, source TEXT, done INTEGER,"
+      " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
 
   SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%.0f");
   Button* saveBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Save Offline Map");
@@ -328,6 +338,14 @@ Widget* MapsOffline::createPanel()
   toolbar->addWidget(maxZoomSpin);
   toolbar->addWidget(saveBtn);
   offlinePanel = app->createMapPanel(toolbar, offlineContent);
+
+  offlinePanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == MapsApp::PANEL_CLOSED) {
+      if(rectMarker)
+        app->map->markerSetVisible(rectMarker, false);
+    }
+    return false;
+  });
 
   Button* offlineBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_expanddown.svg"), "Offline Maps");
   offlineBtn->onClicked = [this](){

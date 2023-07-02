@@ -18,17 +18,17 @@ public:
   void deleteOfflineMap(int mapid);
   int64_t shrinkCache(int64_t maxbytes);
   void onMapChange();
-
-  Widget* sourcesPanel;
-
   Widget* createPanel();
+
+  std::string currSource;
 
 private:
   void createSource(std::string savekey, const std::string& newSrcTitle);
   void populateSources();
   void populateSceneVars();
 
-  std::mutex sourcesMutex;
+  //std::mutex sourcesMutex;
+  Widget* sourcesPanel;
   std::string baseUrl;
   YAML::Node mapSources;
   std::atomic<bool> sourcesLoaded{false};
@@ -45,5 +45,4 @@ private:
 
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;
-
 };

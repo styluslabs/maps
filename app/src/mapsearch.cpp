@@ -356,7 +356,7 @@ void MapsSearch::resultsUpdated()
       double scrx, scry;
       if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
           || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
-        auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);
+        auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32});
         pos.zoom = std::min(pos.zoom, 16.0f);
         map->flyTo(pos, 1.0);
       }

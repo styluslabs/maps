@@ -650,7 +650,7 @@ void MapsTracks::populateStats(Track* track)
   if(activeTrack != track) {
     if(!app->map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude)
         || !app->map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude)) {
-      app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(minLngLat, maxLngLat), 0.5f);
+      app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32}), 0.5f);
     }
     activeTrack = track;
   }

@@ -32,6 +32,10 @@ public:
 void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
 {
   YAML::Node src = sources[key];
+  if(!src) {
+    LOGE("Invalid map source %s", key.c_str());
+    return;
+  }
   if(src["type"].Scalar() == "Multi") {
     for (const auto& layer : src["layers"]) {
       std::string layerkey = layer["source"].Scalar();
@@ -139,7 +143,7 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
 
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 {
-  std::lock_guard<std::mutex> lock(sourcesMutex);
+  //std::lock_guard<std::mutex> lock(sourcesMutex);
   mapSources[key] = srcnode;
   //for(auto& k : layerkeys) -- TODO: if modified layer is in use, reload
 }
@@ -152,8 +156,15 @@ constexpr int MAX_SOURCES = 8;
 void MapsSources::rebuildSource(const std::string& srcname)
 {
   SourceBuilder builder(mapSources);
-  if(!srcname.empty())
+  // support comma separated list of sources
+  auto splitsrc = splitStr<std::vector>(srcname, ",");
+  if(splitsrc.size() > 1) {
+    for(auto& src : splitsrc)
+      builder.addLayer(src);
+  }
+  else if(!srcname.empty()) {
     builder.addLayer(srcname);
+  }
   else {
     for(int ii = 0; ii < nSources; ++ii) {
       int idx = layerCombos[ii]->index();
@@ -169,8 +180,8 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->sceneUpdates = std::move(builder.updates);  //.clear();
     app->loadSceneFile();  //builder.getSceneYaml(baseUrl), builder.updates);
     sceneVarsLoaded = false;
-    if(!srcname.empty())
-      app->config["last_source"] = srcname;
+    currSource = srcname.empty() ? joinStr(builder.layerkeys, ",") : srcname;
+    app->config["last_source"] = currSource;
   }
 
   bool multi = builder.layerkeys.size() > 1;
@@ -235,12 +246,16 @@ void MapsSources::createSource(std::string savekey, const std::string& newSrcTit
 void MapsSources::deleteOfflineMap(int mapid)
 {
   int64_t offlineSize = 0;
-  for(const auto& src : mapSources) {
-    std::string cachename = src["cache"] ? src["cache"].Scalar() : src.first.Scalar();
-    std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";  //options.diskCacheDir
-    if(cachename == "false" || !FSPath(cachefile).exists())  // don't create file if it doesn't exist
-      continue;
-    auto s = std::make_unique<Tangram::MBTilesDataSource>(*app->platform, src.first.Scalar(), cachefile, "", true);
+  FSPath cachedir(app->baseDir, "cache");
+  for(auto& file : lsDirectory(cachedir)) {
+    //for(auto& src : mapSources) ... this doesn't work because cache file may be specified in scene yaml
+    //std::string cachename = src.second["cache"] ? src.second["cache"].Scalar() : src.first.Scalar();
+    //std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";
+    //if(cachename == "false" || !FSPath(cachefile).exists()) continue;
+    FSPath cachefile = cachedir.child(file);
+    if(cachefile.extension() != "mbtiles") continue;
+    auto s = std::make_unique<Tangram::MBTilesDataSource>(
+        *app->platform, cachefile.baseName(), cachefile.path, "", true);
     offlineSize -= s->getOfflineSize();
     s->deleteOfflineMap(mapid);
     offlineSize += s->getOfflineSize();
@@ -255,12 +270,12 @@ int64_t MapsSources::shrinkCache(int64_t maxbytes)
   std::vector< std::pair<int, int> > tiles;
   auto insertTile = [&](int timestamp, int size){ tiles.emplace_back(timestamp, size); };
 
-  for(const auto& src : mapSources) {
-    std::string cachename = src["cache"] ? src["cache"].Scalar() : src.first.Scalar();
-    std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";  //options.diskCacheDir
-    if(cachename == "false" || !FSPath(cachefile).exists())
-      continue;
-    dbsources.push_back(std::make_unique<Tangram::MBTilesDataSource>(*app->platform, src.first.Scalar(), cachefile, "", true));
+  FSPath cachedir(app->baseDir, "cache");
+  for(auto& file : lsDirectory(cachedir)) {
+    FSPath cachefile = cachedir.child(file);
+    if(cachefile.extension() != "mbtiles") continue;
+    dbsources.push_back(std::make_unique<Tangram::MBTilesDataSource>(
+        *app->platform, cachefile.baseName(), cachefile.path, "", true));
     dbsources.back()->getTileSizes(insertTile);
   }
 
@@ -271,6 +286,7 @@ int64_t MapsSources::shrinkCache(int64_t maxbytes)
     if(tot > maxbytes) {
       for(auto& src : dbsources)
         src->deleteOldTiles(x.first);
+      break;
     }
   }
   return tot;
@@ -431,10 +447,16 @@ Widget* MapsSources::createPanel()
   }
   populateSources();
 
+  auto clearCacheFn = [this](std::string res){
+    if(res == "OK") {
+      shrinkCache(20'000'000);  // 20MB just to test shrinkCache code
+      app->storageTotal = app->storageOffline;
+    }
+  };
   Button* clearCacheBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_erase.svg"), "Clear cache");
   clearCacheBtn->onClicked = [=](){
-    shrinkCache(0);
-    app->storageTotal = app->storageOffline;
+    MapsApp::messageBox("Clear cache", "Delete all cached map data? This action cannot be undone.",
+        {"OK", "Cancel"}, clearCacheFn);
   };
 
   Widget* offlineBtn = app->mapsOffline->createPanel();

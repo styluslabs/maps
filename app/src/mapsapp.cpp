@@ -23,6 +23,7 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
+#include "usvg/svgpainter.h"
 #include "mapwidgets.h"
 
 static const char* apiKeyScenePath = "+global.sdk_api_key";
@@ -763,6 +764,42 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
   panelContainer->addWidget(panel);
   return panel;
 }
+
+//enum MessageType {Info, Question, Warning, Error};
+void MapsApp::messageBox(std::string title, std::string message,
+    std::vector<std::string> buttons, std::function<void(std::string)> callback)
+{
+  // copied from syncscribble
+  Dialog* dialog = createDialog(title.c_str());
+  Widget* dialogBody = dialog->selectFirst(".body-container");
+
+  for(size_t ii = 0; ii < buttons.size(); ++ii) {
+    Button* btn = dialog->addButton(buttons[ii].c_str(), [=](){ dialog->finish(int(ii)); });
+    if(ii == 0)
+      dialog->acceptBtn = btn;
+    if(ii + 1 == buttons.size())
+      dialog->cancelBtn = btn;
+  }
+
+  dialogBody->setMargins(10);
+  SvgText* msgNode = createTextNode(message.c_str());
+  dialogBody->addWidget(new Widget(msgNode));
+  // wrap message text as needed
+  std::string bmsg = SvgPainter::breakText(msgNode, 0.8*gui->windows.front()->winBounds().width());
+  if(bmsg != message) {
+    msgNode->clearText();
+    msgNode->addText(bmsg.c_str());
+  }
+
+  dialog->onFinished = [=](int res){
+    if(callback)
+      callback(buttons[res]);
+    //delete dialog;  //gui->deleteWidget(dialog);  -- Window deletes node
+    SvgGui::delayDeleteWin(dialog);  // immediate deletion causes crash when closing link dialog by dbl click
+  };
+  gui->showModal(dialog, gui->windows.front()->modalOrSelf());
+}
+
 
 #if 1  //PLATFORM_DESKTOP
 #include "ugui/svggui_platform.h"
