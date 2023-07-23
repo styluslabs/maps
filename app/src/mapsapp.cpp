@@ -993,11 +993,28 @@ int main(int argc, char* argv[])
   }
 
   // GUI setup
+  // fake location updates to test track recording
+  auto locFn = [&](){
+    real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
+    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0, 0});
+  };
+
+  Timer* locTimer = NULL;
   Window* win = app->createGUI();
   win->sdlWindow = (SDL_Window*)glfwWin;
   win->addHandler([&](SvgGui*, SDL_Event* event){
     if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
       runApplication = false;
+    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_INSERT) {
+      if(locTimer) {
+        gui->removeTimer(locTimer);
+        locTimer = NULL;
+      }
+      else
+        locTimer = gui->setTimer(2000, win, [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
+    }
     return false;
   });
   gui->showWindow(win, NULL);
@@ -1010,16 +1027,7 @@ int main(int argc, char* argv[])
     app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
 
   // Alamo square
-
   app->updateLocation(Location{0, 37.776444, -122.434668, 0, 100, 0, 0, 0, 0, 0, 0});
-  // fake location updates to test track recording
-  auto locFn = [&](){
-    real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
-    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0, 0});
-  };
-  gui->setTimer(2000, win, [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
 
   while(runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();

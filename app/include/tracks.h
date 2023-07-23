@@ -64,6 +64,8 @@ private:
 
   Track* activeTrack = NULL;
   std::vector<TrackLoc> origLocs;
+  double cropStart = 0;
+  double cropEnd = 1;
   double recordLastSave = 0;
   bool recordTrack = false;
   bool drawTrack = false;

@@ -19,7 +19,7 @@
 static bool runOfflineWorker = false;
 static std::unique_ptr<std::thread> offlineWorker;
 static Semaphore semOfflineWorker(1);
-static const char* polylineStyle = "{ style: lines, interactive: true, color: red, width: 4px, order: 5000 }";
+static const char* polylineStyle = "{ style: lines, color: red, width: 4px, order: 5000 }";  //interactive: true,
 
 
 // Offline maps
@@ -52,6 +52,7 @@ public:
     size_t remainingTiles() const { return m_queued.size() + m_pending.size(); }
     bool fetchNextTile();
     std::string name;
+    int totalTiles = 0;
 
 private:
     void tileTaskCallback(std::shared_ptr<TileTask> _task);
@@ -66,6 +67,7 @@ private:
     std::vector<SearchData> searchData;
 };
 
+static MapsOffline* mapsOfflineInst = NULL;  // for updateProgress()
 static int maxOfflineDownloads = 4;
 static std::deque<OfflineMapInfo> offlinePending;
 static std::mutex mutexOfflineQueue;
@@ -139,6 +141,7 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
         m_queued.emplace_back(x, y, 3);
     }
   }
+  totalTiles = m_queued.size();
 }
 
 OfflineDownloader::~OfflineDownloader()
@@ -181,6 +184,10 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
     LOGW("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
   }
   m_pending.erase(pendingit);
+
+  MapsApp::runOnMainThread([](){
+    mapsOfflineInst->updateProgress();
+  });
 
   semOfflineWorker.post();
 }
@@ -245,6 +252,31 @@ int MapsOffline::numOfflinePending() const
 
 // GUI
 
+void MapsOffline::updateProgress()
+{
+  if(!offlinePanel->isVisible()) return;
+  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
+
+  for(Widget* item : offlineContent->select(".listitem")) {
+    int mapid = item->node->getIntAttr("__mapid");
+    for(size_t ii = 0; ii < offlinePending.size(); ++ii) {
+      if(offlinePending[ii].id == mapid) {
+        if(ii == 0) {
+          int total = 0, remaining = 0;
+          for(auto& dl : offlineDownloaders) {
+            total += dl->totalTiles;
+            remaining += dl->remainingTiles();
+          }
+          item->selectFirst(".detail-text")->setText(fstring("%d/%d tiles downloaded", total - remaining, total).c_str());
+        }
+        else
+          item->selectFirst(".detail-text")->setText("Download pending");
+        break;
+      }
+    }
+  }
+}
+
 void MapsOffline::populateOffline()
 {
   static const char* offlineListProtoSVG = R"(
@@ -283,8 +315,11 @@ void MapsOffline::populateOffline()
     std::string titlestr = (const char*)(sqlite3_column_text(stmt, 6));
 
     Button* item = new Button(offlineListProto->clone());
+    item->node->setAttr("__mapid", mapid);
     item->onClicked = [=](){
-      item->setChecked(true);  // TODO: clear previously checked item!
+      //item->setChecked(true);
+      for(Widget* w : offlineContent->select(".listitem"))
+        static_cast<Button*>(w)->setChecked(static_cast<Button*>(w) == item);
       // show bounds of offline region on map
       LngLat bounds[5] = {{lng0, lat0}, {lng0, lat1}, {lng1, lat1}, {lng1, lat0}, {lng0, lat0}};
       if(!rectMarker)
@@ -316,10 +351,12 @@ void MapsOffline::populateOffline()
 
     offlineContent->addWidget(item);
   });
+  updateProgress();
 }
 
 Widget* MapsOffline::createPanel()
 {
+  mapsOfflineInst = this;
   // should we include zoom? total bytes?
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER PRIMARY KEY,"
       " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, source TEXT, done INTEGER,"

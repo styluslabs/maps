@@ -13,6 +13,7 @@ public:
   //void showGUI();
   int numOfflinePending() const;
   void saveOfflineMap(int maxZoom);
+  void updateProgress();
 
   Widget* createPanel();
 

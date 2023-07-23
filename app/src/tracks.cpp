@@ -27,8 +27,10 @@ public:
   Rect bounds(SvgPainter* svgp) const override;
   void setTrack(MapsTracks::Track* track);
   real plotPosToTrackPos(real s);
+  real trackPosToPlotPos(real s);
 
   std::function<void(real)> onHovered;
+  std::function<void()> onPanZoom;
 
   Path2D altDistPlot, altTimePlot, spdDistPlot, spdTimePlot;
   Rect mBounds;
@@ -113,12 +115,20 @@ void TrackPlot::updateZoomOffset(real dx)
 {
   real w = plotVsDist ? maxDist : maxTime - minTime;
   zoomOffset = std::min(std::max((1/zoomScale - 1)*w, zoomOffset + dx*w/plotWidth/zoomScale), 0.0);
+  if(onPanZoom)
+    onPanZoom();
 }
 
 real TrackPlot::plotPosToTrackPos(real s)
 {
   real w = plotVsDist ? maxDist : maxTime - minTime;
   return s/zoomScale - zoomOffset/w;
+}
+
+real TrackPlot::trackPosToPlotPos(real s)
+{
+  real w = plotVsDist ? maxDist : maxTime - minTime;
+  return zoomScale*(s + zoomOffset/w);
 }
 
 void TrackPlot::setTrack(MapsTracks::Track* track)
@@ -245,10 +255,12 @@ void TrackPlot::draw(SvgPainter* svgp) const
 class TrackSliders : public Slider
 {
 public:
+  enum {NO_UPDATE = 0, UPDATE = 1, FORCE_UPDATE = 2};
   TrackSliders(SvgNode* n);
   void setEditMode(bool editmode);
-  void setCropHandles(real start, real end);
-  std::function<void()> onCropHandlesChanged;
+  void setCropHandles(real start, real end, int update);
+  std::function<void()> onStartHandleChanged;
+  std::function<void()> onEndHandleChanged;
 
   real startHandlePos = 0;
   real endHandlePos = 0;  // this reflects initial state of widget
@@ -269,9 +281,7 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
     if(event->type == SDL_FINGERMOTION && gui->pressedWidget == startHandle) {
       Rect rect = sliderBg->node->bounds();
       real startpos = (event->tfinger.x - rect.left)/rect.width();
-      setCropHandles(startpos, std::max(startpos, endHandlePos));
-      if(onCropHandlesChanged)
-        onCropHandlesChanged();
+      setCropHandles(startpos, std::max(startpos, endHandlePos), UPDATE);
       return true;
     }
     return false;
@@ -281,9 +291,7 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
     if(event->type == SDL_FINGERMOTION && gui->pressedWidget == endHandle) {
       Rect rect = sliderBg->node->bounds();
       real endpos = (event->tfinger.x - rect.left)/rect.width();
-      setCropHandles(std::min(startHandlePos, endpos), endpos);
-      if(onCropHandlesChanged)
-        onCropHandlesChanged();
+      setCropHandles(std::min(startHandlePos, endpos), endpos, UPDATE);
       return true;
     }
     return false;
@@ -302,18 +310,22 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
   setEditMode(false);
 }
 
-void TrackSliders::setCropHandles(real start, real end)
+void TrackSliders::setCropHandles(real start, real end, int update)
 {
   start = std::min(std::max(start, 0.0), 1.0);
   end = std::min(std::max(end, 0.0), 1.0);
   Rect rect = sliderBg->node->bounds();
-  if(startHandlePos != start) {
+  if(startHandlePos != start || update > 1) {
     startHandlePos = start;
     startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
+    if(update > 0 && onStartHandleChanged)
+      onStartHandleChanged();
   }
-  if(endHandlePos != end) {
+  if(endHandlePos != end || update > 1) {
     endHandlePos = end;
     endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
+    if(update > 0 && onEndHandleChanged)
+      onEndHandleChanged();
   }
 }
 
@@ -847,9 +859,9 @@ Widget* MapsTracks::createPanel()
   TrackSliders* trackSliders = createTrackSliders();
   statsContent->addWidget(trackSliders);
 
-  trackSliders->onCropHandlesChanged = [=](){
-    real startpos = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
-    TrackLoc startloc = interpTrack(activeTrack->locs, startpos);
+  trackSliders->onStartHandleChanged = [=](){
+    cropStart = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
+    TrackLoc startloc = interpTrack(activeTrack->locs, cropStart);
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
       app->map->markerSetPoint(trackStartMarker, startloc.lngLat());  // must set geometry before properties
@@ -859,9 +871,11 @@ Widget* MapsTracks::createPanel()
       app->map->markerSetVisible(trackStartMarker, true);
       app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
     }
+  };
 
-    real endpos = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
-    TrackLoc endloc = interpTrack(activeTrack->locs, endpos);
+  trackSliders->onEndHandleChanged = [=](){
+    cropEnd = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
+    TrackLoc endloc = interpTrack(activeTrack->locs, cropEnd);
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
       app->map->markerSetPoint(trackEndMarker, endloc.lngLat());  // must set geometry before properties
@@ -886,14 +900,12 @@ Widget* MapsTracks::createPanel()
     const std::vector<TrackLoc>& locs = activeTrack->locs;
     std::vector<TrackLoc> newlocs;
     size_t startidx, endidx;
-    real startpos = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
-    newlocs.push_back(interpTrack(locs, startpos, &startidx));
-    real endpos = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
-    auto endloc = interpTrack(locs, endpos, &endidx);
+    newlocs.push_back(interpTrack(locs, cropStart, &startidx));
+    auto endloc = interpTrack(locs, cropEnd, &endidx);
     newlocs.insert(newlocs.end(), locs.begin() + startidx, locs.begin() + endidx);
     newlocs.push_back(endloc);
     activeTrack->locs.swap(newlocs);
-    trackSliders->setCropHandles(0, 1);
+    trackSliders->setCropHandles(0, 1, TrackSliders::FORCE_UPDATE);
     showTrack(activeTrack);  // rebuild marker
     populateStats(activeTrack);
   };
@@ -933,16 +945,14 @@ Widget* MapsTracks::createPanel()
     const std::vector<TrackLoc>& locs = activeTrack->locs;
     std::vector<TrackLoc> newlocs;
     size_t startidx, endidx;
-    real startpos = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
-    auto startloc = interpTrack(locs, startpos, &startidx);
-    real endpos = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
-    auto endloc = interpTrack(locs, endpos, &endidx);
+    auto startloc = interpTrack(locs, cropStart, &startidx);
+    auto endloc = interpTrack(locs, cropEnd, &endidx);
     newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + startidx);
     newlocs.push_back(startloc);
     newlocs.push_back(endloc);
     newlocs.insert(newlocs.end(), locs.begin() + endidx, locs.end());
     activeTrack->locs.swap(newlocs);
-    trackSliders->setCropHandles(0, 1);
+    trackSliders->setCropHandles(0, 1, TrackSliders::FORCE_UPDATE);
     showTrack(activeTrack);  // rebuild marker
     populateStats(activeTrack);
   });
@@ -969,10 +979,8 @@ Widget* MapsTracks::createPanel()
     editTrackTb->setVisible(show);
     trackOptionsTb->setVisible(show);
     trackSliders->setEditMode(show);
-    if(show) {
-      trackSliders->setCropHandles(0, 1);
-      trackSliders->onCropHandlesChanged();  // show crop markers
-    }
+    if(show)
+      trackSliders->setCropHandles(0, 1, TrackSliders::FORCE_UPDATE);
     else {
       app->map->markerSetVisible(trackStartMarker, false);
       app->map->markerSetVisible(trackEndMarker, false);
@@ -1069,6 +1077,12 @@ Widget* MapsTracks::createPanel()
   //trackPlot->onHovered = hoverFn;
   trackSliders->onValueChanged = hoverFn;
 
+  trackPlot->onPanZoom = [=](){
+    real start = trackPlot->trackPosToPlotPos(cropStart);
+    real end = trackPlot->trackPosToPlotPos(cropEnd);
+    trackSliders->setCropHandles(start, end, TrackSliders::NO_UPDATE);
+  };
+
   // Tracks panel
   tracksContent = createColumn();
 
@@ -1153,10 +1167,7 @@ Widget* MapsTracks::createPanel()
   statsTb->addWidget(pauseRecordBtn);
   statsTb->addWidget(stopRecordBtn);
   statsTb->addWidget(editTrackBtn);
-
-  // ScrollWidget inteferes with sliders ... figure this out later
-  statsPanel = app->createMapPanel(statsTb, NULL, statsContent);
-
+  statsPanel = app->createMapPanel(statsTb, statsContent);
   statsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_CLOSED) {
       if(editTrackBtn->isChecked())
