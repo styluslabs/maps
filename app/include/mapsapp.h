@@ -114,7 +114,7 @@ public:
 
   static void runOnMainThread(std::function<void()> fn);
   static void messageBox(std::string title, std::string message,
-      std::vector<std::string> buttons, std::function<void(std::string)> callback);
+      std::vector<std::string> buttons = {"OK"}, std::function<void(std::string)> callback = {});
 
   static Platform* platform;
   static std::string baseDir;

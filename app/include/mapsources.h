@@ -6,6 +6,8 @@
 class Widget;
 class SelectBox;
 class Button;
+class TextEdit;
+class SvgNode;
 
 class MapsSources : public MapsComponent
 {
@@ -26,9 +28,12 @@ private:
   void createSource(std::string savekey, const std::string& newSrcTitle);
   void populateSources();
   void populateSceneVars();
+  void populateSourceEdit(std::string key);
+  void sourceModified();
 
-  //std::mutex sourcesMutex;
-  Widget* sourcesPanel;
+  Widget* sourcesPanel = NULL;
+  Widget* sourceEditPanel = NULL;
+  Widget* sourcesContent = NULL;
   std::string baseUrl;
   YAML::Node mapSources;
   std::atomic<bool> sourcesLoaded{false};
@@ -37,12 +42,14 @@ private:
 
   std::vector<Widget*> layerRows;
   std::vector<SelectBox*> layerCombos;
-  SelectBox* sourceCombo = NULL;
-  Button* discardBtn = NULL;
+  //SelectBox* sourceCombo = NULL;
+  //Button* discardBtn = NULL;
+  TextEdit* titleEdit = NULL;
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
   bool sceneVarsLoaded = false;
-
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;
+
+  std::unique_ptr<SvgNode> sourceListProto;
 };
