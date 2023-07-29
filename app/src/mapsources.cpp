@@ -105,49 +105,17 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
   FSPath path = FSPath(app->configFile).parent();
   baseUrl = "file://" + path.path;
 
-  FSPath srcfile = path.child(app->config["sources"].Scalar());
+  FSPath srcfile = path.child(app->config["sources"].as<std::string>("mapsources.yaml"));
   try {
     mapSources = YAML::LoadFile(srcfile.c_str());
   } catch (std::exception& e) {}
   if(!mapSources) {
     try {
       mapSources = YAML::LoadFile(srcfile.parent().childPath(srcfile.baseName() + ".default.yaml"));
-    } catch (std::exception& e) {}
-  }
-
-  /*std::string srcyaml;
-  for(auto srcfile : app->config["sources"]) {
-    FSPath srcpath = path.child(srcfile.Scalar());
-    // how to handle baseUrl if sources files are in different folders?
-    //if(baseUrl.empty())
-    //  baseUrl = "file://" + srcpath.parentPath();
-    if(!readFile(&srcyaml, srcpath.c_str()))
-      LOGW("Unable to open map sources file %s", srcpath.c_str());
-    srcyaml += "\n";  // to handle source files w/o trailing newline
-  }
-  mapSources = YAML::Load(srcyaml.c_str());*/
-
-  /*
-  // have to use Url request to access assets on Android
-  auto cb = [&, sourcesFile](UrlResponse&& response) {
-    if(response.error)
-      LOGE("Unable to load '%s': %s", sourcesFile.c_str(), response.error);
-    else {
-      try {
-        std::lock_guard<std::mutex> lock(sourcesMutex);
-        YAML::Node oldsources = Clone(mapSources);
-        mapSources = YAML::Load(response.content.data(), response.content.size());
-        for(auto& node : oldsources)
-          mapSources[node.first.Scalar()] = node.second;
-        sourcesLoaded = true;
-      } catch (std::exception& e) {
-        LOGE("Error parsing '%s': %s", sourcesFile.c_str(), e.what());
-      }
+    } catch (std::exception& e) {
+      LOGE("Unable to load map sources!");
     }
-  };
-
-  app->platform->startUrlRequest(Url(sourcesFile), cb);
-  */
+  }
 }
 
 // this should be static fns!
@@ -209,10 +177,15 @@ void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 
 void MapsSources::saveSources()
 {
-  // TODO: make a copy of mapSources w/ sources from plugins removed
+  YAML::Node sources = YAML::Node(YAML::NodeType::Map);
+  for(auto& node : mapSources) {
+    if(!node.second["__plugin"])
+      sources[node.first] = node.second;
+  }
+
   YAML::Emitter emitter;
   //emitter.SetStringFormat(YAML::DoubleQuoted);
-  emitter << mapSources;
+  emitter << sources;
   FileStream fs(app->config["sources"].Scalar().c_str(), "wb");
   fs.write(emitter.c_str(), emitter.size());
 }
@@ -280,7 +253,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
     layerRows[ii]->setVisible(false);
 }
 
-void MapsSources::createSource(std::string savekey, const std::string& newSrcTitle)
+std::string MapsSources::createSource(std::string savekey, const std::string& yamlStr)
 {
   if(savekey.empty()) {
     // find available name
@@ -291,55 +264,34 @@ void MapsSources::createSource(std::string savekey, const std::string& newSrcTit
     mapSources[savekey] = YAML::Node(YAML::NodeType::Map);
     mapSources[savekey]["type"] = "Multi";
   }
-  YAML::Node node = mapSources[savekey];
-  node["title"] = newSrcTitle;
 
-  if(node["type"].Scalar() == "Multi") {
-    YAML::Node layers = node["layers"] = YAML::Node(YAML::NodeType::Sequence);
-    for(int ii = 0; ii < nSources; ++ii) {
-      int idx = layerCombos[ii]->index();
-      if(idx > 0)
-        layers.push_back(YAML::Load("{source: " + layerKeys[idx] + "}"));
+  if(!yamlStr.empty()) {
+    try {
+      mapSources[savekey] = YAML::Load(yamlStr);
+    } catch (std::exception& e) {
+      return "";
     }
   }
-
-  YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
-  for(const SceneUpdate& upd : app->sceneUpdates)
-    updates[upd.path] = upd.value;
-
-  saveSources();
-  populateSources();
-
-  /*
-  std::stringstream fs;  //fs(sourcesFile, std::fstream::app | std::fstream::binary);
-
-  //if(currIdx > 0 && newSrcTitle == titles[currIdx] && mapSources[keys[currIdx]]["type"].Scalar() == "Multi")
-
-  fs << "type: Multi\n";
-  fs << "title: " << newSrcTitle << "\n";
-  fs << "layers:\n";
-  for(int ii = 0; ii < nSources; ++ii) {
-    int idx = layerCombos[ii]->index();
-    if(idx > 0)
-      fs << "  - source: " << layerKeys[idx] << "\n";
+  else {
+    YAML::Node node = mapSources[savekey];
+    node["title"] = titleEdit->text();
+    if(node["type"].Scalar() == "Multi") {
+      YAML::Node layers = node["layers"] = YAML::Node(YAML::NodeType::Sequence);
+      for(int ii = 0; ii < nSources; ++ii) {
+        int idx = layerCombos[ii]->index();
+        if(idx > 0)
+          layers.push_back(YAML::Load("{source: " + layerKeys[idx] + "}"));
+      }
+    }
+    YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
+    for(const SceneUpdate& upd : app->sceneUpdates)
+      updates[upd.path] = upd.value;
   }
-  // scene updates
-  if(!app->sceneUpdates.empty())
-    fs << "updates:\n";
-  for(const SceneUpdate& upd : app->sceneUpdates)
-    fs << "  " << upd.path << ": " << upd.value << "\n";
-  mapSources[savekey] = YAML::Load(fs.str());
-  // we'd set a flag here to save mapsources.yaml on exit
-  */
-}
 
-void MapsSources::createSource(std::string savekey, const YAML::Node& node)
-{
-  mapSources[savekey] = node;
   saveSources();
   populateSources();
+  return savekey;
 }
-
 
 void MapsSources::populateSources()
 {
@@ -371,7 +323,7 @@ void MapsSources::populateSources()
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowMenu->addItem("Delete", [=](){
       mapSources.remove(key);
-      populateSources();
+      app->gui->deleteWidget(item);  //populateSources();
     });
 
     container->addWidget(editBtn);
@@ -500,24 +452,18 @@ Widget* MapsSources::createPanel()
 
   // JSON (YAML flow), tile URL, or path/URL to file
   importAccept->onClicked = [=](){
-
-
     std::string src = importEdit->text();
+    std::string key;
     importTb->setVisible(false);
-
     if(src.back() == '}') {
-      createSource("", YAML::Load(src));
+      key = createSource("", src);
     }
     else if(Tangram::NetworkDataSource::urlHasTilePattern(src)) {
-      createSource("", YAML::Load(fstring("{type: Raster, title: 'New Source', url: %s}", src.c_str())));
+      key = createSource("", fstring("{type: Raster, title: 'New Source', url: %s}", src.c_str()));
     }
     else {
-
-      // source name conflicts
-      // - skip, replace, rename, or cancel?
-      // - dialog on first conflict? choose before import?
-
-      auto cb = [this, src](UrlResponse&& response) {
+      // source name conflicts: skip, replace, rename, or cancel? dialog on first conflict?
+      app->platform->startUrlRequest(Url(src), [=](UrlResponse&& response){ MapsApp::runOnMainThread( [=](){
         if(response.error)
           MapsApp::messageBox("Import error", fstring("Unable to load '%s': %s", src.c_str(), response.error));
         else {
@@ -529,43 +475,28 @@ Widget* MapsSources::createPanel()
             MapsApp::messageBox("Import error", fstring("Error parsing '%s': %s", src.c_str(), e.what()));
           }
         }
-      };
-
-      app->platform->startUrlRequest(Url(src), [cb](UrlResponse&& res){ MapsApp::runOnMainThread(cb(std::move(res))); });
+      } ); });
       return;
-
     }
-
-    populateSourceEdit();  // so user can edit title
+    if(key.empty())
+      MapsApp::messageBox("Import error", fstring("Unable to create source from '%s'", src.c_str()));
+    else
+      populateSourceEdit(key);  // so user can edit title
   };
-
-
-  // how to create source?
-  // - currSource = ""?
-  // - what is initial layer? none? (show blank map?) current source when createBtn clicked?
 
   Button* createBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_plus.svg"), "New Source");
   createBtn->onClicked = [=](){
-    populateSourceEdit();  // so user can edit title
+    currSource = "";
+    populateSourceEdit("");  // so user can edit title
   };
 
   saveBtn->onClicked = [=](){
-    createSource("", titleEdit->text());
+    createSource(currSource);
     saveBtn->setEnabled(false);
   };
 
   // we should check for conflicting w/ title of other source here
   titleEdit->onChanged = [this](const char*){ saveBtn->setEnabled(true); };
-
-  //saveBtn->onClicked = [this](){
-  //  std::string key = sourceKeys[sourceCombo->index()];
-  //  createSource(key, mapSources[key]["title"].Scalar());
-  //};
-  //
-  //discardBtn->onClicked = [this](){
-  //  mapSources.remove(sourceKeys[sourceCombo->index()]);
-  //  populateSources();
-  //};
 
   sourcesContent = createColumn();
 
@@ -605,7 +536,7 @@ Widget* MapsSources::createPanel()
   sourcesPanel = app->createMapPanel(sourcesHeader, sourcesContent);
 
   auto editHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Edit Source");
-  sourceEditPanel = app->createMapPanel(editHeader, layersContent, newSrcTb);
+  sourceEditPanel = app->createMapPanel(editHeader, layersContent, sourceTb);
 
   // main toolbar button
   Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);

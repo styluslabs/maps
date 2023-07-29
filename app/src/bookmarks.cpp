@@ -136,19 +136,56 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   app->gui->showModal(dialog, app->gui->windows.front()->modalOrSelf());
 }
 
+template<typename T>
+bool yamlRemove(YAML::Node node, T key)
+{
+  if(node.Type() == YAML::NodeType::Sequence) {
+    for(auto& child : node) {
+      if(child.as<T>() == key) {
+        node.remove(child);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void MapsBookmarks::populateLists(bool archived)
 {
   if(archived) archiveDirty = false; else listsDirty = false;
 
+  std::vector<std::string> order;
   app->showPanel(archived ? archivedPanel : listsPanel, archived);
-  Widget* content = archived ? archivedContent : listsContent;
-  app->gui->deleteContents(content, ".listitem");
+  //Widget* content = archived ? archivedContent : listsContent;
+  if(archived)
+    app->gui->deleteContents(archivedContent, ".listitem");
+  else {
+    if(listsContent->empty()) {
+      for(const auto& key : app->config["places"]["list_order"])
+        order.push_back(key.Scalar());
+    }
+    else
+      order = listsContent->getOrder();
+    listsContent->clear();
+  }
+
+
+  // ...
+  listsContent->setOrder(order);
+
+
+  // do this before first call to populateLists()!
+  YamlPath("+places.visible").get(app->config), node);
+  // or
+  node = app->getConfigPath("+places.visible");
+
+  for(auto& node : app->config["places"]["visible"])
+    populateBkmks(node.as<int>(-1), false);
+
+
+
 
   const char* query = "SELECT lists.id, lists.title, COUNT(1) FROM lists JOIN bookmarks AS b ON lists.id = b.list_id WHERE lists.archived = ? GROUP by lists.id;";
-  //const char* query = "SELECT id, title FROM lists "
-  //    "JOIN lists_state AS s ON lists.id = s.list_id WHERE lists.archived = ? ORDER BY s.ordering;";
-  //const char* query = "SELECT id, title, COUNT(1) FROM lists JOIN bookmarks AS b ON lists.id = b.list_id "
-  //    "JOIN lists_state AS s ON lists.id = s.list_id WHERE lists.archived = ? GROUP by lists.row_id ORDER BY s.ordering;";
   DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){  //"SELECT list, COUNT(1) FROM bookmarks GROUP by list;"
     int rowid = sqlite3_column_int(stmt, 0);
     std::string list = (const char*)(sqlite3_column_text(stmt, 1));
@@ -156,43 +193,6 @@ void MapsBookmarks::populateLists(bool archived)
 
     Button* item = new Button(bkmkListProto->clone());
     item->onClicked = [=](){ populateBkmks(rowid, true); };
-    Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));
-    dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
-      // if finger > height above or below center, shift position
-      if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
-        Rect b = dragBtn->node->bounds();
-        real dy = event->tfinger.y - b.center().y;
-        if(std::abs(dy) > b.height()) {
-          SvgContainerNode* parent = item->parent()->containerNode();
-          auto& items = parent->children();
-
-          size_t ii = 0;
-          auto it = items.begin();
-          while(ii < items.size() && *it != item->node) { ++ii; ++it; }
-
-          //auto it = std::find(items.begin(), items.end(), item);
-          if(it == items.end() || (it == items.begin() && dy < 0)) return true;
-          if(dy < 0)
-            --it;
-          // note iterator is advanced by 2 places and we assume archived lists item is always at end
-          else if(++it == items.end() || ++it == items.end())
-            return true;
-
-          /*const char* q = "UPDATE lists_state SET ordering = (CASE ordering WHEN ?1 THEN ?2 WHEN ?2 THEN ?1) WHERE ordering in (?1, ?2);";
-          DB_exec(app->bkmkDB, q, NULL, [&](sqlite3_stmt* stmt1){
-            sqlite3_bind_int(stmt1, 1, ii);
-            sqlite3_bind_int(stmt1, 1, dy < 0 ? ii-1 : ii+1);
-          });*/
-
-          SvgNode* next = *it;
-          parent->removeChild(item->node);
-          parent->addChild(item->node, next);
-        }
-        return true;
-      }
-      return false;
-    });
-
     Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
     auto it = bkmkMarkers.find(rowid);
     if(it != bkmkMarkers.end())
@@ -201,7 +201,10 @@ void MapsBookmarks::populateLists(bool archived)
     showBtn->onClicked = [=](){
       bool visible = !showBtn->isChecked();
       showBtn->setChecked(visible);
-
+      if(visible)
+        app->config["places"]["visible"].push_back(rowid);
+      else
+        yamlRemove(app->config["places"]["visible"], rowid);
       //std::string q1 = fstring("UPDATE lists_state SET visible = %d WHERE list_id = ?;", visible ? 1 : 0);
       //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
       auto it2 = bkmkMarkers.find(rowid);
@@ -216,10 +219,6 @@ void MapsBookmarks::populateLists(bool archived)
     Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
-
-      //std::string q1 = fstring("UPDATE lists_state SET ordering = (SELECT COUNT(1) FROM lists WHERE archived = %d) WHERE list_id = ?;", archived ? 0 : 1);
-      //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
-
       std::string q2 = fstring("UPDATE lists SET archived = %d WHERE id = ?;", archived ? 0 : 1);
       DB_exec(app->bkmkDB, q2.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
       if(archived) listsDirty = true; else archiveDirty = true;
@@ -238,7 +237,9 @@ void MapsBookmarks::populateLists(bool archived)
       if(it1 != bkmkMarkers.end())
         bkmkMarkers.erase(it1);
 
-      if(archived) listsDirty = true; else archiveDirty = true;
+      yamlRemove(app->config["places"]["visible"], rowid);
+
+      if(archived) listsDirty = true;  // Deleteing archived item will dirty archive count
       app->gui->deleteWidget(item);
     });
 
@@ -251,7 +252,10 @@ void MapsBookmarks::populateLists(bool archived)
     SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
     detailnode->addText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
 
-    content->addWidget(item);
+    if(archived)
+      archivedContent->addWidget(item);
+    else
+      listsContent->addItem(std::to_string(rowid), item);
   }, [&](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
@@ -263,9 +267,7 @@ void MapsBookmarks::populateLists(bool archived)
     });
 
     Button* item = new Button(bkmkListProto->clone());
-    item->onClicked = [this](){
-      populateLists(true);
-    };
+    item->onClicked = [this](){ populateLists(true); };
 
     Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
     showBtn->setVisible(false);
@@ -278,7 +280,7 @@ void MapsBookmarks::populateLists(bool archived)
     SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
     detailnode->addText(narchived == 1 ? "1 list" : fstring("%d lists", narchived).c_str());
 
-    content->addWidget(item);
+    listsContent->addItem("archived", item);  //content->addWidget(item);
   }
 }
 
@@ -645,11 +647,11 @@ Widget* MapsBookmarks::createPanel()
   // DB setup
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY, title TEXT NOT NULL,"
       " notes TEXT DEFAULT '', color TEXT NOT NULL, archived INTEGER DEFAULT 0);");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists_state(list_id INTEGER, ordering INTEGER, visible INTEGER);");
+  //DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists_state(list_id INTEGER, ordering INTEGER, visible INTEGER);");
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list_id INTEGER, title TEXT NOT NULL, props TEXT,"
       " notes TEXT NOT NULL, lng REAL, lat REAL, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL,"
-      " rotation REAL, tilt REAL, width REAL, height REAL);");
+  //DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL,"
+  //    " rotation REAL, tilt REAL, width REAL, height REAL);");
 
   // Bookmark lists panel (main and archived lists)
   listsContent = createColumn(); //createListContainer();
@@ -711,6 +713,7 @@ Widget* MapsBookmarks::createPanel()
       sqlite3_bind_text(stmt, 2, listColor->text().c_str(), -1, SQLITE_TRANSIENT);
       sqlite3_bind_int(stmt, 3, activeListId);
     });
+    listsDirty = archiveDirty = true;
   };
   editListContent->addWidget(createTitledRow("Title", listTitle));
   editListContent->addWidget(createTitledRow("Color", listColor));

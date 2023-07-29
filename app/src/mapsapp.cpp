@@ -315,7 +315,12 @@ MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(
   map->setCameraPosition(pos);
 }
 
-MapsApp::~MapsApp() {}
+MapsApp::~MapsApp()
+{
+#if PLATFORM_DESKTOP  // on mobile, suspend will preceed destroy
+  saveConfig();
+#endif
+}
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)
@@ -884,9 +889,11 @@ int main(int argc, char* argv[])
 #endif
 
   // config
+  FSPath configPath(MapsApp::baseDir, "tangram-es/scenes/config.yaml");
   MapsApp::baseDir = "/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
-  MapsApp::configFile = FSPath(MapsApp::baseDir, "tangram-es/scenes/config.yaml").c_str();
-  MapsApp::config = YAML::LoadFile(MapsApp::configFile.c_str());
+  MapsApp::configFile = configPath.c_str();
+  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
+      : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
 
   // command line args
   const char* sceneFile = NULL;  // -f scenes/scene-omt.yaml

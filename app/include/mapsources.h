@@ -25,11 +25,12 @@ public:
   std::string currSource;
 
 private:
-  void createSource(std::string savekey, const std::string& newSrcTitle);
+  std::string createSource(std::string savekey, const std::string& yamlStr = "");
   void populateSources();
   void populateSceneVars();
   void populateSourceEdit(std::string key);
   void sourceModified();
+  void saveSources();
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;

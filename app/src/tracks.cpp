@@ -548,15 +548,14 @@ Widget* MapsTracks::createTrackEntry(Track* track)
       DB_exec(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?", NULL, [=](sqlite3_stmt* stmt){
         sqlite3_bind_int(stmt, 1, track->rowid);
       });
-      //track->rowid = -1;  app->gui->deleteWidget(item);
-      bool archived = track->archived;
       for(auto it = tracks.begin(); it != tracks.end(); ++it) {
         if(it->rowid == track->rowid) {
+          app->map->markerRemove(track->marker);
           tracks.erase(it);
           break;
         }
       }
-      populateTracks(archived);  // refresh
+      app->gui->deleteWidget(item);  //populateTracks(archived);  // refresh
     });
     overflowBtn->setMenu(overflowMenu);
     container->addWidget(overflowBtn);

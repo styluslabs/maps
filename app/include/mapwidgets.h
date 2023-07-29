@@ -33,6 +33,22 @@ private:
   std::vector<std::string> items;
 };
 
+class DragDropList : public Widget
+{
+public:
+  using KeyType = std::string;
+
+  DragDropList(Widget* _content = NULL);
+  void addItem(KeyType key, Widget* item);
+  void deleteItem(KeyType key);
+
+  void setOrder(const std::vector<KeyType>& order);
+  std::vector<KeyType> getOrder();
+
+  Widget* content = NULL;
+  ScrollWidget* scrollWidget = NULL;
+};
+
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 

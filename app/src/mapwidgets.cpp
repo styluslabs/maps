@@ -222,3 +222,106 @@ Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, 
   }
   return widget;
 }
+
+DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)
+{
+  node->setAttribute("box-anchor", "vfill");
+  node->setAttribute("layout", "box");
+  content = _content ? _content->selectFirst(".list-container") : createColumn();
+  Widget* scroll_content = _content ? _content : content;
+  scrollWidget = new ScrollWidget(new SvgDocument(), scroll_content);
+  scroll_content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
+  scrollWidget->node->setAttribute("box-anchor", "fill");
+  addWidget(scrollWidget);
+}
+
+void DragDropList::setOrder(const std::vector<KeyType>& order)
+{
+  // if we want items not in order to be placed at end, iterate both lists in reverse and use push_front
+  //std::unordered_map<KeyType, SvgNode*> items;
+  auto& items = content->containerNode()->children();
+  for(auto& key : order) {
+    for(auto it = items.begin(); it != items.end(); ++it) {
+      SvgNode* node = *it;
+      if(node->getStringAttr("__sortkey") == key) {
+        items.erase(it);
+        items.push_back(node);
+        break;
+      }
+    }
+  }
+}
+
+std::vector<DragDropList::KeyType> DragDropList::getOrder()
+{
+  std::vector<KeyType> order;
+  for(SvgNode* node : content->containerNode()->children()) {
+    order.push_back(node->getStringAttr("__sortkey"));
+  }
+  return order;
+}
+
+void DragDropList::deleteItem(KeyType key)
+{
+  for(SvgNode* node : content->containerNode()->children()) {
+    if(node->getStringAttr("__sortkey") == key) {
+      window()->gui()->deleteWidget(static_cast<Widget*>(node->ext()));
+      return;
+    }
+  }
+}
+
+void DragDropList::addItem(KeyType key, Widget* item)
+{
+  content->addWidget(item);
+  item->node->setAttr("__sortkey", key);
+
+  Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));
+  dragBtn->node->addClass("draggable");
+  dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
+      gui->setTimer(50, dragBtn);
+    else if(event->type == SvgGui::TIMER) {
+      if(gui->pressedWidget != dragBtn)
+        return false;  // stop timer
+      Rect b = dragBtn->node->bounds();
+      Rect scrollb = scrollWidget->node->bounds();
+      if(gui->prevFingerPos.y < scrollb.top + b.height())
+        scrollWidget->scroll(Point(0, -b.height()/5));
+      else if(gui->prevFingerPos.y > scrollb.bottom - b.height())
+        scrollWidget->scroll(Point(0, b.height()/5));
+      return true;  // continue running timer
+    }
+    else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
+      // if finger > height above or below center, shift position
+      Rect b = dragBtn->node->bounds();
+      real dy = event->tfinger.y - b.center().y;
+
+
+      if(std::abs(dy) > b.height()) {
+        SvgContainerNode* parent = content->containerNode();  //item->parent()->containerNode();
+        auto& items = parent->children();
+
+        size_t ii = 0;
+        auto it = items.begin();
+        while(ii < items.size() && *it != item->node) { ++ii; ++it; }
+
+        //auto it = std::find(items.begin(), items.end(), item);
+        if(it == items.end() || (it == items.begin() && dy < 0)) return true;
+        if(dy < 0)
+          --it;
+        // note iterator is advanced by 2 places and we assume archived lists item is always at end
+        else if(++it == items.end() || ++it == items.end())
+          return true;
+
+        SvgNode* next = *it;
+        parent->removeChild(item->node);
+        parent->addChild(item->node, next);
+      }
+      return true;
+    }
+    return false;
+  });
+
+}
+

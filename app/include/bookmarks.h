@@ -6,6 +6,7 @@
 class SvgNode;
 class SvgDocument;
 class Widget;
+class DragDropList;
 
 class MapsBookmarks : public MapsComponent
 {
@@ -36,7 +37,7 @@ private:
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;
   Widget* listsPanel = NULL;
-  Widget* listsContent = NULL;
+  DragDropList* listsContent = NULL;
   Widget* archivedPanel = NULL;
   Widget* archivedContent = NULL;
   bool mapAreaBkmks = false;
