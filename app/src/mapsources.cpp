@@ -108,14 +108,15 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
   FSPath srcfile = path.child(app->config["sources"].as<std::string>("mapsources.yaml"));
   try {
     mapSources = YAML::LoadFile(srcfile.c_str());
-  } catch (std::exception& e) {}
-  if(!mapSources) {
+  } catch (...) {
     try {
       mapSources = YAML::LoadFile(srcfile.parent().childPath(srcfile.baseName() + ".default.yaml"));
-    } catch (std::exception& e) {
+    } catch (...) {
       LOGE("Unable to load map sources!");
+      return;
     }
   }
+  srcFile = srcfile.c_str();
 }
 
 // this should be static fns!
@@ -177,6 +178,7 @@ void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 
 void MapsSources::saveSources()
 {
+  if(srcFile.empty()) return;
   YAML::Node sources = YAML::Node(YAML::NodeType::Map);
   for(auto& node : mapSources) {
     if(!node.second["__plugin"])
@@ -186,7 +188,7 @@ void MapsSources::saveSources()
   YAML::Emitter emitter;
   //emitter.SetStringFormat(YAML::DoubleQuoted);
   emitter << sources;
-  FileStream fs(app->config["sources"].Scalar().c_str(), "wb");
+  FileStream fs(srcFile.c_str(), "wb");
   fs.write(emitter.c_str(), emitter.size());
 }
 
@@ -212,7 +214,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
     builder.addLayer(srcname);
   }
   else {
-    for(int ii = 0; ii < nSources; ++ii) {
+    for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
       int idx = layerCombos[ii]->index();
       if(idx > 0)
         builder.addLayer(layerKeys[idx]);
@@ -230,17 +232,18 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->config["last_source"] = currSource;
   }
 
-  bool multi = !mapSources[srcname]["layers"].IsNull(); //builder.layerkeys.size() > 1;
+  //bool multi = bool(mapSources[srcname]["layers"]);
+  bool multi = srcname.empty() || mapSources[srcname]["type"].Scalar() == "Multi";
   saveBtn->setEnabled(srcname.empty());  // for existing source, don't enable saveBtn until edited
 
   size_t ii = 0;
-  nSources = int(builder.layerkeys.size());  //std::max(int(builder.layerkeys.size()), nSources);
+  //nSources = int(builder.layerkeys.size());  //std::max(int(builder.layerkeys.size()), nSources);
   for(; ii < builder.layerkeys.size(); ++ii) {
     for(size_t jj = 0; jj < layerKeys.size(); ++jj) {
       if(builder.layerkeys[ii] == layerKeys[jj]) {
         //currSrcIdx[ii] = jj;
         layerCombos[ii]->setIndex(jj);
-        layerRows[ii]->setVisible(true);
+        layerRows[ii]->setVisible(multi);
         break;  // next layer
       }
     }
@@ -248,14 +251,15 @@ void MapsSources::rebuildSource(const std::string& srcname)
 
   layerCombos[ii]->setIndex(0);
   layerRows[ii]->setVisible(multi);
-
-  for(++ii; ii < layerRows.size(); ++ii)
+  for(++ii; ii < layerRows.size(); ++ii) {
+    layerCombos[ii]->setIndex(0);
     layerRows[ii]->setVisible(false);
+  }
 }
 
 std::string MapsSources::createSource(std::string savekey, const std::string& yamlStr)
 {
-  if(savekey.empty()) {
+  if(savekey.empty() || !mapSources[savekey]) {
     // find available name
     int ii = mapSources.size();
     while(ii < INT_MAX && mapSources[fstring("custom-%d", ii)]) ++ii;
@@ -268,7 +272,7 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   if(!yamlStr.empty()) {
     try {
       mapSources[savekey] = YAML::Load(yamlStr);
-    } catch (std::exception& e) {
+    } catch (...) {
       return "";
     }
   }
@@ -277,15 +281,19 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     node["title"] = titleEdit->text();
     if(node["type"].Scalar() == "Multi") {
       YAML::Node layers = node["layers"] = YAML::Node(YAML::NodeType::Sequence);
-      for(int ii = 0; ii < nSources; ++ii) {
+      for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
         int idx = layerCombos[ii]->index();
         if(idx > 0)
           layers.push_back(YAML::Load("{source: " + layerKeys[idx] + "}"));
       }
     }
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
-    for(const SceneUpdate& upd : app->sceneUpdates)
-      updates[upd.path] = upd.value;
+    for(const SceneUpdate& upd : app->sceneUpdates) {
+      const char* path = upd.path.c_str();
+      if(strncmp(path, "+sources.raster-", 16) == 0 || strncmp(path, "+layers.raster-", 15) == 0)
+        continue;
+      updates[path[0] == '+' ? path + 1 : path] = upd.value;
+    }
   }
 
   saveSources();
@@ -445,9 +453,6 @@ Widget* MapsSources::createPanel()
   importTb->addWidget(importEdit);
   importTb->addWidget(importAccept);
   importTb->addWidget(importCancel);
-
-  Button* importBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_expanddown.svg"), "Import");
-  importBtn->onClicked = [=](){ importEdit->setText("");  importTb->setVisible(true); };
   importCancel->onClicked = [=](){ importTb->setVisible(false); };
 
   // JSON (YAML flow), tile URL, or path/URL to file
@@ -486,6 +491,9 @@ Widget* MapsSources::createPanel()
 
   Button* createBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_plus.svg"), "New Source");
   createBtn->onClicked = [=](){
+    // ensure at least the first two layer selects are visible
+    layerRows[0]->setVisible(true);
+    layerRows[1]->setVisible(true);
     currSource = "";
     populateSourceEdit("");  // so user can edit title
   };
@@ -496,7 +504,7 @@ Widget* MapsSources::createPanel()
   };
 
   // we should check for conflicting w/ title of other source here
-  titleEdit->onChanged = [this](const char*){ saveBtn->setEnabled(true); };
+  titleEdit->onChanged = [this](const char* s){ saveBtn->setEnabled(s[0]); };
 
   sourcesContent = createColumn();
 
@@ -527,12 +535,20 @@ Widget* MapsSources::createPanel()
 
   Widget* offlineBtn = app->mapsOffline->createPanel();
 
+  Button* overflowBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More");
+  Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
+  overflowBtn->setMenu(overflowMenu);
+  overflowMenu->addItem("Import source", [=](){ importEdit->setText("");  importTb->setVisible(true); });
+  overflowMenu->addItem("Clear cache", [=](){
+    MapsApp::messageBox("Clear cache", "Delete all cached map data? This action cannot be undone.",
+        {"OK", "Cancel"}, clearCacheFn);
+  });
+
   auto sourcesHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Map Source");
   sourcesHeader->addWidget(createStretch());
   sourcesHeader->addWidget(createBtn);
-  sourcesHeader->addWidget(importBtn);
   sourcesHeader->addWidget(offlineBtn);
-  sourcesHeader->addWidget(clearCacheBtn);
+  sourcesHeader->addWidget(overflowBtn);
   sourcesPanel = app->createMapPanel(sourcesHeader, sourcesContent);
 
   auto editHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Edit Source");

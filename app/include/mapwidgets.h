@@ -41,6 +41,7 @@ public:
   DragDropList(Widget* _content = NULL);
   void addItem(KeyType key, Widget* item);
   void deleteItem(KeyType key);
+  void clear();
 
   void setOrder(const std::vector<KeyType>& order);
   std::vector<KeyType> getOrder();

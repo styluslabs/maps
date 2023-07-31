@@ -384,7 +384,7 @@ Widget* MapsOffline::createPanel()
     return false;
   });
 
-  Button* offlineBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_expanddown.svg"), "Offline Maps");
+  Button* offlineBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_insert_space.svg"), "Offline Maps");
   offlineBtn->onClicked = [this](){
     app->showPanel(offlinePanel, true);
     populateOffline();

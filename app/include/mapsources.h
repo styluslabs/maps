@@ -36,10 +36,10 @@ private:
   Widget* sourceEditPanel = NULL;
   Widget* sourcesContent = NULL;
   std::string baseUrl;
+  std::string srcFile;
   YAML::Node mapSources;
   std::atomic<bool> sourcesLoaded{false};
-
-  int nSources = 1;
+  //int nSources = 1;
 
   std::vector<Widget*> layerRows;
   std::vector<SelectBox*> layerCombos;

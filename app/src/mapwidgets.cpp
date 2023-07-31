@@ -34,8 +34,14 @@ SelectDialog::SelectDialog(SvgDocument* n, const std::vector<std::string>& _item
 
 void SelectDialog::addItems(const std::vector<std::string>& _items, bool replace)
 {
-  if(replace)
-    window()->gui()->deleteContents(content);
+  if(replace) {
+    //window()->gui()->deleteContents(content); ... not available when not displayed!!!
+    for(Widget* child : content->select("*")) {
+      child->removeFromParent();
+      delete child->node;
+    }
+  }
+
   SvgNode* proto = containerNode()->selectFirst(".listitem-proto");
   for(int ii = 0; ii < int(_items.size()); ++ii) {
     Button* btn = new Button(proto->clone());
@@ -225,7 +231,7 @@ Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, 
 
 DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)
 {
-  node->setAttribute("box-anchor", "vfill");
+  node->setAttribute("box-anchor", "fill");
   node->setAttribute("layout", "box");
   content = _content ? _content->selectFirst(".list-container") : createColumn();
   Widget* scroll_content = _content ? _content : content;
@@ -261,6 +267,11 @@ std::vector<DragDropList::KeyType> DragDropList::getOrder()
   return order;
 }
 
+void DragDropList::clear()
+{
+  window()->gui()->deleteContents(content);
+}
+
 void DragDropList::deleteItem(KeyType key)
 {
   for(SvgNode* node : content->containerNode()->children()) {
@@ -274,7 +285,7 @@ void DragDropList::deleteItem(KeyType key)
 void DragDropList::addItem(KeyType key, Widget* item)
 {
   content->addWidget(item);
-  item->node->setAttr("__sortkey", key);
+  item->node->setAttr("__sortkey", key.c_str());
 
   Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));
   dragBtn->node->addClass("draggable");
@@ -296,25 +307,13 @@ void DragDropList::addItem(KeyType key, Widget* item)
       // if finger > height above or below center, shift position
       Rect b = dragBtn->node->bounds();
       real dy = event->tfinger.y - b.center().y;
-
-
       if(std::abs(dy) > b.height()) {
-        SvgContainerNode* parent = content->containerNode();  //item->parent()->containerNode();
+        SvgContainerNode* parent = content->containerNode();
         auto& items = parent->children();
-
-        size_t ii = 0;
-        auto it = items.begin();
-        while(ii < items.size() && *it != item->node) { ++ii; ++it; }
-
-        //auto it = std::find(items.begin(), items.end(), item);
-        if(it == items.end() || (it == items.begin() && dy < 0)) return true;
-        if(dy < 0)
-          --it;
-        // note iterator is advanced by 2 places and we assume archived lists item is always at end
-        else if(++it == items.end() || ++it == items.end())
+        auto it = std::find(items.begin(), items.end(), item->node);
+        if(it == items.end() || (dy < 0 && it == items.begin()) || (dy > 0 && ++it == items.end()))
           return true;
-
-        SvgNode* next = *it;
+        SvgNode* next = dy > 0 ? (++it == items.end() ? NULL : *it) : *(--it);
         parent->removeChild(item->node);
         parent->addChild(item->node, next);
       }
@@ -322,6 +321,5 @@ void DragDropList::addItem(KeyType key, Widget* item)
     }
     return false;
   });
-
 }
 
