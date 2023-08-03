@@ -117,7 +117,7 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
             <g class="toolbutton cancel-btn" layout="box">
               <rect class="background" box-anchor="hfill" width="36" height="42"/>
               <g margin="0 3" box-anchor="fill" layout="flex" flex-direction="row">
-                <use class="icon" height="36" xlink:href=":/icons/ic_menu_back.svg" />
+                <use class="icon" height="36" xlink:href=":/ui-icons.svg#back" />
                 <text class="title" display="none" margin="0 9">Cancel</text>
               </g>
             </g>

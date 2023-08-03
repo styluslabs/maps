@@ -430,7 +430,7 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
     std::string query = history[ii];
     Button* item = new Button(autoCompProto->clone());
 
-    Button* discardBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_discard.svg"), "Remove");
+    Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
     discardBtn->onClicked = [=](){
       DB_exec(searchDB, "DELETE FROM history WHERE query = ?;", NULL, [&](sqlite3_stmt* stmt){
         sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
@@ -472,26 +472,6 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 
 Widget* MapsSearch::createPanel()
 {
-  //static const char* searchBoxSVG = R"#(
-  //  <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
-  //    <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
-  //    <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
-  //      <g class="toolbutton search-btn" layout="box">
-  //        <rect class="background" box-anchor="hfill" width="36" height="42"/>
-  //        <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_zoom.svg"/>
-  //      </g>
-  //      <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
-  //        <rect class="min-width-rect" fill="none" width="150" height="36"/>
-  //        <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
-  //      </g>
-  //      <g class="toolbutton cancel-btn" display="none" layout="box">
-  //        <rect class="background" box-anchor="hfill" width="36" height="42"/>
-  //        <use class="icon" width="52" height="52" xlink:href=":/icons/ic_menu_cancel.svg"/>
-  //      </g>
-  //    </g>
-  //  </g>
-  //)#";
-
   static const char* searchBoxSVG = R"#(
     <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
       <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
@@ -499,14 +479,14 @@ Widget* MapsSearch::createPanel()
       <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
         <g class="toolbutton search-btn" layout="box">
           <rect class="background" box-anchor="hfill" width="36" height="34"/>
-          <use class="icon" height="30" xlink:href=":/icons/ic_menu_zoom.svg"/>
+          <use class="icon" height="30" xlink:href=":/ui-icons.svg#search"/>
         </g>
         <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
           <rect class="min-width-rect" fill="none" width="150" height="36"/>
         </g>
         <g class="toolbutton cancel-btn" display="none" layout="box">
           <rect class="background" box-anchor="hfill" width="36" height="34"/>
-          <use class="icon" height="30" xlink:href=":/icons/ic_menu_cancel.svg"/>
+          <use class="icon" height="30" xlink:href=":/ui-icons.svg#circle-x"/>
         </g>
       </g>
     </g>
@@ -539,7 +519,7 @@ Widget* MapsSearch::createPanel()
   };
   cancelBtn->setVisible(false);
 
-  auto searchTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
+  auto searchTb = app->createPanelHeader(MapsApp::uiIcon("search"), "Search");
   if(!app->pluginManager->searchFns.empty()) {
     std::vector<std::string> cproviders = {"Offline"};
     for(auto& fn : app->pluginManager->searchFns)
@@ -562,7 +542,7 @@ Widget* MapsSearch::createPanel()
     if(!queryText->text().empty())
       searchText(queryText->text(), MapsSearch::RETURN);
   }, initSortIdx);
-  Button* sortBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_settings.svg"), "Sort");
+  Button* sortBtn = createToolbutton(MapsApp::uiIcon("sort"), "Sort");
   sortBtn->setMenu(sortMenu);
   searchTb->addWidget(sortBtn);
 
@@ -592,7 +572,7 @@ Widget* MapsSearch::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_zoom.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#search"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -609,7 +589,7 @@ Widget* MapsSearch::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_clock.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#clock"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -634,7 +614,7 @@ Widget* MapsSearch::createPanel()
       // TODO: pinned searches - timestamp column = INF?
       DB_exec(searchDB, "SELECT query FROM history ORDER BY timestamp LIMIT 8;", [&](sqlite3_stmt* stmt){
         std::string s = (const char*)(sqlite3_column_text(stmt, 0));
-        searchMenu->addItem(s.c_str(), SvgGui::useFile(":/icons/ic_menu_clock.svg"), [=](){
+        searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
           queryText->setText(s.c_str());
           searchText(s, MapsSearch::RETURN);
         });
@@ -644,7 +624,7 @@ Widget* MapsSearch::createPanel()
     return false;
   });
 
-  Button* searchBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");
+  Button* searchBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");  //MapsApp::uiIcon("search")
   searchBtn->setMenu(searchMenu);
   searchBtn->onClicked = [this](){
     app->showPanel(searchPanel);

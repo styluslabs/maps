@@ -358,6 +358,7 @@ void MapsApp::mapUpdate(double time)
   // update map center
   mapCenter = map->getCameraPosition();
   reorientBtn->setVisible(mapCenter.tilt != 0 || mapCenter.rotation != 0);
+  reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(mapCenter.rotation));
 
   mapsTracks->onMapChange();
   mapsBookmarks->onMapChange();
@@ -565,7 +566,7 @@ Window* MapsApp::createGUI()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_pin.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
         </g>
         <g layout="flex" flex-direction="column" box-anchor="vfill">
           <text class="title-text" margin="0 10"></text>
@@ -601,7 +602,7 @@ Window* MapsApp::createGUI()
   mapsWidget->isFocusable = true;
 
   infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));  //createColumn(); //createListContainer();
-  auto infoHeader = createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");  // should be pin icon
+  auto infoHeader = createPanelHeader(MapsApp::uiIcon("pin"), "");
   infoPanel = createMapPanel(infoHeader, infoContent);
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
@@ -628,7 +629,7 @@ Window* MapsApp::createGUI()
   // recenter, reorient btns
   Toolbar* floatToolbar = createVertToolbar();
   // we could switch to different orientation modes (travel direction, compass direction) w/ multiple taps
-  reorientBtn = createToolbutton(SvgGui::useFile(":/icons/arrow_up.svg"), "Reorient");
+  reorientBtn = createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->onClicked = [this](){
     CameraPosition camera = map->getCameraPosition();
     camera.tilt = 0;
@@ -637,7 +638,7 @@ Window* MapsApp::createGUI()
   };
   reorientBtn->setVisible(false);
 
-  Button* recenterBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_clock.svg"), "Recenter");
+  Button* recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
   recenterBtn->onClicked = [this](){
     map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
   };
@@ -676,7 +677,7 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
 Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 {
   Toolbar* toolbar = createToolbar();
-  auto backBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"));
+  auto backBtn = createToolbutton(MapsApp::uiIcon("back"));
   backBtn->onClicked = [this](){
     if(panelHistory.empty())
       LOGE("back button clicked but panelHistory empty ... this should never happen!");
@@ -743,7 +744,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
 {
   // what about just swiping down to minimize instead of a button?
   if(canMinimize) {
-    auto minimizeBtn = createToolbutton(SvgGui::useFile(":/icons/chevron_down.svg"));
+    auto minimizeBtn = createToolbutton(MapsApp::uiIcon(PLATFORM_MOBILE ? "chevron-down" : "chevron-up"));
     minimizeBtn->onClicked = [this](){
       // options:
       // 1. hide container and splitter and show a floating restore btn
@@ -843,11 +844,17 @@ const char* getResource(const std::string& name)
   return it != resourceMap.end() ? it->second : NULL;
 }
 
+static std::string uiIconStr;
+
 // SVG for icons
 #define LOAD_RES_FN loadIconRes
 #include "scribbleres/res_icons.cpp"
 
 #include "ugui/theme.cpp"
+
+static const char* moreCSS = R"#(
+.listitem.checked { fill: var(--checked); }
+)#";
 
 void glfwSDLEvent(SDL_Event* event)
 {
@@ -876,6 +883,13 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
   std::lock_guard<std::mutex> lock(taskQueueMutex);
   taskQueue.push_back(fn);
   glfwPostEmptyEvent();
+}
+
+SvgNode* MapsApp::uiIcon(const char* id)
+{
+  SvgNode* res = SvgGui::useFile(":/ui-icons.svg")->namedNode(id);
+  ASSERT(res && "UI icon missing!");
+  return res;
 }
 
 int main(int argc, char* argv[])
@@ -944,6 +958,7 @@ int main(int argc, char* argv[])
   Painter::vg = nvgContext;
   Painter::loadFont("sans", "/home/mwhite/maps/tangram-es/scenes/fonts/roboto-regular.ttf");
 
+  // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
   SvgParser::openStream = [](const char* name) -> std::istream* {
     if(name[0] == ':' && name[1] == '/') {
       const char* res = getResource(name + 2);
@@ -955,8 +970,13 @@ int main(int argc, char* argv[])
   };
 
   loadIconRes();
-  // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
-  setGuiResources(defaultWidgetSVG, defaultStyleCSS);
+  // we could just use SvgGui::useFile directly; presumably, ui-icons will eventually be embedded in exe
+  uiIconStr = readFile("/home/mwhite/maps/tangram-es/app/res/ui-icons.svg");
+  addStringResources({{"ui-icons.svg", uiIconStr.c_str()}});
+
+  std::string styleCSS = defaultStyleCSS;
+  styleCSS += moreCSS;
+  setGuiResources(defaultWidgetSVG, styleCSS.c_str());
   SvgGui* gui = new SvgGui();
   MapsApp::gui = gui;  // needed by glfwSDLEvent()
   // scaling

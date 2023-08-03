@@ -284,7 +284,7 @@ void MapsOffline::populateOffline()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_bookmark.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#fold-map"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -294,7 +294,7 @@ void MapsOffline::populateOffline()
         <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
 
         <g class="toolbutton delete-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_discard.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#discard"/>
         </g>
 
       </g>
@@ -363,14 +363,14 @@ Widget* MapsOffline::createPanel()
       " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
 
   SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%.0f");
-  Button* saveBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Save Offline Map");
+  Button* saveBtn = createToolbutton(MapsApp::uiIcon("download"), "Save Offline Map");
   saveBtn->onClicked = [=](){
     saveOfflineMap(maxZoomSpin->value());
     populateOffline();
   };
 
   offlineContent = createColumn();
-  auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Offline Maps");
+  auto toolbar = app->createPanelHeader(MapsApp::uiIcon("offline"), "Offline Maps");
   toolbar->addWidget(createStretch());
   toolbar->addWidget(maxZoomSpin);
   toolbar->addWidget(saveBtn);
@@ -384,7 +384,7 @@ Widget* MapsOffline::createPanel()
     return false;
   });
 
-  Button* offlineBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_insert_space.svg"), "Offline Maps");
+  Button* offlineBtn = createToolbutton(MapsApp::uiIcon("offline"), "Offline Maps");
   offlineBtn->onClicked = [this](){
     app->showPanel(offlinePanel, true);
     populateOffline();

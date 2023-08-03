@@ -276,12 +276,12 @@ Widget* PluginManager::createPanel()
   pluginContent->addWidget(runBtn);
   pluginContent->addWidget(resultText);
 
-  auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_editbox.svg"), "Plugins");
+  auto toolbar = app->createPanelHeader(MapsApp::uiIcon("textbox"), "Plugins");
   //toolbar->addWidget(createStretch());
   //toolbar->addWidget(maxZoomSpin);
   Widget* pluginPanel = app->createMapPanel(toolbar, NULL, pluginContent);
 
-  Button* pluginBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_editbox.svg"), "Offline Maps");
+  Button* pluginBtn = createToolbutton(MapsApp::uiIcon("textbox"), "Offline Maps");
   pluginBtn->onClicked = [=](){
     app->showPanel(pluginPanel, true);
   };

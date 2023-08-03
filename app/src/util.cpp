@@ -58,6 +58,22 @@ std::string yamlToStr(const YAML::Node& node)
   return std::string(emitter.c_str());
 }
 
+template<typename T>
+void yamlRemove(YAML::Node node, T key)
+{
+  if(node.Type() != YAML::NodeType::Sequence)
+    return;
+  YAML::Node newnode = YAML::Node(YAML::NodeType::Sequence);
+  for(YAML::Node& child : node) {
+    if(child.as<T>() != key)
+      newnode.push_back(child);
+  }
+  node = newnode;
+}
+
+// explicit instantiations
+template void yamlRemove<int>(YAML::Node node, int key);
+
 std::string osmIdFromProps(const rapidjson::Document& props)
 {
   std::string osm_id;

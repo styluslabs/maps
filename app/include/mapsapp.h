@@ -112,6 +112,7 @@ public:
 
   enum EventTypes { PANEL_CLOSED=0xE001 };
 
+  static SvgNode* uiIcon(const char* id);
   static void runOnMainThread(std::function<void()> fn);
   static void messageBox(std::string title, std::string message,
       std::vector<std::string> buttons = {"OK"}, std::function<void(std::string)> callback = {});

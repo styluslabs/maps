@@ -194,7 +194,7 @@ void MapsSources::saveSources()
 
 void MapsSources::sourceModified()
 {
-  saveBtn->setEnabled(true);
+  saveBtn->setEnabled(!titleEdit->text().empty());
 }
 
 // New GUI
@@ -228,8 +228,12 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->sceneUpdates = std::move(builder.updates);  //.clear();
     app->loadSceneFile();  //builder.getSceneYaml(baseUrl), builder.updates);
     sceneVarsLoaded = false;
-    currSource = srcname.empty() ? joinStr(builder.layerkeys, ",") : srcname;
-    app->config["last_source"] = currSource;
+    if(!srcname.empty()) {
+      currSource = srcname;  //srcname.empty() ? joinStr(builder.layerkeys, ",") : srcname;
+      app->config["last_source"] = currSource;
+      for(Widget* item : sourcesContent->select(".listitem"))
+        static_cast<Button*>(item)->setChecked(item->node->getStringAttr("__sourcekey", "") == currSource);
+    }
   }
 
   //bool multi = bool(mapSources[srcname]["layers"]);
@@ -289,15 +293,15 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     }
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
     for(const SceneUpdate& upd : app->sceneUpdates) {
-      const char* path = upd.path.c_str();
-      if(strncmp(path, "+sources.raster-", 16) == 0 || strncmp(path, "+layers.raster-", 15) == 0)
-        continue;
-      updates[path[0] == '+' ? path + 1 : path] = upd.value;
+      // we only want updates from explicit scene var changes
+      if(upd.path[0] != '+')
+        updates[upd.path] = upd.value;
     }
   }
 
   saveSources();
   populateSources();
+  rebuildSource(savekey);  // populateSources() resets the layer select boxes, need to restore!
   return savekey;
 }
 
@@ -321,16 +325,19 @@ void MapsSources::populateSources()
     }
 
     Button* item = new Button(sourceListProto->clone());
+    item->node->setAttr("__sourcekey", key.c_str());
     Widget* container = item->selectFirst(".child-container");
-    item->onClicked = [this, key](){ rebuildSource(key); };
+    item->onClicked = [this, key](){ if(key != currSource) rebuildSource(key); };
 
-    Button* editBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Show");
+    Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
     editBtn->onClicked = [this, key](){ populateSourceEdit(key); };
 
-    Button* overflowBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More");
+    Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
+    overflowBtn->setMenu(overflowMenu);
     overflowMenu->addItem("Delete", [=](){
       mapSources.remove(key);
+      saveSources();
       app->gui->deleteWidget(item);  //populateSources();
     });
 
@@ -370,10 +377,14 @@ void MapsSources::populateSceneVars()
           for(auto& uniform : style->styleUniforms()) {
             if(uniform.first.name == name) {
               if(uniform.second.is<float>()) {
-                auto spinBox = createTextSpinBox(uniform.second.get<float>());
+                auto spinBox = createTextSpinBox(uniform.second.get<float>(), 1, -INFINITY, INFINITY, "%.2f");
                 spinBox->onValueChanged = [=, &uniform](real val){
-                  app->sceneUpdates.push_back(SceneUpdate{"styles." + stylename + ".shaders.uniforms." + name, std::to_string(val)});
+                  std::string path = "styles." + stylename + ".shaders.uniforms." + name;
+                  std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
+                      [&](const SceneUpdate& s){ return s.path == path; });
+                  app->sceneUpdates.push_back(SceneUpdate{path, std::to_string(val)});
                   uniform.second.set<float>(val);
+                  app->platform->requestRender();
                   sourceModified();
                 };
                 varsContent->addWidget(createTitledRow(label.c_str(), spinBox));
@@ -393,12 +404,15 @@ void MapsSources::populateSceneVars()
       std::string value = app->readSceneValue("global." + name).as<std::string>("");
       auto checkbox = createCheckBox("", value == "true");
       checkbox->onToggled = [=](bool newval){
-        app->sceneUpdates.push_back(SceneUpdate{"global." + name, newval ? "true" : "false"});
+        std::string path = "global." + name;
+        std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
+            [&](const SceneUpdate& s){ return s.path == path; });
+        app->sceneUpdates.push_back(SceneUpdate{path, newval ? "true" : "false"});
         sourceModified();
         if(reload == "false")  // ... so default to reloading
-          app->map->updateGlobals({app->sceneUpdates.back()});  //SceneUpdate{"global." + name, newval ? "true" : "false"}});
+          app->map->updateGlobals({app->sceneUpdates.back()});
         else
-          app->loadSceneFile();  //{SceneUpdate{"global." + name, newval ? "true" : "false"}});
+          app->loadSceneFile();
       };
       varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
     }
@@ -425,7 +439,7 @@ Widget* MapsSources::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_drawer.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#layers"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -441,15 +455,15 @@ Widget* MapsSources::createPanel()
 
   Toolbar* sourceTb = createToolbar();
   titleEdit = createTextEdit();
-  saveBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Save Source");
-  //discardBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_discard.svg"), "Delete Source");
+  saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save Source");
+  //discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete Source");
   sourceTb->addWidget(titleEdit);
   sourceTb->addWidget(saveBtn);
 
   Toolbar* importTb = createToolbar();
   TextEdit* importEdit = createTextEdit();
-  Button* importAccept = createToolbutton(SvgGui::useFile(":/icons/ic_menu_accept.svg"), "Save");
-  Button* importCancel = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"), "Cancel");
+  Button* importAccept = createToolbutton(MapsApp::uiIcon("accept"), "Save");
+  Button* importCancel = createToolbutton(MapsApp::uiIcon("cancel"), "Cancel");
   importTb->addWidget(importEdit);
   importTb->addWidget(importAccept);
   importTb->addWidget(importCancel);
@@ -489,7 +503,7 @@ Widget* MapsSources::createPanel()
       populateSourceEdit(key);  // so user can edit title
   };
 
-  Button* createBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_plus.svg"), "New Source");
+  Button* createBtn = createToolbutton(MapsApp::uiIcon("add"), "New Source");
   createBtn->onClicked = [=](){
     // ensure at least the first two layer selects are visible
     layerRows[0]->setVisible(true);
@@ -512,7 +526,7 @@ Widget* MapsSources::createPanel()
   varsContent = createColumn();
   layersContent->addWidget(varsContent);
   for(int ii = 1; ii <= MAX_SOURCES; ++ii) {
-    layerCombos.push_back(createSelectBox(fstring("Layer %d", ii).c_str(), SvgGui::useFile(":/icons/ic_menu_cloud.svg") , {}));
+    layerCombos.push_back(createSelectBox(fstring("Layer %d", ii).c_str(), MapsApp::uiIcon("layers"), {}));
     layerCombos.back()->onChanged = [this](int){
       rebuildSource();
     };
@@ -527,15 +541,10 @@ Widget* MapsSources::createPanel()
       app->storageTotal = app->storageOffline;
     }
   };
-  Button* clearCacheBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_erase.svg"), "Clear cache");
-  clearCacheBtn->onClicked = [=](){
-    MapsApp::messageBox("Clear cache", "Delete all cached map data? This action cannot be undone.",
-        {"OK", "Cancel"}, clearCacheFn);
-  };
 
   Widget* offlineBtn = app->mapsOffline->createPanel();
 
-  Button* overflowBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More");
+  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem("Import source", [=](){ importEdit->setText("");  importTb->setVisible(true); });
@@ -544,14 +553,14 @@ Widget* MapsSources::createPanel()
         {"OK", "Cancel"}, clearCacheFn);
   });
 
-  auto sourcesHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Map Source");
+  auto sourcesHeader = app->createPanelHeader(MapsApp::uiIcon("layers"), "Map Source");
   sourcesHeader->addWidget(createStretch());
   sourcesHeader->addWidget(createBtn);
   sourcesHeader->addWidget(offlineBtn);
   sourcesHeader->addWidget(overflowBtn);
   sourcesPanel = app->createMapPanel(sourcesHeader, sourcesContent);
 
-  auto editHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_cloud.svg"), "Edit Source");
+  auto editHeader = app->createPanelHeader(MapsApp::uiIcon("edit"), "Edit Source");
   sourceEditPanel = app->createMapPanel(editHeader, layersContent, sourceTb);
 
   // main toolbar button
@@ -569,7 +578,7 @@ Widget* MapsSources::createPanel()
     return false;
   });
 
-  Button* sourcesBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Sources");
+  Button* sourcesBtn = app->createPanelButton(MapsApp::uiIcon("layers"), "Sources");
   sourcesBtn->setMenu(sourcesMenu);
   sourcesBtn->onClicked = [this](){
     app->showPanel(sourcesPanel);

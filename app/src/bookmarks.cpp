@@ -93,12 +93,12 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   newListContent->addWidget(createListBtn);
   newListContent->setVisible(false);
 
-  Button* newListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_add_folder.svg"), "Create List");
+  Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
   newListBtn->onClicked = [=](){
     newListContent->setVisible(!newListContent->isVisible());
   };
 
-  Button* cancelBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_back.svg"), "Cancel");
+  Button* cancelBtn = createToolbutton(MapsApp::uiIcon("back"), "Cancel");
   cancelBtn->onClicked = [=](){
     dialog->finish(Dialog::CANCELLED);
   };
@@ -135,19 +135,6 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   dialog->setWinBounds(Rect::ltwh(400,400,500,700));
 
   app->gui->showModal(dialog, app->gui->windows.front()->modalOrSelf());
-}
-
-template<typename T>
-void yamlRemove(YAML::Node node, T key)
-{
-  if(node.Type() != YAML::NodeType::Sequence)
-    return;
-  YAML::Node newnode = YAML::Node(YAML::NodeType::Sequence);
-  for(YAML::Node& child : node) {
-    if(child.as<T>() != key)
-      newnode.push_back(child);
-  }
-  node = newnode;
 }
 
 void MapsBookmarks::populateLists(bool archived)
@@ -224,6 +211,15 @@ void MapsBookmarks::populateLists(bool archived)
 
       if(archived) listsDirty = true;  // Deleteing archived item will dirty archive count
       app->gui->deleteWidget(item);
+    });
+
+    overflowMenu->addItem("Clear", [=](){
+      const char* q = "DELETE FROM bookmarks WHERE list_id = ?;";
+      DB_exec(app->bkmkDB, q, NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
+      auto it1 = bkmkMarkers.find(rowid);
+      if(it1 != bkmkMarkers.end())
+        it1->second->reset();
+      populateLists(archived);
     });
 
     // TODO: overflow menu option to generate track from bookmark list - just passes coords to MapsTracks
@@ -437,13 +433,13 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
       R"(<text class="note-text weak" box-anchor="left" margin="0 10" font-size="12"></text>)"));
   noteText->setText(notestr.c_str());
 
-  Button* createBkmkBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_add_bookmark.svg"), "Bookmark...", true);
+  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Bookmark...", true);
   // bookmark editing
   auto editToolbar = createToolbar();
   auto titleEdit = createTextEdit();
   auto noteEdit = createTextEdit();
-  auto acceptNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_accept.svg"));
-  auto cancelNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_cancel.svg"));
+  auto acceptNoteBtn = createToolbutton(MapsApp::uiIcon("accept"));
+  auto cancelNoteBtn = createToolbutton(MapsApp::uiIcon("cancel"));
 
   titleEdit->setText(namestr.c_str());
   noteEdit->setText(notestr.c_str());
@@ -480,9 +476,9 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   };
 
   Widget* toolRow = createRow();
-  Button* chooseListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), liststr.c_str(), true);
-  Button* removeBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_discard.svg"), "Delete");
-  Button* addNoteBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit");
+  Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), liststr.c_str(), true);
+  Button* removeBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete");
+  Button* addNoteBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
 
   //auto removeBtn = new Button(widget->containerNode()->selectFirst(".discard-btn"));
   removeBtn->onClicked = [=](){
@@ -553,7 +549,7 @@ Widget* MapsBookmarks::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="toolbutton drag-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_drawer.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -563,11 +559,11 @@ Widget* MapsBookmarks::createPanel()
         <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
 
         <g class="toolbutton visibility-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_pin.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#eye"/>
         </g>
 
         <g class="toolbutton overflow-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_overflow.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#overflow"/>
         </g>
 
       </g>
@@ -580,7 +576,7 @@ Widget* MapsBookmarks::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_drawer.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -595,7 +591,7 @@ Widget* MapsBookmarks::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_bookmark.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -605,7 +601,7 @@ Widget* MapsBookmarks::createPanel()
         <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
 
         <g class="toolbutton overflow-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_overflow.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
         </g>
       </g>
     </g>
@@ -664,7 +660,7 @@ Widget* MapsBookmarks::createPanel()
   newListContent->addWidget(createListBtn);
   newListContent->setVisible(false);
 
-  Button* newListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_add_folder.svg"), "Create List");
+  Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
   newListBtn->onClicked = [=](){
     newListContent->setVisible(!newListContent->isVisible());
   };
@@ -674,11 +670,11 @@ Widget* MapsBookmarks::createPanel()
   listsCol->node->setAttribute("box-anchor", "fill");  // ancestors of ScrollWidget must use fill, not vfill
   listsCol->addWidget(newListContent);
   listsCol->addWidget(listsContent);
-  auto listHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Bookmark Lists");
+  auto listHeader = app->createPanelHeader(MapsApp::uiIcon("pin"), "Bookmark Lists");
   listsPanel = app->createMapPanel(listHeader, NULL, listsCol);
 
   archivedContent = createColumn();
-  auto archivedHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Archived Bookmaks");
+  auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Bookmaks");
   archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
 
   listsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
@@ -718,8 +714,8 @@ Widget* MapsBookmarks::createPanel()
   editListContent->setVisible(false);
   bkmkContent->addWidget(editListContent);
 
-  auto toolbar = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
-  Button* editListBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit List");
+  auto toolbar = app->createPanelHeader(MapsApp::uiIcon("folder"), "");
+  Button* editListBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit List");
   editListBtn->onClicked = [=](){
     editListContent->setVisible(!editListContent->isVisible());
   };
@@ -732,10 +728,10 @@ Widget* MapsBookmarks::createPanel()
     app->config["bookmarks"]["sort"] = bkmkSortKeys[ii];
     populateBkmks(activeListId, true);  // class member to hold current list name or id?
   }, initSortIdx);
-  Button* sortBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_settings.svg"), "Sort");
+  Button* sortBtn = createToolbutton(MapsApp::uiIcon("sort"), "Sort");
   sortBtn->setMenu(sortMenu);
 
-  Button* mapAreaBkmksBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Bookmarks in map area only");
+  Button* mapAreaBkmksBtn = createToolbutton(MapsApp::uiIcon("fold-map-pin"), "Bookmarks in map area only");
   mapAreaBkmksBtn->onClicked = [this](){
     mapAreaBkmks = !mapAreaBkmks;
     if(mapAreaBkmks)
@@ -787,14 +783,14 @@ Widget* MapsBookmarks::createPanel()
         double lng = sqlite3_column_double(stmt, 4);
         double lat = sqlite3_column_double(stmt, 5);
         //const char* notestr = (const char*)(sqlite3_column_text(stmt, 2));
-        bkmkMenu->addItem(namestr.c_str(), SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), [=](){
+        bkmkMenu->addItem(namestr.c_str(), MapsApp::uiIcon("pin"), [=](){
           app->setPickResult(LngLat(lng, lat), namestr, propstr); });
       });
     }
     return false;
   });
 
-  Button* bkmkBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "Places");
+  Button* bkmkBtn = app->createPanelButton(MapsApp::uiIcon("pin"), "Places");
   bkmkBtn->setMenu(bkmkMenu);
   bkmkBtn->onClicked = [this](){
     populateLists(false);

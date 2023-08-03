@@ -8,6 +8,7 @@
 #include "pugixml.hpp"
 #include "yaml-cpp/yaml.h"
 #include "sqlite3/sqlite3.h"
+#include "util/yamlPath.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -498,12 +499,14 @@ Widget* MapsTracks::createTrackEntry(Track* track)
   item->onClicked = [=](){ populateStats(track); };
   Widget* container = item->selectFirst(".child-container");
 
-  Button* showBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_pin.svg"), "Show");
+  Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
   showBtn->onClicked = [=](){
     track->visible = !showBtn->checked();
     showBtn->setChecked(track->visible);
-    //std::string q1 = fstring("UPDATE lists_state SET visible = %d WHERE list_id = ?;", visible ? 1 : 0);
-    //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
+    if(track->visible)
+      app->config["tracks"]["visible"].push_back(track->rowid);
+    else
+      yamlRemove(app->config["tracks"]["visible"], track->rowid);
     // assume recordedTrack is dirty (should we introduce a Track.dirty flag?)
     if(!track->visible || (track->marker > 0 && track != &recordedTrack))
       app->map->markerSetVisible(track->marker, track->visible);
@@ -532,7 +535,7 @@ Widget* MapsTracks::createTrackEntry(Track* track)
   container->addWidget(colorBtn);
 
   if(track->rowid >= 0) {
-    Button* overflowBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More");
+    Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowMenu->addItem(track->archived ? "Unarchive" : "Archive", [=](){
       //std::string q1 = fstring("UPDATE lists_state SET order = (SELECT COUNT(1) FROM lists WHERE archived = %d) WHERE list_id = ?;", archived ? 0 : 1);
@@ -551,6 +554,7 @@ Widget* MapsTracks::createTrackEntry(Track* track)
       for(auto it = tracks.begin(); it != tracks.end(); ++it) {
         if(it->rowid == track->rowid) {
           app->map->markerRemove(track->marker);
+          yamlRemove(app->config["tracks"]["visible"], track->rowid);
           tracks.erase(it);
           break;
         }
@@ -789,7 +793,7 @@ Widget* MapsTracks::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/icons/ic_menu_drawer.svg"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#track"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>
@@ -912,7 +916,7 @@ Widget* MapsTracks::createPanel()
   Button* appendTrackBtn = createToolbutton(NULL, "Append track", true);
   appendTrackBtn->onClicked = [this](){
     if(!selectTrackDialog) {
-      selectTrackDialog.reset(createSelectDialog("Choose Track", SvgGui::useFile(":/icons/ic_menu_select_path.svg")));
+      selectTrackDialog.reset(createSelectDialog("Choose Track", MapsApp::uiIcon("track")));
       selectTrackDialog->onSelected = [this](int idx){
         if(origLocs.empty()) origLocs = activeTrack->locs;
         activeTrack->locs.insert(activeTrack->locs.end(), tracks[idx].locs.begin(), tracks[idx].locs.end());
@@ -928,7 +932,7 @@ Widget* MapsTracks::createPanel()
     MapsApp::gui->showModal(selectTrackDialog.get(), MapsApp::gui->windows.front()->modalOrSelf());
   };
 
-  Button* moreTrackOptionsBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_overflow.svg"), "More options");
+  Button* moreTrackOptionsBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
   Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT);
   moreTrackOptionsBtn->setMenu(trackPlotOverflow);
 
@@ -968,9 +972,9 @@ Widget* MapsTracks::createPanel()
   trackOptionsTb->setVisible(false);
   statsContent->addWidget(trackOptionsTb);
 
-  Button* editTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Edit Track");
-  pauseRecordBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select_ruled.svg"), "Pause");
-  stopRecordBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_select.svg"), "Stop");
+  Button* editTrackBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit Track");
+  pauseRecordBtn = createToolbutton(MapsApp::uiIcon("pause"), "Pause");
+  stopRecordBtn = createToolbutton(MapsApp::uiIcon("stop"), "Stop");
 
   auto setTrackEdit = [=](bool show){
     //editTrackBtn->setChecked(show);
@@ -1085,19 +1089,19 @@ Widget* MapsTracks::createPanel()
   // Tracks panel
   tracksContent = createColumn();
 
-  Button* drawTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_draw.svg"), "Draw Track");
+  Button* drawTrackBtn = createToolbutton(MapsApp::uiIcon("draw-track"), "Draw Track");
   drawTrackBtn->onClicked = [=](){
     drawTrack = !drawTrack;
     drawTrackBtn->setTitle(drawTrack ? "Finish Track" : "Draw Track");
   };
 
   Widget* loadTrackPanel = createColumn();
-  Button* loadTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_folder.svg"), "Load Track");
+  Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
   loadTrackBtn->onClicked = [=](){
     loadTrackPanel->setVisible(true);
   };
 
-  Button* recordTrackBtn = createToolbutton(SvgGui::useFile(":/icons/ic_menu_save.svg"), "Record Track");
+  Button* recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record Track");
   recordTrackBtn->onClicked = [=](){
     if(!recordedTrack.locs.empty())
       populateStats(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
@@ -1144,7 +1148,7 @@ Widget* MapsTracks::createPanel()
   loadTrackPanel->setVisible(false);
   tracksContent->addWidget(loadTrackPanel);
 
-  auto tracksTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
+  auto tracksTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Tracks");
   tracksTb->addWidget(drawTrackBtn);
   tracksTb->addWidget(loadTrackBtn);
   tracksTb->addWidget(recordTrackBtn);
@@ -1159,10 +1163,10 @@ Widget* MapsTracks::createPanel()
   });
 
   archivedContent = createColumn();
-  auto archivedHeader = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_drawer.svg"), "Archived Tracks");
+  auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Tracks");
   archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
 
-  auto statsTb = app->createPanelHeader(SvgGui::useFile(":/icons/ic_menu_bookmark.svg"), "");
+  auto statsTb = app->createPanelHeader(MapsApp::uiIcon("graph-line"), "");
   statsTb->addWidget(pauseRecordBtn);
   statsTb->addWidget(stopRecordBtn);
   statsTb->addWidget(editTrackBtn);
@@ -1181,6 +1185,11 @@ Widget* MapsTracks::createPanel()
     return false;
   });
 
+  YAML::Node vistracks;
+  Tangram::YamlPath("+tracks.visible").get(app->config, vistracks);  //node = app->getConfigPath("+places.visible");
+  //for(auto& node : vistracks)
+  //  populateBkmks(node.as<int>(-1), false);
+
   // main toolbar button ... quick menu - recent tracks?
   /*Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
   sourcesMenu->autoClose = true;
@@ -1197,7 +1206,7 @@ Widget* MapsTracks::createPanel()
     return false;
   });*/
 
-  Button* tracksBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_select_path.svg"), "Tracks");
+  Button* tracksBtn = app->createPanelButton(MapsApp::uiIcon("track"), "Tracks");
   //tracksBtn->setMenu(sourcesMenu);
   tracksBtn->onClicked = [=](){
     populateTracks(false);
