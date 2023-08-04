@@ -30,7 +30,7 @@ static const char* apiKeyScenePath = "+global.sdk_api_key";
 
 Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
-std::string MapsApp::apiKey;
+//std::string MapsApp::apiKey;
 CameraPosition MapsApp::mapCenter;
 YAML::Node MapsApp::config;
 std::string MapsApp::configFile;
@@ -75,6 +75,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   pickResultCoord = pos;
   pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
 
+  std::string osmid = osmIdFromProps(props);
+
   gui->deleteContents(infoContent);  //, ".listitem");
 
   Widget* item = new Widget(placeInfoProto->clone());
@@ -92,16 +94,79 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(distnode)
     distnode->addText(fstring("%.1f km", distkm).c_str());
 
-  Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmIdFromProps(props), pos);
+  Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
   if(bkmkSection)
     item->selectFirst(".bkmk-section")->addWidget(bkmkSection);
 
   //SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
   //imghost->addChild(resultIconNode->clone());
 
+  if(!pluginManager->placeFns.empty()) {
+    std::vector<std::string> cproviders = {"None"};
+    for(auto& fn : pluginManager->placeFns)
+      cproviders.push_back(fn.title.c_str());
+
+    ComboBox* providerSel = createComboBox(cproviders);
+    providerSel->setIndex(placeInfoProviderIdx);
+    providerSel->onChanged = [=](const char*){
+      placeInfoProviderIdx = providerSel->index();
+      gui->deleteContents(infoContent->selectFirst(".info-section"), ".listitem");
+      if(placeInfoProviderIdx > 0)
+        pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, osmid);
+
+    };
+    infoContent->selectFirst(".info-section")->addWidget(createTitledRow("Information from ", providerSel));
+    providerSel->onChanged("");
+  }
+
   infoContent->addWidget(item);
 
   showPanel(infoPanel, true);
+}
+
+void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* value)
+{
+  static const char* rowProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
+        <g class="image-container" margin="2 5">
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#info"/>
+        </g>
+        <text class="value-text" box-anchor="left" margin="0 10"></text>
+      </g>
+    </g>
+  )";
+  static std::unique_ptr<SvgNode> rowProto;
+  if(!rowProto)
+    rowProto.reset(loadSVGFragment(rowProtoSVG));
+
+  const char* split = strchr(value, '\r');
+  Widget* row = new Widget(rowProto->clone());
+  static_cast<SvgUse*>(row->containerNode()->selectFirst(".icon"))->setTarget(MapsApp::uiIcon(icon));
+  static_cast<SvgText*>(row->containerNode()->selectFirst(".value-text"))->addText(
+      split ? std::string(value, split-value).c_str() : value);
+  infoContent->selectFirst(".info-section")->addWidget(row);
+
+  if(split) {
+    // collapsible section
+    Widget* row2 = new TextBox(createTextNode(split+1));
+    row2->node->addClass("listitem");
+
+    Button* expandBtn = createToolbutton(MapsApp::uiIcon("chevron-down"), "Expand");
+    expandBtn->onClicked = [=](){
+      bool show = !row2->isVisible();
+      expandBtn->setIcon(MapsApp::uiIcon(show ? "chevron-up" : "chevron-down"));
+      row2->setVisible(show);
+    };
+
+    Widget* c = row->selectFirst(".child-container");
+    c->addWidget(createStretch());
+    c->addWidget(expandBtn);
+
+    row2->setVisible(false);
+    infoContent->selectFirst(".info-section")->addWidget(row2);
+  }
 }
 
 
@@ -176,7 +241,9 @@ void MapsApp::tapEvent(float x, float y)
         pugi::xml_document doc;
         doc.load_string(response.content.data());
         auto tag = doc.child("osm").child(osmType.c_str()).child("tag");
-        if(tag) pickLabelStr += "\n============\nid = " + itemId + "\n";
+        //if(tag) pickLabelStr += "\n============\nid = " + itemId + "\n";
+
+
         while(tag) {
           auto key = tag.attribute("k");
           auto val = tag.attribute("v");
@@ -568,14 +635,9 @@ Window* MapsApp::createGUI()
         <g class="image-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
         </g>
-        <g layout="flex" flex-direction="column" box-anchor="vfill">
-          <text class="title-text" margin="0 10"></text>
-          <text class="addr-text weak" margin="0 10" font-size="12"></text>
-          <text class="lnglat-text weak" margin="0 10" font-size="12"></text>
-          <text class="dist-text weak" margin="0 10" font-size="12"></text>
-        </g>
+        <g class="bkmk-section" layout="box"></g>
+        <g class="info-section" layout="flex" flex-direction="column" box-anchor="vfill"></g>
       </g>
-      <g class="bkmk-section" layout="box"></g>
     </g>
   )#";
 
@@ -647,6 +709,9 @@ Window* MapsApp::createGUI()
   floatToolbar->node->setAttribute("box-anchor", "bottom right");
   floatToolbar->setMargins(0, 10, 10, 0);
   mapsPanel->addWidget(floatToolbar);
+
+  // misc setup
+  placeInfoProviderIdx = pluginManager->placeFns.size();
 
   return win;
 }
@@ -724,7 +789,7 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title)
       <rect class="background" box-anchor="hfill" width="36" height="42"/>
       <rect class="checkmark" box-anchor="bottom hfill" margin="0 2" fill="none" width="36" height="3"/>
       <g margin="0 3" box-anchor="fill" layout="flex" flex-direction="column">
-        <use class="icon" height="36" xlink:href="" />
+        <use class="icon" width="36" height="36" xlink:href="" />
         <text class="title" display="none" margin="0 9"></text>
       </g>
     </g>
@@ -990,8 +1055,8 @@ int main(int argc, char* argv[])
   NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
   uint32_t* swFB = NULL;
 
-  char* apiKey = getenv("NEXTZEN_API_KEY");
-  MapsApp::apiKey = apiKey ? apiKey : "";
+  //char* apiKey = getenv("NEXTZEN_API_KEY");
+  //MapsApp::apiKey = apiKey ? apiKey : "";
   Tangram::Map* tangramMap = new Tangram::Map(std::make_unique<Tangram::LinuxPlatform>());
   MapsApp::platform = &tangramMap->getPlatform();
   MapsApp* app = new MapsApp(tangramMap);

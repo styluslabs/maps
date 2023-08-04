@@ -479,14 +479,14 @@ Widget* MapsSearch::createPanel()
       <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
         <g class="toolbutton search-btn" layout="box">
           <rect class="background" box-anchor="hfill" width="36" height="34"/>
-          <use class="icon" height="30" xlink:href=":/ui-icons.svg#search"/>
+          <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#search"/>
         </g>
         <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
           <rect class="min-width-rect" fill="none" width="150" height="36"/>
         </g>
         <g class="toolbutton cancel-btn" display="none" layout="box">
           <rect class="background" box-anchor="hfill" width="36" height="34"/>
-          <use class="icon" height="30" xlink:href=":/ui-icons.svg#circle-x"/>
+          <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#circle-x"/>
         </g>
       </g>
     </g>
@@ -624,7 +624,7 @@ Widget* MapsSearch::createPanel()
     return false;
   });
 
-  Button* searchBtn = app->createPanelButton(SvgGui::useFile(":/icons/ic_menu_zoom.svg"), "Search");  //MapsApp::uiIcon("search")
+  Button* searchBtn = app->createPanelButton(MapsApp::uiIcon("search"), "Search");
   searchBtn->setMenu(searchMenu);
   searchBtn->onClicked = [this](){
     app->showPanel(searchPanel);

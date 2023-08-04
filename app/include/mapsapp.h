@@ -66,6 +66,7 @@ public:
   LngLat pickResultCoord = {NAN, NAN};
   std::string pickLabelStr;
   bool searchActive = false;
+  int placeInfoProviderIdx = 0;
 
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;
@@ -95,6 +96,7 @@ public:
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
   Button* createPanelButton(const SvgNode* icon, const char* title);
   Widget* createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
+  void addPlaceInfo(const char* icon, const char* title, const char* value);
 
   Splitter* panelSplitter = NULL;
   Widget* panelContainer = NULL;
@@ -119,7 +121,7 @@ public:
 
   static Platform* platform;
   static std::string baseDir;
-  static std::string apiKey;
+  //static std::string apiKey;
   static SvgGui* gui;
   static YAML::Node config;
   static std::string configFile;

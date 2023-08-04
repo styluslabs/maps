@@ -601,7 +601,7 @@ Widget* MapsBookmarks::createPanel()
         <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
 
         <g class="toolbutton overflow-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
+          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#overflow"/>
         </g>
       </g>
     </g>

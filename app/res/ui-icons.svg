@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
 
 <svg id="compass" width="24" height="24" viewBox="0 0 24 24">
   <path fill="#D8263E" d="M17,10L12,2L7,10H17Z"/>
-  <path fill="black" d="M7,22V12H9.5L15,19.3333V12H17V22H14.5L9,14.6667V22H7Z"/>
+  <path fill="currentColor" d="M7,22V12H9.5L15,19.3333V12H17V22H14.5L9,14.6667V22H7Z"/>
 </svg>
 
 </svg>

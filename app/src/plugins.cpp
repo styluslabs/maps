@@ -56,11 +56,18 @@ void PluginManager::cancelJsSearch()
   searchRequests.clear();
 }
 
+void PluginManager::cancelPlaceInfo()
+{
+  for(auto hnd : placeRequests)
+    MapsApp::platform->cancelUrlRequest(hnd);  // no-op if request already completed
+  placeRequests.clear();
+}
+
 void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags)
 {
   //std::lock_guard<std::mutex> lock(jsMutex);
   cancelJsSearch();
-  inJsSearch = true;
+  inState = SEARCH;
 
   duk_context* ctx = jsContext;
   // fn
@@ -82,7 +89,21 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
   // call the fn
   dukTryCall(ctx, 3);
   duk_pop(ctx);
-  inJsSearch = false;
+  inState = NONE;
+}
+
+void PluginManager::jsPlaceInfo(int fnIdx, std::string id)
+{
+  cancelPlaceInfo();
+  inState = PLACE;
+
+  duk_context* ctx = jsContext;
+  duk_get_global_string(ctx, placeFns[fnIdx].name.c_str());
+  duk_push_string(ctx, id.c_str());
+  // call the fn
+  dukTryCall(ctx, 1);
+  duk_pop(ctx);
+  inState = NONE;
 }
 
 std::string PluginManager::evalJS(const char* s)
@@ -106,6 +127,8 @@ static int registerFunction(duk_context* ctx)
 
   if(fntype == "search")
     PluginManager::inst->searchFns.push_back({name, title});
+  else if(fntype == "place")
+    PluginManager::inst->placeFns.push_back({name, title});
   else if(fntype == "command")
     PluginManager::inst->commandFns.push_back({name, title});
   else
@@ -154,8 +177,10 @@ static int jsonHttpRequest(duk_context* ctx)
     //std::lock_guard<std::mutex> lock(PluginManager::inst->jsMutex);
     //invokeHttpReqCallback(ctx, cbvar, response);
   });
-  if(PluginManager::inst->inJsSearch)
+  if(PluginManager::inst->inState == PluginManager::SEARCH)
     PluginManager::inst->searchRequests.push_back(hnd);
+  else if(PluginManager::inst->inState == PluginManager::PLACE)
+    PluginManager::inst->placeRequests.push_back(hnd);
   return 0;
 }
 
@@ -212,6 +237,14 @@ static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lng
   return 0;
 }
 
+static int addPlaceInfo(duk_context* ctx)
+{
+  const char* icon = duk_require_string(ctx, 0);
+  const char* title = duk_require_string(ctx, 1);
+  const char* value = duk_require_string(ctx, 2);
+  PluginManager::inst->app->addPlaceInfo(icon, title, value);
+}
+
 void PluginManager::createFns(duk_context* ctx)
 {
   // create C functions
@@ -225,6 +258,8 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addMapSource");
   duk_push_c_function(ctx, addBookmark, 8);
   duk_put_global_string(ctx, "addBookmark");
+  duk_push_c_function(ctx, addPlaceInfo, 3);
+  duk_put_global_string(ctx, "addPlaceInfo");
 }
 
 // commands should go in toolbar or menu of appropriate panel; e.g. bookmarks panel for import places plugin
