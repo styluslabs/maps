@@ -100,6 +100,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   //SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
   //imghost->addChild(resultIconNode->clone());
+  infoContent->addWidget(item);
 
   if(!pluginManager->placeFns.empty()) {
     std::vector<std::string> cproviders = {"None"};
@@ -119,8 +120,6 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     providerSel->onChanged("");
   }
 
-  infoContent->addWidget(item);
-
   showPanel(infoPanel, true);
 }
 
@@ -131,9 +130,10 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#info"/>
+          <use class="icon" width="36" height="36" xlink:href=""/>
         </g>
-        <text class="value-text" box-anchor="left" margin="0 10"></text>
+        <g class="value-container" box-anchor="left" layout="box" margin="0 10"></g>
+        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
       </g>
     </g>
   )";
@@ -141,17 +141,37 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
   if(!rowProto)
     rowProto.reset(loadSVGFragment(rowProtoSVG));
 
-  const char* split = strchr(value, '\r');
   Widget* row = new Widget(rowProto->clone());
+  Widget* content = new Widget(row->containerNode()->selectFirst(".value-container"));
   static_cast<SvgUse*>(row->containerNode()->selectFirst(".icon"))->setTarget(MapsApp::uiIcon(icon));
-  static_cast<SvgText*>(row->containerNode()->selectFirst(".value-text"))->addText(
-      split ? std::string(value, split-value).c_str() : value);
   infoContent->selectFirst(".info-section")->addWidget(row);
 
+  if(value[0] == '<') {
+    SvgNode* node = loadSVGFragment(value);
+    if(!node) {
+      LOGE("Error parsing SVG from plugin: %s", value);
+      return;
+    }
+    SvgContainerNode* g = node->asContainerNode();
+    if(g) {
+      for(SvgNode* a : g->select("a")) {
+        Button* b = new Button(a);
+        b->onClicked = [b](){
+          MapsApp::openURL(b->node->getStringAttr("href", b->node->getStringAttr("xlink:href")));
+        };
+      }
+    }
+    content->containerNode()->addChild(node);
+    return;
+  }
+
+  const char* split = strchr(value, '\r');
+  content->addWidget(new TextBox(createTextNode(split ? std::string(value, split-value).c_str() : value)));
   if(split) {
     // collapsible section
-    Widget* row2 = new TextBox(createTextNode(split+1));
-    row2->node->addClass("listitem");
+    Widget* row2 = new Widget(rowProto->clone());
+    Widget* content2 = new Widget(row2->containerNode()->selectFirst(".value-container"));
+    content2->addWidget(new TextBox(createTextNode(split+1)));
 
     Button* expandBtn = createToolbutton(MapsApp::uiIcon("chevron-down"), "Expand");
     expandBtn->onClicked = [=](){
@@ -161,7 +181,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     };
 
     Widget* c = row->selectFirst(".child-container");
-    c->addWidget(createStretch());
+    //c->addWidget(createStretch());
     c->addWidget(expandBtn);
 
     row2->setVisible(false);
@@ -210,7 +230,6 @@ void MapsApp::tapEvent(float x, float y)
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
     if (!result) {
       logMsg("Pick Label result is null.\n");
-      pickLabelStr.clear();
       pickResultProps.SetNull();
       if(pickResultMarker > 0)
         map->markerSetVisible(pickResultMarker, false);
@@ -228,30 +247,6 @@ void MapsApp::tapEvent(float x, float y)
     std::string namestr = result->touchItem.properties->getAsString("name");
     setPickResult(result->coordinates, namestr, result->touchItem.properties->toJson());
     mapsSearch->clearSearch();  // ???
-
-    // query OSM API with id - append .json to get JSON instead of XML
-    if(!itemId.empty()) {
-      auto url = Url("https://www.openstreetmap.org/api/0.6/" + osmType + "/" + itemId);
-      map->getPlatform().startUrlRequest(url, [this, url, itemId, osmType](UrlResponse&& response) {
-        if(response.error) {
-          LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
-          return;
-        }
-        response.content.push_back('\0');
-        pugi::xml_document doc;
-        doc.load_string(response.content.data());
-        auto tag = doc.child("osm").child(osmType.c_str()).child("tag");
-        //if(tag) pickLabelStr += "\n============\nid = " + itemId + "\n";
-
-
-        while(tag) {
-          auto key = tag.attribute("k");
-          auto val = tag.attribute("v");
-          pickLabelStr += key.value() + std::string(" = ") + val.value() + std::string("\n");
-          tag = tag.next_sibling("tag");
-        }
-      });
-    }
   });
 
   map->pickMarkerAt(x, y, [&](const Tangram::MarkerPickResult* result) {
@@ -629,15 +624,21 @@ Window* MapsApp::createGUI()
 #endif
 
   static const char* placeInfoProtoSVG = R"#(
-    <g layout="flex" flex-direction="column" box-anchor="fill">
+    <g layout="flex" flex-direction="column" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
         <g class="image-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
         </g>
-        <g class="bkmk-section" layout="box"></g>
-        <g class="info-section" layout="flex" flex-direction="column" box-anchor="vfill"></g>
+        <g layout="flex" flex-direction="column" box-anchor="hfill">
+          <text class="title-text" margin="0 10"></text>
+          <text class="addr-text weak" margin="0 10" font-size="12"></text>
+          <text class="lnglat-text weak" margin="0 10" font-size="12"></text>
+          <text class="dist-text weak" margin="0 10" font-size="12"></text>
+        </g>
       </g>
+      <g class="bkmk-section" layout="box"></g>
+      <g class="info-section" layout="flex" flex-direction="column" box-anchor="hfill"></g>
     </g>
   )#";
 
@@ -912,8 +913,8 @@ const char* getResource(const std::string& name)
 static std::string uiIconStr;
 
 // SVG for icons
-#define LOAD_RES_FN loadIconRes
-#include "scribbleres/res_icons.cpp"
+//#define LOAD_RES_FN loadIconRes
+//#include "scribbleres/res_icons.cpp"
 
 #include "ugui/theme.cpp"
 
@@ -955,6 +956,32 @@ SvgNode* MapsApp::uiIcon(const char* id)
   SvgNode* res = SvgGui::useFile(":/ui-icons.svg")->namedNode(id);
   ASSERT(res && "UI icon missing!");
   return res;
+}
+
+bool MapsApp::openURL(const char* url)
+{
+#if PLATFORM_WIN
+  HINSTANCE result = ShellExecute(0, 0, PLATFORM_STR(url), 0, 0, SW_SHOWNORMAL);
+  // ShellExecute returns a value greater than 32 if successful
+  return (int)result > 32;
+#elif PLATFORM_ANDROID
+  AndroidHelper::openUrl(url);
+  return true;
+#elif PLATFORM_IOS
+  if(!strchr(url, ':'))
+    iosOpenUrl((std::string("http://") + url).c_str());
+  else
+    iosOpenUrl(url);
+  return true;
+#elif PLATFORM_OSX
+  return strchr(url, ':') ? macosOpenUrl(url) : macosOpenUrl((std::string("http://") + url).c_str());
+#elif IS_DEBUG
+  PLATFORM_LOG("openURL: %s\n", url);
+  return true;
+#else  // Linux
+  system(fstring("xdg-open '%s' || x-www-browser '%s' &", url, url).c_str());
+  return true;
+#endif
 }
 
 int main(int argc, char* argv[])
@@ -1034,10 +1061,14 @@ int main(int argc, char* argv[])
     return new std::ifstream(PLATFORM_STR(name), std::ios_base::in | std::ios_base::binary);
   };
 
-  loadIconRes();
+  //loadIconRes();
   // we could just use SvgGui::useFile directly; presumably, ui-icons will eventually be embedded in exe
   uiIconStr = readFile("/home/mwhite/maps/tangram-es/app/res/ui-icons.svg");
   addStringResources({{"ui-icons.svg", uiIconStr.c_str()}});
+  // set icons for combo, spin boxes ... obviously need a better soln
+  SvgGui::useFile("icons/chevron_down.svg", std::unique_ptr<SvgDocument>(static_cast<SvgDocument*>(MapsApp::uiIcon("chevron-down"))->clone()));
+  SvgGui::useFile("icons/chevron_right.svg", std::unique_ptr<SvgDocument>(static_cast<SvgDocument*>(MapsApp::uiIcon("chevron-right"))->clone()));
+  SvgGui::useFile("icons/chevron_left.svg", std::unique_ptr<SvgDocument>(static_cast<SvgDocument*>(MapsApp::uiIcon("chevron-left"))->clone()));
 
   std::string styleCSS = defaultStyleCSS;
   styleCSS += moreCSS;

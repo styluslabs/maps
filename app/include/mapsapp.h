@@ -64,7 +64,7 @@ public:
   MarkerID locMarker = 0;
   rapidjson::Document pickResultProps;
   LngLat pickResultCoord = {NAN, NAN};
-  std::string pickLabelStr;
+  //std::string pickLabelStr;
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
 
@@ -114,6 +114,7 @@ public:
 
   enum EventTypes { PANEL_CLOSED=0xE001 };
 
+  static bool openURL(const char* url);
   static SvgNode* uiIcon(const char* id);
   static void runOnMainThread(std::function<void()> fn);
   static void messageBox(std::string title, std::string message,

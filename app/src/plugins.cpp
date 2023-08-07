@@ -243,6 +243,7 @@ static int addPlaceInfo(duk_context* ctx)
   const char* title = duk_require_string(ctx, 1);
   const char* value = duk_require_string(ctx, 2);
   PluginManager::inst->app->addPlaceInfo(icon, title, value);
+  return 0;
 }
 
 void PluginManager::createFns(duk_context* ctx)
