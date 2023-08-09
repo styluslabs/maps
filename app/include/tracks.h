@@ -12,7 +12,7 @@ class SelectDialog;
 class MapsTracks : public MapsComponent {
 public:
   using MapsComponent::MapsComponent;
-  Widget* createPanel();
+  Button* createPanel();
   void tapEvent(LngLat location);
   void updateLocation(const Location& loc);
 

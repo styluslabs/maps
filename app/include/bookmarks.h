@@ -6,6 +6,7 @@
 class SvgNode;
 class SvgDocument;
 class Widget;
+class Button;
 class DragDropList;
 
 class MapsBookmarks : public MapsComponent
@@ -19,7 +20,7 @@ public:
   int getListId(const char* listname, bool create = false);
   void onMapChange();
 
-  Widget* createPanel();
+  Button* createPanel();
   Widget* getPlaceInfoSection(const std::string& osm_id, LngLat pos);
 
   //std::vector<MarkerID> bkmkMarkers;

@@ -50,6 +50,18 @@ public:
   ScrollWidget* scrollWidget = NULL;
 };
 
+class Menubar : public Toolbar
+{
+public:
+  Menubar(SvgNode* n);
+  void addButton(Button* btn);
+  Button* addAction(Action* action);
+
+  bool autoClose = false;
+};
+
+Menubar* createMenubar();
+
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 

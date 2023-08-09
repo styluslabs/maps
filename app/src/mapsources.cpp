@@ -327,6 +327,8 @@ void MapsSources::populateSources()
     Button* item = new Button(sourceListProto->clone());
     item->node->setAttr("__sourcekey", key.c_str());
     Widget* container = item->selectFirst(".child-container");
+    TextLabel* titleText = new TextLabel(container->containerNode()->selectFirst(".title-text"));
+    titleText->setText(src.second["title"].Scalar().c_str());
     item->onClicked = [this, key](){ if(key != currSource) rebuildSource(key); };
 
     Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
@@ -343,7 +345,6 @@ void MapsSources::populateSources()
 
     container->addWidget(editBtn);
     container->addWidget(overflowBtn);
-    item->selectFirst(".title-text")->setText(src.second["title"].Scalar().c_str());
     //item->selectFirst(".detail-text")->setText(track->detail.c_str());
     sourcesContent->addWidget(item);
   }
@@ -432,7 +433,7 @@ void MapsSources::populateSourceEdit(std::string key)
     populateSceneVars();
 }
 
-Widget* MapsSources::createPanel()
+Button* MapsSources::createPanel()
 {
   static const char* sourceListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
@@ -441,13 +442,10 @@ Widget* MapsSources::createPanel()
         <g class="image-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#layers"/>
         </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="detail-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        <g layout="box" box-anchor="fill">
+          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
+          <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
         </g>
-
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
-
       </g>
     </g>
   )";
@@ -565,7 +563,7 @@ Widget* MapsSources::createPanel()
 
   // main toolbar button
   Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
-  sourcesMenu->autoClose = true;
+  //sourcesMenu->autoClose = true;
   sourcesMenu->addHandler([this, sourcesMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(sourcesMenu->selectFirst(".child-container"));

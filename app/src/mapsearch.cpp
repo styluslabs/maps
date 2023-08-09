@@ -470,7 +470,7 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
   }
 }
 
-Widget* MapsSearch::createPanel()
+Button* MapsSearch::createPanel()
 {
   static const char* searchBoxSVG = R"#(
     <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
@@ -606,7 +606,7 @@ Widget* MapsSearch::createPanel()
 
   // main toolbar button
   Menu* searchMenu = createMenu(Menu::VERT_LEFT);
-  searchMenu->autoClose = true;
+  //searchMenu->autoClose = true;
   searchMenu->addHandler([this, searchMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(searchMenu->selectFirst(".child-container"));
@@ -628,7 +628,7 @@ Widget* MapsSearch::createPanel()
   searchBtn->setMenu(searchMenu);
   searchBtn->onClicked = [this](){
     app->showPanel(searchPanel);
-    //app->gui->setFocused(queryText);
+    app->gui->setFocused(queryText);
     // show history
     searchText("", MapsSearch::EDITING);
   };

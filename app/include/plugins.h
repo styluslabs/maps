@@ -5,6 +5,7 @@
 #include "duktape/duktape.h"
 
 class Widget;
+class Button;
 
 struct PluginFn
 {
@@ -24,7 +25,7 @@ public:
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
   void jsPlaceInfo(int fnIdx, std::string id);
 
-  Widget* createPanel();
+  Button* createPanel();
 
   duk_context* jsContext;
   //std::mutex jsMutex;

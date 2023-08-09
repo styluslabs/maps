@@ -53,7 +53,7 @@ public:
   void updateMapResults(LngLat lngLat00, LngLat lngLat11);
   void resultsUpdated();
 
-  Widget* createPanel();
+  Button* createPanel();
 
 private:
   std::atomic_int tileCount;

@@ -290,7 +290,7 @@ void PluginManager::createFns(duk_context* ctx)
 
 #include "mapsources.h"
 
-Widget* PluginManager::createPanel()
+Button* PluginManager::createPanel()
 {
   Widget* pluginContent = createColumn();
   pluginContent->node->setAttribute("box-anchor", "hfill");

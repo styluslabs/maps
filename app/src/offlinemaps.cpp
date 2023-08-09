@@ -347,7 +347,8 @@ void MapsOffline::populateOffline()
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     titlenode->addText(titlestr.c_str());
     SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
-    detailnode->addText(sourcestr.c_str());
+    auto srcinfo = app->mapsSources->mapSources[sourcestr];
+    detailnode->addText(srcinfo ? srcinfo["title"].Scalar().c_str() : sourcestr.c_str());
 
     offlineContent->addWidget(item);
   });

@@ -323,3 +323,89 @@ void DragDropList::addItem(KeyType key, Widget* item)
   });
 }
 
+// copied from syncscribble/touchwidgets.cpp
+
+
+// most modern applications (at least on mobile) won't have any menubars, so complicating Button class to
+//  support menubar doesn't seem right
+Menubar::Menubar(SvgNode* n) : Toolbar(n)
+{
+  // same logic as Menu except we use `this` instead of `parent()` - any way to deduplicate?
+  addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SvgGui::OUTSIDE_PRESSED) {
+      // close unless button up over parent (assumed to include opening button)
+      if(!isDescendent(static_cast<Widget*>(event->user.data2), this))
+        gui->closeMenus();  // close entire menu tree
+      return true;
+    }
+    if(event->type == SvgGui::OUTSIDE_MODAL) {
+      gui->closeMenus();  // close entire menu tree
+      // swallow event (i.e. return true) if click was within menu's parent to prevent reopening
+      return isDescendent(static_cast<Widget*>(event->user.data2), this);
+    }
+    return false;
+  });
+
+  isPressedGroupContainer = true;
+}
+
+void Menubar::addButton(Button* btn)
+{
+  // this will run before Button's handler
+  btn->addHandler([btn, this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SvgGui::ENTER) {
+      // if our menu is open, enter event can't close it, and we have class=pressed, so don't add hovered
+      if(!btn->mMenu || !btn->mMenu->isVisible()) {
+        bool isPressed = gui->pressedWidget != NULL;
+        // if a menu is open, we won't be sent enter event unless we are in same pressed group container
+        bool sameMenuTree = !gui->menuStack.empty();
+        gui->closeMenus(btn);  // close sibling menu if any
+        // note that we only receive pressed enter event if button went down in our group
+        if(btn->mMenu && (isPressed || sameMenuTree)) {
+          btn->node->addClass("pressed");
+          gui->showMenu(btn->mMenu);
+        }
+        else
+          btn->node->addClass(isPressed ? "pressed" : "hovered");
+      }
+      return true;
+    }
+    else if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
+      // close menu bar menu on 2nd click
+      if(btn->mMenu && !gui->menuStack.empty() && btn->mMenu == gui->menuStack.front()) {
+        btn->node->removeClass("hovered");
+        gui->closeMenus();
+        return true;  // I don't think it makes sense to send onPressed when we are clearing pressed state!
+      }
+    }
+    else if(event->type == SDL_FINGERUP && (!btn->mMenu || autoClose)) {
+      gui->closeMenus();
+      return false;  // continue to button handler
+    }
+    else if(isLongPressOrRightClick(event) && btn->mMenu) {
+      if(!btn->mMenu->isVisible()) {
+        btn->node->addClass("pressed");
+        gui->showMenu(btn->mMenu);
+      }
+      gui->pressedWidget = NULL;  //setPressed(btn->mMenu) doesn't work as menubar is pressed group container
+      return true;
+    }
+    return false;
+  });
+
+  addWidget(btn);
+}
+
+// would be nice to deduplicate this cut and paste from Toolbar::addAction() (w/o using virtual!)
+Button* Menubar::addAction(Action* action)
+{
+  Button* item = createToolbutton(action->icon(), action->title.c_str());
+  action->addButton(item);
+  addButton(item);
+  // handler added in addButton() stops propagation of ENTER event, so tooltip handler must preceed it
+  setupTooltip(item, action->tooltip.empty() ? action->title.c_str() : action->tooltip.c_str());
+  return item;
+}
+
+Menubar* createMenubar() { return new Menubar(widgetNode("#toolbar")); }
+//Menubar* createVertMenubar() { return new Menubar(widgetNode("#vert-toolbar")); }

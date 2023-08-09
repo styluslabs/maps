@@ -11,6 +11,7 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
+#include "usvg/svgpainter.h"
 #include "mapwidgets.h"
 
 // bookmarks (saved places)
@@ -113,8 +114,8 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
       dialog->finish(Dialog::ACCEPTED);
       callback(rowid, listname);
     };
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(listname.c_str());
+    TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
+    titleText->setText(listname.c_str());
     content->addWidget(item);
   });
 
@@ -225,11 +226,10 @@ void MapsBookmarks::populateLists(bool archived)
     // TODO: overflow menu option to generate track from bookmark list - just passes coords to MapsTracks
     overflowBtn->setMenu(overflowMenu);
 
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(list.c_str());
-
-    SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
-    detailnode->addText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
+    TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
+    titleText->setText(list.c_str());
+    TextLabel* detailText = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
+    detailText->setText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
 
     if(archived)
       archivedContent->addWidget(item);
@@ -247,17 +247,17 @@ void MapsBookmarks::populateLists(bool archived)
 
     Button* item = new Button(bkmkListProto->clone());
     item->onClicked = [this](){ populateLists(true); };
+    static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(MapsApp::uiIcon("archive"));
 
     Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
     showBtn->setVisible(false);
     Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
     overflowBtn->setVisible(false);
 
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText("Archived");
-
-    SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
-    detailnode->addText(narchived == 1 ? "1 list" : fstring("%d lists", narchived).c_str());
+    TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
+    titleText->setText("Archived");
+    TextLabel* detailText = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
+    detailText->setText(narchived == 1 ? "1 list" : fstring("%d lists", narchived).c_str());
 
     listsContent->addItem("archived", item);  //content->addWidget(item);
     listsContent->setOrder(order);
@@ -345,10 +345,10 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
       });
       overflowBtn->setMenu(overflowMenu);
 
-      SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-      titlenode->addText(namestr.c_str());
-      SvgText* notenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".note-text"));
-      notenode->addText(notestr);
+      TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
+      titleText->setText(namestr.c_str());
+      TextLabel* noteText = new TextLabel(item->containerNode()->selectFirst(".note-text"));
+      noteText->setText(notestr);
       item->setUserData(LngLat(lng, lat));
       bkmkContent->addWidget(item);
     }
@@ -380,6 +380,7 @@ void MapsBookmarks::onMapChange()
 Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos)
 {
   Widget* content = createColumn();
+  content->node->setAttribute("box-anchor", "hfill");
   // attempt lookup w/ osm_id if passed
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
   // - if this gives us too many false positives, we could add "Nearby bookmarks" title to section
@@ -429,9 +430,11 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   }, [&](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, listid); });
 
   Widget* section = createColumn();
+  section->node->setAttribute("box-anchor", "hfill");
   TextBox* noteText = new TextBox(loadSVGFragment(
       R"(<text class="note-text weak" box-anchor="left" margin="0 10" font-size="12"></text>)"));
   noteText->setText(notestr.c_str());
+  noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
 
   Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Bookmark...", true);
   // bookmark editing
@@ -514,6 +517,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   };
 
   toolRow->addWidget(chooseListBtn);
+  toolRow->addWidget(createStretch());
   toolRow->addWidget(removeBtn);
   toolRow->addWidget(addNoteBtn);
 
@@ -542,21 +546,19 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   return section;
 }
 
-Widget* MapsBookmarks::createPanel()
+Button* MapsBookmarks::createPanel()
 {
   static const char* bkmkListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="toolbutton drag-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
+          <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
         </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="detail-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        <g layout="box" box-anchor="fill">
+          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
+          <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
         </g>
-
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
 
         <g class="toolbutton visibility-btn" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#eye"/>
@@ -576,10 +578,10 @@ Widget* MapsBookmarks::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
+          <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
         </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
+        <g layout="box" box-anchor="fill">
+          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
         </g>
       </g>
     </g>
@@ -591,14 +593,12 @@ Widget* MapsBookmarks::createPanel()
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
+          <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
         </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="note-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
+        <g layout="box" box-anchor="fill">
+          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
+          <text class="note-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
         </g>
-
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
 
         <g class="toolbutton overflow-btn" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#overflow"/>
@@ -771,7 +771,7 @@ Widget* MapsBookmarks::createPanel()
     populateBkmks(node.as<int>(-1), false);
 
   Menu* bkmkMenu = createMenu(Menu::VERT_LEFT);
-  bkmkMenu->autoClose = true;
+  //bkmkMenu->autoClose = true;
   bkmkMenu->addHandler([this, bkmkMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(bkmkMenu->selectFirst(".child-container"));

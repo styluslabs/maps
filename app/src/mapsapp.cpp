@@ -94,6 +94,20 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(distnode)
     distnode->addText(fstring("%.1f km", distkm).c_str());
 
+  // get place type
+  auto jit = props.FindMember("tourism");
+  if(jit == props.MemberEnd()) jit = props.FindMember("leisure");
+  if(jit == props.MemberEnd()) jit = props.FindMember("amenity");
+  if(jit == props.MemberEnd()) jit = props.FindMember("historic");
+  if(jit == props.MemberEnd()) jit = props.FindMember("shop");
+  if(jit != props.MemberEnd()) {
+    std::string val = jit->value.GetString();
+    val[0] = std::toupper(val[0]);
+    SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
+    if(placenode)
+      placenode->addText(val.c_str());
+  }
+
   Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
   if(bkmkSection)
     item->selectFirst(".bkmk-section")->addWidget(bkmkSection);
@@ -132,8 +146,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         <g class="image-container" margin="2 5">
           <use class="icon" width="36" height="36" xlink:href=""/>
         </g>
-        <g class="value-container" box-anchor="left" layout="box" margin="0 10"></g>
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
+        <g class="value-container" box-anchor="hfill" layout="box" margin="0 10"></g>
       </g>
     </g>
   )";
@@ -154,11 +167,19 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     }
     SvgContainerNode* g = node->asContainerNode();
     if(g) {
+      g->setAttribute("box-anchor", "hfill");
       for(SvgNode* a : g->select("a")) {
         Button* b = new Button(a);
         b->onClicked = [b](){
           MapsApp::openURL(b->node->getStringAttr("href", b->node->getStringAttr("xlink:href")));
         };
+      }
+      SvgNode* textNode = g->selectFirst("text");
+      if(textNode) {
+        TextLabel* textbox = new TextLabel(textNode);
+        // or should we require plugin set box-anchor?
+        if(!strchr(textbox->text().c_str(), '\n'))
+          textNode->setAttribute("box-anchor", "hfill");  // automatic ellision
       }
     }
     content->containerNode()->addChild(node);
@@ -166,7 +187,8 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
   }
 
   const char* split = strchr(value, '\r');
-  content->addWidget(new TextBox(createTextNode(split ? std::string(value, split-value).c_str() : value)));
+  TextLabel* textbox = new TextLabel(createTextNode(split ? std::string(value, split-value).c_str() : value));
+  content->addWidget(textbox);
   if(split) {
     // collapsible section
     Widget* row2 = new Widget(rowProto->clone());
@@ -187,6 +209,8 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     row2->setVisible(false);
     infoContent->selectFirst(".info-section")->addWidget(row2);
   }
+  else if(!strchr(value, '\n'))
+    textbox->node->setAttribute("box-anchor", "hfill");  // automatic ellision
 }
 
 
@@ -632,12 +656,12 @@ Window* MapsApp::createGUI()
         </g>
         <g layout="flex" flex-direction="column" box-anchor="hfill">
           <text class="title-text" margin="0 10"></text>
-          <text class="addr-text weak" margin="0 10" font-size="12"></text>
+          <text class="place-text weak" margin="0 10" font-size="12"></text>
           <text class="lnglat-text weak" margin="0 10" font-size="12"></text>
           <text class="dist-text weak" margin="0 10" font-size="12"></text>
         </g>
       </g>
-      <g class="bkmk-section" layout="box"></g>
+      <g class="bkmk-section" layout="box" box-anchor="hfill"></g>
       <g class="info-section" layout="flex" flex-direction="column" box-anchor="hfill"></g>
     </g>
   )#";
@@ -669,18 +693,19 @@ Window* MapsApp::createGUI()
   infoPanel = createMapPanel(infoHeader, infoContent);
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
-  Toolbar* mainToolbar = createToolbar();
-  Widget* tracksBtn = mapsTracks->createPanel();
-  Widget* searchBtn = mapsSearch->createPanel();
-  Widget* sourcesBtn = mapsSources->createPanel();
-  Widget* bkmkBtn = mapsBookmarks->createPanel();
-  Widget* pluginBtn = pluginManager->createPanel();
+  Menubar* mainToolbar = createMenubar();  //createToolbar();
+  mainToolbar->autoClose = true;
+  Button* tracksBtn = mapsTracks->createPanel();
+  Button* searchBtn = mapsSearch->createPanel();
+  Button* sourcesBtn = mapsSources->createPanel();
+  Button* bkmkBtn = mapsBookmarks->createPanel();
+  Button* pluginBtn = pluginManager->createPanel();
 
-  mainToolbar->addWidget(searchBtn);
-  mainToolbar->addWidget(bkmkBtn);
-  mainToolbar->addWidget(tracksBtn);
-  mainToolbar->addWidget(sourcesBtn);
-  mainToolbar->addWidget(pluginBtn);
+  mainToolbar->addButton(searchBtn);
+  mainToolbar->addButton(bkmkBtn);
+  mainToolbar->addButton(tracksBtn);
+  mainToolbar->addButton(sourcesBtn);
+  mainToolbar->addButton(pluginBtn);
 
   // main toolbar at bottom is better than top for auto-close menus (so menu isn't obstructed by finger)
   mainTbContainer = win->selectFirst("#main-tb-container");
@@ -1065,14 +1090,21 @@ int main(int argc, char* argv[])
   // we could just use SvgGui::useFile directly; presumably, ui-icons will eventually be embedded in exe
   uiIconStr = readFile("/home/mwhite/maps/tangram-es/app/res/ui-icons.svg");
   addStringResources({{"ui-icons.svg", uiIconStr.c_str()}});
-  // set icons for combo, spin boxes ... obviously need a better soln
-  SvgGui::useFile("icons/chevron_down.svg", std::unique_ptr<SvgDocument>(static_cast<SvgDocument*>(MapsApp::uiIcon("chevron-down"))->clone()));
-  SvgGui::useFile("icons/chevron_right.svg", std::unique_ptr<SvgDocument>(static_cast<SvgDocument*>(MapsApp::uiIcon("chevron-right"))->clone()));
-  SvgGui::useFile("icons/chevron_left.svg", std::unique_ptr<SvgDocument>(static_cast<SvgDocument*>(MapsApp::uiIcon("chevron-left"))->clone()));
 
-  std::string styleCSS = defaultStyleCSS;
-  styleCSS += moreCSS;
-  setGuiResources(defaultWidgetSVG, styleCSS.c_str());
+  SvgCssStylesheet* styleSheet = new SvgCssStylesheet;
+  styleSheet->parse_stylesheet(defaultStyleCSS);
+  styleSheet->parse_stylesheet(moreCSS);
+  styleSheet->sort_rules();
+  SvgDocument* widgetDoc = SvgParser().parseString(defaultWidgetSVG);
+
+  widgetDoc->removeChild(widgetDoc->selectFirst("defs"));
+  SvgDefs* defs = new SvgDefs;
+  defs->addChild(MapsApp::uiIcon("chevron-down")->clone());
+  defs->addChild(MapsApp::uiIcon("chevron-left")->clone());
+  defs->addChild(MapsApp::uiIcon("chevron-right")->clone());
+  widgetDoc->addChild(defs, widgetDoc->firstChild());
+
+  setGuiResources(widgetDoc, styleSheet);
   SvgGui* gui = new SvgGui();
   MapsApp::gui = gui;  // needed by glfwSDLEvent()
   // scaling

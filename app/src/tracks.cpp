@@ -603,6 +603,7 @@ void MapsTracks::populateTracks(bool archived)
   if(!archived) {
     Button* item = new Button(trackListProto->clone());
     item->onClicked = [this](){ populateTracks(true); };
+    static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(MapsApp::uiIcon("archive"));
     item->selectFirst(".title-text")->setText("Archived Tracks");
     content->addWidget(item);
   }
@@ -786,14 +787,14 @@ TrackLoc MapsTracks::interpTrack(const std::vector<TrackLoc>& locs, double s, si
   return trackPlot->plotVsDist ? interpTrackDist(locs, s, idxout) : interpTrackTime(locs, s, idxout);
 }
 
-Widget* MapsTracks::createPanel()
+Button* MapsTracks::createPanel()
 {
   static const char* trackListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#track"/>
+          <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#track"/>
         </g>
         <g layout="box" box-anchor="vfill">
           <text class="title-text" box-anchor="left" margin="0 10"></text>

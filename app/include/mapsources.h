@@ -11,6 +11,7 @@ class SvgNode;
 
 class MapsSources : public MapsComponent
 {
+  friend class MapsOffline;
 public:
   MapsSources(MapsApp* _app);
   //void showGUI();
@@ -20,7 +21,7 @@ public:
   void deleteOfflineMap(int mapid);
   int64_t shrinkCache(int64_t maxbytes);
   void onMapChange();
-  Widget* createPanel();
+  Button* createPanel();
 
   std::string currSource;
 
