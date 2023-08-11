@@ -81,9 +81,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   Widget* item = new Widget(placeInfoProto->clone());
 
-  SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-  if(titlenode)
-    titlenode->addText(props.IsObject() && props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
+  //SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
+  SvgText* titlenode = static_cast<SvgText*>(infoPanel->containerNode()->selectFirst(".panel-title"));
+  titlenode->setText(props.IsObject() && props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
+  titlenode->setText(SvgPainter::breakText(titlenode, 250).c_str());
 
   SvgText* coordnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".lnglat-text"));
   if(coordnode)
@@ -481,6 +482,14 @@ void MapsApp::updateLocation(const Location& _loc)
   mapsTracks->updateLocation(currLocation);
 }
 
+void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
+{
+  // only show if no fix yet
+  gpsStatusBtn->setVisible(!satsUsed);
+  if(!satsUsed)
+    gpsStatusBtn->setText(fstring("%d/%d", satsUsed, satsVisible).c_str());
+}
+
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
 {
   orientation = azimuth;
@@ -651,18 +660,25 @@ Window* MapsApp::createGUI()
     <g layout="flex" flex-direction="column" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
-        </g>
-        <g layout="flex" flex-direction="column" box-anchor="hfill">
-          <text class="title-text" margin="0 10"></text>
-          <text class="place-text weak" margin="0 10" font-size="12"></text>
-          <text class="lnglat-text weak" margin="0 10" font-size="12"></text>
-          <text class="dist-text weak" margin="0 10" font-size="12"></text>
-        </g>
+        <text class="place-text" margin="0 10" font-size="14"></text>
+        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
+        <!-- text class="lnglat-text weak" margin="0 10" font-size="12"></text -->
+        <text class="dist-text" margin="0 10" font-size="14"></text>
       </g>
       <g class="bkmk-section" layout="box" box-anchor="hfill"></g>
       <g class="info-section" layout="flex" flex-direction="column" box-anchor="hfill"></g>
+    </g>
+  )#";
+
+  static const char* gpsStatusSVG = R"#(
+    <g class="gps-status-button" layout="box" box-anchor="hfill">
+      <rect class="background" box-anchor="hfill" width="36" height="22"/>
+      <g layout="flex" flex-direction="row" box-anchor="fill">
+        <g class="image-container" margin="1 2">
+          <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#satellite"/>
+        </g>
+        <text class="title" margin="0 4"></text>
+      </g>
     </g>
   )#";
 
@@ -689,7 +705,7 @@ Window* MapsApp::createGUI()
   mapsWidget->isFocusable = true;
 
   infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));  //createColumn(); //createListContainer();
-  auto infoHeader = createPanelHeader(MapsApp::uiIcon("pin"), "");
+  auto infoHeader = createPanelHeader(NULL, "");  //MapsApp::uiIcon("pin"), "");
   infoPanel = createMapPanel(infoHeader, infoContent);
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
@@ -730,6 +746,11 @@ Window* MapsApp::createGUI()
   recenterBtn->onClicked = [this](){
     map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
   };
+
+  gpsStatusBtn = new Widget(loadSVGFragment(gpsStatusSVG));
+  gpsStatusBtn->setVisible(false);
+
+  floatToolbar->addWidget(gpsStatusBtn);
   floatToolbar->addWidget(reorientBtn);
   floatToolbar->addWidget(recenterBtn);
   floatToolbar->node->setAttribute("box-anchor", "bottom right");
@@ -762,6 +783,7 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
     panelSplitter->setVisible(true);
     mainTbContainer->setVisible(false);
   }
+  panel->sdlUserEvent(gui, PANEL_OPENED);
 }
 
 // this should be a static method or standalone fn!
@@ -789,9 +811,11 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
     }
   };
   toolbar->addWidget(backBtn);
-  Button* titleBtn = createToolbutton(icon, title, true);
-  titleBtn->node->addClass("panel-title");
-  toolbar->addWidget(titleBtn);
+  Widget* titleWidget = new Widget(widgetNode("#panel-header-title"));
+  if(icon)
+    static_cast<SvgUse*>(titleWidget->containerNode()->selectFirst(".icon"))->setTarget(icon);
+  static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
+  toolbar->addWidget(titleWidget);
 
   Widget* stretch = createStretch();
   if(panelSplitter) {
@@ -808,7 +832,7 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   return toolbar;
 }
 
-Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title)
+Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widget* panel)
 {
   static const char* protoSVG = R"#(
     <g id="toolbutton" class="toolbutton" layout="box">
@@ -824,11 +848,34 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title)
   if(!proto)
     proto.reset(loadSVGFragment(protoSVG));
 
-  Button* widget = new Button(proto->clone());
-  widget->setIcon(icon);
-  widget->setTitle(title);
-  setupTooltip(widget, title);
-  return widget;
+  Button* btn = new Button(proto->clone());
+  btn->setIcon(icon);
+  btn->setTitle(title);
+  setupTooltip(btn, title);
+
+  panel->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SvgGui::VISIBLE)
+      btn->setChecked(true);
+    else if(event->type == MapsApp::PANEL_CLOSED)
+      btn->setChecked(false);
+    return false;  // continue to next handler
+  });
+
+  btn->onClicked = [=](){
+    if(btn->isChecked()) {
+      if(!panelContainer->isVisible()) {
+        panelContainer->setVisible(true);
+        if(panelSplitter) {
+          panelSplitter->setVisible(true);
+          mainTbContainer->setVisible(false);
+        }
+      }
+    }
+    else
+      showPanel(panel);
+  };
+
+  return btn;
 }
 
 Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent, bool canMinimize)
@@ -840,7 +887,11 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
       // options:
       // 1. hide container and splitter and show a floating restore btn
       // 2. use setSplitSize() to shrink panel to toolbar height
-      //minimizePanel();
+      panelContainer->setVisible(false);
+      if(panelSplitter) {
+        panelSplitter->setVisible(false);
+        mainTbContainer->setVisible(true);
+      }
     };
     header->addWidget(minimizeBtn);
   }
@@ -945,6 +996,24 @@ static std::string uiIconStr;
 
 static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
+)#";
+
+static const char* moreWidgetSVG = R"#(
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g id="listitem-icon" class="image-container" margin="2 5">
+    <use class="listitem-icon icon" width="36" height="36" xlink:href=""/>
+  </g>
+
+  <g id="listitem-text-2" layout="box" box-anchor="fill">
+    <text class="title-text" box-anchor="hfill" margin="0 10"></text>
+    <text class="note-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
+  </g>
+
+  <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row">
+    <use class="panel-icon icon" width="36" height="36" xlink:href="" />
+    <text class="panel-title" margin="0 9"></text>
+  </g>
+</svg>
 )#";
 
 void glfwSDLEvent(SDL_Event* event)
@@ -1096,6 +1165,11 @@ int main(int argc, char* argv[])
   styleSheet->parse_stylesheet(moreCSS);
   styleSheet->sort_rules();
   SvgDocument* widgetDoc = SvgParser().parseString(defaultWidgetSVG);
+
+  std::unique_ptr<SvgDocument> moreWidgets(SvgParser().parseString(moreWidgetSVG));
+  for(SvgNode* node : moreWidgets->children())
+    widgetDoc->addChild(node);
+  moreWidgets->children().clear();
 
   widgetDoc->removeChild(widgetDoc->selectFirst("defs"));
   SvgDefs* defs = new SvgDefs;

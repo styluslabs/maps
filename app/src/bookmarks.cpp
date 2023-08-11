@@ -143,7 +143,6 @@ void MapsBookmarks::populateLists(bool archived)
   if(archived) archiveDirty = false; else listsDirty = false;
 
   std::vector<std::string> order;
-  app->showPanel(archived ? archivedPanel : listsPanel, archived);
   //Widget* content = archived ? archivedContent : listsContent;
   if(archived)
     app->gui->deleteContents(archivedContent, ".listitem");
@@ -246,7 +245,7 @@ void MapsBookmarks::populateLists(bool archived)
     });
 
     Button* item = new Button(bkmkListProto->clone());
-    item->onClicked = [this](){ populateLists(true); };
+    item->onClicked = [this](){ app->showPanel(archivedPanel, true); populateLists(true); };
     static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(MapsApp::uiIcon("archive"));
 
     Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
@@ -608,20 +607,6 @@ Button* MapsBookmarks::createPanel()
   )";
   placeListProto.reset(loadSVGFragment(placeListProtoSVG));
 
-  /*static const char* placeInfoSectionProtoSVG = R"(
-    <g margin="0 5" box-anchor="hfill" layout="flex" flex-direction="column">
-      <g class="pushbutton addbkmk-btn" margin="2 5">
-        <text>Add Bookmark</text>
-      </g>
-      <g class="bkmk-display-container" layout="flex" flex-direction="row" box-anchor="left">
-
-      </g>
-      <g class="bkmk-edit-container" box-anchor="hfill" layout="box"></g>
-      <text class="note-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
-    </g>
-  )";
-  placeInfoSectionProto.reset(loadSVGFragment(placeInfoSectionProtoSVG));*/
-
   static const char* chooseListProtoSVG = R"(
     <svg id="dialog" class="window dialog" layout="box">
       <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
@@ -756,7 +741,7 @@ Button* MapsBookmarks::createPanel()
     else if(event->type == MapsApp::PANEL_CLOSED) {
       restoreBookmarks();
       activeListId = -1;
-      return true;
+      //return true;
     }
     return false;
   });
@@ -790,12 +775,8 @@ Button* MapsBookmarks::createPanel()
     return false;
   });
 
-  Button* bkmkBtn = app->createPanelButton(MapsApp::uiIcon("pin"), "Places");
+  Button* bkmkBtn = app->createPanelButton(MapsApp::uiIcon("pin"), "Places", listsPanel);
   bkmkBtn->setMenu(bkmkMenu);
-  bkmkBtn->onClicked = [this](){
-    populateLists(false);
-  };
-
   return bkmkBtn;
 }
 

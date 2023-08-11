@@ -420,3 +420,8 @@ JNI_FN(updateOrientation)(jfloat azimuth, jfloat pitch, jfloat roll)
 {
   app->updateOrientation(azimuth, pitch, roll);
 }
+
+JNI_FN(updateGpsStatus)(int satsVisible, int satsUsed)
+{
+  app->updateGpsStatus(satsVisible, satsUsed);
+}

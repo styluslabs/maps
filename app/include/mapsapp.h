@@ -42,6 +42,7 @@ public:
   void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void updateLocation(const Location& _loc);
   void updateOrientation(float azimuth, float pitch, float roll);
+  void updateGpsStatus(int satsVisible, int satsUsed);
 
   void tapEvent(float x, float y);
   void doubleTapEvent(float x, float y);
@@ -94,7 +95,7 @@ public:
   Window* createGUI();
   void showPanel(Widget* panel, bool isSubPanel = false);
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
-  Button* createPanelButton(const SvgNode* icon, const char* title);
+  Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel);
   Widget* createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
   void addPlaceInfo(const char* icon, const char* title, const char* value);
 
@@ -106,13 +107,14 @@ public:
   Widget* infoContent = NULL;
   MapsWidget* mapsWidget = NULL;
   Button* reorientBtn = NULL;
+  Widget* gpsStatusBtn = NULL;
   std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
 
   int64_t storageTotal = 0;
   int64_t storageOffline = 0;
 
-  enum EventTypes { PANEL_CLOSED=0xE001 };
+  enum EventTypes { PANEL_CLOSED=0xE001, PANEL_OPENED };
 
   static bool openURL(const char* url);
   static SvgNode* uiIcon(const char* id);

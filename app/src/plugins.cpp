@@ -303,8 +303,7 @@ Button* PluginManager::createPanel()
 
   runBtn->onClicked = [=](){
     resultText->setText( evalJS(jsEdit->text().c_str()).c_str() );
-    std::string bmsg = SvgPainter::breakText(resultTextNode, 300);
-    resultText->setText( bmsg.c_str() );
+    resultText->setText( SvgPainter::breakText(resultTextNode, 300).c_str() );
   };
 
   pluginContent->addWidget(new TextBox(createTextNode("Javascript command:")));
@@ -317,9 +316,6 @@ Button* PluginManager::createPanel()
   //toolbar->addWidget(maxZoomSpin);
   Widget* pluginPanel = app->createMapPanel(toolbar, NULL, pluginContent);
 
-  Button* pluginBtn = createToolbutton(MapsApp::uiIcon("textbox"), "Offline Maps");
-  pluginBtn->onClicked = [=](){
-    app->showPanel(pluginPanel, true);
-  };
+  Button* pluginBtn = app->createPanelButton(MapsApp::uiIcon("textbox"), "Plugin console", pluginPanel);
   return pluginBtn;
 }

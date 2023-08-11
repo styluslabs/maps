@@ -576,11 +576,7 @@ Button* MapsSources::createPanel()
     return false;
   });
 
-  Button* sourcesBtn = app->createPanelButton(MapsApp::uiIcon("layers"), "Sources");
+  Button* sourcesBtn = app->createPanelButton(MapsApp::uiIcon("layers"), "Sources", sourcesPanel);
   sourcesBtn->setMenu(sourcesMenu);
-  sourcesBtn->onClicked = [this](){
-    app->showPanel(sourcesPanel);
-  };
-
   return sourcesBtn;
 }

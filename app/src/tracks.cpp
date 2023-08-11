@@ -493,6 +493,20 @@ bool MapsTracks::saveGPX(Track* track)
   return doc.save_file(track->gpxFile.c_str(), "  ");
 }
 
+void MapsTracks::setTrackVisible(Track* track, bool visible)
+{
+  track->visible = visible;
+  if(visible)
+    app->config["tracks"]["visible"].push_back(track->rowid);
+  else
+    yamlRemove(app->config["tracks"]["visible"], track->rowid);
+  // assume recordedTrack is dirty (should we introduce a Track.dirty flag?)
+  if(!visible || (track->marker > 0 && track != &recordedTrack))
+    app->map->markerSetVisible(track->marker, track->visible);
+  else
+    showTrack(track);  //, "layers.track.draw.track");
+}
+
 Widget* MapsTracks::createTrackEntry(Track* track)
 {
   Button* item = new Button(trackListProto->clone());
@@ -501,17 +515,8 @@ Widget* MapsTracks::createTrackEntry(Track* track)
 
   Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
   showBtn->onClicked = [=](){
-    track->visible = !showBtn->checked();
+    setTrackVisible(track, !showBtn->checked());
     showBtn->setChecked(track->visible);
-    if(track->visible)
-      app->config["tracks"]["visible"].push_back(track->rowid);
-    else
-      yamlRemove(app->config["tracks"]["visible"], track->rowid);
-    // assume recordedTrack is dirty (should we introduce a Track.dirty flag?)
-    if(!track->visible || (track->marker > 0 && track != &recordedTrack))
-      app->map->markerSetVisible(track->marker, track->visible);
-    else
-      showTrack(track);  //, "layers.track.draw.track");
   };
   showBtn->setChecked(track->visible);
   container->addWidget(showBtn);
@@ -574,7 +579,6 @@ Widget* MapsTracks::createTrackEntry(Track* track)
 void MapsTracks::populateTracks(bool archived)
 {
   tracksDirty = false;
-  app->showPanel(archived ? archivedPanel : tracksPanel, archived);
   Widget* content = archived ? archivedContent : tracksContent;
   app->gui->deleteContents(content, ".listitem");
 
@@ -602,7 +606,7 @@ void MapsTracks::populateTracks(bool archived)
   }
   if(!archived) {
     Button* item = new Button(trackListProto->clone());
-    item->onClicked = [this](){ populateTracks(true); };
+    item->onClicked = [this](){ app->showPanel(archivedPanel, true);  populateTracks(true); };
     static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(MapsApp::uiIcon("archive"));
     item->selectFirst(".title-text")->setText("Archived Tracks");
     content->addWidget(item);
@@ -1192,26 +1196,27 @@ Button* MapsTracks::createPanel()
   //  populateBkmks(node.as<int>(-1), false);
 
   // main toolbar button ... quick menu - recent tracks?
-  /*Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
-  sourcesMenu->autoClose = true;
-  sourcesMenu->addHandler([this, sourcesMenu](SvgGui* gui, SDL_Event* event){
+  Menu* tracksMenu = createMenu(Menu::VERT_LEFT);
+  tracksMenu->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
-      gui->deleteContents(sourcesMenu->selectFirst(".child-container"));
-
-      for(int ii = 0; ii < 10 && ii < sourceKeys.size(); ++ii) {
-        sourcesMenu->addItem(mapSources[sourceKeys[ii]]["title"].Scalar().c_str(),
-            [ii, this](){ sourceCombo->setIndex(ii); rebuildSource(); });
+      gui->deleteContents(tracksMenu->selectFirst(".child-container"));
+      if(recordTrack) {
+        Button* item = createCheckBoxMenuItem("Current track");
+        item->onClicked = [this](){ setTrackVisible(&recordedTrack, !recordedTrack.visible); };
+        item->setChecked(recordedTrack.visible);
+        tracksMenu->addItem(item);
       }
-
+      for(size_t ii = 0; ii < 9 && ii < tracks.size(); ++ii) {
+        Button* item = createCheckBoxMenuItem(tracks[ii].title.c_str());
+        item->onClicked = [ii, this](){ setTrackVisible(&tracks[ii], !tracks[ii].visible); };
+        item->setChecked(tracks[ii].visible);
+        tracksMenu->addItem(item);
+      }
     }
     return false;
-  });*/
+  });
 
-  Button* tracksBtn = app->createPanelButton(MapsApp::uiIcon("track"), "Tracks");
-  //tracksBtn->setMenu(sourcesMenu);
-  tracksBtn->onClicked = [=](){
-    populateTracks(false);
-  };
-
+  Button* tracksBtn = app->createPanelButton(MapsApp::uiIcon("track"), "Tracks", tracksPanel);
+  tracksBtn->setMenu(tracksMenu);
   return tracksBtn;
 }

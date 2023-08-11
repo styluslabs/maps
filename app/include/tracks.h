@@ -57,6 +57,7 @@ private:
   Track loadGPX(const char* gpxfile);
   bool saveGPX(Track* track);
   void showTrack(Track* track);  //, const char* styling);
+  void setTrackVisible(Track* track, bool visible);
   void populateTracks(bool archived);
   void populateStats(Track* track);
   Widget* createTrackEntry(Track* track);
@@ -69,7 +70,7 @@ private:
   double recordLastSave = 0;
   bool recordTrack = false;
   bool drawTrack = false;
-  bool tracksDirty = false;
+  bool tracksDirty = true;
   std::vector<Color> markerColors;
   std::unique_ptr<SvgNode> trackListProto;
   std::unique_ptr<SelectDialog> selectTrackDialog;

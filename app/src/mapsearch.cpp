@@ -553,10 +553,13 @@ Button* MapsSearch::createPanel()
   searchPanel = app->createMapPanel(searchTb, resultsContent, new Widget(searchBoxNode));
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
-    if(event->type == MapsApp::PANEL_CLOSED) {
-      clearSearch();
-      return true;
+    if(event->type == MapsApp::PANEL_OPENED) {
+      app->gui->setFocused(queryText);
+      // show history
+      searchText("", MapsSearch::EDITING);
     }
+    else if(event->type == MapsApp::PANEL_CLOSED)
+      clearSearch();
     return false;
   });
 
@@ -612,9 +615,10 @@ Button* MapsSearch::createPanel()
       gui->deleteContents(searchMenu->selectFirst(".child-container"));
 
       // TODO: pinned searches - timestamp column = INF?
-      DB_exec(searchDB, "SELECT query FROM history ORDER BY timestamp LIMIT 8;", [&](sqlite3_stmt* stmt){
+      DB_exec(searchDB, "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;", [&](sqlite3_stmt* stmt){
         std::string s = (const char*)(sqlite3_column_text(stmt, 0));
         searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
+          app->showPanel(searchPanel);
           queryText->setText(s.c_str());
           searchText(s, MapsSearch::RETURN);
         });
@@ -624,14 +628,7 @@ Button* MapsSearch::createPanel()
     return false;
   });
 
-  Button* searchBtn = app->createPanelButton(MapsApp::uiIcon("search"), "Search");
+  Button* searchBtn = app->createPanelButton(MapsApp::uiIcon("search"), "Search", searchPanel);
   searchBtn->setMenu(searchMenu);
-  searchBtn->onClicked = [this](){
-    app->showPanel(searchPanel);
-    app->gui->setFocused(queryText);
-    // show history
-    searchText("", MapsSearch::EDITING);
-  };
-
   return searchBtn;
 }

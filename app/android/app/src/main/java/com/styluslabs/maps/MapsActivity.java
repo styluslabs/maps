@@ -39,7 +39,7 @@ import com.mapzen.tangram.networking.HttpHandler;
 import com.mapzen.tangram.networking.DefaultHttpHandler;
 
 
-public class MapsActivity extends Activity implements LocationListener, SensorEventListener
+public class MapsActivity extends Activity implements GpsStatus.Listener, LocationListener, SensorEventListener
 {
   MapsView mGLSurfaceView;
   private ViewGroup mLayout;
@@ -90,6 +90,7 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     case PERM_REQ_LOCATION:
       if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && canGetLocation()) {
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);
+        locationManager.addGpsStatusListener(this);
       }
       break;
     }
@@ -109,6 +110,7 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
 
     if(canGetLocation()) {
       locationManager.removeUpdates(this);
+      locationManager.removeGpsStatusListener(this);
     }
     mSensorManager.unregisterListener(this);
   }
@@ -124,6 +126,7 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     // min GPS dt = 0 (ms), dr = 1 (meters)
     if(canGetLocation()) {
       locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);  //FUSED_PROVIDER || "fused"
+      locationManager.addGpsStatusListener(this);  //catch (SecurityException e)
     }
     mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
     mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
@@ -146,6 +149,21 @@ public class MapsActivity extends Activity implements LocationListener, SensorEv
     mDeclination = new GeomagneticField((float)lat, (float)lng, (float)alt, time).getDeclination()*180/(float)java.lang.Math.PI;
 
     MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
+  }
+
+  // see https://gitlab.com/mvglasow/satstat ... MainActivity.java
+  @Override
+  public void onGpsStatusChanged(int event)
+  {
+    GpsStatus status = locationManager.getGpsStatus(null);
+    int satsVisible = 0;
+    int satsUsed = 0;
+    for(GpsSatellite sat : status.getSatellites()) {
+      satsVisible++;
+      if(sat.usedInFix())
+        satsUsed++;
+    }
+    MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
 
   private float[] mGravity;
