@@ -1132,7 +1132,7 @@ int main(int argc, char* argv[])
   glfwSwapInterval(1); // Enable vsync
   //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
-  int nvgFlags = NVG_AUTOW_DEFAULT | (Painter::sRGB ? NVG_SRGB : 0);
+  int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
   //int nvglFBFlags = NVG_IMAGE_SRGB;
 
   NVGcontext* nvgContext = nvgswCreate(nvgFlags);  // | NVG_DEBUG);
@@ -1141,7 +1141,7 @@ int main(int argc, char* argv[])
   glfwSwapInterval(0);
   glfwSetTime(0);
 
-  Painter::vg = nvgContext;
+  Painter::sharedVg = nvgContext;
   Painter::loadFont("sans", "/home/mwhite/maps/tangram-es/scenes/fonts/roboto-regular.ttf");
 
   // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
@@ -1303,7 +1303,7 @@ int main(int argc, char* argv[])
     bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
     if(!swFB || sizeChanged)
       swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
-    nvgswSetFramebuffer(Painter::vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
+    nvgswSetFramebuffer(painter->vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
 
     // clear dirty rect to transparent pixels
     if(SvgGui::debugDirty)
@@ -1352,7 +1352,7 @@ int main(int argc, char* argv[])
 
 namespace Tangram {
 
-bool userLoadSvg(char* svg, Texture* texture)  //float scale, int& w, int& h)
+bool userLoadSvg0(char* svg, Texture* texture)  //float scale, int& w, int& h)
 {
   NSVGimage* image = nsvgParse(svg, "px", 96.0f);  // nsvgParse is destructive
   if (!image) return false;
@@ -1387,22 +1387,51 @@ bool userLoadSvg(char* svg, Texture* texture)  //float scale, int& w, int& h)
   return true;
 }
 
-bool userLoadSvg2(char* svg, Texture* texture)
+bool userLoadSvg(char* svg, Texture* texture)
 {
   std::unique_ptr<SvgDocument> doc(SvgParser().parseString(svg));
   if(!doc) return false;
 
+  if(doc->hasClass("reflow-icons")) {
+    size_t nicons = doc->children().size();
+    int nside = int(std::sqrt(nicons) + 0.5);
+    int ii = 0;
+    real rowheight = 0;
+    SvgDocument* prev = NULL;
+    for(SvgNode* child : doc->children()) {
+      if(child->type() != SvgNode::DOC) continue;
+      auto childdoc = static_cast<SvgDocument*>(child);
+      if(prev) {
+        childdoc->m_x = ii%nside ? prev->m_x + prev->width().px() : 0;
+        childdoc->m_y = ii%nside ? prev->m_y : prev->m_y + rowheight;
+        //childdoc->invalidate(false); ... shouldn't be necessary
+      }
+      rowheight = ii%nside ? std::max(rowheight, childdoc->height().px()) : childdoc->height().px();
+      prev = childdoc;
+      ++ii;
+    }
+    Rect b = doc->bounds();
+    doc->setWidth(b.width());
+    doc->setHeight(b.height());
+  }
+
   int w = int(doc->width().px(96) + 0.5), h = int(doc->height().px(96) + 0.5);
   Image img(w, h);
-  Painter painter(&img);
+  // this fn will be run on a thread if loading scene async, so we cannot use shared nvg context
+  NVGcontext* nvgContext = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_SRGB | NVGSW_PATHS_XC);
+  Painter painter(&img, nvgContext);
   painter.beginFrame();
+  painter.translate(0, h);
+  painter.scale(1, -1);
   SvgPainter(&painter).drawNode(doc.get());  //, dirty);
   painter.endFrame();
+  nvgswDelete(nvgContext);
 
   auto atlas = std::make_unique<SpriteAtlas>();
   bool hasSprites = false;
   for(auto pair : doc->m_namedNodes) {
-    if(pair.second->isVisible()) continue;
+    if(pair.second->type() != SvgNode::DOC) continue;
+    //if(pair.second->isVisible()) continue;
     hasSprites = true;
     Rect b = pair.second->bounds();
     glm::vec2 pos(b.left, b.top);
