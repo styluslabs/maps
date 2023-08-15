@@ -130,6 +130,11 @@ static bool initSearch()
   return true;
 }
 
+MapsSearch::MapsSearch(MapsApp* _app) : MapsComponent(_app)
+{
+  initSearch();
+}
+
 bool MapsSearch::indexMBTiles()
 {
   Map* map = app->map;
@@ -261,9 +266,7 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
     const char* json = (const char*)(sqlite3_column_text(stmt, 1));
     addMapResult(rowid, lng, lat, score, json);
   }, [&](sqlite3_stmt* stmt){
-    std::string s(queryStr + "*");
-    std::replace(s.begin(), s.end(), '\'', ' ');
-    sqlite3_bind_text(stmt, 1, s.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 1, queryStr.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_double(stmt, 2, lnglat00.longitude);
     sqlite3_bind_double(stmt, 3, lnglat00.latitude);
     sqlite3_bind_double(stmt, 4, lngLat11.longitude);
@@ -287,9 +290,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
     const char* json = (const char*)(sqlite3_column_text(stmt, 1));
     addListResult(rowid, lng, lat, score, json);
   }, [&](sqlite3_stmt* stmt){
-    std::string s(queryStr + "*");
-    std::replace(s.begin(), s.end(), '\'', ' ');
-    sqlite3_bind_text(stmt, 1, s.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 1, queryStr.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 2, offset);
   });
   moreListResultsAvail = listResults.size() - offset >= 20;
@@ -369,8 +370,18 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   Map* map = app->map;
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
+  query = StringRef(query).trimmed().toString();
   if(phase != NEXTPAGE) {
-    searchStr = query;
+    // add synonyms to query (e.g., add "fast food" to "restaurant" query)
+    if(providerIdx == 0 && !query.empty()) {
+      // jsCallFn will return empty string in case of error
+      std::string tfquery = app->pluginManager->jsCallFn("transformQuery", query);
+      searchStr = tfquery.empty() ? query + "*" : tfquery;
+      std::replace(searchStr.begin(), searchStr.end(), '\'', ' ');
+      LOG("Search string: %s", searchStr.c_str());
+    }
+    else
+      searchStr = query;
     clearSearchResults();
     map->markerSetVisible(app->pickResultMarker, false);
     app->showPanel(searchPanel);
@@ -380,25 +391,26 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   if(phase == EDITING) {
     std::vector<std::string> autocomplete;
-    //std::string histq = fstring("SELECT query FROM history WHERE query LIKE '%s%%' ORDER BY timestamp LIMIT 5;", searchStr.c_str());
     std::string histq = "SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;";
     DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
       autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
     }, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, (searchStr + "%").c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 1, (query + "%").c_str(), -1, SQLITE_TRANSIENT);
       // LIMIT 5 - leave room for results if running live search
-      sqlite3_bind_int(stmt, 2, searchStr.size() > 2 && providerIdx == 0 ? 5 : 25);
+      sqlite3_bind_int(stmt, 2, query.size() > 2 && providerIdx == 0 ? 5 : 25);
     });
     populateAutocomplete(autocomplete);
   }
 
-  if(searchStr.size() > 2) {
+  if(query.size() > 2 || phase == NEXTPAGE) {
     // use map center for origin if current location is offscreen
-    LngLat loc = app->currLocation.lngLat();
-    searchOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->mapCenter.lngLat();
+    if(phase != NEXTPAGE) {
+      LngLat loc = app->currLocation.lngLat();
+      searchOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->mapCenter.lngLat();
+    }
     if(phase == RETURN) {
       DB_exec(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);", NULL, [&](sqlite3_stmt* stmt){
-        sqlite3_bind_text(stmt, 1, searchStr.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
       });
       updateMapResults(lngLat00, lngLat11);
     }
@@ -435,12 +447,12 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
       DB_exec(searchDB, "DELETE FROM history WHERE query = ?;", NULL, [&](sqlite3_stmt* stmt){
         sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
       });
-      searchText(searchStr, EDITING);  // refresh
+      searchText(queryText->text(), EDITING);  // refresh
     };
 
     item->onClicked = [=](){
       queryText->setText(query.c_str());
-      searchText(query, MapsSearch::RETURN);
+      searchText(query, RETURN);
     };
     SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
     textnode->addText(history[ii].c_str());
@@ -499,13 +511,13 @@ Button* MapsSearch::createPanel()
   setMinWidth(queryText, 100);
 
   queryText->onChanged = [this](const char* s){
-    searchText(s, MapsSearch::EDITING);  //StringRef(s).trimmed().toString();
+    searchText(s, EDITING);
   };
 
   queryText->addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
       if(!queryText->text().empty())
-        searchText(queryText->text(), MapsSearch::RETURN);
+        searchText(queryText->text(), RETURN);
       return true;
     }
     return false;
@@ -515,7 +527,7 @@ Button* MapsSearch::createPanel()
   cancelBtn = new Button(searchBoxNode->selectFirst(".cancel-btn"));
   cancelBtn->onClicked = [this](){
     clearSearch();
-    searchText("", MapsSearch::EDITING);  // show history
+    searchText("", EDITING);  // show history
   };
   cancelBtn->setVisible(false);
 
@@ -528,6 +540,7 @@ Button* MapsSearch::createPanel()
     ComboBox* providerSel = createComboBox(cproviders);
     providerSel->onChanged = [=](const char*){
       providerIdx = providerSel->index();
+      searchText(queryText->text(), RETURN);
     };
     searchTb->addWidget(providerSel);
   }
@@ -540,7 +553,7 @@ Button* MapsSearch::createPanel()
   Menu* sortMenu = createRadioMenu({"Relevence", "Distance"}, [this](size_t ii){
     app->config["search"]["sort"] = resultSortKeys[ii];
     if(!queryText->text().empty())
-      searchText(queryText->text(), MapsSearch::RETURN);
+      searchText(queryText->text(), RETURN);
   }, initSortIdx);
   Button* sortBtn = createToolbutton(MapsApp::uiIcon("sort"), "Sort");
   sortBtn->setMenu(sortMenu);
@@ -556,7 +569,7 @@ Button* MapsSearch::createPanel()
     if(event->type == MapsApp::PANEL_OPENED) {
       app->gui->setFocused(queryText);
       // show history
-      searchText("", MapsSearch::EDITING);
+      searchText("", EDITING);
     }
     else if(event->type == MapsApp::PANEL_CLOSED)
       clearSearch();
@@ -567,7 +580,7 @@ Button* MapsSearch::createPanel()
   scrollWidget->onScroll = [=](){
     // get more list results
     if(moreListResultsAvail && scrollWidget->scrollY >= scrollWidget->scrollLimits.bottom)
-      searchText(searchStr, NEXTPAGE);
+      searchText("", NEXTPAGE);
   };
 
   static const char* searchResultProtoSVG = R"(
@@ -605,8 +618,6 @@ Button* MapsSearch::createPanel()
 
   markers.reset(new MarkerGroup(app->map, "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
 
-  initSearch();
-
   // main toolbar button
   Menu* searchMenu = createMenu(Menu::VERT_LEFT);
   //searchMenu->autoClose = true;
@@ -620,7 +631,7 @@ Button* MapsSearch::createPanel()
         searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
           app->showPanel(searchPanel);
           queryText->setText(s.c_str());
-          searchText(s, MapsSearch::RETURN);
+          searchText(s, RETURN);
         });
       });
 

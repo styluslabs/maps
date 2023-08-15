@@ -10,17 +10,18 @@ PluginManager* PluginManager::inst = NULL;
 
 // duktape ref: https://duktape.org/api.html
 
-static void dukTryCall(duk_context* ctx, int nargs)
+bool PluginManager::dukTryCall(duk_context* ctx, int nargs)
 {
-  if(duk_pcall(ctx, nargs) != DUK_EXEC_SUCCESS) {
-    if (duk_is_error(ctx, -1)) {
-      duk_get_prop_string(ctx, -1, "stack");
-      LOGW("JS call error: %s\n", duk_safe_to_string(ctx, -1));
-      duk_pop(ctx);
-    } else {
-      LOGW("JS other error: %s\n", duk_safe_to_string(ctx, -1));
-    }
+  if(duk_pcall(ctx, nargs) == DUK_EXEC_SUCCESS)
+    return true;
+  if(duk_is_error(ctx, -1)) {
+    duk_get_prop_string(ctx, -1, "stack");
+    LOGW("JS call error: %s\n", duk_safe_to_string(ctx, -1));
+    duk_pop(ctx);
   }
+  else
+    LOGW("JS other error: %s\n", duk_safe_to_string(ctx, -1));
+  return false;
 }
 
 PluginManager::PluginManager(MapsApp* _app, const std::string& pluginDir) : MapsComponent(_app)
@@ -152,7 +153,7 @@ static void invokeHttpReqCallback(duk_context* ctx, std::string cbvar, const Url
   // TODO: use DUK_USE_CPP_EXCEPTIONS to catch parsing errors!
   if(c0 == '[' || c0 == '{')
     duk_json_decode(ctx, -1);
-  dukTryCall(ctx, 1);
+  PluginManager::dukTryCall(ctx, 1);
   duk_pop(ctx);
 }
 

@@ -28,8 +28,7 @@ class Button;
 class MapsSearch : public MapsComponent
 {
 public:
-  using MapsComponent::MapsComponent;
-  //void showGUI();
+  MapsSearch(MapsApp* _app);
   void clearSearch();
   bool indexMBTiles();
 
@@ -85,6 +84,4 @@ private:
   TextEdit* queryText;
   std::unique_ptr<SvgNode> searchResultProto;
   std::unique_ptr<SvgNode> autoCompProto;
-  //std::unique_ptr<SvgNode> historyIconNode;
-  //std::unique_ptr<SvgNode> resultIconNode;
 };

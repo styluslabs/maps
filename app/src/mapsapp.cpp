@@ -169,18 +169,22 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     SvgContainerNode* g = node->asContainerNode();
     if(g) {
       g->setAttribute("box-anchor", "hfill");
-      for(SvgNode* a : g->select("a")) {
+      auto anchorNodes = g->select("a");
+      for(SvgNode* a : anchorNodes) {
         Button* b = new Button(a);
         b->onClicked = [b](){
           MapsApp::openURL(b->node->getStringAttr("href", b->node->getStringAttr("xlink:href")));
         };
       }
-      SvgNode* textNode = g->selectFirst("text");
-      if(textNode) {
-        TextLabel* textbox = new TextLabel(textNode);
-        // or should we require plugin set box-anchor?
-        if(!strchr(textbox->text().c_str(), '\n'))
-          textNode->setAttribute("box-anchor", "hfill");  // automatic ellision
+      auto textNodes = g->select("text");
+      if(textNodes.size() == 1) {
+        textNodes[0]->setAttribute("box-anchor", "left");
+        SvgG* wrapper = new SvgG;
+        wrapper->addChild(node);
+        TextLabel* textbox = new TextLabel(wrapper);
+        //if(!strchr(textbox->text().c_str(), '\n'))
+        wrapper->setAttribute("box-anchor", "hfill");
+        node = wrapper;
       }
     }
     content->containerNode()->addChild(node);
@@ -188,8 +192,12 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
   }
 
   const char* split = strchr(value, '\r');
-  TextLabel* textbox = new TextLabel(createTextNode(split ? std::string(value, split-value).c_str() : value));
-  content->addWidget(textbox);
+  std::string valuestr = split ? std::string(value, split-value).c_str() : value;
+  SvgText* textnode = createTextNode(valuestr.c_str());
+  textnode->setAttribute("box-anchor", "left");
+  //if(!strchr(valuestr.c_str(), '\n'))
+  textnode->setText(SvgPainter::breakText(textnode, 250).c_str());
+  content->addWidget(new TextBox(textnode));
   if(split) {
     // collapsible section
     Widget* row2 = new Widget(rowProto->clone());
@@ -210,8 +218,6 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     row2->setVisible(false);
     infoContent->selectFirst(".info-section")->addWidget(row2);
   }
-  else if(!strchr(value, '\n'))
-    textbox->node->setAttribute("box-anchor", "hfill");  // automatic ellision
 }
 
 
@@ -659,7 +665,7 @@ Window* MapsApp::createGUI()
   static const char* placeInfoProtoSVG = R"#(
     <g layout="flex" flex-direction="column" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="left">
+      <g layout="flex" flex-direction="row" box-anchor="hfill">
         <text class="place-text" margin="0 10" font-size="14"></text>
         <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
         <!-- text class="lnglat-text weak" margin="0 10" font-size="12"></text -->

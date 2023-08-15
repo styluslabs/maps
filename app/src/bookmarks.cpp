@@ -436,6 +436,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
 
   Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Bookmark...", true);
+  createBkmkBtn->node->setAttribute("box-anchor", "left");
   // bookmark editing
   auto editToolbar = createToolbar();
   auto titleEdit = createTextEdit();
@@ -579,8 +580,8 @@ Button* MapsBookmarks::createPanel()
         <g class="image-container" margin="2 5">
           <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
         </g>
-        <g layout="box" box-anchor="fill">
-          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
+        <g class="title-text" layout="box" box-anchor="hfill">
+          <text box-anchor="left" margin="0 10"></text>
         </g>
       </g>
     </g>
