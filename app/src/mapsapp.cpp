@@ -11,6 +11,7 @@
 #include "pugixml.hpp"
 #include "rapidjson/document.h"
 #include <sys/stat.h>
+#include "nfd.h"
 
 #include "touchhandler.h"
 #include "bookmarks.h"
@@ -1147,6 +1148,13 @@ int main(int argc, char* argv[])
   glfwSwapInterval(0);
   glfwSetTime(0);
 
+  // library for native file dialogs - https://github.com/btzy/nativefiledialog-extended
+  // alternatives:
+  // - https://github.com/samhocevar/portable-file-dialogs (no GTK)
+  // - https://sourceforge.net/projects/tinyfiledialogs (no GTK)
+  // - https://github.com/Geequlim/NativeDialogs - last commit 2018
+  NFD_Init();
+
   Painter::sharedVg = nvgContext;
   Painter::loadFont("sans", "/home/mwhite/maps/tangram-es/scenes/fonts/roboto-regular.ttf");
 
@@ -1258,6 +1266,8 @@ int main(int argc, char* argv[])
   });
   gui->showWindow(win, NULL);
 
+  app->mapsOffline->resumeDownloads();
+
   if(sceneFile) {
     app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();  //"import:\n  - " +
     app->loadSceneFile();
@@ -1346,6 +1356,7 @@ int main(int argc, char* argv[])
   delete tangramMap;
   nvgswuDeleteBlitter(swBlitter);
   nvgswDelete(nvgContext);
+  NFD_Quit();
   glfwTerminate();
   return 0;
 }

@@ -48,6 +48,9 @@ public:
 
   Widget* content = NULL;
   ScrollWidget* scrollWidget = NULL;
+  AbsPosWidget* floatWidget = NULL;
+  Widget* placeholder = NULL;
+  Point fingerDown;
 };
 
 class Menubar : public Toolbar

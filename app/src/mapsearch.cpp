@@ -111,8 +111,8 @@ static bool initSearch()
     }
 
     DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
-    // search history
-    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+    // search history - NOCASE causes comparisions to be case-insensitive but still stores case
+    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
   }
   //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF", NULL, NULL, &errorMessage);
   //sqlite3_exec(searchDB, "PRAGMA count_changes=OFF", NULL, NULL, &errorMessage);

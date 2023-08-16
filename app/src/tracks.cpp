@@ -9,6 +9,7 @@
 #include "yaml-cpp/yaml.h"
 #include "sqlite3/sqlite3.h"
 #include "util/yamlPath.h"
+#include "nfd.hpp"  // file dialogs
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -1100,10 +1101,26 @@ Button* MapsTracks::createPanel()
     drawTrackBtn->setTitle(drawTrack ? "Finish Track" : "Draw Track");
   };
 
-  Widget* loadTrackPanel = createColumn();
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
   loadTrackBtn->onClicked = [=](){
-    loadTrackPanel->setVisible(true);
+    nfdchar_t* outPath;
+    nfdfilteritem_t filterItem[1] = { { "GPX files", "gpx" } };
+    nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
+    if(result != NFD_OKAY)
+      return;
+    auto track = loadGPX(outPath);
+    if(track.locs.empty()) {
+      PLATFORM_LOG("Error loading track!");
+      return;
+    }
+    const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
+    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, track.title.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, track.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
+    });
+    tracks.push_back(std::move(track));
+    populateTracks(false);
+    populateStats(&tracks.back());
   };
 
   Button* recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record Track");
@@ -1127,31 +1144,6 @@ Button* MapsTracks::createPanel()
       saveTrackContent->setVisible(true);
     }
   };
-
-  TextEdit* gpxPath = createTextEdit();
-  Button* addGpxBtn = createPushbutton("Add");
-
-  addGpxBtn->onClicked = [=](){
-    auto track = loadGPX(gpxPath->text().c_str());
-    if(track.locs.empty()) {
-      PLATFORM_LOG("Error loading track!");
-      return;
-    }
-    const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
-    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, track.title.c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 2, track.gpxFile.c_str(), -1, SQLITE_TRANSIENT);
-    });
-    tracks.push_back(std::move(track));
-    populateTracks(false);
-    populateStats(&tracks.back());
-    loadTrackPanel->setVisible(false);
-  };
-
-  loadTrackPanel->addWidget(createTitledRow("GPX File", gpxPath));
-  loadTrackPanel->addWidget(addGpxBtn);
-  loadTrackPanel->setVisible(false);
-  tracksContent->addWidget(loadTrackPanel);
 
   auto tracksTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Tracks");
   tracksTb->addWidget(drawTrackBtn);

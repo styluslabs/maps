@@ -1,5 +1,3 @@
-#add_subdirectory(app/deps)
-
 add_library(maps-app
   app/src/bookmarks.cpp
   app/src/mapsapp.cpp
@@ -57,3 +55,7 @@ target_compile_definitions(maps-app PRIVATE GLM_FORCE_CTOR_INIT)
 target_compile_definitions(maps-app PRIVATE PUGIXML_NO_XPATH)
 target_compile_definitions(maps-app PRIVATE PUGIXML_NO_EXCEPTIONS)
 target_compile_definitions(maps-app PRIVATE NO_PAINTER_GL)
+
+# native file dialogs library
+add_subdirectory(app/deps/nfd)
+target_link_libraries(maps-app PRIVATE nfd)

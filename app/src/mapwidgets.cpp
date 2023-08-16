@@ -239,6 +239,10 @@ DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)
   scroll_content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
   scrollWidget->node->setAttribute("box-anchor", "fill");
   addWidget(scrollWidget);
+
+  SvgNode* fnode = loadSVGFragment(R"#(<g display="none" position="absolute" box-anchor="fill" layout="box"></g>)#");
+  floatWidget = new AbsPosWidget(fnode);
+  addWidget(floatWidget);
 }
 
 void DragDropList::setOrder(const std::vector<KeyType>& order)
@@ -290,8 +294,10 @@ void DragDropList::addItem(KeyType key, Widget* item)
   Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));
   dragBtn->node->addClass("draggable");
   dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
+    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
       gui->setTimer(50, dragBtn);
+      fingerDown = Point(event->tfinger.x, event->tfinger.y);
+    }
     else if(event->type == SvgGui::TIMER) {
       if(gui->pressedWidget != dragBtn)
         return false;  // stop timer
@@ -304,20 +310,50 @@ void DragDropList::addItem(KeyType key, Widget* item)
       return true;  // continue running timer
     }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
+
+      if(!placeholder) {
+        SvgRect* rnode = new SvgRect(item->node->bounds().toSize());
+        rnode->setAttribute("fill", "none");
+        placeholder = new Widget(rnode);
+        item->parent()->containerNode()->addChild(rnode, item->node);
+
+        item->removeFromParent();
+        floatWidget->addWidget(item);
+        floatWidget->setVisible(true);
+      }
+
+      Rect parentBounds = menu->node->parent()->bounds();
+
+      floatWidget->node->setAttribute("left", "0");
+      floatWidget->node->setAttribute("top", fstring("%g", p.y - parentBounds.top).c_str());
+
+
       // if finger > height above or below center, shift position
-      Rect b = dragBtn->node->bounds();
+      Rect b = placeholder->node->bounds();
       real dy = event->tfinger.y - b.center().y;
       if(std::abs(dy) > b.height()) {
         SvgContainerNode* parent = content->containerNode();
         auto& items = parent->children();
-        auto it = std::find(items.begin(), items.end(), item->node);
+        auto it = std::find(items.begin(), items.end(), placeholder->node);
         if(it == items.end() || (dy < 0 && it == items.begin()) || (dy > 0 && ++it == items.end()))
           return true;
         SvgNode* next = dy > 0 ? (++it == items.end() ? NULL : *it) : *(--it);
-        parent->removeChild(item->node);
-        parent->addChild(item->node, next);
+        parent->removeChild(placeholder->node);
+        parent->addChild(placeholder->node, next);
       }
       return true;
+    }
+    else if(event->type == SDL_FINGERUP && gui->pressedWidget == dragBtn) {
+      if(placeholder) {
+        SvgContainerNode* parent = content->containerNode();
+        item->removeFromParent();
+        parent->addChild(item->node);
+        parent->removeChild(placeholder->node);
+        delete placeholder->node;
+        placeholder = NULL;
+        floatWidget->setVisible(false);
+      }
+      //return true;
     }
     return false;
   });

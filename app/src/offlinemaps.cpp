@@ -42,6 +42,7 @@ struct OfflineMapInfo
   LngLat lngLat00, lngLat11;
   int zoom, maxZoom;
   std::vector<OfflineSourceInfo> sources;
+  bool canceled;
 };
 
 class OfflineDownloader
@@ -51,6 +52,7 @@ public:
     ~OfflineDownloader();
     size_t remainingTiles() const { return m_queued.size() + m_pending.size(); }
     bool fetchNextTile();
+    void cancel();
     std::string name;
     int totalTiles = 0;
 
@@ -60,6 +62,7 @@ private:
     int offlineId;
     int srcMaxZoom;
     int64_t offlineSize;
+    bool canceled = false;
     std::deque<TileID> m_queued;
     std::vector<TileID> m_pending;
     std::mutex m_mutexQueue;
@@ -90,15 +93,13 @@ static void offlineDLStep()
       while(nreq > 0 && offlineDownloaders.back()->fetchNextTile()) --nreq;
       if(nreq <= 0 || offlineDownloaders.back()->remainingTiles())
         return;  // m_queued empty, m_pending not empty
-      LOGW("completed offline tile downloads for layer %s", offlineDownloaders.back()->name.c_str());
+      LOGD("completed offline tile downloads for layer %s", offlineDownloaders.back()->name.c_str());
       offlineDownloaders.pop_back();
     }
-    LOGW("completed offline tile downloads for map %d", offlinePending.front().id);
+    LOG("completed offline tile downloads for map %d", offlinePending.front().id);
 
-    // update DB to indicate compeletion of download
-    MapsApp::runOnMainThread([id=offlinePending.front().id](){
-      DB_exec(MapsApp::bkmkDB, "UPDATE offlinemaps SET done = 1 WHERE mapid = ?;", NULL,
-          [id](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, id); });
+    MapsApp::runOnMainThread([id=offlinePending.front().id, canceled=offlinePending.front().canceled](){
+      mapsOfflineInst->downloadCompleted(id, canceled);
     });
 
     offlinePending.pop_front();
@@ -149,6 +150,13 @@ OfflineDownloader::~OfflineDownloader()
   MapsApp::platform->notifyStorage(0, mbtiles->getOfflineSize() - offlineSize);
 }
 
+void OfflineDownloader::cancel()
+{
+  std::unique_lock<std::mutex> lock(m_mutexQueue);
+  m_queued.clear();
+  canceled = true;  //m_pending.clear();
+}
+
 bool OfflineDownloader::fetchNextTile()
 {
   std::unique_lock<std::mutex> lock(m_mutexQueue);
@@ -160,7 +168,7 @@ bool OfflineDownloader::fetchNextTile()
   lock.unlock();
   TileTaskCb cb{[this](std::shared_ptr<TileTask> _task) { tileTaskCallback(_task); }};
   mbtiles->loadTileData(task, cb);
-  LOGW("%s: requested download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
+  LOGD("%s: requested download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
   return true;
 }
 
@@ -175,13 +183,14 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
     return;
   }
   // put back in queue (at end) on failure
-  if(!task->hasData()) {
+  if(canceled) {}
+  else if(!task->hasData()) {
     m_queued.push_back(*pendingit);
     LOGW("%s: download of offline tile %s failed - will retry", name.c_str(), task->tileId().toString().c_str());
   } else {
     if(!searchData.empty() && task->tileId().z == srcMaxZoom)
       MapsSearch::indexTileData(task.get(), offlineId, searchData);
-    LOGW("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
+    LOGD("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
   }
   m_pending.erase(pendingit);
 
@@ -192,18 +201,15 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
   semOfflineWorker.post();
 }
 
-void MapsOffline::saveOfflineMap(int maxZoom)
+void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, int maxZoom)
 {
   Map* map = app->map;
   std::unique_lock<std::mutex> lock(mutexOfflineQueue);
   // don't load tiles outside visible region at any zoom level (as using TileID::getChild() recursively
   //  would do - these could potentially outnumber the number of desired tiles!)
   int zoom = int(map->getZoom());
-  LngLat lngLat00, lngLat11;
-  app->getMapBounds(lngLat00, lngLat11);
   // queue offline downloads
-  int offlineId = (unsigned)time(NULL);
-  offlinePending.push_back({offlineId, lngLat00, lngLat11, zoom, maxZoom, {}});
+  offlinePending.push_back({mapid, lngLat00, lngLat11, zoom, maxZoom, {}, false});
   auto& tileSources = map->getScene()->tileSources();
   for(auto& src : tileSources) {
     auto& info = src->offlineInfo();
@@ -223,17 +229,6 @@ void MapsOffline::saveOfflineMap(int maxZoom)
   runOfflineWorker = true;
   if(!offlineWorker)
     offlineWorker = std::make_unique<std::thread>(offlineDLMain);
-
-  const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,source,done) VALUES (?,?,?,?,?,?,?);";
-  DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_int(stmt, 1, offlineId);
-    sqlite3_bind_double(stmt, 2, lngLat00.longitude);
-    sqlite3_bind_double(stmt, 3, lngLat00.latitude);
-    sqlite3_bind_double(stmt, 4, lngLat11.longitude);
-    sqlite3_bind_double(stmt, 5, lngLat11.latitude);
-    sqlite3_bind_text(stmt, 6, app->mapsSources->currSource.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 7, 0);
-  });
 }
 
 MapsOffline::~MapsOffline()
@@ -250,6 +245,72 @@ int MapsOffline::numOfflinePending() const
   return offlinePending.size();
 }
 
+bool MapsOffline::cancelDownload(int mapid)
+{
+  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
+  if(offlinePending.front().id == mapid) {
+    offlinePending.front().canceled = true;
+    for(auto& dl : offlineDownloaders)
+      dl->cancel();
+    return false;
+  }
+  std::remove_if(offlinePending.begin(), offlinePending.end(), [mapid](auto a){ a.id == mapid; });
+  return true;
+}
+
+static void deleteOfflineMap(int mapid)
+{
+  int64_t offlineSize = 0;
+  FSPath cachedir(MapsApp::baseDir, "cache");
+  for(auto& file : lsDirectory(cachedir)) {
+    //for(auto& src : mapSources) ... this doesn't work because cache file may be specified in scene yaml
+    //std::string cachename = src.second["cache"] ? src.second["cache"].Scalar() : src.first.Scalar();
+    //std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";
+    //if(cachename == "false" || !FSPath(cachefile).exists()) continue;
+    FSPath cachefile = cachedir.child(file);
+    if(cachefile.extension() != "mbtiles") continue;
+    auto s = std::make_unique<Tangram::MBTilesDataSource>(
+        *MapsApp::platform, cachefile.baseName(), cachefile.path, "", true);
+    offlineSize -= s->getOfflineSize();
+    s->deleteOfflineMap(mapid);
+    offlineSize += s->getOfflineSize();
+  }
+  MapsApp::platform->notifyStorage(0, offlineSize);  // this can trigger cache shrink, so wait until all sources processed
+
+  DB_exec(MapsApp::bkmkDB, "DELETE FROM offlinemaps WHERE mapid = ?;", NULL,
+      [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, mapid); });
+}
+
+void MapsOffline::downloadCompleted(int id, bool canceled)
+{
+  if(canceled) {
+    deleteOfflineMap(id);
+  }
+  else {
+    DB_exec(MapsApp::bkmkDB, "UPDATE offlinemaps SET done = 1 WHERE mapid = ?;", NULL,
+        [&](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, id); });
+  }
+  populateOffline();
+}
+
+void MapsOffline::resumeDownloads()
+{
+  // caller should restore map source if necessary
+  //std::string prevsrc = app->mapsSources->currSource;
+  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source FROM offlinemaps WHERE done = 0 ORDER BY timestamp;";
+  DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
+    int mapid = sqlite3_column_int(stmt, 0);
+    double lng0 = sqlite3_column_double(stmt, 1), lat0 = sqlite3_column_double(stmt, 2);
+    double lng1 = sqlite3_column_double(stmt, 3), lat1 = sqlite3_column_double(stmt, 4);
+    std::string sourcestr = (const char*)(sqlite3_column_text(stmt, 5));
+
+    app->mapsSources->rebuildSource(sourcestr);
+    saveOfflineMap(mapid, LngLat(lng0, lat0), LngLat(lng1, lat1));
+
+    LOG("Resuming offline map download for source %s", sourcestr.c_str());
+  });
+}
+
 // GUI
 
 void MapsOffline::updateProgress()
@@ -261,7 +322,9 @@ void MapsOffline::updateProgress()
     int mapid = item->node->getIntAttr("__mapid");
     for(size_t ii = 0; ii < offlinePending.size(); ++ii) {
       if(offlinePending[ii].id == mapid) {
-        if(ii == 0) {
+        if(offlinePending[ii].canceled)
+          item->selectFirst(".detail-text")->setText("Canceling...");
+        else if(ii == 0) {
           int total = 0, remaining = 0;
           for(auto& dl : offlineDownloaders) {
             total += dl->totalTiles;
@@ -271,6 +334,7 @@ void MapsOffline::updateProgress()
         }
         else
           item->selectFirst(".detail-text")->setText("Download pending");
+        item->selectFirst(".delete-btn")->setText("Cancel");
         break;
       }
     }
@@ -306,7 +370,7 @@ void MapsOffline::populateOffline()
 
   app->gui->deleteContents(offlineContent, ".listitem");
 
-  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, strftime('%Y-%m-%d', timestamp, 'unixepoch') FROM offlinemaps;";
+  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title FROM offlinemaps ORDER BY timestamp DESC;";
   DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
     int mapid = sqlite3_column_int(stmt, 0);
     double lng0 = sqlite3_column_double(stmt, 1), lat0 = sqlite3_column_double(stmt, 2);
@@ -317,9 +381,13 @@ void MapsOffline::populateOffline()
     Button* item = new Button(offlineListProto->clone());
     item->node->setAttr("__mapid", mapid);
     item->onClicked = [=](){
-      //item->setChecked(true);
+      bool checked = !item->isChecked();
       for(Widget* w : offlineContent->select(".listitem"))
-        static_cast<Button*>(w)->setChecked(static_cast<Button*>(w) == item);
+        static_cast<Button*>(w)->setChecked(checked && static_cast<Button*>(w) == item);
+      if(!checked) {
+        app->map->markerSetVisible(rectMarker, false);
+        return;
+      }
       // show bounds of offline region on map
       LngLat bounds[5] = {{lng0, lat0}, {lng0, lat1}, {lng1, lat1}, {lng1, lat0}, {lng0, lat0}};
       if(!rectMarker)
@@ -335,13 +403,14 @@ void MapsOffline::populateOffline()
 
     Button* deleteBtn = new Button(item->containerNode()->selectFirst(".delete-btn"));
     deleteBtn->onClicked = [=](){
-      app->mapsSources->deleteOfflineMap(mapid);
       if(rectMarker)
         app->map->markerSetVisible(rectMarker, false);
-      DB_exec(app->bkmkDB, "DELETE FROM offlinemaps WHERE mapid = ?;", NULL, [&](sqlite3_stmt* stmt1){
-        sqlite3_bind_int(stmt1, 1, mapid);
-      });
-      populateOffline();
+      if(cancelDownload(mapid)) {
+        deleteOfflineMap(mapid);
+        populateOffline();
+      }
+      else
+        updateProgress();
     };
 
     SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
@@ -360,20 +429,67 @@ Widget* MapsOffline::createPanel()
   mapsOfflineInst = this;
   // should we include zoom? total bytes?
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER PRIMARY KEY,"
-      " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, source TEXT, done INTEGER,"
+      " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, source TEXT, title TEXT, done INTEGER DEFAULT 0,"
       " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
 
+  TextEdit* titleEdit = createTextEdit();
   SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%.0f");
+  Button* confirmBtn = createPushbutton("Download");
+  Button* cancelBtn = createPushbutton("Cancel");
+
+  Widget* downloadPanel = createColumn();
+  downloadPanel->addWidget(createTitledRow("Title", titleEdit));
+  downloadPanel->addWidget(createTitledRow("Max zoom", maxZoomSpin));
+  downloadPanel->addWidget(createTitledRow(NULL, confirmBtn, cancelBtn));
+  downloadPanel->setVisible(false);
+
+  confirmBtn->onClicked = [=](){
+    LngLat lngLat00, lngLat11;
+    app->getMapBounds(lngLat00, lngLat11);
+    int offlineId = int(time(NULL));
+    saveOfflineMap(offlineId, lngLat00, lngLat11, int(maxZoomSpin->value()));
+
+    const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,source,title) VALUES (?,?,?,?,?,?,?);";
+    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_int(stmt, 1, offlineId);
+      sqlite3_bind_double(stmt, 2, lngLat00.longitude);
+      sqlite3_bind_double(stmt, 3, lngLat00.latitude);
+      sqlite3_bind_double(stmt, 4, lngLat11.longitude);
+      sqlite3_bind_double(stmt, 5, lngLat11.latitude);
+      sqlite3_bind_text(stmt, 6, app->mapsSources->currSource.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 7, titleEdit->text().c_str(), -1, SQLITE_TRANSIENT);
+    });
+
+    downloadPanel->setVisible(false);
+    populateOffline();
+    auto item = static_cast<Button*>(offlineContent->selectFirst(".listitem"));
+    if(item) item->onClicked();
+  };
+
+  cancelBtn->onClicked = [=](){ downloadPanel->setVisible(false); };
+
   Button* saveBtn = createToolbutton(MapsApp::uiIcon("download"), "Save Offline Map");
   saveBtn->onClicked = [=](){
-    saveOfflineMap(maxZoomSpin->value());
-    populateOffline();
+    char timestr[64];
+    time_t t = mSecSinceEpoch()/1000;
+    strftime(timestr, sizeof(timestr), "%FT%H.%M.%S", localtime(&t));  //"%Y-%m-%d %HH%M"
+    titleEdit->setText(timestr);
+
+    int maxZoom = 0;
+    auto& tileSources = app->map->getScene()->tileSources();
+    for(auto& src : tileSources)
+      maxZoom = std::max(maxZoom, src->maxZoom());
+    maxZoomSpin->setLimits(1, maxZoom);
+    if(maxZoomSpin->value() > maxZoom)
+      maxZoomSpin->setValue(maxZoom);
+
+    downloadPanel->setVisible(true);
   };
 
   offlineContent = createColumn();
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("offline"), "Offline Maps");
   toolbar->addWidget(createStretch());
-  toolbar->addWidget(maxZoomSpin);
+  //toolbar->addWidget(maxZoomSpin);
   toolbar->addWidget(saveBtn);
   offlinePanel = app->createMapPanel(toolbar, offlineContent);
 
@@ -384,6 +500,8 @@ Widget* MapsOffline::createPanel()
     }
     return false;
   });
+
+  offlineContent->addWidget(downloadPanel);
 
   Button* offlineBtn = createToolbutton(MapsApp::uiIcon("offline"), "Offline Maps");
   offlineBtn->onClicked = [this](){

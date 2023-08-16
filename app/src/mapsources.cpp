@@ -119,27 +119,6 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
   srcFile = srcfile.c_str();
 }
 
-// this should be static fns!
-void MapsSources::deleteOfflineMap(int mapid)
-{
-  int64_t offlineSize = 0;
-  FSPath cachedir(app->baseDir, "cache");
-  for(auto& file : lsDirectory(cachedir)) {
-    //for(auto& src : mapSources) ... this doesn't work because cache file may be specified in scene yaml
-    //std::string cachename = src.second["cache"] ? src.second["cache"].Scalar() : src.first.Scalar();
-    //std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";
-    //if(cachename == "false" || !FSPath(cachefile).exists()) continue;
-    FSPath cachefile = cachedir.child(file);
-    if(cachefile.extension() != "mbtiles") continue;
-    auto s = std::make_unique<Tangram::MBTilesDataSource>(
-        *app->platform, cachefile.baseName(), cachefile.path, "", true);
-    offlineSize -= s->getOfflineSize();
-    s->deleteOfflineMap(mapid);
-    offlineSize += s->getOfflineSize();
-  }
-  app->platform->notifyStorage(0, offlineSize);  // this can trigger cache shrink, so wait until all sources processed
-}
-
 // don't run this during offline map download!
 int64_t MapsSources::shrinkCache(int64_t maxbytes)
 {
