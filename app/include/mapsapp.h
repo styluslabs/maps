@@ -5,6 +5,7 @@
 
 //using namespace Tangram;
 #include "mapscomponent.h"
+#include "ulib/painter.h"  // for Color
 
 class TouchHandler;
 class MapsTracks;
@@ -129,10 +130,9 @@ public:
   static YAML::Node config;
   static std::string configFile;
   static CameraPosition mapCenter;
-
   static sqlite3* bkmkDB;
-
   static bool metricUnits;
+  static std::vector<Color> markerColors;
 
 private:
   void dumpTileContents(float x, float y);

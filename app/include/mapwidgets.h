@@ -50,7 +50,7 @@ public:
   ScrollWidget* scrollWidget = NULL;
   AbsPosWidget* floatWidget = NULL;
   Widget* placeholder = NULL;
-  Point fingerDown;
+  real yOffset = 0;
 };
 
 class Menubar : public Toolbar
@@ -69,4 +69,15 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
-Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, std::function<void(Color)> onColor);
+
+class ColorPicker : public Button
+{
+public:
+  using Button::Button;
+  Color color() const;
+  void setColor(Color c);
+  void updateColor(Color c) { setColor(c);  if(onColor) { onColor(c); } }
+  std::function<void(Color)> onColor;
+};
+
+ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialColor);

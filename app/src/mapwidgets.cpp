@@ -178,7 +178,17 @@ SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std
   return widget;
 }
 
-Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, std::function<void(Color)> onColor)
+Color ColorPicker::color() const
+{
+  selectFirst(".current-color")->node->getColorAttr("fill");
+}
+
+void ColorPicker::setColor(Color c)
+{
+  selectFirst(".current-color")->node->setAttr<color_t>("fill", c.color);
+}
+
+ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialColor)
 {
   static const char* menuSVG = R"#(
     <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
@@ -202,7 +212,7 @@ Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, 
 
       <rect fill="white" x="1" y="1" width="35" height="35" />
       <rect fill="url(#checkerboard)" x="1" y="1" width="35" height="35" />
-      <rect class="current-color" stroke="currentColor" stroke-width="2" fill="blue" x="1" y="1" width="35" height="35" />
+      <rect class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" x="1" y="1" width="35" height="35" />
     </g>
   )#";
   static std::unique_ptr<SvgNode> colorBtnNode;
@@ -210,20 +220,18 @@ Button* createColorPicker(const std::vector<Color>& colors, Color initialColor, 
     colorBtnNode.reset(loadSVGFragment(colorBtnSVG));
 
   Menu* menu = new Menu(menuNode->clone(), Menu::VERT_LEFT);
-  Button* widget = new Button(colorBtnNode->clone());
-  widget->selectFirst(".current-color")->node->setAttr<color_t>("fill", initialColor.color);
+  ColorPicker* widget = new ColorPicker(colorBtnNode->clone());
+  widget->containerNode()->selectFirst(".btn-color")->addClass("current-color");
+  widget->setColor(initialColor.color);
   widget->setMenu(menu);
 
   for(size_t ii = 0; ii < colors.size(); ++ii) {
     Color color = colors[ii];
     Button* btn = new Button(colorBtnNode->clone());
-    btn->selectFirst(".current-color")->node->setAttr<color_t>("fill", color.color);
+    btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
     if(ii > 0 && ii % 4 == 0)
       btn->node->setAttribute("flex-break", "before");
-    btn->onClicked = [=](){
-      widget->selectFirst(".current-color")->node->setAttr<color_t>("fill", color.color);
-      onColor(color);
-    };
+    btn->onClicked = [=](){ widget->updateColor(color.color); };
     menu->addItem(btn);  //addWidget(btn);  // use addItem() to support press-drag-release?
   }
   return widget;
@@ -240,7 +248,7 @@ DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)
   scrollWidget->node->setAttribute("box-anchor", "fill");
   addWidget(scrollWidget);
 
-  SvgNode* fnode = loadSVGFragment(R"#(<g display="none" position="absolute" box-anchor="fill" layout="box"></g>)#");
+  SvgNode* fnode = loadSVGFragment(R"#(<g display="none" position="absolute"></g>)#");
   floatWidget = new AbsPosWidget(fnode);
   addWidget(floatWidget);
 }
@@ -296,7 +304,7 @@ void DragDropList::addItem(KeyType key, Widget* item)
   dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
       gui->setTimer(50, dragBtn);
-      fingerDown = Point(event->tfinger.x, event->tfinger.y);
+      yOffset = event->tfinger.y - item->node->bounds().top;
     }
     else if(event->type == SvgGui::TIMER) {
       if(gui->pressedWidget != dragBtn)
@@ -310,23 +318,17 @@ void DragDropList::addItem(KeyType key, Widget* item)
       return true;  // continue running timer
     }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
-
       if(!placeholder) {
         SvgRect* rnode = new SvgRect(item->node->bounds().toSize());
         rnode->setAttribute("fill", "none");
         placeholder = new Widget(rnode);
-        item->parent()->containerNode()->addChild(rnode, item->node);
-
+        content->containerNode()->addChild(rnode, item->node);
         item->removeFromParent();
         floatWidget->addWidget(item);
         floatWidget->setVisible(true);
       }
-
-      Rect parentBounds = menu->node->parent()->bounds();
-
       floatWidget->node->setAttribute("left", "0");
-      floatWidget->node->setAttribute("top", fstring("%g", p.y - parentBounds.top).c_str());
-
+      floatWidget->node->setAttribute("top", fstring("%g", event->tfinger.y - node->bounds().top - yOffset).c_str());
 
       // if finger > height above or below center, shift position
       Rect b = placeholder->node->bounds();

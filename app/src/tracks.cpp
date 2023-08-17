@@ -537,7 +537,7 @@ Widget* MapsTracks::createTrackEntry(Track* track)
       });
     }
   };
-  Button* colorBtn = createColorPicker(markerColors, parseColor(track->style, Color::BLUE), onColor);
+  Button* colorBtn = createColorPicker(app->markerColors, parseColor(track->style, Color::BLUE), onColor);
   container->addWidget(colorBtn);
 
   if(track->rowid >= 0) {
@@ -577,12 +577,8 @@ Widget* MapsTracks::createTrackEntry(Track* track)
   return item;
 }
 
-void MapsTracks::populateTracks(bool archived)
+void MapsTracks::loadTracks(bool archived)
 {
-  tracksDirty = false;
-  Widget* content = archived ? archivedContent : tracksContent;
-  app->gui->deleteContents(content, ".listitem");
-
   const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch'), style FROM tracks WHERE archived = ?;";
   DB_exec(app->bkmkDB, query, [this, archived](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
@@ -598,6 +594,16 @@ void MapsTracks::populateTracks(bool archived)
   }, [=](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
+}
+
+
+void MapsTracks::populateTracks(bool archived)
+{
+  tracksDirty = false;
+  Widget* content = archived ? archivedContent : tracksContent;
+  app->gui->deleteContents(content, ".listitem");
+
+  loadTracks(archived);
 
   if(recordTrack && !archived)
     content->addWidget(createTrackEntry(&recordedTrack));
@@ -816,10 +822,6 @@ Button* MapsTracks::createPanel()
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks(title TEXT, filename TEXT, style TEXT,"
       " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)), archived INTEGER DEFAULT 0);");
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks_state(track_id INTEGER, ordering INTEGER, visible INTEGER);");
-
-  // colors for tracks; currently shared with bookmarks - if the remains the case, we should dedup
-  for(const auto& colorstr : app->config["colors"])
-    markerColors.push_back(parseColor(colorstr.Scalar()));
 
   // Stats panel
   statsContent = createColumn();
@@ -1182,10 +1184,20 @@ Button* MapsTracks::createPanel()
     return false;
   });
 
+  // load tracks for quick menu and for visible tracks
+  loadTracks(false);
   YAML::Node vistracks;
   Tangram::YamlPath("+tracks.visible").get(app->config, vistracks);  //node = app->getConfigPath("+places.visible");
-  //for(auto& node : vistracks)
-  //  populateBkmks(node.as<int>(-1), false);
+  for(auto& node : vistracks) {
+    int rowid = node.as<int>(-1);
+    for(Track& track : tracks) {
+      if(track.rowid == rowid) {
+        track.visible = true;
+        showTrack(&track);
+        break;
+      }
+    }
+  }
 
   // main toolbar button ... quick menu - recent tracks?
   Menu* tracksMenu = createMenu(Menu::VERT_LEFT);

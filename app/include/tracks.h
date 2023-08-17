@@ -1,7 +1,6 @@
 #pragma once
 
 #include "mapscomponent.h"
-#include "ulib/painter.h"  // for Color
 
 class Widget;
 class Button;
@@ -54,6 +53,7 @@ public:
   double minTrackTime = 5;  // seconds
 
 private:
+  void loadTracks(bool archived);
   Track loadGPX(const char* gpxfile);
   bool saveGPX(Track* track);
   void showTrack(Track* track);  //, const char* styling);
@@ -71,7 +71,6 @@ private:
   bool recordTrack = false;
   bool drawTrack = false;
   bool tracksDirty = true;
-  std::vector<Color> markerColors;
   std::unique_ptr<SvgNode> trackListProto;
   std::unique_ptr<SelectDialog> selectTrackDialog;
 };

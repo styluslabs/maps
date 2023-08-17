@@ -38,6 +38,7 @@ std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
 sqlite3* MapsApp::bkmkDB = NULL;
 static Tooltips tooltipsInst;
+static std::vector<Color> markerColors;
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 {
@@ -139,6 +140,13 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   showPanel(infoPanel, true);
 }
 
+void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority)
+{
+  rapidjson::Document props;
+  props.Parse(propstr.c_str());
+  setPickResult(pos, namestr, props, priority);
+}
+
 void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* value)
 {
   static const char* rowProtoSVG = R"(
@@ -219,14 +227,6 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     row2->setVisible(false);
     infoContent->selectFirst(".info-section")->addWidget(row2);
   }
-}
-
-
-void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority)
-{
-  rapidjson::Document props;
-  props.Parse(propstr.c_str());
-  setPickResult(pos, namestr, props, priority);
 }
 
 void MapsApp::longPressEvent(float x, float y)
@@ -631,6 +631,62 @@ void MapsWidget::draw(SvgPainter* svgp) const
   //app->map->render();
 }
 
+class ScaleBarWidget : public Widget
+{
+public:
+  ScaleBarWidget(Map* _map) : Widget(new SvgCustomNode), map(_map) {}
+  void draw(SvgPainter* svgp) const override;
+  Rect bounds(SvgPainter* svgp) const override;
+
+  Map* map;
+};
+
+Rect ScaleBarWidget::bounds(SvgPainter* svgp) const
+{
+  return svgp->p->getTransform().mapRect(Rect::wh(100, 20));
+}
+
+void ScaleBarWidget::draw(SvgPainter* svgp) const
+{
+  Painter* p = svgp->p;
+  Rect bbox = node->bounds();
+  //real w = bbox.width(), h = bbox.height();  p->translate(w/2, h/2);
+
+  real y = bbox.center().y;
+  LngLat r0, r1;
+  map->screenPositionToLngLat(bbox.left, y, &r0.longitude, &r0.latitude);
+  map->screenPositionToLngLat(bbox.right, y, &r1.longitude, &r1.latitude);
+
+  // steps are 1, 2, 5, 10, 20, 50, ...
+  const char* format = "%.0f km";
+  real dist = lngLatDist(r0, r1);
+  if(!MapsApp::metricUnits) {
+    dist = dist*0.621371;
+    if(dist < 0.1) {
+      dist = 5280*dist;
+      format = "%.0f ft";
+    }
+    else
+      format = dist < 1 ? "%.1f mi" : "%.0f mi";
+  }
+  else if(dist < 1) {
+    dist *= 1000;
+    format = "%.0f m";
+  }
+  real pow10 = std::pow(10, std::floor(std::log10(dist)));
+  real firstdigit = dist/pow10;
+  real n = firstdigit < 2 ? 1 : firstdigit < 5 ? 2 : 5;
+  real scaledist = n * pow10;
+
+  p->setFillBrush(Color::NONE);
+  p->setStroke(Color(64, 64, 64), 1.5);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->drawLine(Point(0, y), Point(bbox.width()*scaledist/dist, y));
+  p->setFontSize(12);
+  p->setFillBrush(Color::BLACK);
+  p->setStroke(Color::WHITE, 0.5);
+  p->drawText(0, 0, fstring(format, scaledist).c_str());
+}
+
 Window* MapsApp::createGUI()
 {
 #if PLATFORM_MOBILE
@@ -763,6 +819,11 @@ Window* MapsApp::createGUI()
   floatToolbar->node->setAttribute("box-anchor", "bottom right");
   floatToolbar->setMargins(0, 10, 10, 0);
   mapsPanel->addWidget(floatToolbar);
+
+  ScaleBarWidget* scaleBar = new ScaleBarWidget(map);
+  scaleBar->node->setAttribute("box-anchor", "bottom left");
+  scaleBar->setMargins(0, 0, 10, 10);
+  mapsPanel->addWidget(scaleBar);
 
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();
@@ -1236,6 +1297,10 @@ int main(int argc, char* argv[])
   }
 
   // GUI setup
+  // preset colors for tracks and bookmarks
+  for(const auto& colorstr : app->config["colors"])
+    MapsApp::markerColors.push_back(parseColor(colorstr.Scalar()));
+
   // fake location updates to test track recording
   auto locFn = [&](){
     real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));

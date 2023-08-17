@@ -12,6 +12,8 @@
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
+#include "usvg/svgwriter.h"
+#include "usvg/svgparser.h"
 #include "mapwidgets.h"
 
 // bookmarks (saved places)
@@ -67,37 +69,57 @@ int MapsBookmarks::getListId(const char* listname, bool create)
   return list_id;
 }
 
+static Widget* createNewListWidget(std::function<void(int, std::string)> callback)
+{
+  Widget* newListContent = createColumn();
+  newListContent->node->setAttribute("box-anchor", "hfill");
+  TextEdit* newListTitle = createTextEdit();
+  ColorPicker* newListColor = createColorPicker(MapsApp::markerColors, Color::BLUE);
+  Button* createListBtn = createPushbutton("Create");
+  Button* cancelListBtn = createPushbutton("Cancel");
+  createListBtn->onClicked = [=](){
+    char colorstr[64];
+    SvgWriter::serializeColor(colorstr, newListColor->color());
+    std::string listname = newListTitle->text();
+    if(listname.empty()) return;
+    const char* query = "INSERT INTO lists (title, color) VALUES (?,?);";
+    DB_exec(MapsApp::bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
+      sqlite3_bind_text(stmt, 1, listname.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, colorstr, -1, SQLITE_TRANSIENT);
+    });
+    int list_id = sqlite3_last_insert_rowid(MapsApp::bkmkDB);
+    if(callback)
+      callback(list_id, listname);
+    newListContent->setVisible(false);
+  };
+  cancelListBtn->onClicked = [=](){ newListContent->setVisible(false); };
+  newListTitle->onChanged = [=](const char* s){ createListBtn->setEnabled(s[0]); };
+  newListContent->addWidget(createTitledRow("Title", newListTitle, newListColor));
+  //newListContent->addWidget(createTitledRow("Color", newListColor));
+  newListContent->addWidget(createTitledRow(NULL, createListBtn, cancelListBtn));
+  newListContent->setVisible(false);
+  newListContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SvgGui::VISIBLE) {
+      newListColor->setColor(Color(0x12, 0xB5, 0xCB));
+      newListTitle->setText("");
+    }
+    return false;
+  });
+  return newListContent;
+}
+
 void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> callback)  //int rowid)
 {
   Dialog* dialog = new Dialog( setupWindowNode(chooseListProto->clone()) );
   Widget* content = createColumn();
   content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
 
-  Widget* newListContent = createColumn();
-  newListContent->node->setAttribute("box-anchor", "hfill");
-  TextEdit* newListTitle = createTextEdit();
-  TextEdit* newListColor = createTextEdit();  // obviously needs to be replaced with a color picker
-  Button* createListBtn = createPushbutton("Create");
-  createListBtn->onClicked = [=](){
-    std::string listname = newListTitle->text();
-    const char* query = "INSERT INTO lists (title, color) VALUES (?,?);";
-    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, listname.c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 2, newListColor->text().c_str(), -1, SQLITE_TRANSIENT);
-    });
-    int list_id = sqlite3_last_insert_rowid(app->bkmkDB);
+  Widget* newListContent = createNewListWidget([=](int id, std::string name){
     dialog->finish(Dialog::ACCEPTED);
-    callback(list_id, listname);
-  };
-  newListContent->addWidget(createTitledRow("Title", newListTitle));
-  newListContent->addWidget(createTitledRow("Color", newListColor));
-  newListContent->addWidget(createListBtn);
-  newListContent->setVisible(false);
-
+    callback(id, name);
+  });
   Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
-  newListBtn->onClicked = [=](){
-    newListContent->setVisible(!newListContent->isVisible());
-  };
+  newListBtn->onClicked = [=](){ newListContent->setVisible(!newListContent->isVisible()); };
 
   Button* cancelBtn = createToolbutton(MapsApp::uiIcon("back"), "Cancel");
   cancelBtn->onClicked = [=](){
@@ -155,15 +177,20 @@ void MapsBookmarks::populateLists(bool archived)
     listsContent->clear();
   }
 
-  const char* query = "SELECT lists.id, lists.title, COUNT(1) FROM lists JOIN bookmarks AS b ON lists.id = b.list_id WHERE lists.archived = ? GROUP by lists.id;";
-  DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){  //"SELECT list, COUNT(1) FROM bookmarks GROUP by list;"
+  const char* query = "SELECT lists.id, lists.title, lists.color, COUNT(1) FROM lists JOIN bookmarks AS b"
+      " ON lists.id = b.list_id WHERE lists.archived = ? GROUP by lists.id;";
+  DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     std::string list = (const char*)(sqlite3_column_text(stmt, 1));
-    int nplaces = sqlite3_column_int(stmt, 2);
+    std::string color = (const char*)(sqlite3_column_text(stmt, 2));
+    int nplaces = sqlite3_column_int(stmt, 3);
 
     Button* item = new Button(bkmkListProto->clone());
     item->onClicked = [=](){ populateBkmks(rowid, true); };
-    Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
+    Widget* container = item->selectFirst(".child-container");
+
+    Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
+    container->addWidget(showBtn);
     auto it = bkmkMarkers.find(rowid);
     if(it != bkmkMarkers.end())
       showBtn->setChecked(it->second->defaultVis);
@@ -186,7 +213,26 @@ void MapsBookmarks::populateLists(bool archived)
       }
     };
 
-    Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
+    ColorPicker* colorBtn = createColorPicker(app->markerColors, parseColor(color.c_str(), Color::CYAN));
+    container->addWidget(colorBtn);
+    colorBtn->onColor = [=](Color newcolor){
+      char buff[64];
+      SvgWriter::serializeColor(buff, newcolor);
+      DB_exec(app->bkmkDB, "UPDATE lists SET color = ? WHERE id = ?;", NULL, [&](sqlite3_stmt* stmt1){
+        sqlite3_bind_text(stmt1, 1, buff, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt1, 2, rowid);
+      });
+      auto it1 = bkmkMarkers.find(rowid);
+      if(it1 != bkmkMarkers.end()) {
+        bool vis = it1->second->defaultVis;
+        bkmkMarkers.erase(it1);
+        if(vis)
+          populateBkmks(rowid, false);
+      }
+    };
+
+    Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
+    container->addWidget(overflowBtn);
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
       std::string q2 = fstring("UPDATE lists SET archived = %d WHERE id = ?;", archived ? 0 : 1);
@@ -248,11 +294,6 @@ void MapsBookmarks::populateLists(bool archived)
     item->onClicked = [this](){ app->showPanel(archivedPanel, true); populateLists(true); };
     static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(MapsApp::uiIcon("archive"));
 
-    Button* showBtn = new Button(item->containerNode()->selectFirst(".visibility-btn"));
-    showBtn->setVisible(false);
-    Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
-    overflowBtn->setVisible(false);
-
     TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
     titleText->setText("Archived");
     TextLabel* detailText = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
@@ -280,8 +321,10 @@ void MapsBookmarks::restoreBookmarks()
 void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 {
   std::string listname;
-  DB_exec(app->bkmkDB, "SELECT title FROM lists WHERE id = ?;", [&](sqlite3_stmt* stmt){
+  std::string color;
+  DB_exec(app->bkmkDB, "SELECT title, color FROM lists WHERE id = ?;", [&](sqlite3_stmt* stmt){
     listname = (const char*)(sqlite3_column_text(stmt, 0));
+    color = (const char*)(sqlite3_column_text(stmt, 1));
   }, [&](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, list_id); });
 
   if(createUI) {
@@ -317,7 +360,7 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
     int64_t timestamp = sqlite3_column_int64(stmt, 6);
     auto onPicked = [=](){ app->setPickResult(LngLat(lng, lat), namestr, propstr); };
     if(markerGroup)
-      markerGroup->createMarker(LngLat(lng, lat), onPicked, {{{"name", namestr}}});
+      markerGroup->createMarker(LngLat(lng, lat), onPicked, {{{"name", namestr}, {"color", color}}});
 
     if(createUI) {
       Button* item = new Button(placeListProto->clone());
@@ -551,7 +594,7 @@ Button* MapsBookmarks::createPanel()
   static const char* bkmkListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="hfill">
+      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="toolbutton drag-btn" margin="2 5">
           <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
         </g>
@@ -560,14 +603,7 @@ Button* MapsBookmarks::createPanel()
           <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
         </g>
 
-        <g class="toolbutton visibility-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#eye"/>
-        </g>
-
-        <g class="toolbutton overflow-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#overflow"/>
-        </g>
-
+        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
       </g>
     </g>
   )";
@@ -630,26 +666,9 @@ Button* MapsBookmarks::createPanel()
   //    " rotation REAL, tilt REAL, width REAL, height REAL);");
 
   // Bookmark lists panel (main and archived lists)
-  Widget* newListContent = createColumn();
-  TextEdit* newListTitle = createTextEdit();
-  TextEdit* newListColor = createTextEdit();  // obviously needs to be replaced with a color picker
-  Button* createListBtn = createPushbutton("Create");
-  createListBtn->onClicked = [=](){
-    const char* query = "INSERT INTO lists (title, color) VALUES (?,?);";
-    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, newListTitle->text().c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 2, newListColor->text().c_str(), -1, SQLITE_TRANSIENT);
-    });
-  };
-  newListContent->addWidget(createTitledRow("Title", newListTitle));
-  newListContent->addWidget(createTitledRow("Color", newListColor));
-  newListContent->addWidget(createListBtn);
-  newListContent->setVisible(false);
-
+  Widget* newListContent = createNewListWidget({});
   Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
-  newListBtn->onClicked = [=](){
-    newListContent->setVisible(!newListContent->isVisible());
-  };
+  newListBtn->onClicked = [=](){ newListContent->setVisible(!newListContent->isVisible()); };
 
   listsContent = new DragDropList;  //
   Widget* listsCol = createColumn(); //createListContainer();
