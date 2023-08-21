@@ -31,8 +31,6 @@ static const char* apiKeyScenePath = "+global.sdk_api_key";
 
 Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
-//std::string MapsApp::apiKey;
-CameraPosition MapsApp::mapCenter;
 YAML::Node MapsApp::config;
 std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
@@ -53,6 +51,14 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
   lngLatMin.longitude = std::min(std::min(lng00, lng01), std::min(lng10, lng11));
   lngLatMax.latitude  = std::max(std::max(lat00, lat01), std::max(lat10, lat11));
   lngLatMax.longitude = std::max(std::max(lng00, lng01), std::max(lng10, lng11));
+}
+
+LngLat MapsApp::getMapCenter()
+{
+  LngLat res;
+  map->screenPositionToLngLat(
+      map->getViewportWidth()/2, map->getViewportHeight()/2, &res.longitude, &res.latitude);
+  return res;
 }
 
 void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority)
@@ -450,9 +456,9 @@ void MapsApp::mapUpdate(double time)
   //LOG("MapState: %d", state.flags);
 
   // update map center
-  mapCenter = map->getCameraPosition();
-  reorientBtn->setVisible(mapCenter.tilt != 0 || mapCenter.rotation != 0);
-  reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(mapCenter.rotation));
+  auto cpos = map->getCameraPosition();
+  reorientBtn->setVisible(cpos.tilt != 0 || cpos.rotation != 0);
+  reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(cpos.rotation));
 
   mapsTracks->onMapChange();
   mapsBookmarks->onMapChange();
@@ -679,7 +685,9 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
   real scaledist = n * pow10;
 
   p->setFillBrush(Color::NONE);
-  p->setStroke(Color(64, 64, 64), 1.5);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->setStroke(Color::WHITE, 1.5);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->drawLine(Point(0, y), Point(bbox.width()*scaledist/dist, y));
+  p->setStroke(Color::BLACK, 0.5);  //, Painter::FlatCap, Painter::BevelJoin);
   p->drawLine(Point(0, y), Point(bbox.width()*scaledist/dist, y));
   p->setFontSize(12);
   p->setFillBrush(Color::BLACK);

@@ -3,6 +3,7 @@
 #include "mapsearch.h"
 #include "mapsources.h"
 #include "bookmarks.h"
+#include "tracks.h"
 #include "util.h"
 
 
@@ -106,6 +107,31 @@ void PluginManager::jsPlaceInfo(int fnIdx, std::string id)
   duk_pop(ctx);
   inState = NONE;
 }
+
+void PluginManager::jsRoute(int fnIdx, std::string routeMode, const std::vector<LngLat>& waypts)
+{
+  inState = ROUTE;
+
+  duk_context* ctx = jsContext;
+
+  duk_get_global_string(ctx, routeFns[fnIdx].name.c_str());
+
+  duk_push_string(ctx, routeMode.c_str());
+
+  auto array0 = duk_push_array(ctx);
+  for(size_t ii = 0; ii < waypts.size(); ++ii) {
+    auto array1 = duk_push_array(ctx);
+    duk_push_number(ctx, waypts[ii].longitude);
+    duk_put_prop_index(ctx, array1, 0);
+    duk_push_number(ctx, waypts[ii].latitude);
+    duk_put_prop_index(ctx, array1, 1);
+    duk_put_prop_index(ctx, array0, ii);
+  }
+  dukTryCall(ctx, 1);
+  duk_pop(ctx);
+  inState = NONE;
+}
+
 
 std::string PluginManager::evalJS(const char* s)
 {
@@ -244,6 +270,14 @@ static int addPlaceInfo(duk_context* ctx)
   const char* title = duk_require_string(ctx, 1);
   const char* value = duk_require_string(ctx, 2);
   PluginManager::inst->app->addPlaceInfo(icon, title, value);
+  return 0;
+}
+
+static int addRouteGPX(duk_context* ctx)
+{
+  const char* gpx = duk_require_string(ctx, 0);
+  std::unique_ptr<Track> track = MapsTracks::loadGPX(gpx);
+  PluginManager::inst->app->mapsTracks->setRoute(std::move(track->route));
   return 0;
 }
 

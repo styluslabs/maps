@@ -53,6 +53,7 @@ public:
   void loadSceneFile(bool setPosition = false);
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
+  LngLat getMapCenter();
   //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
   void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority = 1);
   void setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority = 1);
@@ -125,11 +126,9 @@ public:
 
   static Platform* platform;
   static std::string baseDir;
-  //static std::string apiKey;
   static SvgGui* gui;
   static YAML::Node config;
   static std::string configFile;
-  static CameraPosition mapCenter;
   static sqlite3* bkmkDB;
   static bool metricUnits;
   static std::vector<Color> markerColors;

@@ -344,7 +344,7 @@ void MapsSearch::resultsUpdated()
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
     int resultIdx = 0;
     for(auto& res : listResults) {
-      if(resultIdx <= 5 || lngLatDist(app->mapCenter.lngLat(), res.pos) < 2.0) {
+      if(resultIdx <= 5 || lngLatDist(app->getMapCenter(), res.pos) < 2.0) {
         minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
         minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
         maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
@@ -406,7 +406,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     // use map center for origin if current location is offscreen
     if(phase != NEXTPAGE) {
       LngLat loc = app->currLocation.lngLat();
-      searchOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->mapCenter.lngLat();
+      searchOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
     }
     if(phase == RETURN) {
       DB_exec(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);", NULL, [&](sqlite3_stmt* stmt){

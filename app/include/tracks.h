@@ -7,6 +7,7 @@ class Button;
 class SvgNode;
 class TrackPlot;
 class SelectDialog;
+class DragDropList;
 
 class MapsTracks : public MapsComponent {
 public:
@@ -22,6 +23,17 @@ public:
   //struct TrackLoc : public Location { double dist; };
   using TrackLoc = Location;
 
+  struct Waypoint
+  {
+    Location loc;
+    double dist;
+    std::string name;
+    std::string desc;
+    MarkerID marker;
+    bool visible;  // <extensions><sl:route visible="true" routed="true"/>
+    bool routed;
+  };
+
   struct Track {
     std::string title;
     std::string detail;
@@ -29,6 +41,11 @@ public:
     std::string style;
     MarkerID marker = 0;
     std::vector<TrackLoc> locs;
+
+    std::vector<Waypoint> waypoints;
+    std::vector<Waypoint> route;
+    std::vector<Waypoint> track;
+
     int rowid = -1;
     bool visible = true;
     bool archived = false;
@@ -44,6 +61,8 @@ public:
   Widget* archivedPanel = NULL;
   Widget* statsContent = NULL;
   Widget* statsPanel = NULL;
+  DragDropList* wayptContent = NULL;
+  Widget* wayptPanel = NULL;
   TrackPlot* trackPlot = NULL;
   Button* pauseRecordBtn = NULL;
   Button* stopRecordBtn = NULL;
@@ -52,10 +71,11 @@ public:
   double minTrackDist = 2;  // meters
   double minTrackTime = 5;  // seconds
 
+  static Track loadGPX(const char* gpxfile);
+  static bool saveGPX(Track* track);
+
 private:
   void loadTracks(bool archived);
-  Track loadGPX(const char* gpxfile);
-  bool saveGPX(Track* track);
   void showTrack(Track* track);  //, const char* styling);
   void setTrackVisible(Track* track, bool visible);
   void populateTracks(bool archived);
