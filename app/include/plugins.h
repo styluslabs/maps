@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include "mapscomponent.h"
 //#include "js/JavaScript.h"
 #include "duktape/duktape.h"
@@ -16,15 +17,18 @@ struct PluginFn
 class PluginManager : public MapsComponent
 {
 public:
+  enum UrlReqType { NONE, SEARCH, PLACE, ROUTE } inState = NONE;
+
   PluginManager(MapsApp* _app, const std::string& pluginDir);
   ~PluginManager();
   Button* createPanel();
   void createFns(duk_context* ctx);
   std::string evalJS(const char* s);
-  void cancelJsSearch();
-  void cancelPlaceInfo();
+  void cancelRequests(UrlReqType type);
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
   void jsPlaceInfo(int fnIdx, std::string id);
+  void jsRoute(int fnIdx, std::string routeMode, const std::vector<LngLat>& waypts);
+  void notifyRequest(UrlRequestHandle handle);
   static bool dukTryCall(duk_context* ctx, int nargs);
 
   template <typename... Types>
@@ -50,11 +54,11 @@ public:
   duk_context* jsContext;
   //std::mutex jsMutex;
   std::vector<PluginFn> searchFns;
+  std::vector<PluginFn> routeFns;
   std::vector<PluginFn> placeFns;
   std::vector<PluginFn> commandFns;
-  std::vector<UrlRequestHandle> searchRequests;
-  std::vector<UrlRequestHandle> placeRequests;
-  enum { NONE, SEARCH, PLACE } inState = NONE;
+  struct UrlRequest { UrlReqType type; UrlRequestHandle handle; };
+  std::list<UrlRequest> pendingRequests;
 
   static PluginManager* inst;
 };

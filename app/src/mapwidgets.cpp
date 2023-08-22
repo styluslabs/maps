@@ -324,6 +324,8 @@ void DragDropList::addItem(KeyType key, Widget* item)
         placeholder = new Widget(rnode);
         content->containerNode()->addChild(rnode, item->node);
         item->removeFromParent();
+        SvgNode* next = content->containerNode()->removeChild(item->node);
+        nextItemKey = next->getStringAttr("__sortkey", "");
         floatWidget->addWidget(item);
         floatWidget->setVisible(true);
       }
@@ -349,11 +351,14 @@ void DragDropList::addItem(KeyType key, Widget* item)
       if(placeholder) {
         SvgContainerNode* parent = content->containerNode();
         item->removeFromParent();
-        parent->addChild(item->node);
-        parent->removeChild(placeholder->node);
+        parent->addChild(item->node, placeholder->node);
+        SvgNode* next = parent->removeChild(placeholder->node);
         delete placeholder->node;
         placeholder = NULL;
         floatWidget->setVisible(false);
+        std::string nextkey = next ? next->getStringAttr("__sortkey", "") : "";
+        if(onReorder && nextkey != nextItemKey)
+          onReorder(item->node->getStringAttr("__sortkey", ""), nextkey);
       }
       //return true;
     }

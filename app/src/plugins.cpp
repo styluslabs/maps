@@ -51,24 +51,23 @@ PluginManager::~PluginManager()
   duk_destroy_heap(jsContext);
 }
 
-void PluginManager::cancelJsSearch()
+void PluginManager::cancelRequests(UrlReqType type)
 {
-  for(auto hnd : searchRequests)
-    MapsApp::platform->cancelUrlRequest(hnd);  // no-op if request already completed
-  searchRequests.clear();
-}
-
-void PluginManager::cancelPlaceInfo()
-{
-  for(auto hnd : placeRequests)
-    MapsApp::platform->cancelUrlRequest(hnd);  // no-op if request already completed
-  placeRequests.clear();
+  auto it = pendingRequests.begin();
+  while(it != pendingRequests.end()) {
+    if(it->type == type) {
+      MapsApp::platform->cancelUrlRequest(it->handle);
+      it = pendingRequests.erase(it);
+    }
+    else
+      ++it;
+  }
 }
 
 void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags)
 {
   //std::lock_guard<std::mutex> lock(jsMutex);
-  cancelJsSearch();
+  cancelRequests(SEARCH);
   inState = SEARCH;
 
   duk_context* ctx = jsContext;
@@ -96,7 +95,7 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
 
 void PluginManager::jsPlaceInfo(int fnIdx, std::string id)
 {
-  cancelPlaceInfo();
+  cancelRequests(PLACE);
   inState = PLACE;
 
   duk_context* ctx = jsContext;
@@ -110,14 +109,12 @@ void PluginManager::jsPlaceInfo(int fnIdx, std::string id)
 
 void PluginManager::jsRoute(int fnIdx, std::string routeMode, const std::vector<LngLat>& waypts)
 {
+  cancelRequests(ROUTE);
   inState = ROUTE;
 
   duk_context* ctx = jsContext;
-
   duk_get_global_string(ctx, routeFns[fnIdx].name.c_str());
-
   duk_push_string(ctx, routeMode.c_str());
-
   auto array0 = duk_push_array(ctx);
   for(size_t ii = 0; ii < waypts.size(); ++ii) {
     auto array1 = duk_push_array(ctx);
@@ -132,6 +129,11 @@ void PluginManager::jsRoute(int fnIdx, std::string routeMode, const std::vector<
   inState = NONE;
 }
 
+void PluginManager::notifyRequest(UrlRequestHandle handle)
+{
+  if(inState != NONE)
+    pendingRequests.push_back({inState, handle});
+}
 
 std::string PluginManager::evalJS(const char* s)
 {
@@ -156,6 +158,8 @@ static int registerFunction(duk_context* ctx)
     PluginManager::inst->searchFns.push_back({name, title});
   else if(fntype == "place")
     PluginManager::inst->placeFns.push_back({name, title});
+  else if(fntype == "route")
+    PluginManager::inst->routeFns.push_back({name, title});
   else if(fntype == "command")
     PluginManager::inst->commandFns.push_back({name, title});
   else
@@ -175,28 +179,30 @@ static void invokeHttpReqCallback(duk_context* ctx, std::string cbvar, const Url
   duk_put_global_string(ctx, cbvar.c_str());  // release for GC
   // parse response JSON and call callback
   duk_push_lstring(ctx, response.content.data(), response.content.size());
-  char c0 = response.content.size() > 1 ? response.content[0] : '\0';
+  //char c0 = response.content.size() > 1 ? response.content[0] : '\0';
   // TODO: use DUK_USE_CPP_EXCEPTIONS to catch parsing errors!
-  if(c0 == '[' || c0 == '{')
-    duk_json_decode(ctx, -1);
+  //if(c0 == '[' || c0 == '{')
+  //  duk_json_decode(ctx, -1);
   PluginManager::dukTryCall(ctx, 1);
   duk_pop(ctx);
 }
 
-static int jsonHttpRequest(duk_context* ctx)
+static int httpRequest(duk_context* ctx)
 {
   static int reqCounter = 0;
   // called from jsSearch, etc., so do not lock jsMutex (alternative is to use recursive_lock)
+  duk_idx_t nargs = duk_get_top(ctx);
   const char* urlstr = duk_require_string(ctx, 0);
-  const char* hdrstr = duk_require_string(ctx, 1);
+  const char* hdrstr = nargs > 2 ? duk_require_string(ctx, 1) : "";
+  const char* payload = nargs > 3 ? duk_require_string(ctx, 2) : "";
   auto url = Url(urlstr);
-  std::string cbvar = fstring("_jsonHttpRequest_%d", reqCounter++);
-  duk_dup(ctx, 2);
+  std::string cbvar = fstring("_httpRequest_%d", reqCounter++);
+  duk_dup(ctx, nargs-1);
   duk_put_global_string(ctx, cbvar.c_str());
   //duk_push_global_stash(ctx);
   //duk_dup(ctx, 1);  // callback
   //duk_put_prop_string(ctx, -2, cbvar.c_str());
-  auto hnd = MapsApp::platform->startUrlRequest(url, hdrstr, [ctx, cbvar, url](UrlResponse&& response) {
+  auto hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [ctx, cbvar, url](UrlResponse&& response) {
     if(response.error)
       LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
     else
@@ -204,10 +210,7 @@ static int jsonHttpRequest(duk_context* ctx)
     //std::lock_guard<std::mutex> lock(PluginManager::inst->jsMutex);
     //invokeHttpReqCallback(ctx, cbvar, response);
   });
-  if(PluginManager::inst->inState == PluginManager::SEARCH)
-    PluginManager::inst->searchRequests.push_back(hnd);
-  else if(PluginManager::inst->inState == PluginManager::PLACE)
-    PluginManager::inst->placeRequests.push_back(hnd);
+  PluginManager::inst->notifyRequest(hnd);
   return 0;
 }
 
@@ -286,7 +289,7 @@ void PluginManager::createFns(duk_context* ctx)
   // create C functions
   duk_push_c_function(ctx, registerFunction, 3);
   duk_put_global_string(ctx, "registerFunction");
-  duk_push_c_function(ctx, jsonHttpRequest, 3);
+  duk_push_c_function(ctx, httpRequest, DUK_VARARGS);
   duk_put_global_string(ctx, "jsonHttpRequest");
   duk_push_c_function(ctx, addSearchResult, 6);
   duk_put_global_string(ctx, "addSearchResult");

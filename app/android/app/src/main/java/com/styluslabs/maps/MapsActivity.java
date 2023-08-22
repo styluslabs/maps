@@ -227,7 +227,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   @Keep
-  void startUrlRequest(@NonNull final String url, @NonNull final String headers, final long requestHandle)
+  void startUrlRequest(@NonNull final String url,
+      @NonNull final String headers, @NonNull final String payload, final long requestHandle)
   {
     final HttpHandler.Callback callback = new HttpHandler.Callback() {
       @Override
@@ -255,7 +256,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       }
     };
 
-    Object request = httpHandler.startRequest(url, headers, callback);
+    Object request = httpHandler.startRequest(url, headers, payload, callback);
     if (request != null) {
       httpRequestHandles.put(requestHandle, request);
     }

@@ -199,7 +199,7 @@ bool MapsSearch::indexMBTiles()
 
 void MapsSearch::clearSearchResults()
 {
-  app->pluginManager->cancelJsSearch();  // cancel any outstanding search requests
+  app->pluginManager->cancelRequests(PluginManager::SEARCH);  // cancel any outstanding search requests
   mapResults.clear();
   listResults.clear();
   markers->reset();

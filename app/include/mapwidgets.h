@@ -46,11 +46,14 @@ public:
   void setOrder(const std::vector<KeyType>& order);
   std::vector<KeyType> getOrder();
 
+  std::function<void(std::string, std::string)> onReorder;
+
   Widget* content = NULL;
   ScrollWidget* scrollWidget = NULL;
   AbsPosWidget* floatWidget = NULL;
   Widget* placeholder = NULL;
   real yOffset = 0;
+  std::string nextItemKey;
 };
 
 class Menubar : public Toolbar
