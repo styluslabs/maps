@@ -113,6 +113,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       locationManager.removeGpsStatusListener(this);
     }
     mSensorManager.unregisterListener(this);
+    MapsLib.onPause();
   }
 
   @Override

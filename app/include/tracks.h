@@ -25,21 +25,36 @@ struct Waypoint
   LngLat lngLat() const { return loc.lngLat(); }
 };
 
-struct Track {
+struct GpxWay
+{
   std::string title;
-  std::string detail;
-  std::string gpxFile;
+  std::string desc;
+  std::vector<Waypoint> pts;
+
+  GpxWay(const std::string& _title, const std::string& _desc) : title(_title), desc(_desc) {}
+};
+
+struct GpxFile {
+  std::string title;
+  std::string desc;
+  std::string filename;
   std::string style;
   MarkerID marker = 0;
-  //std::vector<TrackLoc> locs;
 
   std::vector<Waypoint> waypoints;
-  std::vector<Waypoint> route;
-  std::vector<Waypoint> track;
+  std::vector<GpxWay> routes;
+  std::vector<GpxWay> tracks;
 
   int rowid = -1;
+  int wayPtSerial = 0;
   bool visible = true;
   bool archived = false;
+  //bool loaded = false;
+
+  GpxFile(const std::string& _title, const std::string& _desc, const std::string& _file)
+      : title(_title), desc(_desc), filename(_file) {}
+
+  GpxWay* activeWay() { return !routes.empty() ? &routes.front() : !tracks.empty()? &tracks.front() : NULL; }
 };
 
 class MapsTracks : public MapsComponent {
@@ -53,12 +68,9 @@ public:
   MarkerID trackStartMarker = 0;
   MarkerID trackEndMarker = 0;
 
-  //struct TrackLoc : public Location { double dist; };
-  //using TrackLoc = Location;
-
-  std::vector<Track> tracks;
-  Track recordedTrack;
-  Track drawnTrack;
+  std::vector<GpxFile> tracks;
+  GpxFile recordedTrack;
+  //GpxFile drawnTrack;
 
   std::string routeMode = "direct";  // "walk", "bike", "drive"
   int pluginFn = 0;
@@ -79,20 +91,20 @@ public:
   double minTrackDist = 2;  // meters
   double minTrackTime = 5;  // seconds
 
-  static Track loadGPX(const char* gpxfile);
-  static bool saveGPX(Track* track);
+  static GpxFile loadGPX(const char* gpxfile);
+  static bool saveGPX(GpxFile* track);
 
 private:
   void loadTracks(bool archived);
-  void updateTrackMarker(Track* track);
-  void showTrack(Track* track, bool show);
-  void setTrackVisible(Track* track, bool visible);
+  void updateTrackMarker(GpxFile* track);
+  void showTrack(GpxFile* track, bool show);
+  void setTrackVisible(GpxFile* track, bool visible);
   void populateTracks(bool archived);
-  void populateStats(Track* track);
-  Widget* createTrackEntry(Track* track);
+  void populateStats(GpxFile* track);
+  Widget* createTrackEntry(GpxFile* track);
   Waypoint interpTrack(const std::vector<Waypoint>& locs, double s, size_t* idxout = NULL);
 
-  Track* activeTrack = NULL;
+  GpxFile* activeTrack = NULL;
   std::vector<Waypoint> origLocs;
   double cropStart = 0;
   double cropEnd = 1;

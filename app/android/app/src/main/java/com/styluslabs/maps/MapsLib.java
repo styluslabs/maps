@@ -13,6 +13,7 @@ public class MapsLib
   public static native void resize(int width, int height);
   public static native void setupGL();
   public static native void drawFrame();
+  public static native void onPause();
   public static native void touchEvent(int ptrId, int action, int t, float x, float y, float p);
   public static native void keyEvent(int keycode, int action);
   public static native void charInput(int c, int newCursorPosition);

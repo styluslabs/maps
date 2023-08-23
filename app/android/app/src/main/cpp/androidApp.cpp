@@ -378,6 +378,11 @@ JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
   prevWantTextInput = wantTextInput;
 }
 
+JNI_FN(onPause)()
+{
+  app->onSuspend();
+}
+
 JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)
 {
   static const int translateAction[] = {1, -1, 0 /*motion*/, -1 /*cancel*/, 0, 1, -1};
