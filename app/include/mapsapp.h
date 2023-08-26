@@ -54,6 +54,7 @@ public:
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   LngLat getMapCenter();
+  void getElevation(LngLat pos, std::function<void(double)> callback);
   //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
   void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority = 1);
   void setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority = 1);

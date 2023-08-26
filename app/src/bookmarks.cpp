@@ -18,12 +18,9 @@
 
 // bookmarks (saved places)
 
-void MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* name, const char* props,
+int MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* name, const char* props,
     const char* note, LngLat pos, int timestamp)//, int rowid)
 {
-  // WITH list_id AS (SELECT rowid FROM lists where title = ?)
-
-  //rowid >= 0 ? "UPDATE bookmarks SET list_id = ?, osm_id = ?, title = ?, props = ?, notes = ?, lng = ?, lat = ? WHERE rowid = ?" :
   const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
   DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, list_id);
@@ -34,14 +31,10 @@ void MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* nam
     sqlite3_bind_double(stmt, 6, pos.longitude);
     sqlite3_bind_double(stmt, 7, pos.latitude);
     sqlite3_bind_int(stmt, 8, timestamp > 0 ? timestamp : int(mSecSinceEpoch()/1000));
-    //if(rowid >= 0)
-    //  sqlite3_bind_int(stmt, 9, rowid);
   });
 
   bkmkPanelDirty = true;
   listsDirty = archiveDirty = true;  // list is dirty too since it shows number of bookmarks
-  //if(rowid >= 0)
-  //  return;
 
   auto it = bkmkMarkers.find(list_id);
   if(it != bkmkMarkers.end()) {
@@ -50,6 +43,8 @@ void MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* nam
     auto onPicked = [=](){ app->setPickResult(pos, namestr, propstr); };
     it->second->createMarker(pos, onPicked, {{{"name", name}}});
   }
+
+  return sqlite3_last_insert_rowid(app->bkmkDB);
 }
 
 int MapsBookmarks::getListId(const char* listname, bool create)
@@ -423,6 +418,7 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
 {
   Widget* content = createColumn();
   content->node->setAttribute("box-anchor", "hfill");
+  content->node->addClass("bkmk-content");
   // attempt lookup w/ osm_id if passed
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
   // - if this gives us too many false positives, we could add "Nearby bookmarks" title to section
@@ -478,8 +474,6 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   noteText->setText(notestr.c_str());
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
 
-  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Bookmark...", true);
-  createBkmkBtn->node->setAttribute("box-anchor", "left");
   // bookmark editing
   auto editToolbar = createToolbar();
   auto titleEdit = createTextEdit();
@@ -533,10 +527,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     });
     bkmkPanelDirty = true;
     listsDirty = archiveDirty = true;  // list is dirty too since it shows number of bookmarks
-    editContent->setVisible(false);  // note that we do not redisplay info stack
-    noteText->setVisible(false);
-    createBkmkBtn->setVisible(true);
-    toolRow->setVisible(false);
+    app->gui->deleteWidget(section);
   };
 
   //auto addNoteBtn = new Button(widget->containerNode()->selectFirst(".addnote-btn"));
@@ -564,29 +555,34 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   toolRow->addWidget(removeBtn);
   toolRow->addWidget(addNoteBtn);
 
-  section->addWidget(createBkmkBtn);
   section->addWidget(toolRow);
   section->addWidget(noteText);
   section->addWidget(editContent);
+
+  return section;
+}
+
+void MapsBookmarks::addPlaceActions(Toolbar* tb)
+{
+  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Bookmark...", true);
+  createBkmkBtn->node->setAttribute("box-anchor", "left");
 
   auto createBkmkFn = [=](int list_id, std::string listname){
     rapidjson::Document& doc = app->pickResultProps;
     std::string title = doc.IsObject() && doc.HasMember("name") ?  doc["name"].GetString()
         : fstring("Pin: %.6f, %.6f", app->pickResultCoord.latitude, app->pickResultCoord.longitude);
-    addBookmark(list_id, osmIdFromProps(doc).c_str(), title.c_str(),
+    int rowid = addBookmark(list_id, osmIdFromProps(doc).c_str(), title.c_str(),
         rapidjsonToStr(doc).c_str(), "", app->pickResultCoord);
-    chooseListBtn->setText(listname.c_str());
-    createBkmkBtn->setVisible(false);
-    toolRow->setVisible(true);
+
+    Widget* section = getPlaceInfoSubSection(rowid, list_id, title.c_str(), "");
+    app->infoContent->selectFirst(".bkmk-content")->addWidget(section);
   };
 
   createBkmkBtn->onClicked = [=](){
     chooseBookmarkList(createBkmkFn);  //rowid);
   };
 
-  createBkmkBtn->setVisible(rowid < 0);
-  toolRow->setVisible(rowid >= 0);
-  return section;
+  tb->addWidget(createBkmkBtn);
 }
 
 Button* MapsBookmarks::createPanel()

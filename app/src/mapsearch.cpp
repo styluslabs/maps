@@ -188,7 +188,7 @@ bool MapsSearch::indexMBTiles()
     for(int row = min_row; row <= max_row; ++row) {
       for(int col = min_col; col <= max_col; ++col) {
         TileID tileid(col, (1 << max_zoom) - 1 - row, max_zoom);
-        tileSrc->loadTileData(std::make_shared<Tangram::BinaryTileTask>(tileid, tileSrc), tilecb);
+        tileSrc->loadTileData(std::make_shared<BinaryTileTask>(tileid, tileSrc), tilecb);
       }
     }
     //break; ???

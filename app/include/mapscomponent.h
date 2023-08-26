@@ -14,6 +14,7 @@ using Tangram::logMsg;
 using Tangram::Url;
 using Tangram::UrlResponse;
 using Tangram::TileTaskCb;
+using Tangram::BinaryTileTask;
 using Tangram::UrlRequestHandle;
 
 class MapsApp;

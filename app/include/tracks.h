@@ -50,6 +50,7 @@ struct GpxFile {
   bool visible = true;
   bool archived = false;
   //bool loaded = false;
+  bool modified = false;
 
   GpxFile(const std::string& _title, const std::string& _desc, const std::string& _file)
       : title(_title), desc(_desc), filename(_file) {}
@@ -67,6 +68,7 @@ public:
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;
   MarkerID trackEndMarker = 0;
+  MarkerID previewMarker = 0;
 
   std::vector<GpxFile> tracks;
   GpxFile recordedTrack;
@@ -111,7 +113,9 @@ private:
   double recordLastSave = 0;
   bool recordTrack = false;
   bool drawTrack = false;
+  bool directRoutePreview = false;
   bool tracksDirty = true;
+  bool waypointsDirty = true;
   std::unique_ptr<SvgNode> trackListProto;
   std::unique_ptr<SelectDialog> selectTrackDialog;
 };

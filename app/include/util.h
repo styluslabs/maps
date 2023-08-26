@@ -13,6 +13,7 @@ using Tangram::TileID;
 namespace YAML { class Node; }
 
 double lngLatDist(LngLat r1, LngLat r2);
+double lngLatBearing(LngLat r1, LngLat r2);
 TileID lngLatTile(LngLat ll, int z);
 LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord);
 

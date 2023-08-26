@@ -89,6 +89,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   Widget* item = new Widget(placeInfoProto->clone());
 
+  // actions toolbar
+  Toolbar* toolbar = createToolbar();
+  mapsBookmarks->addPlaceActions(toolbar);
+  item->selectFirst(".action-container")->addWidget(toolbar);
+
   //SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
   SvgText* titlenode = static_cast<SvgText*>(infoPanel->containerNode()->selectFirst(".panel-title"));
   titlenode->setText(props.IsObject() && props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
@@ -98,10 +103,22 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(coordnode)
     coordnode->addText(fstring("%.6f, %.6f", pos.latitude, pos.longitude).c_str());
 
-  SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
-  double distkm = lngLatDist(currLocation.lngLat(), pos);
-  if(distnode)
-    distnode->addText(fstring("%.1f km", distkm).c_str());
+  Widget* distwdgt = item->selectFirst(".dist-text");
+  if(distwdgt) {
+    double dist = lngLatDist(currLocation.lngLat(), pos);
+    double bearing = lngLatBearing(currLocation.lngLat(), pos);
+    SvgUse* icon = static_cast<SvgUse*>(distwdgt->containerNode()->selectFirst(".icon"));
+    icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
+    distwdgt->setText(fstring(metricUnits ? "%.1f km" : "%.1f mi", metricUnits ? dist : dist*0.621371).c_str());
+  }
+
+  getElevation(pos, [this](double elev){
+    Widget* elevWidget = infoContent->selectFirst(".elevation-text");
+    if(elevWidget) {
+      elevWidget->setText(fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? elev : elev*3.28084).c_str());
+      elevWidget->setVisible(true);
+    }
+  });
 
   // get place type
   auto jit = props.FindMember("tourism");
@@ -460,6 +477,12 @@ void MapsApp::mapUpdate(double time)
   reorientBtn->setVisible(cpos.tilt != 0 || cpos.rotation != 0);
   reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(cpos.rotation));
 
+  if(pickedMarkerId == locMarker) {
+    setPickResult(currLocation.lngLat(), "Current location", "");
+    mapsSearch->clearSearch();  // ???
+    pickedMarkerId = 0;
+  }
+
   mapsTracks->onMapChange();
   mapsBookmarks->onMapChange();
   mapsOffline->onMapChange();
@@ -514,6 +537,81 @@ YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
   if(map->getScene()->isReady())
       Tangram::YamlPath(yamlPath).get(map->getScene()->config(), node);
   return node;
+}
+
+#include "data/rasterSource.h"
+
+static double readElevTex(Tangram::Texture* tex, int x, int y)
+{
+  // see getElevation() in raster-contour.yaml
+  GLubyte* p = tex->bufferData() + y*tex->width()*4 + x*4;
+  //(red * 256 + green + blue / 256) - 32768
+  return (p[1]*256 + p[2] + p[3]/256.0) - 32768;
+}
+
+static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
+{
+  using namespace Tangram;
+
+  double scale = MapProjection::metersPerTileAtZoom(tileId.z);
+  ProjectedMeters tileOrigin = MapProjection::tileSouthWestCorner(tileId);
+  ProjectedMeters meters = MapProjection::lngLatToProjectedMeters(pos);  //glm::dvec2(tileCoord) * scale + tileOrigin;
+  ProjectedMeters offset = meters - tileOrigin;
+  double ox = offset.x/scale, oy = offset.y/scale;
+
+  double x0 = ox*tex->width(), y0 = oy*tex->height();
+  int ix0 = std::floor(x0), iy0 = std::floor(y0);
+  int ix1 = std::ceil(x0), iy1 = std::ceil(y0);
+  double fx = x0 - ix0, fy = y0 - iy0;
+  double t00 = readElevTex(tex, ix0, iy0);
+  double t01 = readElevTex(tex, ix0, iy1);
+  double t10 = readElevTex(tex, ix1, iy0);
+  double t11 = readElevTex(tex, ix1, iy1);
+  double t0 = t00 + fx*(t10 - t00);
+  double t1 = t01 + fx*(t11 - t01);
+  return t0 + fy*(t1 - t0);
+}
+
+void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
+{
+  using namespace Tangram;
+
+  static std::weak_ptr<Texture> prevTex;
+  static TileID prevTileId = {0, 0, 0, 0};
+
+  if(prevTileId.z > 0) {
+    TileID tileId = lngLatTile(pos, prevTileId.z);
+    if(tileId == prevTileId) {
+      auto tex = prevTex.lock();
+      if(tex) {
+        callback(elevationLerp(tex.get(), tileId, pos));
+        return;
+      }
+    }
+  }
+
+  auto& tileSources = map->getScene()->tileSources();
+  for(const auto& srcname : config["elevation_sources"]) {
+    for(auto& src : tileSources) {
+      if(src->isRaster() && src->name() == srcname.Scalar()) {
+        auto* rsrc = static_cast<RasterSource*>(src.get());
+        TileID tileId = lngLatTile(pos, src->maxZoom());
+        auto task = rsrc->createTask(tileId);
+        rsrc->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
+          runOnMainThread([=](){
+            if(_task->hasData()) {
+              auto tex = rsrc->getTextureDirect(_task);
+              if(tex) {
+                callback(elevationLerp(tex.get(), tileId, pos));
+                prevTex = tex;
+                prevTileId = tileId;
+              }
+            }
+          });
+        }});
+      }
+    }
+  }
 }
 
 #include <fstream>
@@ -734,8 +832,17 @@ Window* MapsApp::createGUI()
         <text class="place-text" margin="0 10" font-size="14"></text>
         <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
         <!-- text class="lnglat-text weak" margin="0 10" font-size="12"></text -->
-        <text class="dist-text" margin="0 10" font-size="14"></text>
+        <g class="elevation-text" display="none" margin="1 2">
+          <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
+          <text margin="0 10" font-size="14"></text>
+        </g>
+        <g class="dist-text" margin="1 2">
+          <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#arrow-narrow-up"/>
+          <text margin="0 10" font-size="14"></text>
+        </g>
       </g>
+      <g class="action-container" layout="box" box-anchor="hfill"></g>
+      <g class="waypt-section" layout="box" box-anchor="hfill"></g>
       <g class="bkmk-section" layout="box" box-anchor="hfill"></g>
       <g class="info-section" layout="flex" flex-direction="column" box-anchor="hfill"></g>
     </g>

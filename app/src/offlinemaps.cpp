@@ -161,7 +161,7 @@ bool OfflineDownloader::fetchNextTile()
 {
   std::unique_lock<std::mutex> lock(m_mutexQueue);
   if(m_queued.empty()) return false;
-  auto task = std::make_shared<Tangram::BinaryTileTask>(m_queued.front(), nullptr);
+  auto task = std::make_shared<BinaryTileTask>(m_queued.front(), nullptr);
   task->offlineId = searchData.empty() ? offlineId : -offlineId;
   m_pending.push_back(m_queued.front());
   m_queued.pop_front();

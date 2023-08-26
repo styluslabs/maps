@@ -15,7 +15,7 @@ public:
   using MapsComponent::MapsComponent;
   void hideBookmarks(int excludelist = -1);
   void restoreBookmarks();
-  void addBookmark(int list_id, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int timestamp = -1); //, int rowid = -1);
+  int addBookmark(int list_id, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int timestamp = -1); //, int rowid = -1);
   int getListId(const char* listname, bool create = false);
   void onMapChange();
   Button* createPanel();

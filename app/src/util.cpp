@@ -28,6 +28,14 @@ double lngLatDist(LngLat r1, LngLat r2)
   return 12742 * asin(sqrt(a));  // kilometers
 }
 
+// initial bearing on great circle path from r1 to r2
+double lngLatBearing(LngLat r1, LngLat r2)
+{
+  double y = sin(r2.longitude-r1.longitude) * cos(r2.latitude);
+  double x = cos(r1.latitude)*sin(r2.latitude) - sin(r1.latitude)*cos(r2.latitude)*cos(r2.longitude-r1.longitude);
+  return atan2(y, x);
+}
+
 TileID lngLatTile(LngLat ll, int z)
 {
   int x = int(floor((ll.longitude + 180.0) / 360.0 * (1 << z)));
@@ -116,7 +124,7 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
 }
 
 // MarkerGroup
-// - we may alter this is preserve markers when reset or to use ClientDataSource (at least for alt markers)
+// - we may alter this to use ClientDataSource (at least for alt markers)
 
 bool MarkerGroup::onPicked(MarkerID id)
 {
