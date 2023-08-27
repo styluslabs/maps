@@ -72,7 +72,7 @@ public:
 
   std::vector<GpxFile> tracks;
   GpxFile recordedTrack;
-  //GpxFile drawnTrack;
+  GpxFile navRoute;
 
   std::string routeMode = "direct";  // "walk", "bike", "drive"
   int pluginFn = 0;
@@ -88,6 +88,7 @@ public:
   TrackPlot* trackPlot = NULL;
   Button* pauseRecordBtn = NULL;
   Button* stopRecordBtn = NULL;
+  Button* routeModeBtn = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters

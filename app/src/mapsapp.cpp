@@ -56,8 +56,8 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 LngLat MapsApp::getMapCenter()
 {
   LngLat res;
-  map->screenPositionToLngLat(
-      map->getViewportWidth()/2, map->getViewportHeight()/2, &res.longitude, &res.latitude);
+  int w = map->getViewportWidth(), h = map->getViewportHeight();
+  map->screenPositionToLngLat(w/2, h/2, &res.longitude, &res.latitude);
   return res;
 }
 
@@ -81,6 +81,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   // show place info panel
   pickResultCoord = pos;
+  pickResultName = namestr;
   pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
 
   std::string osmid = osmIdFromProps(props);

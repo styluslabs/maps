@@ -68,7 +68,7 @@ public:
   MarkerID locMarker = 0;
   rapidjson::Document pickResultProps;
   LngLat pickResultCoord = {NAN, NAN};
-  //std::string pickLabelStr;
+  std::string pickResultName;
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
 

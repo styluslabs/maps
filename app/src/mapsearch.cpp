@@ -531,19 +531,25 @@ Button* MapsSearch::createPanel()
   };
   cancelBtn->setVisible(false);
 
-  auto searchTb = app->createPanelHeader(MapsApp::uiIcon("search"), "Search");
-  if(!app->pluginManager->searchFns.empty()) {
-    std::vector<std::string> cproviders = {"Offline"};
-    for(auto& fn : app->pluginManager->searchFns)
-      cproviders.push_back(fn.title.c_str());
+  providerIdx = app->config["search"]["plugin"].as<int>(0);
+  std::vector<std::string> cproviders = {"Offline Search"};
+  for(auto& fn : app->pluginManager->searchFns)
+    cproviders.push_back(fn.title.c_str());
 
-    ComboBox* providerSel = createComboBox(cproviders);
-    providerSel->onChanged = [=](const char*){
-      providerIdx = providerSel->index();
-      searchText(queryText->text(), RETURN);
-    };
-    searchTb->addWidget(providerSel);
+  auto searchTb = app->createPanelHeader(MapsApp::uiIcon("search"), cproviders[providerIdx].c_str());
+  bool hasPlugins = !app->pluginManager->searchFns.empty();
+  Button* searchPluginBtn = createToolbutton(MapsApp::uiIcon(hasPlugins ? "plugin" : "no-plugin"), "Plugin");
+  searchPluginBtn->setEnabled(hasPlugins);
+  Menu* searchPluginMenu = createMenu(Menu::VERT_LEFT, false);
+  for(size_t ii = 0; ii < cproviders.size(); ++ii) {
+    std::string title = cproviders[ii];
+    searchPluginMenu->addItem(title.c_str(), [=](){
+      searchPanel->selectFirst(".panel-title")->setText(title.c_str());
+      app->config["search"]["plugin"] = providerIdx = ii;
+    });
   }
+  searchPluginBtn->setMenu(searchPluginMenu);
+  searchTb->addWidget(searchPluginBtn);
 
   // result sort order
   static const char* resultSortKeys[] = {"rank", "dist"};

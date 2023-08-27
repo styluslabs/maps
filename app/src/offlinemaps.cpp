@@ -207,7 +207,10 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
   std::unique_lock<std::mutex> lock(mutexOfflineQueue);
   // don't load tiles outside visible region at any zoom level (as using TileID::getChild() recursively
   //  would do - these could potentially outnumber the number of desired tiles!)
-  int zoom = int(map->getZoom());
+  double heightkm = lngLatDist(lngLat00, LngLat(lngLat00.longitude, lngLat11.latitude));
+  double widthkm = lngLatDist(lngLat11, LngLat(lngLat00.longitude, lngLat11.latitude));
+  int zoom = std::round(MapProjection::zoomAtMetersPerPixel( std::min(heightkm, widthkm)/MapProjection::tileSize() ));
+  //int zoom = int(map->getZoom());
   // queue offline downloads
   offlinePending.push_back({mapid, lngLat00, lngLat11, zoom, maxZoom, {}, false});
   auto& tileSources = map->getScene()->tileSources();
@@ -297,15 +300,16 @@ void MapsOffline::resumeDownloads()
 {
   // caller should restore map source if necessary
   //std::string prevsrc = app->mapsSources->currSource;
-  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source FROM offlinemaps WHERE done = 0 ORDER BY timestamp;";
+  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, maxzoom, source FROM offlinemaps WHERE done = 0 ORDER BY timestamp;";
   DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
     int mapid = sqlite3_column_int(stmt, 0);
     double lng0 = sqlite3_column_double(stmt, 1), lat0 = sqlite3_column_double(stmt, 2);
     double lng1 = sqlite3_column_double(stmt, 3), lat1 = sqlite3_column_double(stmt, 4);
-    std::string sourcestr = (const char*)(sqlite3_column_text(stmt, 5));
+    int maxZoom = sqlite3_column_int(stmt, 5);
+    std::string sourcestr = (const char*)(sqlite3_column_text(stmt, 6));
 
     app->mapsSources->rebuildSource(sourcestr);
-    saveOfflineMap(mapid, LngLat(lng0, lat0), LngLat(lng1, lat1));
+    saveOfflineMap(mapid, LngLat(lng0, lat0), LngLat(lng1, lat1), maxZoom);
 
     LOG("Resuming offline map download for source %s", sourcestr.c_str());
   });
@@ -429,8 +433,8 @@ Widget* MapsOffline::createPanel()
   mapsOfflineInst = this;
   // should we include zoom? total bytes?
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER PRIMARY KEY,"
-      " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, source TEXT, title TEXT, done INTEGER DEFAULT 0,"
-      " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+      " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, maxzoom INTEGER, source TEXT, title TEXT,"
+      " done INTEGER DEFAULT 0, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
 
   TextEdit* titleEdit = createTextEdit();
   SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%.0f");
@@ -447,17 +451,19 @@ Widget* MapsOffline::createPanel()
     LngLat lngLat00, lngLat11;
     app->getMapBounds(lngLat00, lngLat11);
     int offlineId = int(time(NULL));
-    saveOfflineMap(offlineId, lngLat00, lngLat11, int(maxZoomSpin->value()));
+    int maxZoom = int(maxZoomSpin->value());
+    saveOfflineMap(offlineId, lngLat00, lngLat11, maxZoom);
 
-    const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,source,title) VALUES (?,?,?,?,?,?,?);";
+    const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title) VALUES (?,?,?,?,?,?,?,?);";
     DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
       sqlite3_bind_int(stmt, 1, offlineId);
       sqlite3_bind_double(stmt, 2, lngLat00.longitude);
       sqlite3_bind_double(stmt, 3, lngLat00.latitude);
       sqlite3_bind_double(stmt, 4, lngLat11.longitude);
       sqlite3_bind_double(stmt, 5, lngLat11.latitude);
-      sqlite3_bind_text(stmt, 6, app->mapsSources->currSource.c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 7, titleEdit->text().c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_int(stmt, 6, maxZoom);
+      sqlite3_bind_text(stmt, 7, app->mapsSources->currSource.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 8, titleEdit->text().c_str(), -1, SQLITE_TRANSIENT);
     });
 
     downloadPanel->setVisible(false);

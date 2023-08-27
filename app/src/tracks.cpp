@@ -1068,6 +1068,46 @@ void MapsTracks::onMapChange()
   }
 }
 
+void MapsTracks::setRouteMode(const std::string& mode)
+{
+  routeMode = mode;
+  auto parts = splitStr<std::vector>(mode.c_str(), '-');
+  const char* icon = "segment";
+  if(parts[0] == "walk") icon = "walk";
+  else if(parts[0] == "bike") icon = "bike";
+  else if(parts[0] == "drive") icon = "car";
+  routeModeBtn->setIcon(MapsApp::uiIcon(icon));
+};
+
+void MapsTracks::addPlaceActions(Toolbar* tb)
+{
+  Button* routeBtn = createToolbutton(MapsApp::uiIcon("directions"), "Directions");
+  routeBtn->onClicked = [=](){
+    LngLat r1 = app->currLocation.lngLat(), r2 = app->pickResultCoord;
+    double km = lngLatDist(r1, r2);
+    setRouteMode(km < 10 ? "walk" : km < 100 ? "bike" : "drive");
+    navRoute.waypoints.clear();
+    navRoute.waypoints.emplace_back(r1, "Current location");
+    navRoute.waypoints.emplace_back(r2, app->pickResultName);
+    navRoute.modified = true;
+    populateWaypoints(&navRoute);
+    createRoute(&navRoute);
+  };
+  tb->addWidget(routeBtn);
+
+  if(activeTrack) {
+    Button* addWptBtn = createToolbutton(MapsApp::uiIcon("directions"), "Add waypoint");
+    addWptBtn->onClicked = [=](){
+      activeTrack->waypoints.emplace_back(app->pickResultCoord, app->pickResultName);  //++activeTrack->wayPtSerial?
+      activeTrack->modified = true;
+      addWaypointItem(activeTrack->waypoints.back());
+      if(activeTrack->waypoints.back().routed)
+        createRoute(activeTrack);
+    };
+    tb->addWidget(addWptBtn);
+  }
+}
+
 static Widget* createStatsRow(std::vector<const char*> items)  // const char* title1, const char* class1, const char* title2, const char* class2)
 {
   static const char* statBlockProtoSVG = R"(
@@ -1565,18 +1605,14 @@ Button* MapsTracks::createPanel()
     routePluginBtn->setMenu(routePluginMenu);
   }
 
-  Button* routeModeBtn = createToolbutton(MapsApp::uiIcon("segment"), "Routing");
+  routeModeBtn = createToolbutton(MapsApp::uiIcon("segment"), "Routing");
   Menu* routeModeMenu = createMenu(Menu::VERT_LEFT);
-  routeModeMenu->addItem("Direct", MapsApp::uiIcon("segment"),
-      [=](){ routeMode = "direct"; routeModeBtn->setIcon(MapsApp::uiIcon("segment")); });
-  routeModeMenu->addItem("Walk", MapsApp::uiIcon("walk"),
-      [=](){ routeMode = "walk"; routeModeBtn->setIcon(MapsApp::uiIcon("walk")); });
-  routeModeMenu->addItem("Cycle", MapsApp::uiIcon("bike"),
-      [=](){ routeMode = "bike"; routeModeBtn->setIcon(MapsApp::uiIcon("bike")); });
-  routeModeMenu->addItem("Drive", MapsApp::uiIcon("car"),
-      [=](){ routeMode = "drive"; routeModeBtn->setIcon(MapsApp::uiIcon("car")); });
+  routeModeMenu->addItem("Direct", MapsApp::uiIcon("segment"), [=](){ setRouteMode("direct"); });
+  routeModeMenu->addItem("Walk", MapsApp::uiIcon("walk"), [=](){ setRouteMode("walk"); });
+  routeModeMenu->addItem("Cycle", MapsApp::uiIcon("bike"), [=](){ setRouteMode("bike"); });
+  routeModeMenu->addItem("Drive", MapsApp::uiIcon("car"), [=](){ setRouteMode("drive"); });
   routeModeBtn->setMenu(routeModeMenu);
-  routeModeBtn->setEnabled(hasPlugins);  // disabled until plugin selected
+  routeModeBtn->setEnabled(hasPlugins);
 
   auto wayptsTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Waypoints");
   wayptsTb->addWidget(mapCenterWayptBtn);

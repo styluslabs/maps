@@ -564,8 +564,8 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
 
 void MapsBookmarks::addPlaceActions(Toolbar* tb)
 {
-  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Bookmark...", true);
-  createBkmkBtn->node->setAttribute("box-anchor", "left");
+  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Add bookmark");
+  //createBkmkBtn->node->setAttribute("box-anchor", "left");
 
   auto createBkmkFn = [=](int list_id, std::string listname){
     rapidjson::Document& doc = app->pickResultProps;
