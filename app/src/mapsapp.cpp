@@ -35,8 +35,10 @@ YAML::Node MapsApp::config;
 std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
 sqlite3* MapsApp::bkmkDB = NULL;
+std::vector<Color> MapsApp::markerColors;
+
 static Tooltips tooltipsInst;
-static std::vector<Color> markerColors;
+
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 {
@@ -79,6 +81,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(!map->lngLatToScreenPosition(pos.longitude, pos.latitude, &scrx, &scry))
     map->flyTo(CameraPosition{pos.longitude, pos.latitude, 16}, 1.0);  // max(map->getZoom(), 14)
 
+  if(namestr.empty())
+    namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
   // show place info panel
   pickResultCoord = pos;
   pickResultName = namestr;
@@ -93,11 +97,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   // actions toolbar
   Toolbar* toolbar = createToolbar();
   mapsBookmarks->addPlaceActions(toolbar);
+  mapsTracks->addPlaceActions(toolbar);
+  toolbar->addWidget(createStretch());
   item->selectFirst(".action-container")->addWidget(toolbar);
 
   //SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
   SvgText* titlenode = static_cast<SvgText*>(infoPanel->containerNode()->selectFirst(".panel-title"));
-  titlenode->setText(props.IsObject() && props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
+  //titlenode->setText(props.IsObject() && props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
+  titlenode->setText(namestr.c_str());
   titlenode->setText(SvgPainter::breakText(titlenode, 250).c_str());
 
   SvgText* coordnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".lnglat-text"));
@@ -108,31 +115,26 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(distwdgt) {
     double dist = lngLatDist(currLocation.lngLat(), pos);
     double bearing = lngLatBearing(currLocation.lngLat(), pos);
-    SvgUse* icon = static_cast<SvgUse*>(distwdgt->containerNode()->selectFirst(".icon"));
-    icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
+    SvgUse* icon = static_cast<SvgUse*>(item->containerNode()->selectFirst(".direction-icon"));
+    if(icon)
+      icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
     distwdgt->setText(fstring(metricUnits ? "%.1f km" : "%.1f mi", metricUnits ? dist : dist*0.621371).c_str());
   }
 
-  getElevation(pos, [this](double elev){
-    Widget* elevWidget = infoContent->selectFirst(".elevation-text");
-    if(elevWidget) {
-      elevWidget->setText(fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? elev : elev*3.28084).c_str());
-      elevWidget->setVisible(true);
-    }
-  });
-
   // get place type
-  auto jit = props.FindMember("tourism");
-  if(jit == props.MemberEnd()) jit = props.FindMember("leisure");
-  if(jit == props.MemberEnd()) jit = props.FindMember("amenity");
-  if(jit == props.MemberEnd()) jit = props.FindMember("historic");
-  if(jit == props.MemberEnd()) jit = props.FindMember("shop");
-  if(jit != props.MemberEnd()) {
-    std::string val = jit->value.GetString();
-    val[0] = std::toupper(val[0]);
-    SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
-    if(placenode)
-      placenode->addText(val.c_str());
+  if(props.IsObject()) {
+    auto jit = props.FindMember("tourism");
+    if(jit == props.MemberEnd()) jit = props.FindMember("leisure");
+    if(jit == props.MemberEnd()) jit = props.FindMember("amenity");
+    if(jit == props.MemberEnd()) jit = props.FindMember("historic");
+    if(jit == props.MemberEnd()) jit = props.FindMember("shop");
+    if(jit != props.MemberEnd()) {
+      std::string val = jit->value.GetString();
+      val[0] = std::toupper(val[0]);
+      SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
+      if(placenode)
+        placenode->addText(val.c_str());
+    }
   }
 
   Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
@@ -142,6 +144,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   //SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
   //imghost->addChild(resultIconNode->clone());
   infoContent->addWidget(item);
+
+  getElevation(pos, [this](double elev){
+    Widget* elevWidget = infoContent->selectFirst(".elevation-text");
+    if(elevWidget) {
+      elevWidget->setText(fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? elev : elev*3.28084).c_str());
+      infoContent->selectFirst(".elevation-icon")->setVisible(true);  //elevWidget->setVisible(true);
+    }
+  });
 
   if(!pluginManager->placeFns.empty()) {
     std::vector<std::string> cproviders = {"None"};
@@ -314,7 +324,7 @@ void MapsApp::tapEvent(float x, float y)
     pickedMarkerId = result->id;
   });
 
-  mapsTracks->tapEvent(location);
+  //mapsTracks->tapEvent(location);
 
   map->getPlatform().requestRender();
 }
@@ -368,7 +378,7 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
 #ifdef DEBUG
   options.debugStyles = true;
 #endif
-  // single worker much easier to debug (alterative is gdb scheduler-locking option)
+  // single worker much easier to debug (alternative is gdb scheduler-locking option)
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
   map->loadScene(std::move(options), load_async);
@@ -436,7 +446,7 @@ MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(
 MapsApp::~MapsApp()
 {
 #if PLATFORM_DESKTOP  // on mobile, suspend will preceed destroy
-  saveConfig();
+  onSuspend();
 #endif
 }
 
@@ -462,6 +472,16 @@ void MapsApp::saveConfig()
   fs.write(emitter.c_str(), emitter.size());
 }
 
+void MapsApp::sendMapEvent(MapEvent_t event)
+{
+  mapsTracks->onMapEvent(event);
+  mapsBookmarks->onMapEvent(event);
+  //mapsOffline->onMapEvent(event);
+  mapsSources->onMapEvent(event);
+  mapsSearch->onMapEvent(event);
+  //pluginManager->onMapEvent(event);
+}
+
 void MapsApp::mapUpdate(double time)
 {
   static double lastFrameTime = 0;
@@ -484,12 +504,7 @@ void MapsApp::mapUpdate(double time)
     pickedMarkerId = 0;
   }
 
-  mapsTracks->onMapChange();
-  mapsBookmarks->onMapChange();
-  mapsOffline->onMapChange();
-  mapsSources->onMapChange();
-  mapsSearch->onMapChange();
-  pluginManager->onMapChange();
+  sendMapEvent(MAP_CHANGE);
 }
 
 void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
@@ -501,6 +516,12 @@ void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
   }
   map->setPixelScale(pixel_scale*density);
   map->resize(fWidth, fHeight);
+}
+
+void MapsApp::onSuspend()
+{
+  sendMapEvent(SUSPEND);
+  saveConfig();
 }
 
 void MapsApp::updateLocation(const Location& _loc)
@@ -516,7 +537,7 @@ void MapsApp::updateLocation(const Location& _loc)
   //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, currLocation.lngLat());
 
-  mapsTracks->updateLocation(currLocation);
+  sendMapEvent(LOC_UPDATE);
 }
 
 void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
@@ -547,7 +568,7 @@ static double readElevTex(Tangram::Texture* tex, int x, int y)
   // see getElevation() in raster-contour.yaml
   GLubyte* p = tex->bufferData() + y*tex->width()*4 + x*4;
   //(red * 256 + green + blue / 256) - 32768
-  return (p[1]*256 + p[2] + p[3]/256.0) - 32768;
+  return (p[0]*256 + p[1] + p[2]/256.0) - 32768;
 }
 
 static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
@@ -559,7 +580,7 @@ static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
   ProjectedMeters meters = MapProjection::lngLatToProjectedMeters(pos);  //glm::dvec2(tileCoord) * scale + tileOrigin;
   ProjectedMeters offset = meters - tileOrigin;
   double ox = offset.x/scale, oy = offset.y/scale;
-
+  // ... seems this work correctly w/o accounting for vertical flip of texture
   double x0 = ox*tex->width(), y0 = oy*tex->height();
   int ix0 = std::floor(x0), iy0 = std::floor(y0);
   int ix1 = std::ceil(x0), iy1 = std::ceil(y0);
@@ -577,17 +598,14 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
 {
   using namespace Tangram;
 
-  static std::weak_ptr<Texture> prevTex;
+  static std::unique_ptr<Texture> prevTex;
   static TileID prevTileId = {0, 0, 0, 0};
 
-  if(prevTileId.z > 0) {
+  if(prevTex) {
     TileID tileId = lngLatTile(pos, prevTileId.z);
     if(tileId == prevTileId) {
-      auto tex = prevTex.lock();
-      if(tex) {
-        callback(elevationLerp(tex.get(), tileId, pos));
-        return;
-      }
+      callback(elevationLerp(prevTex.get(), tileId, pos));
+      return;
     }
   }
 
@@ -595,16 +613,17 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
   for(const auto& srcname : config["elevation_sources"]) {
     for(auto& src : tileSources) {
       if(src->isRaster() && src->name() == srcname.Scalar()) {
-        auto* rsrc = static_cast<RasterSource*>(src.get());
         TileID tileId = lngLatTile(pos, src->maxZoom());
-        auto task = rsrc->createTask(tileId);
-        rsrc->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
+        // do not use RasterSource::createTask() because we can't use its cached Textures!
+        auto task = std::make_shared<BinaryTileTask>(tileId, src);  //rsrc->createTask(tileId);
+        src->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
           runOnMainThread([=](){
             if(_task->hasData()) {
+              auto* rsrc = static_cast<RasterSource*>(_task->source().get());
               auto tex = rsrc->getTextureDirect(_task);
-              if(tex) {
+              if(tex && tex->bufferData()) {
                 callback(elevationLerp(tex.get(), tileId, pos));
-                prevTex = tex;
+                prevTex = std::move(tex);
                 prevTileId = tileId;
               }
             }
@@ -697,8 +716,13 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
         (event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK)) {
       if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
         gui->setPressed(this);
-      app->touchHandler->touchEvent(0, actionFromSDLFinger(event->type),
-          event->tfinger.timestamp/1000.0, event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale, 1.0f);
+      if(event->tfinger.fingerId != SDL_BUTTON_LMASK) {
+        if(event->type == SDL_FINGERDOWN)
+          app->longPressEvent(event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale);
+      }
+      else
+        app->touchHandler->touchEvent(0, actionFromSDLFinger(event->type), event->tfinger.timestamp/1000.0,
+             event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale, 1.0f);
     }
     else if(event->type == SDL_MOUSEWHEEL) {
       Point p = gui->prevFingerPos;
@@ -782,16 +806,20 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
   real firstdigit = dist/pow10;
   real n = firstdigit < 2 ? 1 : firstdigit < 5 ? 2 : 5;
   real scaledist = n * pow10;
+  std::string str = fstring(format, scaledist);
 
+  real y0 = bbox.height()/2;
   p->setFillBrush(Color::NONE);
-  p->setStroke(Color::WHITE, 1.5);  //, Painter::FlatCap, Painter::BevelJoin);
-  p->drawLine(Point(0, y), Point(bbox.width()*scaledist/dist, y));
-  p->setStroke(Color::BLACK, 0.5);  //, Painter::FlatCap, Painter::BevelJoin);
-  p->drawLine(Point(0, y), Point(bbox.width()*scaledist/dist, y));
-  p->setFontSize(12);
+  p->setStroke(Color::WHITE, 3);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
+  p->setStroke(Color::BLACK, 2);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
+  p->setFontSize(14);
+  p->setStroke(Color::WHITE, 2);
+  p->drawText(0, 0, str.c_str());
   p->setFillBrush(Color::BLACK);
-  p->setStroke(Color::WHITE, 0.5);
-  p->drawText(0, 0, fstring(format, scaledist).c_str());
+  p->setStroke(Color::NONE);
+  p->drawText(0, 0, str.c_str());
 }
 
 Window* MapsApp::createGUI()
@@ -833,14 +861,10 @@ Window* MapsApp::createGUI()
         <text class="place-text" margin="0 10" font-size="14"></text>
         <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
         <!-- text class="lnglat-text weak" margin="0 10" font-size="12"></text -->
-        <g class="elevation-text" display="none" margin="1 2">
-          <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
-          <text margin="0 10" font-size="14"></text>
-        </g>
-        <g class="dist-text" margin="1 2">
-          <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#arrow-narrow-up"/>
-          <text margin="0 10" font-size="14"></text>
-        </g>
+        <use class="icon elevation-icon" display="none" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
+        <text class="elevation-text" margin="0 6" font-size="14"></text>
+        <use class="icon direction-icon" width="18" height="18" xlink:href=":/ui-icons.svg#arrow-narrow-up"/>
+        <text class="dist-text" margin="0 6" font-size="14"></text>
       </g>
       <g class="action-container" layout="box" box-anchor="hfill"></g>
       <g class="waypt-section" layout="box" box-anchor="hfill"></g>
@@ -1146,6 +1170,7 @@ void MapsApp::messageBox(std::string title, std::string message,
 #define NANOVG_SW_IMPLEMENTATION
 #define NVG_LOG PLATFORM_LOG
 #define NVGSWU_GLES2
+#define NVGSW_QUIET_FRAME  // suppress axis-aligned scissor warning
 #include "nanovg-2/src/nanovg_sw.h"
 #include "nanovg-2/src/nanovg_sw_utils.h"
 
@@ -1221,12 +1246,17 @@ void PLATFORM_WakeEventLoop()
 
 static std::mutex taskQueueMutex;
 static std::vector< std::function<void()> > taskQueue;
+static std::thread::id mainThreadId;
 
 void MapsApp::runOnMainThread(std::function<void()> fn)
 {
-  std::lock_guard<std::mutex> lock(taskQueueMutex);
-  taskQueue.push_back(fn);
-  glfwPostEmptyEvent();
+  if(std::this_thread::get_id() == mainThreadId)
+    fn();
+  else {
+    std::lock_guard<std::mutex> lock(taskQueueMutex);
+    taskQueue.push_back(fn);
+    glfwPostEmptyEvent();
+  }
 }
 
 SvgNode* MapsApp::uiIcon(const char* id)
@@ -1273,6 +1303,7 @@ int main(int argc, char* argv[])
 #endif
 
   // config
+  mainThreadId = std::this_thread::get_id();
   MapsApp::baseDir = "/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
   FSPath configPath(MapsApp::baseDir, "tangram-es/scenes/config.yaml");
   MapsApp::configFile = configPath.c_str();
@@ -1422,7 +1453,7 @@ int main(int argc, char* argv[])
     real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
     real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
     real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
-    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0, 0});
+    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0});
   };
 
   Timer* locTimer = NULL;
@@ -1457,7 +1488,7 @@ int main(int argc, char* argv[])
     app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
 
   // Alamo square
-  app->updateLocation(Location{0, 37.776444, -122.434668, 0, 100, 0, 0, 0, 0, 0, 0});
+  app->updateLocation(Location{0, 37.776444, -122.434668, 0, 100, 0, 0, 0, 0, 0});
 
   while(runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();

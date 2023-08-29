@@ -180,7 +180,7 @@ SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std
 
 Color ColorPicker::color() const
 {
-  selectFirst(".current-color")->node->getColorAttr("fill");
+  return selectFirst(".current-color")->node->getColorAttr("fill");
 }
 
 void ColorPicker::setColor(Color c)
@@ -323,9 +323,8 @@ void DragDropList::addItem(KeyType key, Widget* item)
         rnode->setAttribute("fill", "none");
         placeholder = new Widget(rnode);
         content->containerNode()->addChild(rnode, item->node);
-        item->removeFromParent();
         SvgNode* next = content->containerNode()->removeChild(item->node);
-        nextItemKey = next->getStringAttr("__sortkey", "");
+        nextItemKey = next ? next->getStringAttr("__sortkey", "") : "";
         floatWidget->addWidget(item);
         floatWidget->setVisible(true);
       }
@@ -347,12 +346,11 @@ void DragDropList::addItem(KeyType key, Widget* item)
       }
       return true;
     }
-    else if(event->type == SDL_FINGERUP && gui->pressedWidget == dragBtn) {
+    else if(event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL || event->type == SvgGui::OUTSIDE_PRESSED) {
       if(placeholder) {
-        SvgContainerNode* parent = content->containerNode();
         item->removeFromParent();
-        parent->addChild(item->node, placeholder->node);
-        SvgNode* next = parent->removeChild(placeholder->node);
+        content->containerNode()->addChild(item->node, placeholder->node);
+        SvgNode* next = content->containerNode()->removeChild(placeholder->node);
         delete placeholder->node;
         placeholder = NULL;
         floatWidget->setVisible(false);
@@ -452,3 +450,34 @@ Button* Menubar::addAction(Action* action)
 
 Menubar* createMenubar() { return new Menubar(widgetNode("#toolbar")); }
 //Menubar* createVertMenubar() { return new Menubar(widgetNode("#vert-toolbar")); }
+
+Button* createListItem(SvgNode* icon, const char* title, const char* note)
+{
+  static const char* listItemProtoSVG = R"(
+    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
+        <g class="toolbutton drag-btn" margin="2 5">
+          <use class="listitem-icon icon" width="36" height="36" xlink:href=""/>
+        </g>
+        <g layout="box" box-anchor="fill">
+          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
+          <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
+        </g>
+
+      </g>
+    </g>
+  )";
+  static std::unique_ptr<SvgNode> listItemProto;
+  if(!listItemProto)
+    listItemProto.reset(loadSVGFragment(listItemProtoSVG));
+
+  Button* item = new Button(listItemProto->clone());
+  static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(icon);
+  TextLabel* titleLabel = new TextLabel(item->containerNode()->selectFirst(".title-text"));
+  titleLabel->setText(title);
+  TextLabel* noteLabel = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
+  if(note)
+    noteLabel->setText(note);
+  return item;
+}

@@ -48,7 +48,7 @@ public:
 
   enum SearchPhase { EDITING, RETURN, NEXTPAGE };
   void searchText(std::string query, SearchPhase phase);
-  void onMapChange();
+  void onMapEvent(MapEvent_t event);
   void updateMapResults(LngLat lngLat00, LngLat lngLat11);
   void resultsUpdated();
 

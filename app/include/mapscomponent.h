@@ -20,6 +20,8 @@ using Tangram::MapProjection;
 
 class MapsApp;
 
+enum MapEvent_t { MAP_CHANGE, LOC_UPDATE, SUSPEND };
+
 struct Location
 {
   double time;
@@ -32,8 +34,8 @@ struct Location
   float direrr;
   float spd;
   float spderr;
-  //double dist;  // for tracks
 
+  //Location(LngLat r, double _alt = 0, double t = 0) : time(t), lat(r.latitude), lng(r.longitude), alt(_alt) {}
   LngLat lngLat() const { return LngLat(lng, lat); }
 };
 
@@ -43,5 +45,5 @@ public:
   MapsComponent(MapsApp* _app) : app(_app) {}
   MapsApp* app;
 
-  void onMapChange() {}
+  //void onMapChange() {}  -- no point unless this is a virtual fn
 };

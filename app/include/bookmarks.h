@@ -8,6 +8,7 @@ class SvgDocument;
 class Widget;
 class Button;
 class DragDropList;
+class Toolbar;
 
 class MapsBookmarks : public MapsComponent
 {
@@ -17,9 +18,10 @@ public:
   void restoreBookmarks();
   int addBookmark(int list_id, const char* osm_id, const char* name, const char* props, const char* note, LngLat pos, int timestamp = -1); //, int rowid = -1);
   int getListId(const char* listname, bool create = false);
-  void onMapChange();
+  void onMapEvent(MapEvent_t event);
   Button* createPanel();
   Widget* getPlaceInfoSection(const std::string& osm_id, LngLat pos);
+  void addPlaceActions(Toolbar* tb);
 
   std::unordered_map< int, std::unique_ptr<MarkerGroup> > bkmkMarkers;
 
@@ -41,9 +43,9 @@ private:
   bool archiveDirty = false;
   int activeListId = -1;
 
-  std::unique_ptr<SvgNode> bkmkListProto;
-  std::unique_ptr<SvgNode> listSelectProto;
-  std::unique_ptr<SvgNode> placeListProto;
+  //std::unique_ptr<SvgNode> bkmkListProto;
+  //std::unique_ptr<SvgNode> listSelectProto;
+  //std::unique_ptr<SvgNode> placeListProto;
   std::unique_ptr<SvgNode> placeInfoSectionProto;
   std::unique_ptr<SvgDocument> chooseListProto;
 };

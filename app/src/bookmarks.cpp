@@ -126,13 +126,11 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     std::string listname = (const char*)(sqlite3_column_text(stmt, 1));
-    Button* item = new Button(listSelectProto->clone());
+    Button* item = createListItem(MapsApp::uiIcon("folder"), listname.c_str());  //new Button(listSelectProto->clone());
     item->onClicked = [=](){
       dialog->finish(Dialog::ACCEPTED);
       callback(rowid, listname);
     };
-    TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
-    titleText->setText(listname.c_str());
     content->addWidget(item);
   });
 
@@ -180,7 +178,8 @@ void MapsBookmarks::populateLists(bool archived)
     std::string color = (const char*)(sqlite3_column_text(stmt, 2));
     int nplaces = sqlite3_column_int(stmt, 3);
 
-    Button* item = new Button(bkmkListProto->clone());
+    Button* item = createListItem(MapsApp::uiIcon("folder"),
+        list.c_str(), nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());  //new Button(bkmkListProto->clone());
     item->onClicked = [=](){ populateBkmks(rowid, true); };
     Widget* container = item->selectFirst(".child-container");
 
@@ -266,11 +265,6 @@ void MapsBookmarks::populateLists(bool archived)
     // TODO: overflow menu option to generate track from bookmark list - just passes coords to MapsTracks
     overflowBtn->setMenu(overflowMenu);
 
-    TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
-    titleText->setText(list.c_str());
-    TextLabel* detailText = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
-    detailText->setText(nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());
-
     if(archived)
       archivedContent->addWidget(item);
     else
@@ -285,14 +279,9 @@ void MapsBookmarks::populateLists(bool archived)
       narchived = sqlite3_column_int(stmt, 0);
     });
 
-    Button* item = new Button(bkmkListProto->clone());
+    Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived",
+        narchived == 1 ? "1 list" : fstring("%d lists", narchived).c_str());  //new Button(bkmkListProto->clone());
     item->onClicked = [this](){ app->showPanel(archivedPanel, true); populateLists(true); };
-    static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(MapsApp::uiIcon("archive"));
-
-    TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
-    titleText->setText("Archived");
-    TextLabel* detailText = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
-    detailText->setText(narchived == 1 ? "1 list" : fstring("%d lists", narchived).c_str());
 
     listsContent->addItem("archived", item);  //content->addWidget(item);
     listsContent->setOrder(order);
@@ -358,12 +347,12 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
       markerGroup->createMarker(LngLat(lng, lat), onPicked, {{{"name", namestr}, {"color", color}}});
 
     if(createUI) {
-      Button* item = new Button(placeListProto->clone());
+      Button* item = createListItem(MapsApp::uiIcon("pin"), namestr.c_str(), notestr);  //new Button(placeListProto->clone());
       item->onClicked = onPicked;  //[=](){ app->setPickResult(LngLat(lng, lat), namestr, propstr); };
 
       // alternative to overflow would be multi-select w/ selection toolbar; part of MapPanel, shared
       //  between bookmarks, tracks, etc
-      Button* overflowBtn = new Button(item->containerNode()->selectFirst(".overflow-btn"));
+      Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");  //new Button(item->containerNode()->selectFirst(".overflow-btn"));
       Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
       overflowMenu->addItem("Delete", [=](){
         const char* q = "DELETE FROM bookmarks WHERE rowid = ?;";
@@ -381,11 +370,8 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
         populateBkmks(activeListId, true);  // actually only needed if sorted by date
       });
       overflowBtn->setMenu(overflowMenu);
+      item->selectFirst(".child-container")->addWidget(overflowBtn);
 
-      TextLabel* titleText = new TextLabel(item->containerNode()->selectFirst(".title-text"));
-      titleText->setText(namestr.c_str());
-      TextLabel* noteText = new TextLabel(item->containerNode()->selectFirst(".note-text"));
-      noteText->setText(notestr);
       item->setUserData(LngLat(lng, lat));
       bkmkContent->addWidget(item);
     }
@@ -393,11 +379,13 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
     sqlite3_bind_int(stmt, 1, list_id);
   });
   if(createUI && mapAreaBkmks)
-    onMapChange();
+    onMapEvent(MAP_CHANGE);
 }
 
-void MapsBookmarks::onMapChange()
+void MapsBookmarks::onMapEvent(MapEvent_t event)
 {
+  if(event != MAP_CHANGE)
+    return;
   if(mapAreaBkmks) {
     for(Widget* item : bkmkContent->select(".listitem")) {
       LngLat pos = item->userData<LngLat>();
@@ -453,10 +441,8 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
       sqlite3_bind_double(stmt, 4, pos.latitude + delta);
     });
   }
-
-  if(content->containerNode()->children().empty())
-    content->addWidget(getPlaceInfoSubSection(-1, -1, "", ""));  // for adding to bookmark list
-
+  //if(content->containerNode()->children().empty())
+  //  content->addWidget(getPlaceInfoSubSection(-1, -1, "", ""));  // for adding to bookmark list
   return content;
 }
 
@@ -587,7 +573,7 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
 
 Button* MapsBookmarks::createPanel()
 {
-  static const char* bkmkListProtoSVG = R"(
+  /*static const char* bkmkListProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
@@ -638,7 +624,7 @@ Button* MapsBookmarks::createPanel()
       </g>
     </g>
   )";
-  placeListProto.reset(loadSVGFragment(placeListProtoSVG));
+  placeListProto.reset(loadSVGFragment(placeListProtoSVG));*/
 
   static const char* chooseListProtoSVG = R"(
     <svg id="dialog" class="window dialog" layout="box">
@@ -736,7 +722,7 @@ Button* MapsBookmarks::createPanel()
   mapAreaBkmksBtn->onClicked = [this](){
     mapAreaBkmks = !mapAreaBkmks;
     if(mapAreaBkmks)
-      onMapChange();
+      onMapEvent(MAP_CHANGE);
     else {
       for(Widget* item : bkmkContent->select(".listitem"))
         item->setVisible(true);

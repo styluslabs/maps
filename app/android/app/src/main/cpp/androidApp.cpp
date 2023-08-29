@@ -418,7 +418,7 @@ JNI_FN(onUrlComplete)(JNIEnv* env, jobject obj, jlong handle, jbyteArray data, j
 JNI_FN(updateLocation)(long time, double lat, double lng, float poserr,
     double alt, float alterr, float dir, float direrr, float spd, float spderr)
 {
-  app->updateLocation(Location{time/1000.0, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr, 0});
+  app->updateLocation(Location{time/1000.0, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr});
 }
 
 JNI_FN(updateOrientation)(jfloat azimuth, jfloat pitch, jfloat roll)

@@ -296,8 +296,10 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
   moreListResultsAvail = listResults.size() - offset >= 20;
 }
 
-void MapsSearch::onMapChange()
+void MapsSearch::onMapEvent(MapEvent_t event)
 {
+  if(event != MAP_CHANGE)
+    return;
   Map* map = app->map;
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);

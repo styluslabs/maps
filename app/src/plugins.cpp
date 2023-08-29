@@ -279,8 +279,10 @@ static int addPlaceInfo(duk_context* ctx)
 static int addRouteGPX(duk_context* ctx)
 {
   const char* gpx = duk_require_string(ctx, 0);
-  std::unique_ptr<Track> track = MapsTracks::loadGPX(gpx);
-  PluginManager::inst->app->mapsTracks->setRoute(std::move(track->route));
+  GpxFile track;
+  MapsTracks::loadGPX(&track, gpx);
+  for(auto& route : track.routes)
+    PluginManager::inst->app->mapsTracks->addRoute(std::move(route.pts));
   return 0;
 }
 
@@ -290,7 +292,7 @@ void PluginManager::createFns(duk_context* ctx)
   duk_push_c_function(ctx, registerFunction, 3);
   duk_put_global_string(ctx, "registerFunction");
   duk_push_c_function(ctx, httpRequest, DUK_VARARGS);
-  duk_put_global_string(ctx, "jsonHttpRequest");
+  duk_put_global_string(ctx, "httpRequest");
   duk_push_c_function(ctx, addSearchResult, 6);
   duk_put_global_string(ctx, "addSearchResult");
   duk_push_c_function(ctx, addMapSource, 2);
@@ -299,6 +301,8 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addBookmark");
   duk_push_c_function(ctx, addPlaceInfo, 3);
   duk_put_global_string(ctx, "addPlaceInfo");
+  duk_push_c_function(ctx, addRouteGPX, 1);
+  duk_put_global_string(ctx, "addRouteGPX");
 }
 
 // commands should go in toolbar or menu of appropriate panel; e.g. bookmarks panel for import places plugin

@@ -41,6 +41,7 @@ public:
   void onMouseMove(double time, double x, double y, bool pressed);
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
   void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
+  void onSuspend();
   void updateLocation(const Location& _loc);
   void updateOrientation(float azimuth, float pitch, float roll);
   void updateGpsStatus(int satsVisible, int satsUsed);
@@ -137,4 +138,5 @@ public:
 private:
   void dumpTileContents(float x, float y);
   void saveConfig();
+  void sendMapEvent(MapEvent_t event);
 };

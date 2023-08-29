@@ -66,13 +66,6 @@ public:
   bool autoClose = false;
 };
 
-Menubar* createMenubar();
-
-SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
-SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
-
-Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
-
 class ColorPicker : public Button
 {
 public:
@@ -83,4 +76,9 @@ public:
   std::function<void(Color)> onColor;
 };
 
+SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
+SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
+Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
+Menubar* createMenubar();
 ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialColor);
+Button* createListItem(SvgNode* icon, const char* title, const char* note = NULL);

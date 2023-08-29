@@ -382,29 +382,42 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
     std::stringstream(timenode.child_value()) >> std::get_time(&tmb, "%Y-%m-%dT%TZ");  //2023-03-31T20:19:15Z
     time = mktime(&tmb);
   }
-  return Waypoint({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0});
+
+  Waypoint wpt({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0},
+      trkpt.child("name").child_value(), trkpt.child("desc").child_value());
+  pugi::xml_node extnode = trkpt.child("extensions").child("sl:route");
+  if(extnode) {
+    wpt.visible = extnode.attribute("visible").as_bool(wpt.visible);
+    wpt.routed = extnode.attribute("routed").as_bool(wpt.routed);
+  }
+  return wpt;
 }
 
-GpxFile MapsTracks::loadGPX(const char* gpxfile)
+bool MapsTracks::loadGPX(GpxFile* track, const char* gpxSrc)
 {
   pugi::xml_document doc;
-  doc.load_file(gpxfile);
+  if(gpxSrc)
+    doc.load_string(gpxSrc);
+  else
+    doc.load_file(track->filename.c_str());
   pugi::xml_node gpx = doc.child("gpx");
-  GpxFile track(gpx.child("name").child_value(), gpx.child("desc").child_value(), gpxfile);
+  if(!gpx)
+    return false;
+  track->title = gpx.child("name").child_value();
+  track->desc = gpx.child("desc").child_value();
 
   pugi::xml_node wpt = gpx.child("wpt");
   while(wpt) {
-    track.waypoints.push_back(loadWaypoint(wpt));
-    track.waypoints.back().uid = std::to_string(++track.wayPtSerial);
+    track->addWaypoint(loadWaypoint(wpt));
     wpt = gpx.next_sibling("wpt");
   }
 
   pugi::xml_node rte = gpx.child("rte");
   while(rte) {
-    track.routes.emplace_back(rte.child("name").child_value(), rte.child("desc").child_value());
+    track->routes.emplace_back(rte.child("name").child_value(), rte.child("desc").child_value());
     pugi::xml_node rtept = gpx.child("rtept");
     while(rtept) {
-      track.routes.back().pts.push_back(loadWaypoint(rtept));
+      track->routes.back().pts.push_back(loadWaypoint(rtept));
       rtept = gpx.next_sibling("rtept");
     }
     rte = rte.next_sibling("rte");
@@ -413,27 +426,28 @@ GpxFile MapsTracks::loadGPX(const char* gpxfile)
   pugi::xml_node trk = gpx.child("trk");
   //if(!trk) logMsg("Error loading %s\n", gpxfile);
   while(trk) {
-    track.tracks.emplace_back(trk.child("name").child_value(), trk.child("desc").child_value());
+    track->tracks.emplace_back(trk.child("name").child_value(), trk.child("desc").child_value());
     pugi::xml_node trkseg = trk.child("trkseg");
     while(trkseg) {
       //std::vector<LngLat> track;
       pugi::xml_node trkpt = trkseg.child("trkpt");
       while(trkpt) {
         Waypoint pt1 = loadWaypoint(trkpt);
-        if(!track.tracks.back().pts.empty()) {
-          auto& pt0 = track.tracks.back().pts.back();
+        if(!track->tracks.back().pts.empty()) {
+          auto& pt0 = track->tracks.back().pts.back();
           pt1.dist = pt0.dist + 1000*lngLatDist(pt1.lngLat(), pt0.lngLat());
           if(pt1.loc.time > 0)
             pt1.loc.spd = (pt1.dist - pt0.dist)/(pt1.loc.time - pt0.loc.time);
         }
-        track.tracks.back().pts.push_back(pt1);
+        track->tracks.back().pts.push_back(pt1);
         trkpt = trkpt.next_sibling("trkpt");
       }
       trkseg = trkseg.next_sibling("trkseg");
     }
     trk = trk.next_sibling("trk");
   }
-  return track;
+  track->loaded = true;
+  return true;
 }
 
 static void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
@@ -447,12 +461,20 @@ static void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
     strftime(timebuf, sizeof(timebuf), "%FT%TZ", gmtime(&t));
     trkpt.append_child("time").append_child(pugi::node_pcdata).set_value(timebuf);
   }
+  if(!wpt.name.empty())
+    trkpt.append_child("name").append_child(pugi::node_pcdata).set_value(wpt.name.c_str());
+  if(!wpt.desc.empty())
+    trkpt.append_child("desc").append_child(pugi::node_pcdata).set_value(wpt.desc.c_str());
+  if(!wpt.visible || !wpt.routed) {
+    pugi::xml_node extnode = trkpt.append_child("extensions").append_child("sl:route");
+    extnode.append_attribute("visible").set_value(wpt.visible);
+    extnode.append_attribute("routed").set_value(wpt.routed);
+  }
 }
 
 bool MapsTracks::saveGPX(GpxFile* track)
 {
   // saving track
-  char timebuf[256];
   pugi::xml_document doc;
   pugi::xml_node gpx = doc.append_child("gpx");
   gpx.append_child("name").append_child(pugi::node_pcdata).set_value(track->title.c_str());
@@ -480,16 +502,16 @@ bool MapsTracks::saveGPX(GpxFile* track)
   return doc.save_file(track->filename.c_str(), "  ");
 }
 
-void MapsTracks::tapEvent(LngLat location)
-{
-  if(!drawTrack)
-    return;
-  auto& locs = drawnTrack.locs;
-  double dist = locs.empty() ? 0 : locs.back().dist + 1000*lngLatDist(locs.back().lngLat(), location);
-  double time = 0;
-  locs.push_back({time, location.latitude, location.longitude, 0, /*ele*/0, 0, /*dir*/0, 0, /*spd*/0, 0, dist});
-  showTrack(&drawnTrack);  //, "layers.track.draw.selected-track");
-}
+//void MapsTracks::tapEvent(LngLat location)
+//{
+//  if(!drawTrack)
+//    return;
+//  auto& locs = drawnTrack.locs;
+//  double dist = locs.empty() ? 0 : locs.back().dist + 1000*lngLatDist(locs.back().lngLat(), location);
+//  double time = 0;
+//  locs.push_back({time, location.latitude, location.longitude, 0, /*ele*/0, 0, /*dir*/0, 0, /*spd*/0, 0, dist});
+//  showTrack(&drawnTrack);  //, "layers.track.draw.selected-track");
+//}
 
 void MapsTracks::updateLocation(const Location& loc)
 {
@@ -527,7 +549,7 @@ void MapsTracks::updateLocation(const Location& loc)
 void MapsTracks::updateTrackMarker(GpxFile* track)
 {
   if(!track->loaded && !track->filename.empty())
-    loadGPX(track->filename.c_str(), track);
+    loadGPX(track);
 
   std::vector<LngLat> pts;
   GpxWay* way = track->activeWay();
@@ -563,20 +585,6 @@ void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
   app->map->markerSetVisible(track->marker, show);
   for(Waypoint& wp : track->waypoints)
     app->map->markerSetVisible(wp.marker, show);
-
-  //if(track->locs.empty() && !track->gpxFile.empty())
-  //  track->locs = std::move(loadGPX(track->gpxFile.c_str()).locs);
-  //std::vector<LngLat> pts;
-  //for(const TrackLoc& loc : track->locs)
-  //  pts.push_back(loc.lngLat());
-  // choose unused color automatically, but allow user to change color (line width, dash too?)
-  //if(track->marker <= 0) {
-  //  track->marker = app->map->markerAdd();
-  //  app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  //styling);
-  //}
-  //app->map->markerSetPolyline(track->marker, pts.data(), pts.size());
-  //if(!track->style.empty())
-  //  app->map->markerSetProperties(track->marker, {{{"color", track->style}}});
 }
 
 void MapsTracks::setTrackVisible(GpxFile* track, bool visible)
@@ -600,7 +608,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 
   Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
   showBtn->onClicked = [=](){
-    setTrackVisible(track, !showBtn->checked());
+    setTrackVisible(track, !track->visible);
     showBtn->setChecked(track->visible);
   };
   showBtn->setChecked(track->visible);
@@ -670,16 +678,14 @@ void MapsTracks::loadTracks(bool archived)
     const char* filename = (const char*)(sqlite3_column_text(stmt, 2));
     const char* date = (const char*)(sqlite3_column_text(stmt, 3));
     const char* style = (const char*)(sqlite3_column_text(stmt, 4));
-    for(Track& track : tracks) {
-      if(track.rowid == rowid)
-        return;
-    }
-    tracks.push_back({title, date, filename, style ? style : "", 0, {}, rowid, false, archived});
+    tracks.emplace_back(title, date, filename);
+    tracks.back().rowid = rowid;
+    tracks.back().style = style ? style : "";
+    tracks.back().archived = archived;
   }, [=](sqlite3_stmt* stmt){
     sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
 }
-
 
 void MapsTracks::populateTracks(bool archived)
 {
@@ -687,7 +693,10 @@ void MapsTracks::populateTracks(bool archived)
   Widget* content = archived ? archivedContent : tracksContent;
   app->gui->deleteContents(content, ".listitem");
 
-  loadTracks(archived);
+  if(archived && !archiveLoaded) {
+    loadTracks(true);
+    archiveLoaded = true;
+  }
 
   if(recordTrack && !archived)
     content->addWidget(createTrackEntry(&recordedTrack));
@@ -813,17 +822,6 @@ void MapsTracks::populateStats(GpxFile* track)
   statsContent->selectFirst(".track-descent-speed")->setText(descentTime > 0 ? descentSpdStr.c_str() : notime);
 }
 
-Button* createListItem(SvgNode* icon, const char* title, const char* note)
-{
-  Widget* item = createRow();
-  item->addWidget(new Widget(widgetNode("#listitem-icon")));
-  item->addWidget(new Widget(widgetNode("#listitem-text-2")));
-  static_cast<SvgUse*>(item->containerNode()->selectFirst(".listitem-icon"))->setTarget(icon);
-  static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"))->setText(title);
-  static_cast<SvgText*>(item->containerNode()->selectFirst(".note-text"))->setText(note);
-  return item;
-}
-
 void MapsTracks::createRoute(GpxFile* track)
 {
   track->routes.clear();
@@ -848,7 +846,7 @@ void MapsTracks::createRoute(GpxFile* track)
 }
 
 // supporting multiple routes: std::list<std::vector<Waypoint>> altRoutes;
-void MapsTracks::setRoute(std::vector<Waypoint>&& route)
+void MapsTracks::addRoute(std::vector<Waypoint>&& route)
 {
   activeTrack->routes.emplace_back();
   activeTrack->routes.back().pts = std::move(route);
@@ -857,7 +855,7 @@ void MapsTracks::setRoute(std::vector<Waypoint>&& route)
   updateTrackMarker(activeTrack);
 }
 
-static std::vector<Waypoint>::iterator findWaypoint(GpxFile* track, const std::string & uid)
+static std::vector<Waypoint>::iterator findWaypoint(GpxFile* track, const std::string& uid)
 {
   auto it = track->waypoints.begin();
   while(it != track->waypoints.end() && it->uid != uid) { ++it; }
@@ -865,7 +863,7 @@ static std::vector<Waypoint>::iterator findWaypoint(GpxFile* track, const std::s
 }
 
 // cut and paste from bookmarks
-Widget* MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
+void MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
 {
   Widget* section = createColumn();
   section->node->setAttribute("box-anchor", "hfill");
@@ -947,9 +945,6 @@ Widget* MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
 
 void MapsTracks::addWaypointItem(Waypoint& wp)
 {
-  // how will this work given that waypoint list is mutable?  key for DragDropList?
-  // - use wayptSerial to create unique id for each waypoint? findWaypoint fn?
-  // - use std::list (or vector<unique_ptr> so reference to wp remains valid?
   std::string uid = wp.uid;
 
   Button* item = createListItem(MapsApp::uiIcon("pin"), wp.name.c_str(), wp.desc.c_str());
@@ -972,7 +967,7 @@ void MapsTracks::addWaypointItem(Waypoint& wp)
     activeTrack->modified = true;
     //app->map->markerSetStylingFromPath(wp.marker,
     //    wp.visible ? "layers.waypoint.draw.marker" : "layers.waypoint-dot.draw.marker");
-    if(!showAll && !it->visible)
+    if(!showAllWaypts && !it->visible)
       wayptContent->deleteItem(uid);
   };
 
@@ -1026,16 +1021,21 @@ void MapsTracks::populateWaypoints(GpxFile* track)
   directRoutePreview = true;
 
   wayptContent->clear();
-
   for(Waypoint& wp : track->waypoints) {
-    addWaypointItem(wp);
+    if(wp.visible || showAllWaypts)
+      addWaypointItem(wp);
   }
-
 }
 
-void MapsTracks::onMapChange()
+void MapsTracks::onMapEvent(MapEvent_t event)
 {
   if(!activeTrack)
+    return;
+  if(event == LOC_UPDATE)
+    updateLocation(app->currLocation);
+  else if(event == SUSPEND && activeTrack->modified)
+    activeTrack->modified = !saveGPX(activeTrack);
+  if(event != MAP_CHANGE)
     return;
 
   // update polyline marker in direct mode
@@ -1062,10 +1062,6 @@ void MapsTracks::onMapChange()
       }
     }
   }
-
-  if(event == SUSPEND && activeTrack->modified) {
-    activeTrack->modified = !saveGPX(activeTrack);
-  }
 }
 
 void MapsTracks::setRouteMode(const std::string& mode)
@@ -1087,8 +1083,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     double km = lngLatDist(r1, r2);
     setRouteMode(km < 10 ? "walk" : km < 100 ? "bike" : "drive");
     navRoute.waypoints.clear();
-    navRoute.waypoints.emplace_back(r1, "Current location");
-    navRoute.waypoints.emplace_back(r2, app->pickResultName);
+    navRoute.addWaypoint({r1, "Current location"});
+    navRoute.addWaypoint({r2, app->pickResultName});
     navRoute.modified = true;
     populateWaypoints(&navRoute);
     createRoute(&navRoute);
@@ -1098,7 +1094,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   if(activeTrack) {
     Button* addWptBtn = createToolbutton(MapsApp::uiIcon("directions"), "Add waypoint");
     addWptBtn->onClicked = [=](){
-      activeTrack->waypoints.emplace_back(app->pickResultCoord, app->pickResultName);  //++activeTrack->wayPtSerial?
+      activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName});  //++activeTrack->wayPtSerial?
       activeTrack->modified = true;
       addWaypointItem(activeTrack->waypoints.back());
       if(activeTrack->waypoints.back().routed)
@@ -1401,7 +1397,7 @@ Button* MapsTracks::createPanel()
     });
     recordedTrack.rowid = sqlite3_last_insert_rowid(app->bkmkDB);
     tracks.push_back(std::move(recordedTrack));
-    recordedTrack = GpxFile("","","");
+    recordedTrack = GpxFile();
     recordTrack = false;
     tracksDirty = true;
     pauseRecordBtn->setChecked(false);
@@ -1494,6 +1490,7 @@ Button* MapsTracks::createPanel()
       sqlite3_bind_text(stmt, 2, filename.c_str(), -1, SQLITE_TRANSIENT);
     });
     tracks.emplace_back(newTrackTitle->text(), "", filename);
+    tracks.back().loaded = true;
     populateTracks(false);
     populateWaypoints(&tracks.back());
     newTrackContent->setVisible(false);
@@ -1524,24 +1521,25 @@ Button* MapsTracks::createPanel()
     nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
     if(result != NFD_OKAY)
       return;
-    auto track = loadGPX(outPath);
-    if(track.locs.empty()) {
+    tracks.emplace_back("", "", outPath);
+    loadGPX(&tracks.back());
+    if(tracks.back().waypoints.empty() && !tracks.back().activeWay()) {
       PLATFORM_LOG("Error loading track!");
+      tracks.pop_back();
       return;
     }
     const char* query = "INSERT INTO tracks (title,filename) VALUES (?,?);";
     DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, track.title.c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 2, track.filename.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 1, tracks.back().title.c_str(), -1, SQLITE_TRANSIENT);
+      sqlite3_bind_text(stmt, 2, tracks.back().filename.c_str(), -1, SQLITE_TRANSIENT);
     });
-    tracks.push_back(std::move(track));
     populateTracks(false);
     populateStats(&tracks.back());
   };
 
   Button* recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record Track");
   recordTrackBtn->onClicked = [=](){
-    if(!recordedTrack.track.empty())
+    if(!recordedTrack.tracks.empty())
       populateStats(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
     else {
       recordTrack = true;
@@ -1549,14 +1547,16 @@ Button* MapsTracks::createPanel()
       time_t t = mSecSinceEpoch()/1000;
       strftime(timestr, sizeof(timestr), "%FT%H.%M.%S", localtime(&t));  //"%Y-%m-%d %HH%M"
       FSPath gpxPath(app->baseDir, std::string(timestr) + ".gpx");
-      recordedTrack = Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
-      recordedTrack.track.push_back(app->currLocation);
+      recordedTrack = GpxFile(timestr, "", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
+      recordedTrack.loaded = true;
+      recordedTrack.tracks.emplace_back();
+      recordedTrack.tracks.back().pts.push_back(app->currLocation);
       recordedTrack.marker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(recordedTrack.marker, "layers.recording-track.draw.track");
       populateTracks(false);
       populateStats(&recordedTrack);
       saveTitle->setText(recordedTrack.title.c_str());
-      savePath->setText(recordedTrack.gpxFile.c_str());
+      savePath->setText(recordedTrack.filename.c_str());
       saveTrackContent->setVisible(true);
     }
   };
@@ -1584,8 +1584,8 @@ Button* MapsTracks::createPanel()
 
   Button* mapCenterWayptBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Add waypoint");
   mapCenterWayptBtn->onClicked = [=](){
-    std::string title = fstring("Waypoint %d", ++activeTrack->wayPtSerial);
-    activeTrack->waypoints.emplace_back(app->getMapCenter(), title);
+    std::string title = fstring("Waypoint %d", activeTrack->wayPtSerial+1);
+    activeTrack->addWaypoint({app->getMapCenter(), title});
     activeTrack->modified = true;
     addWaypointItem(activeTrack->waypoints.back());
     if(activeTrack->waypoints.back().routed)
@@ -1614,10 +1614,22 @@ Button* MapsTracks::createPanel()
   routeModeBtn->setMenu(routeModeMenu);
   routeModeBtn->setEnabled(hasPlugins);
 
+  Button* wayptsOverflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
+  Menu* wayptsOverflow = createMenu(Menu::VERT_LEFT);
+  wayptsOverflowBtn->setMenu(wayptsOverflow);
+
+  Button* showAllWptsBtn = createCheckBoxMenuItem("Show all waypoints");
+  showAllWptsBtn->onClicked = [=](){
+    showAllWaypts = !showAllWaypts;
+    showAllWptsBtn->setChecked(showAllWaypts);
+    populateWaypoints(activeTrack);
+  };
+
   auto wayptsTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Waypoints");
   wayptsTb->addWidget(mapCenterWayptBtn);
   wayptsTb->addWidget(routeModeBtn);
   wayptsTb->addWidget(routePluginBtn);
+  wayptsTb->addWidget(wayptsOverflowBtn);
   wayptPanel = app->createMapPanel(wayptsTb, NULL, wayptContent);
   wayptPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
@@ -1667,7 +1679,7 @@ Button* MapsTracks::createPanel()
   Tangram::YamlPath("+tracks.visible").get(app->config, vistracks);  //node = app->getConfigPath("+places.visible");
   for(auto& node : vistracks) {
     int rowid = node.as<int>(-1);
-    for(Track& track : tracks) {
+    for(GpxFile& track : tracks) {
       if(track.rowid == rowid) {
         track.visible = true;
         showTrack(&track, true);

@@ -19,7 +19,7 @@ public:
   void addSource(const std::string& key, YAML::Node srcnode);
   void rebuildSource(const std::string& srcname = "");
   int64_t shrinkCache(int64_t maxbytes);
-  void onMapChange();
+  void onMapEvent(MapEvent_t event);
   Button* createPanel();
 
   std::string currSource;

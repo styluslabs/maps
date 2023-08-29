@@ -332,8 +332,10 @@ void MapsSources::populateSources()
     combo->addItems(layerTitles);
 }
 
-void MapsSources::onMapChange()
+void MapsSources::onMapEvent(MapEvent_t event)
 {
+  if(event != MAP_CHANGE)
+    return;
   if(!sceneVarsLoaded && app->map->getScene()->isReady() && sourceEditPanel->isVisible())
     populateSceneVars();
 }
