@@ -15,6 +15,7 @@
 #include "ugui/textedit.h"
 
 #include "mapsources.h"
+#include "mapwidgets.h"
 
 static bool runOfflineWorker = false;
 static std::unique_ptr<std::thread> offlineWorker;
@@ -347,31 +348,6 @@ void MapsOffline::updateProgress()
 
 void MapsOffline::populateOffline()
 {
-  static const char* offlineListProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="hfill">
-        <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#fold-map"/>
-        </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="detail-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
-        </g>
-
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
-
-        <g class="toolbutton delete-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#discard"/>
-        </g>
-
-      </g>
-    </g>
-  )";
-  std::unique_ptr<SvgNode> offlineListProto;
-  if(!offlineListProto)
-    offlineListProto.reset(loadSVGFragment(offlineListProtoSVG));
-
   app->gui->deleteContents(offlineContent, ".listitem");
 
   const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title FROM offlinemaps ORDER BY timestamp DESC;";
@@ -381,8 +357,10 @@ void MapsOffline::populateOffline()
     double lng1 = sqlite3_column_double(stmt, 3), lat1 = sqlite3_column_double(stmt, 4);
     std::string sourcestr = (const char*)(sqlite3_column_text(stmt, 5));
     std::string titlestr = (const char*)(sqlite3_column_text(stmt, 6));
+    auto srcinfo = app->mapsSources->mapSources[sourcestr];
 
-    Button* item = new Button(offlineListProto->clone());
+    Button* item = createListItem(MapsApp::uiIcon("fold-map"), titlestr.c_str(),
+        srcinfo ? srcinfo["title"].Scalar().c_str() : sourcestr.c_str());
     item->node->setAttr("__mapid", mapid);
     item->onClicked = [=](){
       bool checked = !item->isChecked();
@@ -416,12 +394,6 @@ void MapsOffline::populateOffline()
       else
         updateProgress();
     };
-
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(titlestr.c_str());
-    SvgText* detailnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".detail-text"));
-    auto srcinfo = app->mapsSources->mapSources[sourcestr];
-    detailnode->addText(srcinfo ? srcinfo["title"].Scalar().c_str() : sourcestr.c_str());
 
     offlineContent->addWidget(item);
   });

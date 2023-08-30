@@ -134,6 +134,6 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     prevTime = initTime = t;
     prevCOM = initCOM = pt;
     flingV = {0, 0};
-    canBeLongPress = true;
+    canBeLongPress = ptrId >= 0;
   }
 }

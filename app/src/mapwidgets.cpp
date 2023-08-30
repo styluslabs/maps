@@ -318,6 +318,7 @@ void DragDropList::addItem(KeyType key, Widget* item)
       return true;  // continue running timer
     }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
+      Rect b = placeholder ? placeholder->node->bounds() : item->node->bounds();
       if(!placeholder) {
         SvgRect* rnode = new SvgRect(item->node->bounds().toSize());
         rnode->setAttribute("fill", "none");
@@ -332,7 +333,6 @@ void DragDropList::addItem(KeyType key, Widget* item)
       floatWidget->node->setAttribute("top", fstring("%g", event->tfinger.y - node->bounds().top - yOffset).c_str());
 
       // if finger > height above or below center, shift position
-      Rect b = placeholder->node->bounds();
       real dy = event->tfinger.y - b.center().y;
       if(std::abs(dy) > b.height()) {
         SvgContainerNode* parent = content->containerNode();

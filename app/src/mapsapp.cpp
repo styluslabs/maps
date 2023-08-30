@@ -153,7 +153,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     }
   });
 
-  if(!pluginManager->placeFns.empty()) {
+  if(!osmid.empty() && !pluginManager->placeFns.empty()) {
     std::vector<std::string> cproviders = {"None"};
     for(auto& fn : pluginManager->placeFns)
       cproviders.push_back(fn.title.c_str());
@@ -332,24 +332,6 @@ void MapsApp::tapEvent(float x, float y)
 void MapsApp::hoverEvent(float x, float y)
 {
   // ???
-}
-
-void MapsApp::onMouseButton(double time, double x, double y, int button, int action, int mods)
-{
-  if(button == 0)
-    touchHandler->touchEvent(0, action > 0 ? 1 : -1, time, x*density, y*density, 1.0f);
-  else if(action > 0) {
-    if(mods == 0x04)  // GLFW_MOD_ALT
-      dumpTileContents(x, y);
-    else
-      longPressEvent(x, y);
-  }
-}
-
-void MapsApp::onMouseMove(double time, double x, double y, bool pressed)
-{
-  if(pressed)
-    touchHandler->touchEvent(0, 0, time, x*density, y*density, 1.0f);
 }
 
 void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving)
@@ -716,13 +698,13 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
         (event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK)) {
       if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
         gui->setPressed(this);
-      if(event->tfinger.fingerId != SDL_BUTTON_LMASK) {
+      if(event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK) {
         if(event->type == SDL_FINGERDOWN)
           app->longPressEvent(event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale);
       }
       else
-        app->touchHandler->touchEvent(0, actionFromSDLFinger(event->type), event->tfinger.timestamp/1000.0,
-             event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale, 1.0f);
+        app->touchHandler->touchEvent(event->tfinger.touchId, actionFromSDLFinger(event->type),
+             event->tfinger.timestamp/1000.0, event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale, 1.0f);
     }
     else if(event->type == SDL_MOUSEWHEEL) {
       Point p = gui->prevFingerPos;
@@ -734,7 +716,8 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
       auto points = static_cast<std::vector<SDL_Finger>*>(event->user.data2);
       for(const SDL_Finger& pt : *points) {
         int action = pt.id == fevent->tfinger.fingerId ? actionFromSDLFinger(fevent->type) : 0;
-        app->touchHandler->touchEvent(0, action, event->user.timestamp/1000.0, pt.x/gui->inputScale, pt.y/gui->inputScale, 1.0f);
+        app->touchHandler->touchEvent(event->tfinger.touchId, action,
+            event->user.timestamp/1000.0, pt.x/gui->inputScale, pt.y/gui->inputScale, 1.0f);
       }
     }
     else
@@ -758,6 +741,30 @@ Rect MapsWidget::dirtyRect() const
 void MapsWidget::draw(SvgPainter* svgp) const
 {
   //app->map->render();
+}
+
+class CrosshairWidget : public Widget
+{
+public:
+  CrosshairWidget() : Widget(new SvgCustomNode) {}
+  void draw(SvgPainter* svgp) const override;
+  Rect bounds(SvgPainter* svgp) const override;
+};
+
+Rect CrosshairWidget::bounds(SvgPainter* svgp) const
+{
+  return svgp->p->getTransform().mapRect(Rect::wh(40, 40));
+}
+
+void CrosshairWidget::draw(SvgPainter* svgp) const
+{
+  Painter* p = svgp->p;
+  Rect bbox = node->bounds();
+
+  p->setFillBrush(Color::NONE);
+  p->setStroke(Color::RED, 3);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->drawLine(Point(0, bbox.height()/2), Point(bbox.width(), bbox.height()/2));
+  p->drawLine(Point(bbox.width()/2, 0), Point(bbox.width()/2, bbox.height()));
 }
 
 class ScaleBarWidget : public Widget
@@ -964,6 +971,10 @@ Window* MapsApp::createGUI()
   scaleBar->node->setAttribute("box-anchor", "bottom left");
   scaleBar->setMargins(0, 0, 10, 10);
   mapsPanel->addWidget(scaleBar);
+
+  crossHair = new CrosshairWidget();
+  crossHair->setVisible(false);
+  mapsPanel->addWidget(crossHair);
 
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();
@@ -1511,12 +1522,13 @@ int main(int argc, char* argv[])
     glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
     painter->deviceRect = Rect::wh(fbWidth, fbHeight);
 
+    // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
     if(MapsApp::platform->notifyRender()) {
       auto t0 = std::chrono::high_resolution_clock::now();
       double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
       app->mapUpdate(currTime);
       app->mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);
-      app->map->render();  // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
+      app->map->render();
     }
 
     Rect dirty = gui->layoutAndDraw(painter);

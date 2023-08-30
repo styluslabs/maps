@@ -573,59 +573,6 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
 
 Button* MapsBookmarks::createPanel()
 {
-  /*static const char* bkmkListProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
-        <g class="toolbutton drag-btn" margin="2 5">
-          <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
-        </g>
-        <g layout="box" box-anchor="fill">
-          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
-          <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
-        </g>
-
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
-      </g>
-    </g>
-  )";
-  bkmkListProto.reset(loadSVGFragment(bkmkListProtoSVG));
-
-  static const char* listSelectProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5">
-          <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#folder"/>
-        </g>
-        <g class="title-text" layout="box" box-anchor="hfill">
-          <text box-anchor="left" margin="0 10"></text>
-        </g>
-      </g>
-    </g>
-  )";
-  listSelectProto.reset(loadSVGFragment(listSelectProtoSVG));
-
-  static const char* placeListProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="hfill">
-        <g class="image-container" margin="2 5">
-          <use class="listitem-icon icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
-        </g>
-        <g layout="box" box-anchor="fill">
-          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
-          <text class="note-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
-        </g>
-
-        <g class="toolbutton overflow-btn" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#overflow"/>
-        </g>
-      </g>
-    </g>
-  )";
-  placeListProto.reset(loadSVGFragment(placeListProtoSVG));*/
-
   static const char* chooseListProtoSVG = R"(
     <svg id="dialog" class="window dialog" layout="box">
       <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>

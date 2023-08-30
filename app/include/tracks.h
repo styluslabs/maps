@@ -118,11 +118,13 @@ private:
   void addWaypointItem(Waypoint& wp);
   void setPlaceInfoSection(const Waypoint& wpt);
   void createRoute(GpxFile* track);
+  void removeWaypoint(const std::string& uid);
 
   std::string routeMode = "direct";  // "walk", "bike", "drive"
   int pluginFn = 0;
   GpxFile* activeTrack = NULL;
   std::vector<Waypoint> origLocs;
+  std::vector<LngLat>  previewRoute;
   double cropStart = 0;
   double cropEnd = 1;
   double recordLastSave = 0;
@@ -133,6 +135,5 @@ private:
   bool waypointsDirty = true;
   bool showAllWaypts = false;
   bool archiveLoaded = false;
-  std::unique_ptr<SvgNode> trackListProto;
   std::unique_ptr<SelectDialog> selectTrackDialog;
 };

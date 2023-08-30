@@ -43,9 +43,6 @@ private:
   bool archiveDirty = false;
   int activeListId = -1;
 
-  //std::unique_ptr<SvgNode> bkmkListProto;
-  //std::unique_ptr<SvgNode> listSelectProto;
-  //std::unique_ptr<SvgNode> placeListProto;
   std::unique_ptr<SvgNode> placeInfoSectionProto;
   std::unique_ptr<SvgDocument> chooseListProto;
 };

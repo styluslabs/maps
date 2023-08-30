@@ -303,11 +303,9 @@ void MapsSources::populateSources()
       layerTitles.push_back(src.second["title"].Scalar());
     }
 
-    Button* item = new Button(sourceListProto->clone());
+    Button* item = createListItem(MapsApp::uiIcon("layers"), src.second["title"].Scalar().c_str());
     item->node->setAttr("__sourcekey", key.c_str());
     Widget* container = item->selectFirst(".child-container");
-    TextLabel* titleText = new TextLabel(container->containerNode()->selectFirst(".title-text"));
-    titleText->setText(src.second["title"].Scalar().c_str());
     item->onClicked = [this, key](){ if(key != currSource) rebuildSource(key); };
 
     Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
@@ -324,10 +322,8 @@ void MapsSources::populateSources()
 
     container->addWidget(editBtn);
     container->addWidget(overflowBtn);
-    //item->selectFirst(".detail-text")->setText(track->detail.c_str());
     sourcesContent->addWidget(item);
   }
-  //sourceCombo->addItems(sourceTitles);
   for(SelectBox* combo : layerCombos)
     combo->addItems(layerTitles);
 }
@@ -416,22 +412,6 @@ void MapsSources::populateSourceEdit(std::string key)
 
 Button* MapsSources::createPanel()
 {
-  static const char* sourceListProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
-        <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#layers"/>
-        </g>
-        <g layout="box" box-anchor="fill">
-          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
-          <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
-        </g>
-      </g>
-    </g>
-  )";
-  sourceListProto.reset(loadSVGFragment(sourceListProtoSVG));
-
   Toolbar* sourceTb = createToolbar();
   titleEdit = createTextEdit();
   saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save Source");

@@ -124,7 +124,7 @@ void PluginManager::jsRoute(int fnIdx, std::string routeMode, const std::vector<
     duk_put_prop_index(ctx, array1, 1);
     duk_put_prop_index(ctx, array0, ii);
   }
-  dukTryCall(ctx, 1);
+  dukTryCall(ctx, 2);
   duk_pop(ctx);
   inState = NONE;
 }

@@ -37,8 +37,6 @@ public:
   ~MapsApp();  // impl must be outside header to allow unique_ptr members w/ incomplete types
 
   void mapUpdate(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
-  void onMouseButton(double time, double x, double y, int button, int action, int mods);
-  void onMouseMove(double time, double x, double y, bool pressed);
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
   void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void onSuspend();
@@ -112,6 +110,7 @@ public:
   MapsWidget* mapsWidget = NULL;
   Button* reorientBtn = NULL;
   Widget* gpsStatusBtn = NULL;
+  Widget* crossHair = NULL;
   std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
 

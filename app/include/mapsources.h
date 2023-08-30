@@ -51,6 +51,4 @@ private:
   bool sceneVarsLoaded = false;
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;
-
-  std::unique_ptr<SvgNode> sourceListProto;
 };
