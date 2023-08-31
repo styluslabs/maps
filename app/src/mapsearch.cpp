@@ -83,10 +83,6 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
   sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
 }
 
-//search_data:
-//    - layer: place
-//      fields: name, class
-
 std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
 {
   std::vector<SearchData> searchData;
@@ -442,7 +438,12 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
 
   for(size_t ii = 0; ii < history.size(); ++ii) {
     std::string query = history[ii];
-    Button* item = new Button(autoCompProto->clone());
+    Button* item = createListItem(MapsApp::uiIcon("clock"), history[ii].c_str());
+    Widget* container = item->selectFirst(".child-container");
+    item->onClicked = [=](){
+      queryText->setText(query.c_str());
+      searchText(query, RETURN);
+    };
 
     Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
     discardBtn->onClicked = [=](){
@@ -451,15 +452,6 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
       });
       searchText(queryText->text(), EDITING);  // refresh
     };
-
-    item->onClicked = [=](){
-      queryText->setText(query.c_str());
-      searchText(query, RETURN);
-    };
-    SvgText* textnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    textnode->addText(history[ii].c_str());
-    Widget* container = item->selectFirst(".child-container");
-    container->addWidget(createStretch());
     container->addWidget(discardBtn);
 
     resultsContent->addWidget(item);
@@ -470,16 +462,16 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 {
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
-    Button* item = new Button(searchResultProto->clone());
+    Button* item = createListItem(MapsApp::uiIcon("search"), res.tags["name"].GetString());
     item->onClicked = [this, &results, ii](){
       // TODO: hide search result marker
       app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
     };
-    SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
-    titlenode->addText(res.tags["name"].GetString());
-    SvgText* distnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".dist-text"));
     double distkm = lngLatDist(app->currLocation.lngLat(), res.pos);
-    distnode->addText(fstring("%.1f km", distkm).c_str());
+    TextBox* distText = new TextBox(createTextNode(fstring("%.1f km", distkm).c_str()));
+    distText->node->addClass("weak");
+    distText->node->setAttribute("font-size", "12");
+    item->selectFirst(".child-container")->addWidget(distText);
     resultsContent->addWidget(item);
   }
 }
@@ -590,39 +582,6 @@ Button* MapsSearch::createPanel()
     if(moreListResultsAvail && scrollWidget->scrollY >= scrollWidget->scrollLimits.bottom)
       searchText("", NEXTPAGE);
   };
-
-  static const char* searchResultProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="left">
-        <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#search"/>
-        </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
-          <text class="dist-text weak" box-anchor="left bottom" margin="0 120" font-size="12"></text>
-        </g>
-      </g>
-    </g>
-  )";
-  searchResultProto.reset(loadSVGFragment(searchResultProtoSVG));
-
-  static const char* autoCompProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
-        <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#clock"/>
-        </g>
-        <g layout="box" box-anchor="vfill">
-          <text class="title-text" box-anchor="left" margin="0 10"></text>
-          <text class="addr-text weak" box-anchor="left bottom" margin="0 10" font-size="12"></text>
-        </g>
-      </g>
-    </g>
-  )";
-  autoCompProto.reset(loadSVGFragment(autoCompProtoSVG));
 
   markers.reset(new MarkerGroup(app->map, "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
 

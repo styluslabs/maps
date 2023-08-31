@@ -119,6 +119,7 @@ private:
   void setPlaceInfoSection(const Waypoint& wpt);
   void createRoute(GpxFile* track);
   void removeWaypoint(const std::string& uid);
+  void viewEntireTrack(GpxFile* track);
 
   std::string routeMode = "direct";  // "walk", "bike", "drive"
   int pluginFn = 0;

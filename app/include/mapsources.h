@@ -8,6 +8,7 @@ class SelectBox;
 class Button;
 class TextEdit;
 class SvgNode;
+class DragDropList;
 
 class MapsSources : public MapsComponent
 {
@@ -34,7 +35,7 @@ private:
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;
-  Widget* sourcesContent = NULL;
+  DragDropList* sourcesContent = NULL;
   std::string baseUrl;
   std::string srcFile;
   YAML::Node mapSources;
@@ -49,6 +50,7 @@ private:
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
   bool sceneVarsLoaded = false;
+  bool sourcesDirty = true;
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;
 };

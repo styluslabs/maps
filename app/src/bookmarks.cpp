@@ -486,9 +486,8 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
       sqlite3_bind_int(stmt, 3, rowid);
     });
     // update title
-    SvgText* titlenode = static_cast<SvgText*>(app->infoContent->containerNode()->selectFirst(".title-text"));
-    titlenode->clearText();
-    titlenode->addText(titleEdit->text().c_str());
+    SvgText* titlenode = static_cast<SvgText*>(app->infoPanel->containerNode()->selectFirst(".panel-title"));
+    titlenode->setText(titleEdit->text().c_str());
 
     noteText->setText(noteEdit->text().c_str());
     editContent->setVisible(false);

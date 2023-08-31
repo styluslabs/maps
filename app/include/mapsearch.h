@@ -82,6 +82,4 @@ private:
   Widget* resultsContent = NULL;
   Button* cancelBtn;
   TextEdit* queryText;
-  std::unique_ptr<SvgNode> searchResultProto;
-  std::unique_ptr<SvgNode> autoCompProto;
 };

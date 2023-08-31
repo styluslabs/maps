@@ -286,7 +286,9 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
 
 void MapsSources::populateSources()
 {
-  app->gui->deleteContents(sourcesContent, ".listitem");
+  //app->gui->deleteContents(sourcesContent, ".listitem");
+  sourcesDirty = false;
+  sourcesContent->clear();
 
   std::vector<std::string> layerTitles = {"None"};
   std::vector<std::string> sourceTitles = {};
@@ -322,7 +324,7 @@ void MapsSources::populateSources()
 
     container->addWidget(editBtn);
     container->addWidget(overflowBtn);
-    sourcesContent->addWidget(item);
+    sourcesContent->addItem(key, item);  //addWidget(item);
   }
   for(SelectBox* combo : layerCombos)
     combo->addItems(layerTitles);
@@ -479,7 +481,7 @@ Button* MapsSources::createPanel()
   // we should check for conflicting w/ title of other source here
   titleEdit->onChanged = [this](const char* s){ saveBtn->setEnabled(s[0]); };
 
-  sourcesContent = createColumn();
+  sourcesContent = new DragDropList;  //createColumn();
 
   Widget* layersContent = createColumn();
   varsContent = createColumn();
@@ -492,7 +494,6 @@ Button* MapsSources::createPanel()
     layerRows.push_back(createTitledRow(fstring("Layer %d", ii).c_str(), layerCombos.back()));
     layersContent->addWidget(layerRows.back());
   }
-  populateSources();
 
   auto clearCacheFn = [this](std::string res){
     if(res == "OK") {
@@ -517,7 +518,16 @@ Button* MapsSources::createPanel()
   sourcesHeader->addWidget(createBtn);
   sourcesHeader->addWidget(offlineBtn);
   sourcesHeader->addWidget(overflowBtn);
-  sourcesPanel = app->createMapPanel(sourcesHeader, sourcesContent);
+  sourcesPanel = app->createMapPanel(sourcesHeader, NULL, sourcesContent);
+
+  sourcesPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SvgGui::VISIBLE) {
+      if(sourcesDirty)
+        populateSources();
+    }
+    return false;
+  });
+
 
   auto editHeader = app->createPanelHeader(MapsApp::uiIcon("edit"), "Edit Source");
   sourceEditPanel = app->createMapPanel(editHeader, layersContent, sourceTb);

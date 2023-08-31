@@ -10,6 +10,7 @@
 #include "yaml-cpp/yaml.h"
 #include "sqlite3/sqlite3.h"
 #include "util/yamlPath.h"
+#include "util/mapProjection.h"
 #include "nfd.hpp"  // file dialogs
 
 #include "ugui/svggui.h"
@@ -719,6 +720,24 @@ void MapsTracks::populateTracks(bool archived)
   }
 }
 
+void MapsTracks::viewEntireTrack(GpxFile* track)
+{
+  if(!track->activeWay() || track->activeWay()->pts.empty()) return;
+  auto& locs = track->activeWay()->pts;
+  LngLat minLngLat(locs.front().lngLat()), maxLngLat(locs.front().lngLat());
+  for(size_t ii = 1; ii < locs.size(); ++ii) {
+    Location& loc = locs[ii].loc;
+    minLngLat.longitude = std::min(minLngLat.longitude, loc.lng);
+    minLngLat.latitude = std::min(minLngLat.latitude, loc.lat);
+    maxLngLat.longitude = std::max(maxLngLat.longitude, loc.lng);
+    maxLngLat.latitude = std::max(maxLngLat.latitude, loc.lat);
+  }
+  if(!app->map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude)
+      || !app->map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude)) {
+    app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32}), 0.5f);
+  }
+}
+
 void MapsTracks::populateStats(GpxFile* track)
 {
   app->showPanel(statsPanel, true);
@@ -737,7 +756,6 @@ void MapsTracks::populateStats(GpxFile* track)
   // how to calculate max speed?
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
   double currSpeed = 0, maxSpeed = 0;
-  LngLat minLngLat(locs.front().lngLat()), maxLngLat(locs.front().lngLat());
   for(size_t ii = 1; ii < locs.size(); ++ii) {
     const Location& prev = locs[ii-1].loc;
     Location& loc = locs[ii].loc;
@@ -761,22 +779,13 @@ void MapsTracks::populateStats(GpxFile* track)
     ascentTime += vert > 0 ? dt : 0;
     descentTime += vert < 0 ? dt : 0;
 
-    minLngLat.longitude = std::min(minLngLat.longitude, loc.lng);
-    minLngLat.latitude = std::min(minLngLat.latitude, loc.lat);
-    maxLngLat.longitude = std::max(maxLngLat.longitude, loc.lng);
-    maxLngLat.latitude = std::max(maxLngLat.latitude, loc.lat);
-
     if(!origLocs.empty())  // track has been modified - recalc distances
       locs[ii].dist = trackDist;
   }
 
-  if(activeTrack != track) {
-    if(!app->map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude)
-        || !app->map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude)) {
-      app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32}), 0.5f);
-    }
-    activeTrack = track;
-  }
+  if(activeTrack != track)
+    viewEntireTrack(track);
+  activeTrack = track;
   trackPlot->setTrack(locs);
 
   const Location& loc = locs.back().loc;
@@ -878,6 +887,8 @@ void MapsTracks::removeWaypoint(const std::string& uid)
     app->map->markerRemove(it->marker);
   activeTrack->waypoints.erase(it);
   activeTrack->modified = true;
+  if(activeTrack->waypoints.empty())
+    app->map->markerSetVisible(previewMarker, false);
   if(routed)
     createRoute(activeTrack);
   wayptContent->deleteItem(uid);
@@ -917,7 +928,7 @@ void MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
     it->desc = noteEdit->text();
 
     // update title
-    SvgText* titlenode = static_cast<SvgText*>(app->infoContent->containerNode()->selectFirst(".title-text"));
+    SvgText* titlenode = static_cast<SvgText*>(app->infoPanel->containerNode()->selectFirst(".panel-title"));
     titlenode->setText(titleEdit->text().c_str());
 
     noteText->setText(noteEdit->text().c_str());
@@ -932,7 +943,7 @@ void MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
   };
 
   Widget* toolRow = createRow();
-  Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), activeTrack->title.c_str(), true);
+  Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), activeTrack->title.c_str(), true);
   Button* removeBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete");
   Button* addNoteBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
 
@@ -963,7 +974,7 @@ void MapsTracks::addWaypointItem(Waypoint& wp)
 {
   std::string uid = wp.uid;
 
-  Button* item = createListItem(MapsApp::uiIcon("pin"), wp.name.c_str(), wp.desc.c_str());
+  Button* item = createListItem(MapsApp::uiIcon("waypoint"), wp.name.c_str(), wp.desc.c_str());
   Widget* container = item->selectFirst(".child-container");
   Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
   Button* routeBtn = createToolbutton(MapsApp::uiIcon("track"), "Route");
@@ -1020,6 +1031,8 @@ void MapsTracks::populateWaypoints(GpxFile* track)
   waypointsDirty = false;
   app->showPanel(wayptPanel, true);
   wayptPanel->selectFirst(".panel-title")->setText(track->title.c_str());
+  if(activeTrack != track)
+    viewEntireTrack(track);
   activeTrack = track;
   showTrack(track, true);
   directRoutePreview = true;
@@ -1031,8 +1044,6 @@ void MapsTracks::populateWaypoints(GpxFile* track)
       addWaypointItem(wp);
   }
 }
-
-#include "util/mapProjection.h"
 
 void MapsTracks::onMapEvent(MapEvent_t event)
 {
@@ -1057,9 +1068,9 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->map->markerSetProperties(previewMarker, {{{"color", "red"}}});
       app->map->markerSetVisible(previewMarker, pix > 2);
     }
-    else if(!(pts[0] == previewRoute[0] && pts[1] == previewRoute[1])) {
+    else if(previewRoute.empty() || !(pts[0] == previewRoute[0] && pts[1] == previewRoute[1])) {
       app->map->markerSetPolyline(previewMarker, pts.data(), 2);
-      app->map->markerSetVisible(previewMarker, pix > 2);  //activeTrack->routes.front().pts.back().lngLat()
+      app->map->markerSetVisible(previewMarker, pix > 2);
     }
     previewRoute = pts;
   }
@@ -1085,6 +1096,13 @@ void MapsTracks::setRouteMode(const std::string& mode)
   else if(parts[0] == "bike") icon = "bike";
   else if(parts[0] == "drive") icon = "car";
   routeModeBtn->setIcon(MapsApp::uiIcon(icon));
+  if(directRoutePreview) {
+    previewRoute.clear();
+    if(mode != "direct")
+      app->map->markerSetVisible(previewMarker, false);
+    else
+      onMapEvent(MAP_CHANGE);
+  }
   if(activeTrack)
     createRoute(activeTrack);
 };
@@ -1092,11 +1110,16 @@ void MapsTracks::setRouteMode(const std::string& mode)
 void MapsTracks::addPlaceActions(Toolbar* tb)
 {
   if(activeTrack) {
-    Button* addWptBtn = createToolbutton(MapsApp::uiIcon("directions"), "Add waypoint");
+    Button* addWptBtn = createToolbutton(MapsApp::uiIcon("waypoint"), "Add waypoint");
     addWptBtn->onClicked = [=](){
+      // don't create successive waypoints at same position
+      if(!activeTrack->waypoints.empty() && app->pickResultCoord == activeTrack->waypoints.back().lngLat())
+        return;
       activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName});  //++activeTrack->wayPtSerial?
       activeTrack->modified = true;
       addWaypointItem(activeTrack->waypoints.back());
+      //app->setPickResult(it->lngLat(), it->name, "");
+      setPlaceInfoSection(activeTrack->waypoints.back());
       if(activeTrack->waypoints.back().routed)
         createRoute(activeTrack);
     };

@@ -319,6 +319,8 @@ void DragDropList::addItem(KeyType key, Widget* item)
     }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
       Rect b = placeholder ? placeholder->node->bounds() : item->node->bounds();
+      floatWidget->node->setAttribute("left", "0");
+      floatWidget->node->setAttribute("top", fstring("%g", event->tfinger.y - node->bounds().top - yOffset).c_str());
       if(!placeholder) {
         SvgRect* rnode = new SvgRect(item->node->bounds().toSize());
         rnode->setAttribute("fill", "none");
@@ -329,8 +331,8 @@ void DragDropList::addItem(KeyType key, Widget* item)
         floatWidget->addWidget(item);
         floatWidget->setVisible(true);
       }
-      floatWidget->node->setAttribute("left", "0");
-      floatWidget->node->setAttribute("top", fstring("%g", event->tfinger.y - node->bounds().top - yOffset).c_str());
+      else if(placeholder->node->m_dirty == SvgNode::BOUNDS_DIRTY)
+        return true;  // once placeholder has been moved, have to wait until layout is recalculated
 
       // if finger > height above or below center, shift position
       real dy = event->tfinger.y - b.center().y;

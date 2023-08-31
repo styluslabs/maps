@@ -33,6 +33,7 @@ PluginManager::PluginManager(MapsApp* _app, const std::string& pluginDir) : Maps
 
   duk_context* ctx = jsContext;
   auto files = lsDirectory(pluginDir);
+  std::sort(files.begin(), files.end());  // load plugins alphabetically
   for(auto& file : files) {
     if(file.substr(file.size() - 3) != ".js") continue;
     std::string js = readFile((pluginDir + "/" + file).c_str());

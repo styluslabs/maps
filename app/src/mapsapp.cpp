@@ -101,9 +101,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   toolbar->addWidget(createStretch());
   item->selectFirst(".action-container")->addWidget(toolbar);
 
-  //SvgText* titlenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".title-text"));
   SvgText* titlenode = static_cast<SvgText*>(infoPanel->containerNode()->selectFirst(".panel-title"));
-  //titlenode->setText(props.IsObject() && props.HasMember("name") ? props["name"].GetString() : namestr.c_str());
   titlenode->setText(namestr.c_str());
   titlenode->setText(SvgPainter::breakText(titlenode, 250).c_str());
 
@@ -547,7 +545,7 @@ YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
 
 static double readElevTex(Tangram::Texture* tex, int x, int y)
 {
-  // see getElevation() in raster-contour.yaml
+  // see getElevation() in raster-contour.yaml and https://github.com/tilezen/joerd
   GLubyte* p = tex->bufferData() + y*tex->width()*4 + x*4;
   //(red * 256 + green + blue / 256) - 32768
   return (p[0]*256 + p[1] + p[2]/256.0) - 32768;
@@ -562,6 +560,8 @@ static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
   ProjectedMeters meters = MapProjection::lngLatToProjectedMeters(pos);  //glm::dvec2(tileCoord) * scale + tileOrigin;
   ProjectedMeters offset = meters - tileOrigin;
   double ox = offset.x/scale, oy = offset.y/scale;
+  if(ox < 0 || ox > 1 || oy < 0 || oy > 1)
+    LOGE("Elevation tile position out of range");
   // ... seems this work correctly w/o accounting for vertical flip of texture
   double x0 = ox*tex->width(), y0 = oy*tex->height();
   int ix0 = std::floor(x0), iy0 = std::floor(y0);
