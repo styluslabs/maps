@@ -100,6 +100,7 @@ public:
   Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel);
   Widget* createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
   void addPlaceInfo(const char* icon, const char* title, const char* value);
+  void dumpTileContents(float x, float y);
 
   Splitter* panelSplitter = NULL;
   Widget* panelContainer = NULL;
@@ -135,7 +136,6 @@ public:
   static std::vector<Color> markerColors;
 
 private:
-  void dumpTileContents(float x, float y);
   void saveConfig();
   void sendMapEvent(MapEvent_t event);
 };

@@ -303,18 +303,17 @@ void DragDropList::addItem(KeyType key, Widget* item)
   dragBtn->node->addClass("draggable");
   dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
-      gui->setTimer(50, dragBtn);
       yOffset = event->tfinger.y - item->node->bounds().top;
     }
     else if(event->type == SvgGui::TIMER) {
       if(gui->pressedWidget != dragBtn)
         return false;  // stop timer
-      Rect b = dragBtn->node->bounds();
+      Rect b = item->node->bounds();
       Rect scrollb = scrollWidget->node->bounds();
       if(gui->prevFingerPos.y < scrollb.top + b.height())
-        scrollWidget->scroll(Point(0, -b.height()/5));
-      else if(gui->prevFingerPos.y > scrollb.bottom - b.height())
         scrollWidget->scroll(Point(0, b.height()/5));
+      else if(gui->prevFingerPos.y > scrollb.bottom - b.height())
+        scrollWidget->scroll(Point(0, -b.height()/5));
       return true;  // continue running timer
     }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == dragBtn) {
@@ -330,6 +329,7 @@ void DragDropList::addItem(KeyType key, Widget* item)
         nextItemKey = next ? next->getStringAttr("__sortkey", "") : "";
         floatWidget->addWidget(item);
         floatWidget->setVisible(true);
+        gui->setTimer(50, dragBtn);
       }
       else if(placeholder->node->m_dirty == SvgNode::BOUNDS_DIRTY)
         return true;  // once placeholder has been moved, have to wait until layout is recalculated
@@ -350,6 +350,7 @@ void DragDropList::addItem(KeyType key, Widget* item)
     }
     else if(event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL || event->type == SvgGui::OUTSIDE_PRESSED) {
       if(placeholder) {
+        gui->removeTimer(dragBtn);
         item->removeFromParent();
         content->containerNode()->addChild(item->node, placeholder->node);
         SvgNode* next = content->containerNode()->removeChild(placeholder->node);

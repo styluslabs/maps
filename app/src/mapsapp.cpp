@@ -11,6 +11,7 @@
 #include "pugixml.hpp"
 #include "rapidjson/document.h"
 #include <sys/stat.h>
+#include <fstream>
 #include "nfd.h"
 
 #include "touchhandler.h"
@@ -284,16 +285,17 @@ void MapsApp::doubleTapEvent(float x, float y)
 
 void MapsApp::tapEvent(float x, float y)
 {
-  // Single tap recognized
+#ifndef NDEBUG
   LngLat location;
   map->screenPositionToLngLat(x, y, &location.longitude, &location.latitude);
   double xx, yy;
   map->lngLatToScreenPosition(location.longitude, location.latitude, &xx, &yy);
-  logMsg("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, location.longitude, location.latitude, xx, yy);
+  LOG("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, location.longitude, location.latitude, xx, yy);
+#endif
 
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
+    LOG("Picked label: %s", result ? result->touchItem.properties->getAsString("name").c_str() : "none");
     if (!result) {
-      logMsg("Pick Label result is null.\n");
       pickResultProps.SetNull();
       if(pickResultMarker > 0)
         map->markerSetVisible(pickResultMarker, false);
@@ -301,7 +303,6 @@ void MapsApp::tapEvent(float x, float y)
       //minimizePanel();  //hidePlaceInfo();
       return;
     }
-
     std::string itemId = result->touchItem.properties->getAsString("id");
     std::string osmType = result->touchItem.properties->getAsString("osm_type");
     if(itemId.empty())
@@ -316,6 +317,7 @@ void MapsApp::tapEvent(float x, float y)
   map->pickMarkerAt(x, y, [&](const Tangram::MarkerPickResult* result) {
     if(!result || result->id == pickResultMarker)
       return;
+    LOG("Marker %d picked", result->id);
     // hide pick result marker, since there is already a marker!
     map->markerSetVisible(pickResultMarker, false);
     // looking for search marker or bookmark marker?
@@ -616,8 +618,6 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
   }
 }
 
-#include <fstream>
-
 void MapsApp::dumpTileContents(float x, float y)
 {
   using namespace Tangram;
@@ -629,17 +629,21 @@ void MapsApp::dumpTileContents(float x, float y)
     if(!task->hasData() || !task->source()) return;
     TileID id = task->tileId();
     std::string filename = baseDir + fstring("dump_%s_%d_%d_%d.json", task->source()->name().c_str(), id.z, id.x, id.y);
+    //FileStream fout(filename.c_str(), "wb");
     std::ofstream fout(filename);
     std::lock_guard<std::mutex> lock(logMutex);
     auto tileData = task->source()->parse(*task);  //task->source() ? : Mvt::parseTile(*task, 0);
     std::vector<std::string> layerstr;
     for(const Layer& layer : tileData->layers) {
       std::vector<std::string> featstr;
-      for(const Feature& feature : layer.features)
-        featstr.push_back(feature.props.toJson());
-      layerstr.push_back("\"" + layer.name + "\": [" + joinStr(featstr, ", ") + "]");
+      for(const Feature& feature : layer.features) {
+        size_t ng = feature.polygons.size(), np = feature.points.size(), nl = feature.lines.size();
+        std::string geom = ng ? std::to_string(ng) + " polygons" : nl ? std::to_string(nl) + " lines" : std::to_string(np) + " points";
+        featstr.push_back("{ \"properties\": " + feature.props.toJson() + ", \"geometry\": \"" + geom + "\" }");
+      }
+      layerstr.push_back("\"" + layer.name + "\": [\n  " + joinStr(featstr, ",\n  ") + "\n]");
     }
-    fout << "{" << joinStr(layerstr, ", ") << "}";
+    fout << "{" << joinStr(layerstr, ",\n\n") << "}";
     LOGW("Tile dumped to %s", filename.c_str());
   }};
 
@@ -699,8 +703,12 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
       if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
         gui->setPressed(this);
       if(event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK) {
-        if(event->type == SDL_FINGERDOWN)
-          app->longPressEvent(event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale);
+        if(event->type == SDL_FINGERDOWN) {
+          if(SDL_GetModState() & KMOD_ALT)
+            app->dumpTileContents(event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale);
+          else
+            app->longPressEvent(event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale);
+        }
       }
       else
         app->touchHandler->touchEvent(event->tfinger.touchId, actionFromSDLFinger(event->type),
@@ -708,7 +716,7 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
     }
     else if(event->type == SDL_MOUSEWHEEL) {
       Point p = gui->prevFingerPos;
-      uint32_t mods = (PLATFORM_WIN || PLATFORM_LINUX) ? (event->wheel.direction >> 16) : 0;
+      uint32_t mods = (PLATFORM_WIN || PLATFORM_LINUX) ? (event->wheel.direction >> 16) : SDL_GetModState();
       app->onMouseWheel(p.x/gui->inputScale, p.y/gui->inputScale, event->wheel.x/120.0, event->wheel.y/120.0, mods & KMOD_ALT, mods & KMOD_CTRL);
     }
     else if(event->type == SvgGui::MULTITOUCH) {
@@ -814,6 +822,9 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
   real n = firstdigit < 2 ? 1 : firstdigit < 5 ? 2 : 5;
   real scaledist = n * pow10;
   std::string str = fstring(format, scaledist);
+#ifndef NDEBUG
+  str += fstring("  (z%.2f)", map->getZoom());
+#endif
 
   real y0 = bbox.height()/2;
   p->setFillBrush(Color::NONE);
@@ -1236,28 +1247,14 @@ static const char* moreWidgetSVG = R"#(
 </svg>
 )#";
 
-void glfwSDLEvent(SDL_Event* event)
-{
-  event->common.timestamp = SDL_GetTicks();
-  if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
-    SvgGui::debugLayout = true;
-  else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)
-    SvgGui::debugDirty = !SvgGui::debugDirty;
-  else
-    MapsApp::gui->sdlEvent(event);
-}
-
-static bool timerEventFired = false;
-
-void PLATFORM_WakeEventLoop()
-{
-  timerEventFired = true;
-  glfwPostEmptyEvent();
-}
-
 static std::mutex taskQueueMutex;
 static std::vector< std::function<void()> > taskQueue;
 static std::thread::id mainThreadId;
+
+void PLATFORM_WakeEventLoop()
+{
+  glfwPostEmptyEvent();
+}
 
 void MapsApp::runOnMainThread(std::function<void()> fn)
 {
@@ -1268,6 +1265,19 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
     taskQueue.push_back(fn);
     glfwPostEmptyEvent();
   }
+}
+
+void glfwSDLEvent(SDL_Event* event)
+{
+  event->common.timestamp = SDL_GetTicks();
+  if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
+    SvgGui::debugLayout = true;
+  else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)
+    SvgGui::debugDirty = !SvgGui::debugDirty;
+  else if(std::this_thread::get_id() != mainThreadId)
+    MapsApp::runOnMainThread([_event = *event](){ glfwSDLEvent((SDL_Event*)&_event); });
+  else
+    MapsApp::gui->sdlEvent(event);
 }
 
 SvgNode* MapsApp::uiIcon(const char* id)
@@ -1503,12 +1513,6 @@ int main(int argc, char* argv[])
 
   while(runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
-    if(timerEventFired) {
-      timerEventFired = false;
-      SDL_Event event = {0};
-      event.type = SvgGui::TIMER;
-      gui->sdlEvent(&event);
-    }
 
     {
       std::lock_guard<std::mutex> lock(taskQueueMutex);
