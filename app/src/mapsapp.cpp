@@ -2,7 +2,7 @@
 #include "tangram.h"
 #include "scene/scene.h"
 //#include "style/style.h"  // for making uniforms avail as GUI variables
-#include "resources.h"
+//#include "resources.h"
 #include "util.h"
 //#include "imgui.h"
 //#include "imgui_stl.h"
@@ -66,6 +66,17 @@ LngLat MapsApp::getMapCenter()
 
 void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority)
 {
+  if(namestr.empty())
+    namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
+  std::string osmid = osmIdFromProps(props);
+  pickResultCoord = pos;
+  pickResultName = namestr;
+  pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
+  // allow pick result to be used as waypoint
+  if(mapsTracks->onPickResult())
+    return;
+
+  // show marker
   if(pickResultMarker == 0)
     pickResultMarker = map->markerAdd();
   map->markerSetVisible(pickResultMarker, true);
@@ -82,15 +93,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(!map->lngLatToScreenPosition(pos.longitude, pos.latitude, &scrx, &scry))
     map->flyTo(CameraPosition{pos.longitude, pos.latitude, 16}, 1.0);  // max(map->getZoom(), 14)
 
-  if(namestr.empty())
-    namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
   // show place info panel
-  pickResultCoord = pos;
-  pickResultName = namestr;
-  pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
-
-  std::string osmid = osmIdFromProps(props);
-
   gui->deleteContents(infoContent);  //, ".listitem");
 
   Widget* item = new Widget(placeInfoProto->clone());
@@ -130,6 +133,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     if(jit != props.MemberEnd()) {
       std::string val = jit->value.GetString();
       val[0] = std::toupper(val[0]);
+      std::replace(val.begin(), val.end(), '_', ' ');
       SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
       if(placenode)
         placenode->addText(val.c_str());
@@ -513,7 +517,7 @@ void MapsApp::updateLocation(const Location& _loc)
     currLocation.time = mSecSinceEpoch()/1000;
   if(!locMarker) {
     locMarker = map->markerAdd();
-    map->markerSetStylingFromString(locMarker, locMarkerStyleStr);
+    map->markerSetStylingFromPath(locMarker, "layers.loc-marker.draw.marker");
     map->markerSetDrawOrder(locMarker, INT_MAX);
   }
   //map->markerSetVisible(locMarker, true);
@@ -1016,30 +1020,31 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
   panel->sdlUserEvent(gui, PANEL_OPENED);
 }
 
+bool MapsApp::popPanel()
+{
+  if(panelHistory.empty())
+    return false;
+  panelHistory.back()->sdlUserEvent(gui, PANEL_CLOSED);
+  panelHistory.back()->setVisible(false);
+  panelHistory.pop_back();
+  if(!panelHistory.empty())
+    panelHistory.back()->setVisible(true);
+  else {
+    panelContainer->setVisible(false);
+    if(panelSplitter) {
+      panelSplitter->setVisible(false);
+      mainTbContainer->setVisible(true);
+    }
+  }
+  return true;
+}
+
 // this should be a static method or standalone fn!
 Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 {
   Toolbar* toolbar = createToolbar();
   auto backBtn = createToolbutton(MapsApp::uiIcon("back"));
-  backBtn->onClicked = [this](){
-    if(panelHistory.empty())
-      LOGE("back button clicked but panelHistory empty ... this should never happen!");
-    else {
-      //panelContainer->containerNode()->removeChild(panelHistory.back()->node);
-      panelHistory.back()->sdlUserEvent(gui, PANEL_CLOSED);
-      panelHistory.back()->setVisible(false);
-      panelHistory.pop_back();
-      if(!panelHistory.empty())
-        panelHistory.back()->setVisible(true);
-      else {
-        panelContainer->setVisible(false);
-        if(panelSplitter) {
-          panelSplitter->setVisible(false);
-          mainTbContainer->setVisible(true);
-        }
-      }
-    }
-  };
+  backBtn->onClicked = [this](){ popPanel(); };
   toolbar->addWidget(backBtn);
   Widget* titleWidget = new Widget(widgetNode("#panel-header-title"));
   if(icon)
@@ -1429,11 +1434,14 @@ int main(int argc, char* argv[])
   gui->inputScale = 1/gui->paintScale;
   nvgAtlasTextThreshold(nvgContext, 24 * gui->paintScale);  // 24px font is default for dialog titles
 
-  Painter* painter = new Painter();
+  Painter* painter = new Painter(Painter::sharedVg);
   //NVGLUframebuffer* nvglFB = nvgluCreateFramebuffer(nvgContext, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
   //nvgluSetFramebufferSRGB(1);  // no-op for GLES - sRGB enabled iff FB is sRGB
   NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
   uint32_t* swFB = NULL;
+
+  SvgPainter boundsPaint(painter);
+  SvgDocument::sharedBoundsCalc = &boundsPaint;
 
   //char* apiKey = getenv("NEXTZEN_API_KEY");
   //MapsApp::apiKey = apiKey ? apiKey : "";
@@ -1509,7 +1517,7 @@ int main(int argc, char* argv[])
     app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
 
   // Alamo square
-  app->updateLocation(Location{0, 37.776444, -122.434668, 0, 100, 0, 0, 0, 0, 0});
+  app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, 0, 0, 0, 0});
 
   while(runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
@@ -1599,6 +1607,10 @@ bool userLoadSvg(char* svg, Texture* texture)
   std::unique_ptr<SvgDocument> doc(SvgParser().parseString(svg));
   if(!doc) return false;
 
+  Painter boundsPaint(NULL);
+  SvgPainter boundsCalc(&boundsPaint);
+  doc->boundsCalculator = &boundsCalc;
+
   if(doc->hasClass("reflow-icons")) {
     size_t nicons = doc->children().size();
     int nside = int(std::sqrt(nicons) + 0.5);
@@ -1625,20 +1637,21 @@ bool userLoadSvg(char* svg, Texture* texture)
   int w = int(doc->width().px(96) + 0.5), h = int(doc->height().px(96) + 0.5);
   Image img(w, h);
   // this fn will be run on a thread if loading scene async, so we cannot use shared nvg context
-  NVGcontext* nvgContext = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_SRGB | NVGSW_PATHS_XC);
-  Painter painter(&img, nvgContext);
-  painter.beginFrame();
-  painter.translate(0, h);
-  painter.scale(1, -1);
-  SvgPainter(&painter).drawNode(doc.get());  //, dirty);
-  painter.endFrame();
-  nvgswDelete(nvgContext);
+  NVGcontext* drawCtx = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_SRGB | NVGSW_PATHS_XC);
+  {
+    Painter painter(&img, drawCtx);
+    painter.beginFrame();
+    painter.translate(0, h);
+    painter.scale(1, -1);
+    SvgPainter(&painter).drawNode(doc.get());  //, dirty);
+    painter.endFrame();
+  }
+  nvgswDelete(drawCtx);
 
   auto atlas = std::make_unique<SpriteAtlas>();
   bool hasSprites = false;
   for(auto pair : doc->m_namedNodes) {
     if(pair.second->type() != SvgNode::DOC) continue;
-    //if(pair.second->isVisible()) continue;
     hasSprites = true;
     Rect b = pair.second->bounds();
     glm::vec2 pos(b.left, b.top);

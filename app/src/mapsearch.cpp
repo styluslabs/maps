@@ -410,6 +410,17 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       DB_exec(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);", NULL, [&](sqlite3_stmt* stmt){
         sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
       });
+      // handle lat,lng string
+      if(isDigit(query[0]) || query[0] == '-') {
+        LngLat pos = parseLngLat(query.c_str());
+        if(!std::isnan(pos.latitude) && !std::isnan(pos.longitude)) {
+          // if we close search, no way to edit lat,lng from history
+          //if(app->panelHistory.size() == 1)
+          //  app->popPanel();  // just close search
+          app->setPickResult(pos, "", "");
+          return;
+        }
+      }
       updateMapResults(lngLat00, lngLat11);
     }
 

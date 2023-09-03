@@ -44,6 +44,48 @@ TileID lngLatTile(LngLat ll, int z)
   return TileID(x, y, z);
 }
 
+static double parseCoord(const char* s, char** endptr)
+{
+  // strToReal will consume 'E' (for east), but not a problem unless followed by a digit (w/o space)
+  char* p = (char*)s;
+  double val = strToReal<double>(p, &p);
+  if(p == s) val = double(NAN);
+  while(isSpace(*p)) { ++p; }
+  if(strncmp("°", p, 2) == 0) {
+    char* q;
+    p += 2;
+    double tmp = strToReal<double>(p, &q);
+    while(isSpace(*q)) { ++q; }
+    if(*q == '\'') {
+      val += tmp/60;
+      p = ++q;
+      tmp = strToReal<double>(p, &q);
+      while(isSpace(*q)) { ++q; }
+      if(*q == '\"' || (*q == '\'' && *++q == '\'')) {
+        val += tmp/3600;
+        p = ++q;
+      }
+    }
+    while(isSpace(*p)) { ++p; }
+  }
+  bool ne = *p == 'n' || *p == 'N' || *p == 'e' || *p == 'E';
+  bool sw = *p == 's' || *p == 'S' || *p == 'w' || *p == 'W';
+  if(ne || sw) { ++p; while(isSpace(*p)) { ++p; } }
+  if(endptr) *endptr = p;
+  return sw ? -val : val;
+}
+
+// support z/lat/lng and lat,lng,zoom formats?
+LngLat parseLngLat(const char* s)
+{
+  char* end;
+  double lat = parseCoord(s, &end);
+  if(*end == '/' || *end == ',' || *end == ';') { ++end; while(isSpace(*end)) { ++end; }  }
+  double lng = parseCoord(end, &end);
+  // if not at end of string, reject ... could be something like 38 N 1st St.
+  return *end || lat < -90 || lat > 90 || lng < -180 || lng > 180 ? LngLat(NAN, NAN) : LngLat(lng, lat);
+}
+
 // segfault if GLM_FORCE_CTOR_INIT is defined for some units and not others!!!
 #ifndef GLM_FORCE_CTOR_INIT
 #error "GLM_FORCE_CTOR_INIT is not defined!"

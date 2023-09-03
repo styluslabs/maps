@@ -99,6 +99,7 @@ public:
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
   Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel);
   Widget* createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
+  bool popPanel();
   void addPlaceInfo(const char* icon, const char* title, const char* value);
   void dumpTileContents(float x, float y);
 

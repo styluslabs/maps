@@ -53,6 +53,7 @@ public:
   void resultsUpdated();
 
   Button* createPanel();
+  Widget* searchPanel = NULL;
 
 private:
   std::atomic_int tileCount;
@@ -78,7 +79,6 @@ private:
   void populateAutocomplete(const std::vector<std::string>& history);
   void populateResults(const std::vector<SearchResult>& results);
 
-  Widget* searchPanel = NULL;
   Widget* resultsContent = NULL;
   Button* cancelBtn;
   TextEdit* queryText;

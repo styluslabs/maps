@@ -484,3 +484,16 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
     noteLabel->setText(note);
   return item;
 }
+
+// if we wanted something like a titled row, we can use textEditInnerNode() to make a custom widget
+// - an alternative would be title in smaller font embedded at upper left in border (move title text
+//  from the box to the border when focused?)
+TextEdit* createTitledTextEdit(const char* title, const char* text)
+{
+  TextEdit* widget = createTextEdit();
+  widget->node->setAttribute("box-anchor", "hfill");
+  widget->setEmptyText(title);
+  if(text)
+    widget->setText(text);
+  return widget;
+}

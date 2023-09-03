@@ -62,7 +62,9 @@ struct GpxFile {
       : title(_title), desc(_desc), filename(_file) {}
 
   GpxWay* activeWay() { return !routes.empty() ? &routes.front() : !tracks.empty()? &tracks.front() : NULL; }
-  void addWaypoint(Waypoint wpt) { waypoints.push_back(wpt); waypoints.back().uid = std::to_string(++wayPtSerial); }
+
+  std::vector<Waypoint>::iterator findWaypoint(const std::string& uid);
+  std::vector<Waypoint>::iterator addWaypoint(Waypoint wpt, const std::string& nextuid = {});
 };
 
 class MapsTracks : public MapsComponent {
@@ -74,6 +76,7 @@ public:
   void updateLocation(const Location& loc);
   void onMapEvent(MapEvent_t event);
   void addRoute(std::vector<Waypoint>&& route);
+  bool onPickResult();
 
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;
@@ -118,14 +121,16 @@ private:
   void addWaypointItem(Waypoint& wp);
   void setPlaceInfoSection(const Waypoint& wpt);
   void createRoute(GpxFile* track);
-  void removeWaypoint(const std::string& uid);
+  void removeWaypoint(GpxFile* track, const std::string& uid);
   void viewEntireTrack(GpxFile* track);
+  void updateDB(GpxFile* track);
 
   std::string routeMode = "direct";  // "walk", "bike", "drive"
   int pluginFn = 0;
   GpxFile* activeTrack = NULL;
   std::vector<Waypoint> origLocs;
-  std::vector<LngLat>  previewRoute;
+  std::vector<LngLat> previewRoute;
+  std::string wptToReplace;
   double cropStart = 0;
   double cropEnd = 1;
   double recordLastSave = 0;

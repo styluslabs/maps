@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ugui/widgets.h"
+#include "ugui/textedit.h"
 
 class SelectDialog : public Dialog
 {
@@ -82,3 +83,4 @@ Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t
 Menubar* createMenubar();
 ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialColor);
 Button* createListItem(SvgNode* icon, const char* title, const char* note = NULL);
+TextEdit* createTitledTextEdit(const char* title, const char* text = NULL);
