@@ -294,9 +294,14 @@ void DragDropList::deleteItem(KeyType key)
   }
 }
 
-void DragDropList::addItem(KeyType key, Widget* item)
+void DragDropList::addItem(KeyType key, Widget* item, KeyType nextkey)
 {
-  content->addWidget(item);
+  auto& items = content->containerNode()->children();
+  auto it = items.begin();
+  if(!nextkey.empty())
+    while(it != items.end() && (*it)->getStringAttr("__sortkey") != nextkey) { ++it;}
+  items.insert(it, item->node);
+  //content->addWidget(item);
   item->node->setAttr("__sortkey", key.c_str());
 
   Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));

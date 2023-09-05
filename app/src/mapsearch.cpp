@@ -52,15 +52,15 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
     for(const SearchData& searchdata : searchData) {
       if(searchdata.layer == layer.name) {
         for(const Feature& feature : layer.features) {
-          if(feature.props.getString("name").empty() || feature.points.empty())
+          std::string featname = feature.props.getString("name");
+          if(featname.empty() || feature.points.empty())
             continue;  // skip POIs w/o name or geometry
           auto lnglat = tileCoordToLngLat(task->tileId(), feature.points.front());
           std::string tags;
-          for(const std::string& field : searchdata.fields) {
-            tags += feature.props.getString(field);
-            tags += ' ';
-          }
+          for(const std::string& field : searchdata.fields)
+            tags.append(feature.props.getString(field)).append(" ");
           // insert row
+          //sqlite3_bind_text(stmt, 1, featname.c_str(), -1, SQLITE_STATIC);
           sqlite3_bind_text(stmt, 1, tags.c_str(), tags.size() - 1, SQLITE_STATIC);  // drop trailing separator
           sqlite3_bind_text(stmt, 2, feature.props.toJson().c_str(), -1, SQLITE_TRANSIENT);
           sqlite3_bind_double(stmt, 3, lnglat.longitude);
@@ -98,6 +98,8 @@ static bool initSearch()
     sqlite3_close(searchDB);
     searchDB = NULL;
 
+    ASSERT(0 && "Add support for name column!");
+
     // DB doesn't exist - create it
     if(sqlite3_open_v2(dbPath.c_str(), &searchDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
       logMsg("Error creating %s", dbPath.c_str());
@@ -106,7 +108,7 @@ static bool initSearch()
       return false;
     }
 
-    DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
+    DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(name, tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
     // search history - NOCASE causes comparisions to be case-insensitive but still stores case
     DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
   }
@@ -196,6 +198,7 @@ bool MapsSearch::indexMBTiles()
 void MapsSearch::clearSearchResults()
 {
   app->pluginManager->cancelRequests(PluginManager::SEARCH);  // cancel any outstanding search requests
+  app->gui->deleteContents(resultsContent, ".listitem");
   mapResults.clear();
   listResults.clear();
   markers->reset();
@@ -383,7 +386,6 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     clearSearchResults();
     map->markerSetVisible(app->pickResultMarker, false);
     app->showPanel(searchPanel);
-    app->gui->deleteContents(resultsContent, ".listitem");
     cancelBtn->setVisible(!searchStr.empty());
   }
 

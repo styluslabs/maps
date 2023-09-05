@@ -986,9 +986,9 @@ bool MapsTracks::onPickResult()
   if(!activeTrack || app->panelHistory.back() == wayptPanel)
     return false;
   auto it = activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName}, wptToReplace);
+  addWaypointItem(*it, wptToReplace);
   if(!wptToReplace.empty())
     removeWaypoint(activeTrack, wptToReplace);
-  addWaypointItem(*it);
   if(it->routed)
     createRoute(activeTrack);
 
@@ -996,7 +996,7 @@ bool MapsTracks::onPickResult()
   return true;
 }
 
-void MapsTracks::addWaypointItem(Waypoint& wp)
+void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
 {
   std::string uid = wp.uid;
 
@@ -1043,7 +1043,7 @@ void MapsTracks::addWaypointItem(Waypoint& wp)
 
   discardBtn->onClicked = [=](){ removeWaypoint(activeTrack, uid); };
 
-  wayptContent->addItem(uid, item);
+  wayptContent->addItem(uid, item, nextuid);
 
   wayptContent->onReorder = [=](std::string key, std::string next){
     auto itsrc = activeTrack->findWaypoint(key);
@@ -1617,6 +1617,7 @@ Button* MapsTracks::createPanel()
   archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
 
   // waypoint panel
+  Widget* wayptContainer = createColumn();
   wayptContent = new DragDropList;
 
   Widget* saveRouteContent = createColumn();
@@ -1639,7 +1640,8 @@ Button* MapsTracks::createPanel()
   saveRouteContent->addWidget(saveRouteFile);
   saveRouteContent->addWidget(createTitledRow(NULL, acceptSaveRouteBtn, cancelSaveRouteBtn));
   saveRouteContent->setVisible(false);
-  wayptContent->addWidget(saveRouteContent);
+  wayptContainer->addWidget(saveRouteContent);
+  wayptContainer->addWidget(wayptContent);
 
   Button* saveRouteBtn = createToolbutton(MapsApp::uiIcon("save"), "Save");
   saveRouteBtn->onClicked = [=](){
@@ -1701,7 +1703,7 @@ Button* MapsTracks::createPanel()
   wayptsTb->addWidget(routeModeBtn);
   wayptsTb->addWidget(routePluginBtn);
   wayptsTb->addWidget(wayptsOverflowBtn);
-  wayptPanel = app->createMapPanel(wayptsTb, NULL, wayptContent);
+  wayptPanel = app->createMapPanel(wayptsTb, NULL, wayptContainer);
   wayptPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
       if(waypointsDirty)

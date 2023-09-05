@@ -40,7 +40,7 @@ public:
   using KeyType = std::string;
 
   DragDropList(Widget* _content = NULL);
-  void addItem(KeyType key, Widget* item);
+  void addItem(KeyType key, Widget* item, KeyType nextkey = {});
   void deleteItem(KeyType key);
   void clear();
 

@@ -1,13 +1,8 @@
 #include "mapsapp.h"
 #include "tangram.h"
 #include "scene/scene.h"
-//#include "style/style.h"  // for making uniforms avail as GUI variables
-//#include "resources.h"
 #include "util.h"
-//#include "imgui.h"
-//#include "imgui_stl.h"
 #include "glm/common.hpp"
-//#include "rapidxml/rapidxml.hpp"
 #include "pugixml.hpp"
 #include "rapidjson/document.h"
 #include <sys/stat.h>
@@ -27,8 +22,6 @@
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
 #include "mapwidgets.h"
-
-static const char* apiKeyScenePath = "+global.sdk_api_key";
 
 Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
@@ -372,8 +365,6 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
 
 MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(this))
 {
-  //sceneUpdates.push_back(SceneUpdate(apiKeyScenePath, apiKey));
-
   // make sure cache folder exists
   mkdir(FSPath(baseDir, "cache").c_str(), 0777);
 

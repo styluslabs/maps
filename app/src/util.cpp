@@ -183,6 +183,7 @@ bool MarkerGroup::onPicked(MarkerID id)
 // labels are collected and collided by LabelManager::updateLabelSet() - sorted by priority (lower number
 //  is higher priority), collided, then sorted by order set by markerSetDrawOrder (not YAML "order") - higher
 //  order means drawn later, i.e., on top
+// note LabelCollider is only used when building the tile, while LabelManager is run for every frame
 // blend_order only supported for style blocks: https://github.com/tangrams/tangram-es/issues/2039
 
 MarkerID MarkerGroup::getMarker(PlaceInfo& res)

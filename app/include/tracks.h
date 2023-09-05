@@ -118,7 +118,7 @@ private:
   Widget* createTrackEntry(GpxFile* track);
   Waypoint interpTrack(const std::vector<Waypoint>& locs, double s, size_t* idxout = NULL);
   void setRouteMode(const std::string& mode);
-  void addWaypointItem(Waypoint& wp);
+  void addWaypointItem(Waypoint& wp, const std::string& nextuid = {});
   void setPlaceInfoSection(const Waypoint& wpt);
   void createRoute(GpxFile* track);
   void removeWaypoint(GpxFile* track, const std::string& uid);
