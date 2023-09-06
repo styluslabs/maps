@@ -57,6 +57,22 @@ LngLat MapsApp::getMapCenter()
   return res;
 }
 
+// I think we'll eventually want to use a plugin for this
+std::string MapsApp::osmPlaceType(const rapidjson::Document& props)
+{
+  if(!props.IsObject()) return {};
+  auto jit = props.FindMember("tourism");
+  if(jit == props.MemberEnd()) jit = props.FindMember("leisure");
+  if(jit == props.MemberEnd()) jit = props.FindMember("amenity");
+  if(jit == props.MemberEnd()) jit = props.FindMember("historic");
+  if(jit == props.MemberEnd()) jit = props.FindMember("shop");
+  if(jit == props.MemberEnd()) return {};
+  std::string val = jit->value.GetString();
+  val[0] = std::toupper(val[0]);
+  std::replace(val.begin(), val.end(), '_', ' ');
+  return val;
+}
+
 void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority)
 {
   if(namestr.empty())
@@ -117,21 +133,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   }
 
   // get place type
-  if(props.IsObject()) {
-    auto jit = props.FindMember("tourism");
-    if(jit == props.MemberEnd()) jit = props.FindMember("leisure");
-    if(jit == props.MemberEnd()) jit = props.FindMember("amenity");
-    if(jit == props.MemberEnd()) jit = props.FindMember("historic");
-    if(jit == props.MemberEnd()) jit = props.FindMember("shop");
-    if(jit != props.MemberEnd()) {
-      std::string val = jit->value.GetString();
-      val[0] = std::toupper(val[0]);
-      std::replace(val.begin(), val.end(), '_', ' ');
-      SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
-      if(placenode)
-        placenode->addText(val.c_str());
-    }
-  }
+  std::string placetype = osmPlaceType(props);
+  SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
+  if(placenode && !placetype.empty())
+    placenode->addText(placetype.c_str());
 
   Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
   if(bkmkSection)

@@ -121,6 +121,7 @@ public:
 
   enum EventTypes { PANEL_CLOSED=0xE001, PANEL_OPENED };
 
+  static std::string osmPlaceType(const rapidjson::Document& props);
   static bool openURL(const char* url);
   static SvgNode* uiIcon(const char* id);
   static void runOnMainThread(std::function<void()> fn);

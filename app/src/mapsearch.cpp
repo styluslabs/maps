@@ -475,9 +475,9 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 {
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
-    Button* item = createListItem(MapsApp::uiIcon("search"), res.tags["name"].GetString());
+    std::string placetype = MapsApp::osmPlaceType(res.tags);
+    Button* item = createListItem(MapsApp::uiIcon("search"), res.tags["name"].GetString(), placetype.c_str());
     item->onClicked = [this, &results, ii](){
-      // TODO: hide search result marker
       app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
     };
     double distkm = lngLatDist(app->currLocation.lngLat(), res.pos);

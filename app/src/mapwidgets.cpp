@@ -485,7 +485,7 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
   TextLabel* titleLabel = new TextLabel(item->containerNode()->selectFirst(".title-text"));
   titleLabel->setText(title);
   TextLabel* noteLabel = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
-  if(note)
+  if(note && note[0])
     noteLabel->setText(note);
   return item;
 }
