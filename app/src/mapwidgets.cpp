@@ -296,11 +296,11 @@ void DragDropList::deleteItem(KeyType key)
 
 void DragDropList::addItem(KeyType key, Widget* item, KeyType nextkey)
 {
-  auto& items = content->containerNode()->children();
-  auto it = items.begin();
+  const auto& children = content->containerNode()->children();
+  auto it = children.begin();
   if(!nextkey.empty())
-    while(it != items.end() && (*it)->getStringAttr("__sortkey") != nextkey) { ++it;}
-  items.insert(it, item->node);
+    while(it != children.end() && (*it)->getStringAttr("__sortkey") != nextkey) { ++it;}
+  content->containerNode()->addChild(item->node, nextkey.empty() || it == children.end() ? NULL : *it);
   //content->addWidget(item);
   item->node->setAttr("__sortkey", key.c_str());
 
