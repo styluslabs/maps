@@ -2,14 +2,6 @@
 
 #include "mapscomponent.h"
 
-class Widget;
-class Button;
-class SvgNode;
-class TrackPlot;
-class SelectDialog;
-class DragDropList;
-class Toolbar;
-
 struct Waypoint
 {
   Location loc;
@@ -77,6 +69,7 @@ public:
   void onMapEvent(MapEvent_t event);
   void addRoute(std::vector<Waypoint>&& route);
   bool onPickResult();
+  bool tapEvent(LngLat location);
 
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;
@@ -99,6 +92,7 @@ public:
   Button* pauseRecordBtn = NULL;
   Button* stopRecordBtn = NULL;
   Button* routeModeBtn = NULL;
+  TextBox* previewDistText = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
@@ -130,7 +124,7 @@ private:
   GpxFile* activeTrack = NULL;
   std::vector<Waypoint> origLocs;
   std::vector<LngLat> previewRoute;
-  std::string wptToReplace;
+  std::string insertionWpt;
   double cropStart = 0;
   double cropEnd = 1;
   double recordLastSave = 0;
@@ -141,5 +135,7 @@ private:
   bool waypointsDirty = true;
   bool showAllWaypts = false;
   bool archiveLoaded = false;
+  bool tapToAddWaypt = false;
+  bool replaceWaypt = false;
   std::unique_ptr<SelectDialog> selectTrackDialog;
 };

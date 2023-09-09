@@ -3,13 +3,6 @@
 #include "mapscomponent.h"
 #include "util.h"
 
-class SvgNode;
-class SvgDocument;
-class Widget;
-class Button;
-class DragDropList;
-class Toolbar;
-
 class MapsBookmarks : public MapsComponent
 {
 public:
@@ -23,6 +16,7 @@ public:
   Widget* getPlaceInfoSection(const std::string& osm_id, LngLat pos);
   void addPlaceActions(Toolbar* tb);
 
+  Widget* listsPanel = NULL;
   std::unordered_map< int, std::unique_ptr<MarkerGroup> > bkmkMarkers;
 
 private:
@@ -33,7 +27,6 @@ private:
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;
-  Widget* listsPanel = NULL;
   DragDropList* listsContent = NULL;
   Widget* archivedPanel = NULL;
   Widget* archivedContent = NULL;

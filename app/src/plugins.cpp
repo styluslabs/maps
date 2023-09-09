@@ -6,6 +6,11 @@
 #include "tracks.h"
 #include "util.h"
 
+#include "ugui/svggui.h"
+#include "ugui/widgets.h"
+#include "ugui/textedit.h"
+#include "usvg/svgpainter.h"
+
 
 PluginManager* PluginManager::inst = NULL;
 
@@ -28,9 +33,21 @@ bool PluginManager::dukTryCall(duk_context* ctx, int nargs)
 PluginManager::PluginManager(MapsApp* _app, const std::string& pluginDir) : MapsComponent(_app)
 {
   inst = this;
+  reload(pluginDir);
+}
+
+void PluginManager::reload(const std::string& pluginDir)
+{
+  cancelRequests(NONE);
+  searchFns.clear();
+  routeFns.clear();
+  placeFns.clear();
+  commandFns.clear();
+  if(jsContext)
+    duk_destroy_heap(jsContext);
+
   jsContext = duk_create_heap_default();  //(NULL, NULL, NULL, NULL, dukErrorHander);
   createFns(jsContext);
-
   duk_context* ctx = jsContext;
   auto files = lsDirectory(pluginDir);
   std::sort(files.begin(), files.end());  // load plugins alphabetically
@@ -56,7 +73,7 @@ void PluginManager::cancelRequests(UrlReqType type)
 {
   auto it = pendingRequests.begin();
   while(it != pendingRequests.end()) {
-    if(it->type == type) {
+    if(type == NONE || it->type == type) {
       MapsApp::platform->cancelUrlRequest(it->handle);
       it = pendingRequests.erase(it);
     }
@@ -325,13 +342,6 @@ void PluginManager::createFns(duk_context* ctx)
 
 // for now, we need somewhere to put TextEdit for entering JS commands; probably would be opened from
 //  overflow menu, assuming we even keep it
-
-#include "ugui/svggui.h"
-#include "ugui/widgets.h"
-#include "ugui/textedit.h"
-#include "usvg/svgpainter.h"
-
-#include "mapsources.h"
 
 Button* PluginManager::createPanel()
 {

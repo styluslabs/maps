@@ -22,9 +22,6 @@ struct SearchResult
   rapidjson::Document tags;  // will eventually be a DuktapeValue? standard osm tag names for now
 };
 
-class TextEdit;
-class Button;
-
 class MapsSearch : public MapsComponent
 {
 public:

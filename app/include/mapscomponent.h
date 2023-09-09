@@ -20,6 +20,19 @@ using Tangram::MapProjection;
 
 class MapsApp;
 
+// GUI classes
+class Widget;
+class Button;
+class SvgNode;
+class SvgDocument;
+class TrackPlot;
+class SelectDialog;
+class SelectBox;
+class DragDropList;
+class Toolbar;
+class TextEdit;
+class TextBox;
+
 enum MapEvent_t { MAP_CHANGE, LOC_UPDATE, SUSPEND };
 
 struct Location

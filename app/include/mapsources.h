@@ -3,13 +3,6 @@
 #include "mapscomponent.h"
 #include "yaml-cpp/yaml.h"
 
-class Widget;
-class SelectBox;
-class Button;
-class TextEdit;
-class SvgNode;
-class DragDropList;
-
 class MapsSources : public MapsComponent
 {
   friend class MapsOffline;

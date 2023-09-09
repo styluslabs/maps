@@ -287,13 +287,16 @@ void MapsApp::doubleTapEvent(float x, float y)
 
 void MapsApp::tapEvent(float x, float y)
 {
-#ifndef NDEBUG
   LngLat location;
   map->screenPositionToLngLat(x, y, &location.longitude, &location.latitude);
+#ifndef NDEBUG
   double xx, yy;
   map->lngLatToScreenPosition(location.longitude, location.latitude, &xx, &yy);
   LOG("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, location.longitude, location.latitude, xx, yy);
 #endif
+
+  if(mapsTracks->tapEvent(location))
+    return;
 
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
     LOG("Picked label: %s", result ? result->touchItem.properties->getAsString("name").c_str() : "none");
@@ -325,8 +328,6 @@ void MapsApp::tapEvent(float x, float y)
     // looking for search marker or bookmark marker?
     pickedMarkerId = result->id;
   });
-
-  //mapsTracks->tapEvent(location);
 
   map->getPlatform().requestRender();
 }
@@ -1497,6 +1498,7 @@ int main(int argc, char* argv[])
 
     }
     else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
+      app->pluginManager->reload(MapsApp::baseDir + "plugins");
       app->loadSceneFile();  // reload scene
     }
     return false;

@@ -4,6 +4,7 @@
 #include "mapwidgets.h"
 #include "plugins.h"
 #include "mapsearch.h"
+#include "bookmarks.h"
 
 #include <ctime>
 #include <iomanip>
@@ -508,17 +509,6 @@ bool MapsTracks::saveGPX(GpxFile* track)
   return doc.save_file(track->filename.c_str(), "  ");
 }
 
-//void MapsTracks::tapEvent(LngLat location)
-//{
-//  if(!drawTrack)
-//    return;
-//  auto& locs = drawnTrack.locs;
-//  double dist = locs.empty() ? 0 : locs.back().dist + 1000*lngLatDist(locs.back().lngLat(), location);
-//  double time = 0;
-//  locs.push_back({time, location.latitude, location.longitude, 0, /*ele*/0, 0, /*dir*/0, 0, /*spd*/0, 0, dist});
-//  showTrack(&drawnTrack);  //, "layers.track.draw.selected-track");
-//}
-
 void MapsTracks::updateLocation(const Location& loc)
 {
   if(!recordTrack)
@@ -858,7 +848,7 @@ void MapsTracks::createRoute(GpxFile* track)
       if(wp.routed)
         pts.push_back(wp.loc.lngLat());
     }
-    if(!pts.empty())
+    if(pts.size() > 1)
       app->pluginManager->jsRoute(pluginFn, routeMode, pts);
   }
 }
@@ -907,6 +897,7 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
 // cut and paste from bookmarks
 void MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
 {
+  std::string uid = wpt.uid;
   Widget* section = createColumn();
   section->node->setAttribute("box-anchor", "hfill");
   TextBox* noteText = new TextBox(loadSVGFragment(
@@ -931,7 +922,6 @@ void MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
   editContent->addWidget(editToolbar);
   editContent->setVisible(false);
 
-  std::string uid = wpt.uid;
   acceptNoteBtn->onClicked = [=](){
     auto it = activeTrack->findWaypoint(uid);
     it->name = titleEdit->text();
@@ -967,10 +957,23 @@ void MapsTracks::setPlaceInfoSection(const Waypoint& wpt)
     app->gui->setFocused(noteEdit);
   };
 
+  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
+  Menu* overflowMenu = createMenu(Menu::VERT_LEFT);
+  overflowBtn->setMenu(overflowMenu);
+
+  overflowMenu->addItem("Add waypoints before", [=](){ insertionWpt = uid; });
+  overflowMenu->addItem("Add waypoints after", [=](){
+    if(!activeTrack) return;
+    auto it = activeTrack->findWaypoint(uid);
+    if(it != activeTrack->waypoints.end()) ++it;
+    insertionWpt = it != activeTrack->waypoints.end() ? it->uid : "";
+  });
+
   toolRow->addWidget(chooseListBtn);
   toolRow->addWidget(createStretch());
   toolRow->addWidget(removeBtn);
   toolRow->addWidget(addNoteBtn);
+  toolRow->addWidget(overflowBtn);
 
   section->addWidget(toolRow);
   section->addWidget(noteText);
@@ -985,14 +988,27 @@ bool MapsTracks::onPickResult()
 {
   if(!activeTrack || app->panelHistory.back() == wayptPanel)
     return false;
-  auto it = activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName}, wptToReplace);
-  addWaypointItem(*it, wptToReplace);
-  if(!wptToReplace.empty())
-    removeWaypoint(activeTrack, wptToReplace);
+  auto it = activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName}, insertionWpt);
+  addWaypointItem(*it, insertionWpt);
+  if(replaceWaypt && !insertionWpt.empty()) {
+    removeWaypoint(activeTrack, insertionWpt);
+    insertionWpt.clear();
+  }
   if(it->routed)
     createRoute(activeTrack);
 
   while(app->panelHistory.back() != wayptPanel && app->popPanel()) {}
+  return true;
+}
+
+bool MapsTracks::tapEvent(LngLat location)
+{
+  if(!activeTrack || app->panelHistory.back() != wayptPanel || !tapToAddWaypt)
+    return false;
+  auto it = activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName}, insertionWpt);
+  addWaypointItem(*it, insertionWpt);
+  if(it->routed)
+    createRoute(activeTrack);
   return true;
 }
 
@@ -1011,7 +1027,8 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
 
   item->onClicked = [=](){
     if(activeTrack == &navRoute) {
-      wptToReplace = wp.uid;
+      replaceWaypt = true;
+      insertionWpt = wp.uid;
       app->showPanel(app->mapsSearch->searchPanel, true);
     }
     else {
@@ -1063,10 +1080,13 @@ void MapsTracks::populateWaypoints(GpxFile* track)
   waypointsDirty = false;
   app->showPanel(wayptPanel, true);
   wayptPanel->selectFirst(".panel-title")->setText(track->title.c_str());
-  if(activeTrack != track)
-    viewEntireTrack(track);
-  activeTrack = track;
   showTrack(track, true);
+  if(activeTrack != track) {
+    insertionWpt.clear();
+    viewEntireTrack(track);
+    app->map->markerSetStylingFromPath(track->marker, "layers.selected-track.draw.track");
+  }
+  activeTrack = track;
   directRoutePreview = true;
   app->crossHair->setVisible(true);
 
@@ -1091,7 +1111,8 @@ void MapsTracks::onMapEvent(MapEvent_t event)
   // update polyline marker in direct mode
   if(directRoutePreview && routeMode == "direct" && !activeTrack->waypoints.empty()) {
     std::vector<LngLat> pts = {activeTrack->waypoints.back().lngLat(), app->getMapCenter()};
-    double pix = lngLatDist(pts[0], pts[1])*1000/MapProjection::metersPerPixelAtZoom(app->map->getZoom());
+    double distkm = lngLatDist(pts[0], pts[1]);
+    double pix = distkm*1000/MapProjection::metersPerPixelAtZoom(app->map->getZoom());
     if(previewMarker <= 0) {
       previewMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(previewMarker, "layers.track.draw.track");  //styling);
@@ -1105,6 +1126,13 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->map->markerSetVisible(previewMarker, pix > 2);
     }
     previewRoute = pts;
+
+    if(MapsApp::metricUnits)
+      previewDistText->setText(fstring(distkm < 1 ? "%.0f m" : "%.2f km", distkm < 1 ? distkm*1000 : distkm).c_str());
+    else if(distkm*0.621371 < 0.1)
+      previewDistText->setText(fstring("%.0f ft", distkm*1000*3.28084).c_str());
+    else
+      previewDistText->setText(fstring("%.2f mi", distkm*0.621371).c_str());
   }
 
   if(app->pickedMarkerId > 0) {
@@ -1147,8 +1175,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       // don't create successive waypoints at same position
       if(!activeTrack->waypoints.empty() && app->pickResultCoord == activeTrack->waypoints.back().lngLat())
         return;
-      activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName});  //++activeTrack->wayPtSerial?
-      addWaypointItem(activeTrack->waypoints.back());
+      auto it = activeTrack->addWaypoint({app->pickResultCoord, app->pickResultName}, insertionWpt);
+      addWaypointItem(*it, insertionWpt);
       //app->setPickResult(it->lngLat(), it->name, "");
       setPlaceInfoSection(activeTrack->waypoints.back());
       if(activeTrack->waypoints.back().routed)
@@ -1618,6 +1646,7 @@ Button* MapsTracks::createPanel()
 
   // waypoint panel
   Widget* wayptContainer = createColumn();
+  wayptContainer->node->setAttribute("box-anchor", "fill");
   wayptContent = new DragDropList;
 
   Widget* saveRouteContent = createColumn();
@@ -1640,8 +1669,6 @@ Button* MapsTracks::createPanel()
   saveRouteContent->addWidget(saveRouteFile);
   saveRouteContent->addWidget(createTitledRow(NULL, acceptSaveRouteBtn, cancelSaveRouteBtn));
   saveRouteContent->setVisible(false);
-  wayptContainer->addWidget(saveRouteContent);
-  wayptContainer->addWidget(wayptContent);
 
   Button* saveRouteBtn = createToolbutton(MapsApp::uiIcon("save"), "Save");
   saveRouteBtn->onClicked = [=](){
@@ -1652,15 +1679,6 @@ Button* MapsTracks::createPanel()
     }
     else
       activeTrack->modified = !saveGPX(activeTrack);
-  };
-
-  Button* mapCenterWayptBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Add waypoint");
-  mapCenterWayptBtn->onClicked = [=](){
-    std::string title = fstring("Waypoint %d", activeTrack->wayPtSerial+1);
-    activeTrack->addWaypoint({app->getMapCenter(), title});
-    addWaypointItem(activeTrack->waypoints.back());
-    if(activeTrack->waypoints.back().routed)
-      createRoute(activeTrack);
   };
 
   bool hasPlugins = !app->pluginManager->routeFns.empty();
@@ -1697,8 +1715,49 @@ Button* MapsTracks::createPanel()
   };
   wayptsOverflow->addItem(showAllWptsBtn);
 
+  // I think this will eventually be a floating toolbar
+  Toolbar* routeEditTb = createToolbar();
+
+  previewDistText = new TextBox(createTextNode(""));
+
+  Button* mapCenterWayptBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Add map center");
+  mapCenterWayptBtn->onClicked = [=](){
+    std::string title = fstring("Waypoint %d", activeTrack->wayPtSerial+1);
+    auto it = activeTrack->addWaypoint({app->getMapCenter(), title}, insertionWpt);
+    addWaypointItem(*it, insertionWpt);
+    if(activeTrack->waypoints.back().routed)
+      createRoute(activeTrack);
+  };
+
+  Button* searchWayptBtn = createToolbutton(MapsApp::uiIcon("search"), "Add from search");
+  searchWayptBtn->onClicked = [=](){ app->showPanel(app->mapsSearch->searchPanel, true); };
+
+  Button* bkmkWayptBtn = createToolbutton(MapsApp::uiIcon("pin"), "Add from bookmarks");
+  bkmkWayptBtn->onClicked = [=](){ app->showPanel(app->mapsBookmarks->listsPanel, true); };
+
+  Button* rteEditOverflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
+  Menu* rteEditOverflow = createMenu(Menu::VERT_LEFT);
+  rteEditOverflowBtn->setMenu(rteEditOverflow);
+
+  Button* tapToAddWayptBtn = createCheckBoxMenuItem("Tap to add waypoint");
+  tapToAddWayptBtn->onClicked = [=](){
+    tapToAddWaypt = !tapToAddWaypt;
+    tapToAddWayptBtn->setChecked(tapToAddWaypt);
+  };
+  tapToAddWayptBtn->setChecked(tapToAddWaypt);
+  rteEditOverflow->addItem(tapToAddWayptBtn);
+
+  routeEditTb->addWidget(previewDistText);
+  routeEditTb->addWidget(mapCenterWayptBtn);
+  routeEditTb->addWidget(searchWayptBtn);
+  routeEditTb->addWidget(bkmkWayptBtn);
+  routeEditTb->addWidget(rteEditOverflowBtn);
+
+  wayptContainer->addWidget(routeEditTb);
+  wayptContainer->addWidget(saveRouteContent);
+  wayptContainer->addWidget(wayptContent);
+
   auto wayptsTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Waypoints");
-  wayptsTb->addWidget(mapCenterWayptBtn);
   wayptsTb->addWidget(saveRouteBtn);
   wayptsTb->addWidget(routeModeBtn);
   wayptsTb->addWidget(routePluginBtn);
@@ -1706,6 +1765,7 @@ Button* MapsTracks::createPanel()
   wayptPanel = app->createMapPanel(wayptsTb, NULL, wayptContainer);
   wayptPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
+      replaceWaypt = false;  // clear this when coming back from search, regardless of point choosen or not
       if(waypointsDirty)
         populateWaypoints(activeTrack);
     }
@@ -1720,7 +1780,7 @@ Button* MapsTracks::createPanel()
       //  editTrackBtn->onClicked();
       //app->map->markerSetVisible(trackHoverMarker, false);
       if(activeTrack != &recordedTrack)
-        app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.marker");
+        app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
       if(!activeTrack->visible)
         showTrack(activeTrack, false);
       activeTrack = NULL;
@@ -1739,7 +1799,7 @@ Button* MapsTracks::createPanel()
         editTrackBtn->onClicked();
       app->map->markerSetVisible(trackHoverMarker, false);
       if(activeTrack != &recordedTrack)
-        app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.marker");
+        app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
       if(!activeTrack->visible)
         showTrack(activeTrack, false);
       activeTrack = NULL;

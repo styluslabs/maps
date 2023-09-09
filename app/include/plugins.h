@@ -5,9 +5,6 @@
 //#include "js/JavaScript.h"
 #include "duktape/duktape.h"
 
-class Widget;
-class Button;
-
 struct PluginFn
 {
   std::string name;  //Tangram::JSFunctionIndex jsFnIdx;
@@ -21,6 +18,7 @@ public:
 
   PluginManager(MapsApp* _app, const std::string& pluginDir);
   ~PluginManager();
+  void reload(const std::string& pluginDir);
   Button* createPanel();
   void createFns(duk_context* ctx);
   std::string evalJS(const char* s);
@@ -51,7 +49,7 @@ public:
     return res;
   }
 
-  duk_context* jsContext;
+  duk_context* jsContext = NULL;
   //std::mutex jsMutex;
   std::vector<PluginFn> searchFns;
   std::vector<PluginFn> routeFns;
