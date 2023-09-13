@@ -287,16 +287,13 @@ void MapsApp::doubleTapEvent(float x, float y)
 
 void MapsApp::tapEvent(float x, float y)
 {
-  LngLat location;
-  map->screenPositionToLngLat(x, y, &location.longitude, &location.latitude);
+  //LngLat location;
+  map->screenPositionToLngLat(x, y, &tapLocation.longitude, &tapLocation.latitude);
 #ifndef NDEBUG
   double xx, yy;
-  map->lngLatToScreenPosition(location.longitude, location.latitude, &xx, &yy);
-  LOG("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, location.longitude, location.latitude, xx, yy);
+  map->lngLatToScreenPosition(tapLocation.longitude, tapLocation.latitude, &xx, &yy);
+  LOG("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, tapLocation.longitude, tapLocation.latitude, xx, yy);
 #endif
-
-  if(mapsTracks->tapEvent(location))
-    return;
 
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
     LOG("Picked label: %s", result ? result->touchItem.properties->getAsString("name").c_str() : "none");
@@ -317,6 +314,7 @@ void MapsApp::tapEvent(float x, float y)
     std::string namestr = result->touchItem.properties->getAsString("name");
     setPickResult(result->coordinates, namestr, result->touchItem.properties->toJson());
     mapsSearch->clearSearch();  // ???
+    tapLocation = {NAN, NAN};
   });
 
   map->pickMarkerAt(x, y, [&](const Tangram::MarkerPickResult* result) {
@@ -327,9 +325,10 @@ void MapsApp::tapEvent(float x, float y)
     map->markerSetVisible(pickResultMarker, false);
     // looking for search marker or bookmark marker?
     pickedMarkerId = result->id;
+    tapLocation = {NAN, NAN};
   });
 
-  map->getPlatform().requestRender();
+  //map->getPlatform().requestRender();
 }
 
 void MapsApp::hoverEvent(float x, float y)
@@ -1539,6 +1538,13 @@ int main(int argc, char* argv[])
       app->mapUpdate(currTime);
       app->mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);
       app->map->render();
+      // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
+      if(!std::isnan(app->tapLocation.longitude)) {
+        if(app->panelHistory.back() == app->infoPanel)
+          app->popPanel();
+        app->mapsTracks->tapEvent(app->tapLocation);
+        app->tapLocation = {NAN, NAN};
+      }
     }
 
     Rect dirty = gui->layoutAndDraw(painter);

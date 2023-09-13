@@ -502,3 +502,24 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
     widget->setText(text);
   return widget;
 }
+
+Widget* createInlineDialog(std::initializer_list<Widget*> widgets, const char* acceptLabel, std::function<void()> onAccept)
+{
+  Widget* container = createColumn();
+  container->node->setAttribute("box-anchor", "hfill");
+  //Button* acceptBtn = createToolbutton(MapsApp::uiIcon("accept"), acceptLabel, true);
+  //Button* cancelBtn = createToolbutton(MapsApp::uiIcon("cancel"), "Cancel", true);
+  Button* acceptBtn = createPushbutton(acceptLabel);
+  Button* cancelBtn = createPushbutton("Cancel");
+  acceptBtn->onClicked = [=](){ container->setVisible(false); onAccept(); };
+  cancelBtn->onClicked = [=](){ container->setVisible(false); };
+  acceptBtn->node->addClass(".accept-btn");
+  for(Widget* child : widgets)
+    container->addWidget(child);
+  //Toolbar* tb = createToolbar();
+  //tb->addWidget(acceptBtn);
+  //tb->addWidget(cancelBtn);
+  container->addWidget(createTitledRow(NULL, acceptBtn, cancelBtn));  //tb
+  container->setVisible(false);
+  return container;
+}

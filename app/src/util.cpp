@@ -140,6 +140,14 @@ std::string rapidjsonToStr(const rapidjson::Document& props)
   return sb.GetString();
 }
 
+std::string ftimestr(const char* fmt, int64_t msec_epoch)
+{
+  char timestr[64];
+  time_t t = msec_epoch <= 0 ? mSecSinceEpoch()/1000 : msec_epoch/1000;
+  strftime(timestr, sizeof(timestr), fmt, localtime(&t));
+  return std::string(timestr);
+}
+
 // note that indices for sqlite3_column_* start from 0 while indices for sqlite3_bind_* start from 1
 bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
 {

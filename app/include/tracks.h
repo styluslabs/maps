@@ -10,7 +10,7 @@ struct Waypoint
   std::string desc;
   std::string uid;  // id for DragDropList
   MarkerID marker = 0;
-  bool visible = true;  // <extensions><sl:route visible="true" routed="true"/>
+  //bool visible = true;  // <extensions><sl:route visible="true" routed="true"/>
   bool routed = true;
 
   Waypoint(const Location& _loc, const std::string& _name = "", const std::string& _desc = "")
@@ -36,6 +36,7 @@ struct GpxFile {
   std::string desc;
   std::string filename;
   std::string style;
+  std::string routeMode = "direct";  // "walk", "bike", "drive"
   MarkerID marker = 0;
 
   std::vector<Waypoint> waypoints;
@@ -113,13 +114,13 @@ private:
   Waypoint interpTrack(const std::vector<Waypoint>& locs, double s, size_t* idxout = NULL);
   void setRouteMode(const std::string& mode);
   void addWaypointItem(Waypoint& wp, const std::string& nextuid = {});
-  void setPlaceInfoSection(const Waypoint& wpt);
+  void setPlaceInfoSection(GpxFile* track, const Waypoint& wpt);
   void createRoute(GpxFile* track);
   void removeWaypoint(GpxFile* track, const std::string& uid);
   void viewEntireTrack(GpxFile* track);
   void updateDB(GpxFile* track);
+  Waypoint* addWaypoint(Waypoint wpt);
 
-  std::string routeMode = "direct";  // "walk", "bike", "drive"
   int pluginFn = 0;
   GpxFile* activeTrack = NULL;
   std::vector<Waypoint> origLocs;
@@ -129,13 +130,14 @@ private:
   double cropEnd = 1;
   double recordLastSave = 0;
   bool recordTrack = false;
-  bool drawTrack = false;
+  //bool drawTrack = false;
   bool directRoutePreview = false;
   bool tracksDirty = true;
   bool waypointsDirty = true;
   bool showAllWaypts = false;
   bool archiveLoaded = false;
   bool tapToAddWaypt = false;
-  bool replaceWaypt = false;
+  bool replaceWaypt = false;  // replacing waypt from search or bookmarks
+  bool stealPickResult = false;  // adding waypt from search or bookmarks
   std::unique_ptr<SelectDialog> selectTrackDialog;
 };

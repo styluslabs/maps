@@ -24,6 +24,8 @@ void yamlRemove(YAML::Node node, T key);
 std::string osmIdFromProps(const rapidjson::Document& props);
 std::string rapidjsonToStr(const rapidjson::Document& props);
 
+std::string ftimestr(const char* fmt, int64_t msec_epoch = 0);
+
 struct sqlite3_stmt;
 struct sqlite3;
 typedef std::function<void(sqlite3_stmt*)> SQLiteStmtFn;
