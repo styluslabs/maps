@@ -513,7 +513,7 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets, const char* a
   Button* cancelBtn = createPushbutton("Cancel");
   acceptBtn->onClicked = [=](){ container->setVisible(false); onAccept(); };
   cancelBtn->onClicked = [=](){ container->setVisible(false); };
-  acceptBtn->node->addClass(".accept-btn");
+  acceptBtn->node->addClass("accept-btn");
   for(Widget* child : widgets)
     container->addWidget(child);
   //Toolbar* tb = createToolbar();

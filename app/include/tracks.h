@@ -31,6 +31,9 @@ struct GpxWay
   GpxWay(const std::string& _title, const std::string& _desc) : title(_title), desc(_desc) {}
 };
 
+class TrackPlot;
+class TrackSparkline;
+
 struct GpxFile {
   std::string title;
   std::string desc;
@@ -94,6 +97,8 @@ public:
   Button* stopRecordBtn = NULL;
   Button* routeModeBtn = NULL;
   TextBox* previewDistText = NULL;
+  Button* sparkStats = NULL;
+  TrackSparkline* trackSpark = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters

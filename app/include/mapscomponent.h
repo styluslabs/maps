@@ -25,7 +25,6 @@ class Widget;
 class Button;
 class SvgNode;
 class SvgDocument;
-class TrackPlot;
 class SelectDialog;
 class SelectBox;
 class DragDropList;

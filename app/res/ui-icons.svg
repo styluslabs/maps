@@ -205,10 +205,9 @@ document.addEventListener('DOMContentLoaded', function(event) {
 </svg>
 
 <svg id="segment" class="icon-tabler icon-tabler-line" width="1em" height="1em" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-   <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-   <path d="M6 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-   <path d="M18 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-   <path d="M7.5 16.5l9 -9"></path>
+   <path d="M6 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/>
+   <path d="M18 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/>
+   <path d="M7.5 16.5l9 -9"/>
 </svg>
 
 <svg id="plugin" class="icon-tabler icon-tabler-puzzle" width="1em" height="1em" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -243,12 +242,23 @@ document.addEventListener('DOMContentLoaded', function(event) {
 </svg>
 
 <!-- assembled from draw-track and pin -->
-<svg id="waypoint" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+<svg id="waypoint" width="1em" height="1em" viewBox="0 0 24 24">
 <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 14H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4"/>
 <g fill="none" stroke="currentColor" stroke-width="3.33" transform="scale(0.6) translate(8,4)">
   <path d="M20 10c0 4.418-8 12-8 12s-8-7.582-8-12a8 8 0 1 1 16 0Z"/>
   <path fill="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M12 11a1 1 0 1 0 0-2a1 1 0 0 0 0 2Z"/>
 </g>
+</svg>
+
+<svg id="crosshair" class="icon-tabler icon-tabler-crosshair" width="1em" height="1em" viewBox="0 0 24 24">
+  <g stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 8v-2a2 2 0 0 1 2 -2h2"/>
+    <path d="M4 16v2a2 2 0 0 0 2 2h2"/>
+    <path d="M16 4h2a2 2 0 0 1 2 2v2"/>
+    <path d="M16 20h2a2 2 0 0 0 2 -2v-2"/>
+    <path d="M9 12l6 0"/>
+    <path d="M12 9l0 6"/>
+  </g>
 </svg>
 
 </svg>

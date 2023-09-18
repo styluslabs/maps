@@ -277,7 +277,8 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
 void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 {
   int offset = listResults.size();
-  bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
+  // if '*' not appended to string, we assume catagorical search - no info for ranking besides dist
+  bool sortByDist = queryStr.back() != '*' || app->config["search"]["sort"].as<std::string>("rank") == "dist";
   // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
   std::string query = fstring("SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
       "MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;", sortByDist ? "-1" : "rank");
