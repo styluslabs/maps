@@ -397,6 +397,24 @@ void MapsSources::populateSceneVars()
       varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
     }
   }
+
+  // load legend widgets
+  app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
+  app->gui->deleteContents(app->legendContainer);
+  YAML::Node legends = app->readSceneValue("global.__legend");
+  for(const auto& legend : legends) {
+    Widget* widget = new Widget(loadSVGFragment(legend.second["svg"].Scalar().c_str()));
+    widget->setMargins(10, 0, 10, 0);
+    widget->setVisible(false);
+    app->legendContainer->addWidget(widget);
+
+    Button* menuitem = createCheckBoxMenuItem(legend.second["title"].Scalar().c_str());
+    legendMenu->addItem(legend.second["title"].Scalar().c_str(), [=](){
+      widget->setVisible(!widget->isVisible());
+      menuitem->setChecked(widget->isVisible());
+    });
+  }
+  legendBtn->setVisible(app->legendContainer->containerNode()->firstChild() != NULL);
 }
 
 void MapsSources::populateSourceEdit(std::string key)
@@ -410,6 +428,38 @@ void MapsSources::populateSourceEdit(std::string key)
 
   if(app->map->getScene()->isReady())
     populateSceneVars();
+}
+
+void MapsSources::importSources(const std::string& src)
+{
+  std::string key;
+  if(src.back() == '}') {
+    key = createSource("", src);
+  }
+  else if(Tangram::NetworkDataSource::urlHasTilePattern(src)) {
+    key = createSource("", fstring("{type: Raster, title: 'New Source', url: %s}", src.c_str()));
+  }
+  else {
+    // source name conflicts: skip, replace, rename, or cancel? dialog on first conflict?
+    app->platform->startUrlRequest(Url(src), [=](UrlResponse&& response){ MapsApp::runOnMainThread( [=](){
+      if(response.error)
+        MapsApp::messageBox("Import error", fstring("Unable to load '%s': %s", src.c_str(), response.error));
+      else {
+        try {
+          YAML::Node newsources = YAML::Load(response.content.data(), response.content.size());
+          for(auto& node : newsources)
+            mapSources[node.first.Scalar()] = node.second;
+        } catch (std::exception& e) {
+          MapsApp::messageBox("Import error", fstring("Error parsing '%s': %s", src.c_str(), e.what()));
+        }
+      }
+    } ); });
+    return;
+  }
+  if(key.empty())
+    MapsApp::messageBox("Import error", fstring("Unable to create source from '%s'", src.c_str()));
+  else
+    populateSourceEdit(key);  // so user can edit title
 }
 
 Button* MapsSources::createPanel()
@@ -432,36 +482,8 @@ Button* MapsSources::createPanel()
 
   // JSON (YAML flow), tile URL, or path/URL to file
   importAccept->onClicked = [=](){
-    std::string src = importEdit->text();
-    std::string key;
+    importSources(importEdit->text());
     importTb->setVisible(false);
-    if(src.back() == '}') {
-      key = createSource("", src);
-    }
-    else if(Tangram::NetworkDataSource::urlHasTilePattern(src)) {
-      key = createSource("", fstring("{type: Raster, title: 'New Source', url: %s}", src.c_str()));
-    }
-    else {
-      // source name conflicts: skip, replace, rename, or cancel? dialog on first conflict?
-      app->platform->startUrlRequest(Url(src), [=](UrlResponse&& response){ MapsApp::runOnMainThread( [=](){
-        if(response.error)
-          MapsApp::messageBox("Import error", fstring("Unable to load '%s': %s", src.c_str(), response.error));
-        else {
-          try {
-            YAML::Node newsources = YAML::Load(response.content.data(), response.content.size());
-            for(auto& node : newsources)
-              mapSources[node.first.Scalar()] = node.second;
-          } catch (std::exception& e) {
-            MapsApp::messageBox("Import error", fstring("Error parsing '%s': %s", src.c_str(), e.what()));
-          }
-        }
-      } ); });
-      return;
-    }
-    if(key.empty())
-      MapsApp::messageBox("Import error", fstring("Unable to create source from '%s'", src.c_str()));
-    else
-      populateSourceEdit(key);  // so user can edit title
   };
 
   Button* createBtn = createToolbutton(MapsApp::uiIcon("add"), "New Source");
@@ -504,6 +526,11 @@ Button* MapsSources::createPanel()
 
   Widget* offlineBtn = app->mapsOffline->createPanel();
 
+  legendBtn = createToolbutton(MapsApp::uiIcon("map-question"), "Legends");
+  legendMenu = createMenu(Menu::VERT_LEFT);
+  legendBtn->setMenu(legendMenu);
+  legendBtn->setVisible(false);
+
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
@@ -512,10 +539,15 @@ Button* MapsSources::createPanel()
     MapsApp::messageBox("Clear cache", "Delete all cached map data? This action cannot be undone.",
         {"OK", "Cancel"}, clearCacheFn);
   });
+  overflowMenu->addItem("Restore default sources", [=](){
+    FSPath path = FSPath(app->configFile).parent().child("mapsources.default.yaml");
+    importSources(path.path);
+  });
 
   auto sourcesHeader = app->createPanelHeader(MapsApp::uiIcon("layers"), "Map Source");
   sourcesHeader->addWidget(createStretch());
   sourcesHeader->addWidget(createBtn);
+  sourcesHeader->addWidget(legendBtn);
   sourcesHeader->addWidget(offlineBtn);
   sourcesHeader->addWidget(overflowBtn);
   sourcesPanel = app->createMapPanel(sourcesHeader, NULL, sourcesContent);

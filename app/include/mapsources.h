@@ -25,6 +25,7 @@ private:
   void populateSourceEdit(std::string key);
   void sourceModified();
   void saveSources();
+  void importSources(const std::string& src);
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;
@@ -37,8 +38,8 @@ private:
 
   std::vector<Widget*> layerRows;
   std::vector<SelectBox*> layerCombos;
-  //SelectBox* sourceCombo = NULL;
-  //Button* discardBtn = NULL;
+  Button* legendBtn = NULL;
+  Menu* legendMenu = NULL;
   TextEdit* titleEdit = NULL;
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;

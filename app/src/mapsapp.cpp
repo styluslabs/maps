@@ -987,6 +987,11 @@ Window* MapsApp::createGUI()
   crossHair->setVisible(false);
   mapsPanel->addWidget(crossHair);
 
+  legendContainer = createColumn();
+  legendContainer->node->setAttribute("box-anchor", "bottom");
+  legendContainer->setMargins(0, 0, 10, 0);
+  mapsPanel->addWidget(legendContainer);
+
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();
 

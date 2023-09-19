@@ -114,6 +114,7 @@ public:
   Button* reorientBtn = NULL;
   Widget* gpsStatusBtn = NULL;
   Widget* crossHair = NULL;
+  Widget* legendContainer = NULL;
   std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
 

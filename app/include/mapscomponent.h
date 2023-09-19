@@ -31,6 +31,7 @@ class DragDropList;
 class Toolbar;
 class TextEdit;
 class TextBox;
+class Menu;
 
 enum MapEvent_t { MAP_CHANGE, LOC_UPDATE, SUSPEND };
 
