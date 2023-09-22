@@ -24,6 +24,7 @@ private:
   void populateLists(bool archived);
   Widget* getPlaceInfoSubSection(int rowid, int listid, std::string namestr, std::string notestr);
   void chooseBookmarkList(std::function<void(int, std::string)> callback);
+  void deleteBookmark(int listid, int rowid);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;

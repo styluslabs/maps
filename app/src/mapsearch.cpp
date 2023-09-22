@@ -65,9 +65,9 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
           sqlite3_bind_text(stmt, 2, feature.props.toJson().c_str(), -1, SQLITE_TRANSIENT);
           sqlite3_bind_double(stmt, 3, lnglat.longitude);
           sqlite3_bind_double(stmt, 4, lnglat.latitude);
-          if (sqlite3_step(stmt) != SQLITE_DONE)
-            logMsg("sqlite3_step failed: %s\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
-          sqlite3_clear_bindings(stmt);  // not necessary?
+          if(sqlite3_step(stmt) != SQLITE_DONE)
+            LOGE("sqlite3_step failed: %s\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
+          //sqlite3_clear_bindings(stmt);  -- retain binding for tile_id set by caller
           sqlite3_reset(stmt);  // necessary to reuse statement
         }
       }
@@ -77,8 +77,19 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
 
 void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
+  /*int nchanges = sqlite3_total_changes(searchDB);
+  const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
+  DB_exec(searchDB, query, {}, [&](sqlite3_stmt* stmt){
+    sqlite3_bind_int(stmt, 1, task->tileId().z);
+    sqlite3_bind_int(stmt, 2, task->tileId().x);
+    sqlite3_bind_int(stmt, 3, task->tileId().y);
+  });
+  if(sqlite3_total_changes(searchDB) == nchanges)  // total_changes() is a bit safer than changes() here
+    return;
+  // bind tile_id
+  sqlite3_bind_int64(insertStmt, 6, sqlite3_last_insert_rowid(searchDB));*/
+
   sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
-  //sqlite3_bind_int(insertStmt, 5, mapId);
   processTileData(task, insertStmt, searchData);
   sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
 }
@@ -90,6 +101,31 @@ std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
     searchData.push_back({elem["layer"].Scalar(), splitStr<std::vector>(elem["fields"].Scalar(), ", ", true)});
   return searchData;
 }
+
+static const char* POI_SCHEMA = R"#(BEGIN;
+CREATE TABLE tiles(id INTEGER PRIMARY KEY, z INTEGER, x INTEGER, y INTEGER, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));
+CREATE UNIQUE INDEX tiles_tile_id ON tiles (z, x, y);
+CREATE TABLE pois(name TEXT, tags TEXT, props TEXT, lng REAL, lat REAL, tile_id INTEGER);
+CREATE VIRTUAL TABLE pois_fts USING fts5(name, tags, content='pois');
+CREATE INDEX pois_tile_id ON pois (tile_id);
+
+-- trigger to delete pois when tile row deleted
+CREATE TRIGGER tiles_delete AFTER DELETE ON tiles BEGIN
+  DELETE FROM pois WHERE tile_id = OLD.rowid;
+END;
+
+-- triggers to keep the FTS index up to date.
+CREATE TRIGGER pois_insert AFTER INSERT ON pois BEGIN
+  INSERT INTO pois_fts(rowid, name, tags) VALUES (NEW.rowid, NEW.name, NEW.tags);
+END;
+CREATE TRIGGER pois_delete AFTER DELETE ON pois BEGIN
+  INSERT INTO pois_fts(pois_fts, rowid, name, tags) VALUES('delete', OLD.rowid, OLD.name, OLD.tags);
+END;
+CREATE TRIGGER pois_update AFTER UPDATE ON pois BEGIN
+  INSERT INTO pois_fts(pois_fts, rowid, name, tags) VALUES('delete', OLD.rowid, OLD.name, OLD.tags);
+  INSERT INTO pois_fts(rowid, name, tags) VALUES (NEW.rowid, NEW.name, NEW.tags);
+END;
+COMMIT;)#";
 
 static bool initSearch()
 {
@@ -108,7 +144,8 @@ static bool initSearch()
       return false;
     }
 
-    DB_exec(searchDB, "CREATE VIRTUAL TABLE points_fts USING fts5(name, tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);");
+    //CREATE VIRTUAL TABLE points_fts USING fts5(name, tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);
+    DB_exec(searchDB, POI_SCHEMA);
     // search history - NOCASE causes comparisions to be case-insensitive but still stores case
     DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
   }
@@ -118,6 +155,7 @@ static bool initSearch()
   //sqlite3_exec(searchDB, "PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
 
   char const* stmtStr = "INSERT INTO points_fts (tags,props,lng,lat) VALUES (?,?,?,?);";
+  //char const* stmtStr = "INSERT INTO pois (name,tags,props,lng,lat,tile_id) VALUES (?,?,?,?,?,?);";
   if(sqlite3_prepare_v2(searchDB, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
     logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
     return false;

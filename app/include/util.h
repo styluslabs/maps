@@ -41,19 +41,23 @@ public:
 
   MarkerGroup(Map* _map, const std::string& _styling, const std::string _altStyling = "");
   ~MarkerGroup();
-  void createMarker(LngLat pos, OnPickedFn cb, Properties&& props = {});
+  void createMarker(LngLat pos, OnPickedFn cb, Properties&& props = {}, int id = -1);
   void reset();
   void setVisible(bool vis);
   bool onPicked(MarkerID id);
   void onZoom();
+  void deleteMarker(int id);
+  void updateMarker(int id, Properties&& props);
 
   Map* map;
   std::string styling;
   std::string altStyling;
+  Properties commonProps;
   bool visible = true;
   bool defaultVis = false;
 
   struct PlaceInfo {
+    int id;
     LngLat pos;
     Properties props;
     OnPickedFn callback;

@@ -34,6 +34,7 @@ private:
   std::string srcFile;
   YAML::Node mapSources;
   std::atomic<bool> sourcesLoaded{false};
+  std::vector<std::string> tempLayers;
   //int nSources = 1;
 
   std::vector<Widget*> layerRows;

@@ -191,6 +191,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
   }
   else if(!srcname.empty()) {
     builder.addLayer(srcname);
+    tempLayers = {srcname};
   }
   else {
     for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
@@ -296,7 +297,8 @@ void MapsSources::populateSources()
   sourceKeys = {};
   for(const auto& src : mapSources) {
     std::string key = src.first.Scalar();
-    if(!src.second["layer"].as<bool>(false) && src.second["type"].Scalar() != "Update") {
+    bool isLayer = src.second["layer"].as<bool>(false);
+    if(!isLayer && src.second["type"].Scalar() != "Update") {
       sourceKeys.push_back(key);
       sourceTitles.push_back(src.second["title"].Scalar());
     }
@@ -308,7 +310,29 @@ void MapsSources::populateSources()
     Button* item = createListItem(MapsApp::uiIcon("layers"), src.second["title"].Scalar().c_str());
     item->node->setAttr("__sourcekey", key.c_str());
     Widget* container = item->selectFirst(".child-container");
-    item->onClicked = [this, key](){ if(key != currSource) rebuildSource(key); };
+
+    if(isLayer) {
+      Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
+      showBtn->onClicked = [=](){
+        if(key == currSource) return;
+        bool show = !showBtn->isChecked();
+        showBtn->setChecked(show);
+        if(show)
+          tempLayers.push_back(key);
+        else
+          std::remove(tempLayers.begin(), tempLayers.end(), key);
+        rebuildSource(joinStr(tempLayers, ","));
+      };
+      container->addWidget(showBtn);
+      item->onClicked = [=](){
+        showBtn->setChecked(false);
+        if(key != currSource)
+          rebuildSource(key);
+      };
+    }
+    else
+      item->onClicked = [=](){ if(key != currSource) rebuildSource(key); };
+
 
     Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
     editBtn->onClicked = [this, key](){ populateSourceEdit(key); };
@@ -465,7 +489,8 @@ void MapsSources::importSources(const std::string& src)
 Button* MapsSources::createPanel()
 {
   Toolbar* sourceTb = createToolbar();
-  titleEdit = createTextEdit();
+  titleEdit = createTitledTextEdit("Title");
+  titleEdit->node->setAttribute("box-anchor", "hfill");
   saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save Source");
   //discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete Source");
   sourceTb->addWidget(titleEdit);
@@ -510,9 +535,7 @@ Button* MapsSources::createPanel()
   layersContent->addWidget(varsContent);
   for(int ii = 1; ii <= MAX_SOURCES; ++ii) {
     layerCombos.push_back(createSelectBox(fstring("Layer %d", ii).c_str(), MapsApp::uiIcon("layers"), {}));
-    layerCombos.back()->onChanged = [this](int){
-      rebuildSource();
-    };
+    layerCombos.back()->onChanged = [this](int){ rebuildSource(); };
     layerRows.push_back(createTitledRow(fstring("Layer %d", ii).c_str(), layerCombos.back()));
     layersContent->addWidget(layerRows.back());
   }

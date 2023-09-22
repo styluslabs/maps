@@ -503,7 +503,8 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
   return widget;
 }
 
-Widget* createInlineDialog(std::initializer_list<Widget*> widgets, const char* acceptLabel, std::function<void()> onAccept)
+Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
+    const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel)
 {
   Widget* container = createColumn();
   container->node->setAttribute("box-anchor", "hfill");
@@ -512,7 +513,7 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets, const char* a
   Button* acceptBtn = createPushbutton(acceptLabel);
   Button* cancelBtn = createPushbutton("Cancel");
   acceptBtn->onClicked = [=](){ container->setVisible(false); onAccept(); };
-  cancelBtn->onClicked = [=](){ container->setVisible(false); };
+  cancelBtn->onClicked = [=](){ container->setVisible(false); if(onCancel) onCancel(); };
   acceptBtn->node->addClass("accept-btn");
   for(Widget* child : widgets)
     container->addWidget(child);

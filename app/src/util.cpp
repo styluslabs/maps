@@ -247,11 +247,46 @@ void MarkerGroup::reset()
   prevZoom = -1;
 }
 
-void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props)
+void MarkerGroup::updateMarker(int id, Properties&& props)
 {
-  places.push_back({pos, props, cb, 0, 0, false});
+  for(auto it = places.begin(); it != places.end(); ++it) {
+    if(it->id == id) {
+      it->props = std::move(props);
+      for(auto& item : commonProps.items())
+        it->props.set(item.key, item.value);
+      map->markerSetPoint(it->markerId, it->pos);  // to force marker update
+      if(it->markerId > 0)
+        map->markerSetProperties(it->markerId, Properties(it->props));
+      if(it->altMarkerId > 0)
+        map->markerSetProperties(it->altMarkerId, Properties(it->props));
+      // we use fixed radius for marker, so changing title doesn't affect our collision calc
+      break;
+    }
+  }
+}
+
+void MarkerGroup::deleteMarker(int id)
+{
+  for(auto it = places.begin(); it != places.end(); ++it) {
+    if(it->id == id) {
+      map->markerRemove(it->markerId);
+      map->markerRemove(it->altMarkerId);
+      places.erase(it);
+      // marker deletion may allow nearby marker to be shown
+      prevZoom = -1;
+      onZoom();
+      break;
+    }
+  }
+}
+
+void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props, int id)
+{
+  places.push_back({id, pos, std::move(props), cb, 0, 0, false});
   PlaceInfo& res = places.back();
-  res.props.set("priority", places.size()-1);
+  for(auto& item : commonProps.items())
+    res.props.set(item.key, item.value);
+  res.props.set("priority", places.size()-1);  //id < 0 ? places.size()-1 : id);
   double markerRadius = map->getZoom() >= 17 ? 25 : 50;
   bool collided = false;
   collider.intersect(markerAABB(map, res.pos, markerRadius),

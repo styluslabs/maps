@@ -1020,6 +1020,10 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
     // update title
     SvgText* titlenode = static_cast<SvgText*>(app->infoPanel->containerNode()->selectFirst(".panel-title"));
     titlenode->setText(titleEdit->text().c_str());
+    if(it->marker) {
+      app->map->markerSetProperties(it->marker,
+          {{{"name", it->name}, {"color", track->style}, {"priority", it->marker}}});
+    }
 
     noteText->setText(noteEdit->text().c_str());
     editContent->setVisible(false);
