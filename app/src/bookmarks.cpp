@@ -3,7 +3,8 @@
 #include "util.h"
 #include "resources.h"
 
-#include "sqlite3/sqlite3.h"
+//#include "sqlite3/sqlite3.h"
+#include "sqlitepp.h"
 #include "rapidjson/document.h"
 #include "yaml-cpp/yaml.h"
 #include "util/yamlPath.h"
@@ -173,11 +174,13 @@ void MapsBookmarks::populateLists(bool archived)
 
   const char* query = "SELECT lists.id, lists.title, lists.color, COUNT(1) FROM lists JOIN bookmarks AS b"
       " ON lists.id = b.list_id WHERE lists.archived = ? GROUP by lists.id;";
-  DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){
-    int rowid = sqlite3_column_int(stmt, 0);
-    std::string list = (const char*)(sqlite3_column_text(stmt, 1));
-    std::string color = (const char*)(sqlite3_column_text(stmt, 2));
-    int nplaces = sqlite3_column_int(stmt, 3);
+  SQLiteStmt stmt(app->bkmkDB, query);
+  stmt.bind(archived).exec([=](int rowid, std::string list, std::string color, int nplaces){
+  //DB_exec(app->bkmkDB, query, [=](sqlite3_stmt* stmt){
+  //  int rowid = sqlite3_column_int(stmt, 0);
+  //  std::string list = (const char*)(sqlite3_column_text(stmt, 1));
+  //  std::string color = (const char*)(sqlite3_column_text(stmt, 2));
+  //  int nplaces = sqlite3_column_int(stmt, 3);
 
     Button* item = createListItem(MapsApp::uiIcon("folder"),
         list.c_str(), nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());  //new Button(bkmkListProto->clone());
@@ -213,10 +216,13 @@ void MapsBookmarks::populateLists(bool archived)
     colorBtn->onColor = [=](Color newcolor){
       char buff[64];
       SvgWriter::serializeColor(buff, newcolor);
-      DB_exec(app->bkmkDB, "UPDATE lists SET color = ? WHERE id = ?;", NULL, [&](sqlite3_stmt* stmt1){
-        sqlite3_bind_text(stmt1, 1, buff, -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt1, 2, rowid);
-      });
+
+      SQLiteStmt(app->bkmkDB, "UPDATE lists SET color = ? WHERE id = ?;").bind(buff, rowid).exec();
+
+      //DB_exec(app->bkmkDB, "UPDATE lists SET color = ? WHERE id = ?;", NULL, [&](sqlite3_stmt* stmt1){
+      //  sqlite3_bind_text(stmt1, 1, buff, -1, SQLITE_TRANSIENT);
+      //  sqlite3_bind_int(stmt1, 2, rowid);
+      //});
       auto it1 = bkmkMarkers.find(rowid);
       if(it1 != bkmkMarkers.end()) {
         bool vis = it1->second->defaultVis;
@@ -270,15 +276,17 @@ void MapsBookmarks::populateLists(bool archived)
       archivedContent->addWidget(item);
     else
       listsContent->addItem(std::to_string(rowid), item);
-  }, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
+  //}, [&](sqlite3_stmt* stmt){
+  //  sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
 
   if(!archived) {
     int narchived = 0;
-    DB_exec(app->bkmkDB, "SELECT COUNT(1) FROM lists WHERE archived = 1;", [&narchived](sqlite3_stmt* stmt){
-      narchived = sqlite3_column_int(stmt, 0);
-    });
+    SQLiteStmt(app->bkmkDB, "SELECT COUNT(1) FROM lists WHERE archived = 1;").exec([&](int n){ narchived = n; });
+
+    //DB_exec(app->bkmkDB, "SELECT COUNT(1) FROM lists WHERE archived = 1;", [&narchived](sqlite3_stmt* stmt){
+    //  narchived = sqlite3_column_int(stmt, 0);
+    //});
 
     Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived",
         narchived == 1 ? "1 list" : fstring("%d lists", narchived).c_str());  //new Button(bkmkListProto->clone());

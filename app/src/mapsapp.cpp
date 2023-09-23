@@ -1593,6 +1593,10 @@ int main(int argc, char* argv[])
     glfwSwapBuffers(glfwWin);
   }
 
+  while(sqlite3_stmt* stmt = sqlite3_next_stmt(MapsApp::bkmkDB, NULL)) {
+    PLATFORM_LOG("Leaked sqlite3_stmt: %s", sqlite3_sql(stmt));
+    sqlite3_finalize(stmt);
+  }
   sqlite3_close(MapsApp::bkmkDB);
   gui->closeWindow(win);
   delete gui;

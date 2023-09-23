@@ -674,11 +674,18 @@ void MapsTracks::setTrackVisible(GpxFile* track, bool visible)
   if(visible && track == &recordedTrack)
     updateTrackMarker(track);
   showTrack(track, visible);  //, "layers.track.draw.track");
+  // to handle toggle from quick menu ... general soln to this issue is to use Actions, but there are only
+  //   a few cases like this in this app, so we don't bother
+  for(Widget* item : tracksContent->select(".listitem")) {
+    if(item->node->getIntAttr("__rowid", INT_MAX) == track->rowid)
+      static_cast<Button*>(item->selectFirst(".show-btn"))->setChecked(visible);
+  }
 }
 
 Widget* MapsTracks::createTrackEntry(GpxFile* track)
 {
   Button* item = createListItem(MapsApp::uiIcon("track"), track->title.c_str(), track->desc.c_str());
+  item->node->setAttr("__rowid", track->rowid);
   item->onClicked = [=](){
     // make sure track is loaded so we can decide between stats and waypoints
     if(track->marker <= 0)
@@ -691,9 +698,10 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
   Widget* container = item->selectFirst(".child-container");
 
   Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
+  showBtn->node->addClass("show-btn");
   showBtn->onClicked = [=](){
     setTrackVisible(track, !track->visible);
-    showBtn->setChecked(track->visible);
+    showBtn->setChecked(track->visible);  // toggle in setTrackVisible() only handles non-archived case
   };
   showBtn->setChecked(track->visible);
   container->addWidget(showBtn);
