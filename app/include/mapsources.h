@@ -34,11 +34,13 @@ private:
   std::string srcFile;
   YAML::Node mapSources;
   std::atomic<bool> sourcesLoaded{false};
-  std::vector<std::string> tempLayers;
+  std::vector<std::string> currLayers;
+  std::vector<SceneUpdate> currUpdates;
   //int nSources = 1;
 
-  std::vector<Widget*> layerRows;
-  std::vector<SelectBox*> layerCombos;
+  //std::vector<Widget*> layerRows;
+  //std::vector<SelectBox*> layerCombos;
+  Widget* layersContent = NULL;
   Button* legendBtn = NULL;
   Menu* legendMenu = NULL;
   TextEdit* titleEdit = NULL;
@@ -48,4 +50,5 @@ private:
   bool sourcesDirty = true;
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;
+  std::unique_ptr<SelectDialog> selectLayerDialog;
 };

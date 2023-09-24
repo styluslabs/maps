@@ -269,4 +269,11 @@ document.addEventListener('DOMContentLoaded', function(event) {
    <path d="M19 19a2.003 2.003 0 0 0 .914 -3.782a1.98 1.98 0 0 0 -2.414 .483"></path>
 </svg>
 
+<svg id="opacity" width="1em" height="1em" viewBox="0 0 24 24">
+  <g stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+     <circle cx="9.5" cy="9.5" r="7" fill="none" />
+     <circle cx="14.5" cy="14.5" r="7" fill="currentColor" fill-opacity="0.75" />
+  </g>
+</svg>
+
 </svg>

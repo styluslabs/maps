@@ -184,22 +184,38 @@ void MapsSources::rebuildSource(const std::string& srcname)
 {
   SourceBuilder builder(mapSources);
   // support comma separated list of sources
-  auto splitsrc = splitStr<std::vector>(srcname, ",");
-  if(splitsrc.size() > 1) {
-    for(auto& src : splitsrc)
-      builder.addLayer(src);
-  }
-  else if(!srcname.empty()) {
-    builder.addLayer(srcname);
-    tempLayers = {srcname};
-  }
-  else {
-    for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
-      int idx = layerCombos[ii]->index();
-      if(idx > 0)
-        builder.addLayer(layerKeys[idx]);
+  if(!srcname.empty()) {
+    currLayers.clear();
+    currUpdates.clear();
+    auto splitsrc = splitStr<std::vector>(srcname, ",");
+    if(splitsrc.size() > 1) {
+      for(auto& src : splitsrc)
+        currLayers.push_back(src);  //builder.addLayer(src);
+    }
+    else {
+      auto src = mapSources[srcname];
+      if(!src) return;
+      if(src["type"].Scalar() == "Multi") {
+        for(const auto& layer : src["layers"])
+          currLayers.push_back(layer["source"].Scalar());
+        for(const auto& update : src["updates"])
+          currUpdates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
+      }
+      else
+        currLayers.push_back(srcname);
     }
   }
+  //else {
+  //  for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
+  //    int idx = layerCombos[ii]->index();
+  //    if(idx > 0)
+  //      builder.addLayer(layerKeys[idx]);
+  //  }
+  //}
+
+  builder.updates = currUpdates;
+  for(auto& src : currLayers)
+    builder.addLayer(src);
 
   if(!builder.imports.empty() || !builder.updates.empty()) {
     // we need this to be persistent for scene reloading (e.g., on scene variable change)
@@ -208,37 +224,35 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->sceneUpdates = std::move(builder.updates);  //.clear();
     app->loadSceneFile();  //builder.getSceneYaml(baseUrl), builder.updates);
     sceneVarsLoaded = false;
+    currSource = srcname;
     if(!srcname.empty()) {
-      currSource = srcname;  //srcname.empty() ? joinStr(builder.layerkeys, ",") : srcname;
       app->config["last_source"] = currSource;
       for(Widget* item : sourcesContent->select(".listitem"))
         static_cast<Button*>(item)->setChecked(item->node->getStringAttr("__sourcekey", "") == currSource);
     }
   }
 
-  //bool multi = bool(mapSources[srcname]["layers"]);
-  bool multi = srcname.empty() || mapSources[srcname]["type"].Scalar() == "Multi";
   saveBtn->setEnabled(srcname.empty());  // for existing source, don't enable saveBtn until edited
 
-  size_t ii = 0;
-  //nSources = int(builder.layerkeys.size());  //std::max(int(builder.layerkeys.size()), nSources);
-  for(; ii < builder.layerkeys.size(); ++ii) {
-    for(size_t jj = 0; jj < layerKeys.size(); ++jj) {
-      if(builder.layerkeys[ii] == layerKeys[jj]) {
-        //currSrcIdx[ii] = jj;
-        layerCombos[ii]->setIndex(jj);
-        layerRows[ii]->setVisible(multi);
-        break;  // next layer
-      }
-    }
-  }
-
-  layerCombos[ii]->setIndex(0);
-  layerRows[ii]->setVisible(multi);
-  for(++ii; ii < layerRows.size(); ++ii) {
-    layerCombos[ii]->setIndex(0);
-    layerRows[ii]->setVisible(false);
-  }
+  //bool multi = srcname.empty() || mapSources[srcname]["type"].Scalar() == "Multi";
+  //size_t ii = 0;
+  //for(; ii < builder.layerkeys.size(); ++ii) {
+  //  for(size_t jj = 0; jj < layerKeys.size(); ++jj) {
+  //    if(builder.layerkeys[ii] == layerKeys[jj]) {
+  //      //currSrcIdx[ii] = jj;
+  //      layerCombos[ii]->setIndex(jj);
+  //      layerRows[ii]->setVisible(multi);
+  //      break;  // next layer
+  //    }
+  //  }
+  //}
+  //
+  //layerCombos[ii]->setIndex(0);
+  //layerRows[ii]->setVisible(multi);
+  //for(++ii; ii < layerRows.size(); ++ii) {
+  //  layerCombos[ii]->setIndex(0);
+  //  layerRows[ii]->setVisible(false);
+  //}
 }
 
 std::string MapsSources::createSource(std::string savekey, const std::string& yamlStr)
@@ -265,11 +279,13 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     node["title"] = titleEdit->text();
     if(node["type"].Scalar() == "Multi") {
       YAML::Node layers = node["layers"] = YAML::Node(YAML::NodeType::Sequence);
-      for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
-        int idx = layerCombos[ii]->index();
-        if(idx > 0)
-          layers.push_back(YAML::Load("{source: " + layerKeys[idx] + "}"));
-      }
+      for(auto& src : currLayers)
+        layers.push_back(YAML::Load("{source: " + src + "}"));
+      //for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
+      //  int idx = layerCombos[ii]->index();
+      //  if(idx > 0)
+      //    layers.push_back(YAML::Load("{source: " + src + "}"));
+      //}
     }
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
     for(const SceneUpdate& upd : app->sceneUpdates) {
@@ -293,8 +309,8 @@ void MapsSources::populateSources()
 
   std::vector<std::string> layerTitles = {"None"};
   std::vector<std::string> sourceTitles = {};
-  layerKeys = {""};
-  sourceKeys = {};
+  layerKeys = {""};  // used for layerCombos
+  sourceKeys = {};  // currently only used for quick menu
   for(const auto& src : mapSources) {
     std::string key = src.first.Scalar();
     bool isLayer = src.second["layer"].as<bool>(false);
@@ -311,6 +327,8 @@ void MapsSources::populateSources()
     item->node->setAttr("__sourcekey", key.c_str());
     Widget* container = item->selectFirst(".child-container");
 
+    Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
+
     if(isLayer) {
       Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
       showBtn->onClicked = [=](){
@@ -318,10 +336,10 @@ void MapsSources::populateSources()
         bool show = !showBtn->isChecked();
         showBtn->setChecked(show);
         if(show)
-          tempLayers.push_back(key);
+          currLayers.push_back(key);
         else
-          std::remove(tempLayers.begin(), tempLayers.end(), key);
-        rebuildSource(joinStr(tempLayers, ","));
+          std::remove(currLayers.begin(), currLayers.end(), key);
+        rebuildSource();  //currLayers
       };
       container->addWidget(showBtn);
       item->onClicked = [=](){
@@ -329,29 +347,53 @@ void MapsSources::populateSources()
         if(key != currSource)
           rebuildSource(key);
       };
+      editBtn->onClicked = [=](){ populateSourceEdit(showBtn->isChecked() ? "" : key); };
     }
-    else
+    else {
       item->onClicked = [=](){ if(key != currSource) rebuildSource(key); };
-
-
-    Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
-    editBtn->onClicked = [this, key](){ populateSourceEdit(key); };
+      editBtn->onClicked = [=](){ populateSourceEdit(key); };
+    }
 
     Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowBtn->setMenu(overflowMenu);
-    overflowMenu->addItem("Delete", [=](){
+    auto deleteSrcFn = [=](std::string res){
+      if(res != "OK") return;
       mapSources.remove(key);
       saveSources();
       app->gui->deleteWidget(item);  //populateSources();
+    };
+    overflowMenu->addItem("Delete", [=](){
+      std::vector<std::string> dependents;
+      for (const auto& ssrc : mapSources) {
+        for (const auto& layer : ssrc.second["layers"]) {
+          if(layer["source"].Scalar() == key)
+            dependents.push_back(ssrc.second["title"].Scalar());
+        }
+      }
+      if(!dependents.empty())
+        MapsApp::messageBox("Delete source", fstring("%s is used by other sources: %s. Delete anyway?",
+            mapSources[key]["title"].Scalar().c_str(), joinStr(dependents, ", ").c_str()),
+            {"OK", "Cancel"}, deleteSrcFn);
+      else
+        deleteSrcFn("OK");
     });
 
     container->addWidget(editBtn);
     container->addWidget(overflowBtn);
     sourcesContent->addItem(key, item);  //addWidget(item);
   }
-  for(SelectBox* combo : layerCombos)
-    combo->addItems(layerTitles);
+  //for(SelectBox* combo : layerCombos)
+  //  combo->addItems(layerTitles);
+  if(!selectLayerDialog) {
+    selectLayerDialog.reset(createSelectDialog("Choose Layer", MapsApp::uiIcon("layer")));
+    selectLayerDialog->onSelected = [this](int idx){
+      currLayers.push_back(layerKeys[idx]);
+      rebuildSource();  //currLayers);
+      populateSourceEdit("");
+    };
+  }
+  selectLayerDialog->addItems(layerTitles);
 }
 
 void MapsSources::onMapEvent(MapEvent_t event)
@@ -450,6 +492,28 @@ void MapsSources::populateSourceEdit(std::string key)
   app->showPanel(sourceEditPanel, true);
   //sourceEditPanel->selectFirst(".panel-title")->setText(mapSources[key]["title"].Scalar().c_str());
 
+  for(auto& src : currLayers) {
+    Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[src]["title"].Scalar().c_str());
+    Widget* container = item->selectFirst(".child-container");
+
+    //<use class="icon elevation-icon" display="none" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
+    //widgetNode("#listitem-icon")
+    //TextEdit* opacityEdit = createTextEdit(80);
+
+    Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
+    discardBtn->onClicked = [=](){
+      std::remove(currLayers.begin(), currLayers.end(), src);
+      app->gui->deleteWidget(item);
+      rebuildSource();  //tempLayers);
+    };
+    container->addWidget(discardBtn);
+  }
+
+  Button* item = createListItem(MapsApp::uiIcon("add"), "Add Layer...");
+  item->onClicked = [=](){
+    MapsApp::gui->showModal(selectLayerDialog.get(), MapsApp::gui->windows.front()->modalOrSelf());
+  };
+
   if(app->map->getScene()->isReady())
     populateSceneVars();
 }
@@ -514,8 +578,8 @@ Button* MapsSources::createPanel()
   Button* createBtn = createToolbutton(MapsApp::uiIcon("add"), "New Source");
   createBtn->onClicked = [=](){
     // ensure at least the first two layer selects are visible
-    layerRows[0]->setVisible(true);
-    layerRows[1]->setVisible(true);
+    //layerRows[0]->setVisible(true);
+    //layerRows[1]->setVisible(true);
     currSource = "";
     populateSourceEdit("");  // so user can edit title
   };
@@ -530,15 +594,19 @@ Button* MapsSources::createPanel()
 
   sourcesContent = new DragDropList;  //createColumn();
 
-  Widget* layersContent = createColumn();
+  Widget* srcEditContent = createColumn();
+  layersContent = createColumn();
+  layersContent->node->setAttribute("box-anchor", "hfill");
   varsContent = createColumn();
-  layersContent->addWidget(varsContent);
-  for(int ii = 1; ii <= MAX_SOURCES; ++ii) {
-    layerCombos.push_back(createSelectBox(fstring("Layer %d", ii).c_str(), MapsApp::uiIcon("layers"), {}));
-    layerCombos.back()->onChanged = [this](int){ rebuildSource(); };
-    layerRows.push_back(createTitledRow(fstring("Layer %d", ii).c_str(), layerCombos.back()));
-    layersContent->addWidget(layerRows.back());
-  }
+  varsContent->node->setAttribute("box-anchor", "hfill");
+  srcEditContent->addWidget(varsContent);
+  srcEditContent->addWidget(layersContent);
+  //for(int ii = 1; ii <= MAX_SOURCES; ++ii) {
+  //  layerCombos.push_back(createSelectBox(fstring("Layer %d", ii).c_str(), MapsApp::uiIcon("layers"), {}));
+  //  layerCombos.back()->onChanged = [this](int){ rebuildSource(); };
+  //  layerRows.push_back(createTitledRow(fstring("Layer %d", ii).c_str(), layerCombos.back()));
+  //  layersContent->addWidget(layerRows.back());
+  //}
 
   auto clearCacheFn = [this](std::string res){
     if(res == "OK") {
@@ -585,7 +653,7 @@ Button* MapsSources::createPanel()
 
 
   auto editHeader = app->createPanelHeader(MapsApp::uiIcon("edit"), "Edit Source");
-  sourceEditPanel = app->createMapPanel(editHeader, layersContent, sourceTb);
+  sourceEditPanel = app->createMapPanel(editHeader, srcEditContent, sourceTb);
 
   // main toolbar button
   Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
