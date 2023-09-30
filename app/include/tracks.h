@@ -106,6 +106,7 @@ public:
 
   static bool loadGPX(GpxFile* track, const char* gpxSrc = NULL);
   static bool saveGPX(GpxFile* track);
+  static std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double precision = 1E6);
 
 private:
   void loadTracks(bool archived);
@@ -125,6 +126,7 @@ private:
   void viewEntireTrack(GpxFile* track);
   void updateDB(GpxFile* track);
   Waypoint* addWaypoint(Waypoint wpt);
+  void removeTrackMarkers(GpxFile* track);
 
   int pluginFn = 0;
   GpxFile* activeTrack = NULL;

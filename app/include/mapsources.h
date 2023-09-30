@@ -8,7 +8,6 @@ class MapsSources : public MapsComponent
   friend class MapsOffline;
 public:
   MapsSources(MapsApp* _app);
-  //void showGUI();
 
   void addSource(const std::string& key, YAML::Node srcnode);
   void rebuildSource(const std::string& srcname = "");
@@ -36,10 +35,7 @@ private:
   std::atomic<bool> sourcesLoaded{false};
   std::vector<std::string> currLayers;
   std::vector<SceneUpdate> currUpdates;
-  //int nSources = 1;
 
-  //std::vector<Widget*> layerRows;
-  //std::vector<SelectBox*> layerCombos;
   Widget* layersContent = NULL;
   Button* legendBtn = NULL;
   Menu* legendMenu = NULL;

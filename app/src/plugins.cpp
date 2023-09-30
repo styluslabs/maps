@@ -304,6 +304,15 @@ static int addRouteGPX(duk_context* ctx)
   return 0;
 }
 
+// eventually we will extend this to accept routes steps and other route info
+static int addRoutePolyline(duk_context* ctx)
+{
+  const char* str = duk_require_string(ctx, 0);
+  auto route = MapsTracks::decodePolylineStr(str);
+  PluginManager::inst->app->mapsTracks->addRoute(std::move(route));
+  return 0;
+}
+
 void PluginManager::createFns(duk_context* ctx)
 {
   // create C functions
@@ -321,6 +330,8 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addPlaceInfo");
   duk_push_c_function(ctx, addRouteGPX, 1);
   duk_put_global_string(ctx, "addRouteGPX");
+  duk_push_c_function(ctx, addRoutePolyline, 1);
+  duk_put_global_string(ctx, "addRoutePolyline");
 }
 
 // commands should go in toolbar or menu of appropriate panel; e.g. bookmarks panel for import places plugin

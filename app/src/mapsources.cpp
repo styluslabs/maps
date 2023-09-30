@@ -496,9 +496,11 @@ void MapsSources::populateSourceEdit(std::string key)
     Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[src]["title"].Scalar().c_str());
     Widget* container = item->selectFirst(".child-container");
 
-    //<use class="icon elevation-icon" display="none" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
+    //<use class="icon elevation-icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
     //widgetNode("#listitem-icon")
     //TextEdit* opacityEdit = createTextEdit(80);
+    //container->addWidget(opacityEdit);
+    //... updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", <alpha value>);
 
     Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
     discardBtn->onClicked = [=](){

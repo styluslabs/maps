@@ -155,15 +155,29 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   if(maxTime - minTime <= 0)
     plotVsDist = true;
 
+  // rounding for altitude range
   real elev = maxAlt - minAlt;
-  minAlt -= 0.05*elev;
-  maxAlt += 0.05*elev;
+  real expnt = std::pow(10, std::floor(std::log10(elev)));
+  real lead = elev/expnt;
+  real quant = lead > 5 ? expnt : lead > 2 ? expnt/2 : expnt/5;
+  minAlt = std::floor(minAlt/quant)*quant;  //-= 0.05*elev;
+  maxAlt = std::ceil(maxAlt/quant)*quant;  //+= 0.05*elev;
   maxZoom = locs.size()/8;  // min 8 points in view
   // exclude first, last, and unnamed waypoints
   for(size_t ii = 1; ii < wpts.size() - 1; ++ii) {
     if(!wpts[ii].name.empty())
       waypoints.push_back(wpts[ii]);
   }
+}
+
+// return the number w/ the fewest significant digits between x0 and x1
+static real fewestSigDigits(real x0, real x1)
+{
+  real dx = x1 - x0;
+  real expnt = std::pow(10, std::floor(std::log10(dx)));
+  real lead = dx/expnt;
+  real quant = lead > 5 ? 5*expnt : lead > 2 ? 2*expnt : expnt;
+  return std::ceil(x0/quant)*quant;
 }
 
 // should we highlight zoomed region of track on map?
@@ -179,23 +193,39 @@ void TrackPlot::draw(SvgPainter* svgp) const
   // labels
   p->setFillBrush(Color::BLACK);
   p->setFontSize(12);
+  p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real labelw = 0;
   int nvert = 5;
   real dh = (maxAlt - minAlt)/nvert;
   for(int ii = 0; ii < nvert; ++ii)
-    labelw = std::max(labelw, p->drawText(0, h*(1-real(ii)/nvert), fstring("%.0f", minAlt + ii*dh).c_str()));
+    labelw = std::max(labelw, p->textBounds(0, 0, fstring("%.0f", minAlt + ii*dh).c_str()));
+  p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
+  for(int ii = 0; ii < nvert; ++ii)
+    p->drawText(labelw, h*(1-real(ii)/nvert), fstring("%.0f", minAlt + ii*dh).c_str());
 
   int plotw = w - (labelw + 10);
   int ploth = h - 15;
   int nhorz = 5;
   plotWidth = plotw;
+  p->setTextAlign(Painter::AlignHCenter | Painter::AlignBottom);
   if(plotVsDist) {
     real xMin = -zoomOffset/1000;
     real xMax = xMin + maxDist/1000/zoomScale;
-    real dw = (xMax - xMin)/nhorz;
+    real dx = xMax - xMin;
+    real anch = fewestSigDigits(xMin, xMax);
+    // for n labels, find step size between 1/(n-1) and 1/n of dx
+    real dw = fewestSigDigits(dx/(nhorz - 1), dx/nhorz);
+    while(anch - dw > xMin) anch -= dw;
+    real dxlbl = dw*plotw/dx;
+    real anchlbl = (anch - xMin)*(plotw/dx) + labelw + 10;
     int prec = std::max(0, -int(std::floor(std::log10(dw))));
     for(int ii = 0; ii < nhorz; ++ii)
-      p->drawText(ii*plotw/nhorz + labelw + 10, h, fstring("%.*f", prec, xMin + ii*dw).c_str());
+      p->drawText(anchlbl + ii*dxlbl, h, fstring("%.*f", prec, anch + ii*dw).c_str());
+    // vert grid lines
+    p->setFillBrush(Brush::NONE);
+    p->setStroke(Color(0, 0, 0, 128), 0.75);
+    for(int ii = 0; ii < nhorz; ++ii)
+      p->drawLine(Point(anchlbl + ii*dxlbl, ploth), Point(anchlbl + ii*dxlbl, 0));
   }
   else {
     real xMin = minTime + zoomOffset;
@@ -208,6 +238,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
       p->drawText(ii*plotw/nhorz + labelw + 10, h, fstring("%.0f:%.0f", hrs, mins).c_str());
     }
   }
+  // horz grid lines
+  for(int ii = 0; ii < nvert; ++ii)
+    p->drawLine(Point(labelw, h*(1-real(ii)/nvert)), Point(w, h*(1-real(ii)/nvert)));
 
   // axes
   //drawCheckerboard(p, w, h, 4, 0x18000000);
@@ -584,6 +617,38 @@ bool MapsTracks::saveGPX(GpxFile* track)
   return doc.save_file(track->filename.c_str(), "  ");
 }
 
+// decode encoded polyline, used by Valhalla, Google, etc.
+// - https://github.com/valhalla/valhalla/blob/master/docs/docs/decoding.md - Valhalla uses 1E6 precision
+// - https://developers.google.com/maps/documentation/utilities/polylinealgorithm - Google uses 1E5 precision
+std::vector<Waypoint> MapsTracks::decodePolylineStr(const std::string& encoded, double precision)
+{
+  const double invprec = 1/precision;
+  size_t i = 0;     // what byte are we looking at
+
+  // Handy lambda to turn a few bytes of an encoded string into an integer
+  auto deserialize = [&encoded, &i](const int previous) {
+    // Grab each 5 bits and mask it in where it belongs using the shift
+    int byte, shift = 0, result = 0;
+    do {
+      byte = static_cast<int>(encoded[i++]) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    // Undo the left shift from above or the bit flipping and add to previous since it's an offset
+    return previous + (result & 1 ? ~(result >> 1) : (result >> 1));
+  };
+
+  // Iterate over all characters in the encoded string
+  std::vector<Waypoint> shape;
+  int lon = 0, lat = 0;
+  while (i < encoded.length()) {
+    lat = deserialize(lat);
+    lon = deserialize(lon);
+    shape.emplace_back(LngLat(lon*invprec, lat*invprec));
+  }
+  return shape;
+}
+
 void MapsTracks::updateLocation(const Location& loc)
 {
   if(!recordTrack)
@@ -743,7 +808,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       });
       for(auto it = tracks.begin(); it != tracks.end(); ++it) {
         if(it->rowid == track->rowid) {
-          app->map->markerRemove(track->marker);
+          removeTrackMarkers(track);
           yamlRemove(app->config["tracks"]["visible"], track->rowid);
           tracks.erase(it);
           break;
@@ -990,6 +1055,16 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   if(routed)
     createRoute(track);
   wayptContent->deleteItem(uid);
+}
+
+void MapsTracks::removeTrackMarkers(GpxFile* track)
+{
+  if(track->marker > 0)
+    app->map->markerRemove(track->marker);
+  for(auto& wpt: track->waypoints) {
+    if(wpt.marker > 0)
+      app->map->markerRemove(wpt.marker);
+  }
 }
 
 // cut and paste from bookmarks
@@ -1324,6 +1399,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     routeBtn->onClicked = [=](){
       LngLat r1 = app->currLocation.lngLat(), r2 = app->pickResultCoord;
       double km = lngLatDist(r1, r2);
+      removeTrackMarkers(&navRoute);
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
       navRoute.waypoints.clear();
       navRoute.addWaypoint({r1, "Current location"});
@@ -1332,6 +1408,16 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       createRoute(&navRoute);
     };
     tb->addWidget(routeBtn);
+
+    Button* measureBtn = createToolbutton(MapsApp::uiIcon("measure"), "Directions");
+    measureBtn->onClicked = [=](){
+      removeTrackMarkers(&navRoute);
+      navRoute.routeMode = "direct";
+      navRoute.waypoints.clear();
+      navRoute.addWaypoint({app->pickResultCoord, app->pickResultName});
+      populateWaypoints(&navRoute);
+    };
+    tb->addWidget(measureBtn);
   }
 }
 
@@ -1462,6 +1548,61 @@ Button* MapsTracks::createPanel()
   statsContent->addWidget(createStatsRow({"Distance", "track-dist", "Avg speed", "track-avg-speed"}));
   statsContent->addWidget(createStatsRow({"Ascent", "track-ascent", "Descent", "track-descent"}));
   statsContent->addWidget(createStatsRow({"Ascent speed", "track-ascent-speed", "Descent speed", "track-descent-speed"}));
+
+  Button* vertAxisSelBtn = createToolbutton(NULL, "Altitude", true);
+  Button* horzAxisSelBtn = createToolbutton(NULL, "Distance", true);
+  Menu* vertAxisMenu = createMenu(Menu::VERT_LEFT);
+  vertAxisSelBtn->setMenu(vertAxisMenu);
+  Button* plotAltiBtn = createCheckBoxMenuItem("Altitude");
+  Button* plotSpeedBtn = createCheckBoxMenuItem("Speed");
+  vertAxisMenu->addWidget(plotAltiBtn);
+  vertAxisMenu->addWidget(plotSpeedBtn);
+
+  plotAltiBtn->onClicked = [=](){
+    plotAltiBtn->setChecked(!plotAltiBtn->isChecked());
+    trackPlot->plotAlt = plotAltiBtn->isChecked();
+    bool alt = trackPlot->plotAlt, spd = trackPlot->plotSpd;
+    if(!alt && !spd) {
+      trackPlot->plotSpd = true;
+      plotSpeedBtn->setChecked(true);
+    }
+    vertAxisSelBtn->setTitle(alt && spd ? "Altitude, Speed" : alt ? "Altitude" : "Speed");
+    trackPlot->redraw();
+  };
+
+  plotSpeedBtn->onClicked = [=](){
+    plotSpeedBtn->setChecked(!plotSpeedBtn->isChecked());
+    trackPlot->plotSpd = plotSpeedBtn->isChecked();
+    bool alt = trackPlot->plotAlt, spd = trackPlot->plotSpd;
+    if(!alt && !spd) {
+      trackPlot->plotAlt = true;
+      plotAltiBtn->setChecked(true);
+    }
+    vertAxisSelBtn->setTitle(alt && spd ? "Altitude, Speed" : spd ? "Speed" : "Altitude");
+    trackPlot->redraw();
+  };
+
+  Button* plotVsTimeBtn = createCheckBoxMenuItem("Time", "#radiobutton");
+  Button* plotVsDistBtn = createCheckBoxMenuItem("Distance", "#radiobutton");
+  Menu* horzAxisMenu = createMenu(Menu::VERT_LEFT);
+  horzAxisSelBtn->setMenu(horzAxisMenu);
+  horzAxisMenu->addWidget(plotVsDistBtn);
+  horzAxisMenu->addWidget(plotVsTimeBtn);
+
+  auto horzAxisSelFn = [=](bool vsdist){
+    trackPlot->plotVsDist = vsdist;
+    plotVsDistBtn->setChecked(vsdist);
+    plotVsTimeBtn->setChecked(!vsdist);
+    trackPlot->redraw();
+  };
+  plotVsTimeBtn->onClicked = [=](){ horzAxisSelFn(false); };
+  plotVsDistBtn->onClicked = [=](){ horzAxisSelFn(true); };
+
+  Toolbar* axisSelRow = createToolbar();
+  axisSelRow->addWidget(vertAxisSelBtn);
+  axisSelRow->addWidget(new TextBox(createTextNode("vs.")));
+  axisSelRow->addWidget(horzAxisSelBtn);
+  statsContent->addWidget(axisSelRow);
 
   trackPlot = new TrackPlot();
   trackPlot->node->setAttribute("box-anchor", "hfill");
