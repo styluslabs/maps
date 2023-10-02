@@ -58,6 +58,7 @@ public:
   void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority = 1);
   void setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority = 1);
   YAML::Node readSceneValue(const std::string& yamlPath);
+  void placeInfoPluginError(const char* err);
 
   Location currLocation;
   float orientation = 0;

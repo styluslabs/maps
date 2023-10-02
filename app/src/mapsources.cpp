@@ -89,7 +89,7 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   std::string importstr;
   for(auto& url : imports)
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
-  for(auto& imp : MapsApp::config["common_imports"]) {
+  for(auto& imp : MapsApp::config["sources"]["common_imports"]) {
     std::string url = imp.Scalar();
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   }
@@ -105,7 +105,7 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
   FSPath path = FSPath(app->configFile).parent();
   baseUrl = "file://" + path.path;
 
-  FSPath srcfile = path.child(app->config["sources"].as<std::string>("mapsources.yaml"));
+  FSPath srcfile = path.child(app->config["sources"]["file"].as<std::string>("mapsources.yaml"));
   try {
     mapSources = YAML::LoadFile(srcfile.c_str());
   } catch (...) {
@@ -226,7 +226,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
     sceneVarsLoaded = false;
     currSource = srcname;
     if(!srcname.empty()) {
-      app->config["last_source"] = currSource;
+      app->config["sources"]["last_source"] = currSource;
       for(Widget* item : sourcesContent->select(".listitem"))
         static_cast<Button*>(item)->setChecked(item->node->getStringAttr("__sourcekey", "") == currSource);
     }
@@ -303,8 +303,12 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
 
 void MapsSources::populateSources()
 {
-  //app->gui->deleteContents(sourcesContent, ".listitem");
   sourcesDirty = false;
+  std::vector<std::string> order = sourcesContent->getOrder();
+  if(order.empty()) {
+    for(const auto& key : app->config["sources"]["list_order"])
+      order.push_back(key.Scalar());
+  }
   sourcesContent->clear();
 
   std::vector<std::string> layerTitles = {"None"};
@@ -383,8 +387,8 @@ void MapsSources::populateSources()
     container->addWidget(overflowBtn);
     sourcesContent->addItem(key, item);  //addWidget(item);
   }
-  //for(SelectBox* combo : layerCombos)
-  //  combo->addItems(layerTitles);
+  sourcesContent->setOrder(order);
+
   if(!selectLayerDialog) {
     selectLayerDialog.reset(createSelectDialog("Choose Layer", MapsApp::uiIcon("layer")));
     selectLayerDialog->onSelected = [this](int idx){
@@ -398,6 +402,13 @@ void MapsSources::populateSources()
 
 void MapsSources::onMapEvent(MapEvent_t event)
 {
+  if(event == SUSPEND) {
+    YAML::Node order = app->config["sources"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
+    for(const std::string& s : sourcesContent->getOrder())
+      order.push_back(s);
+    return;
+  }
+
   if(event != MAP_CHANGE)
     return;
   if(!sceneVarsLoaded && app->map->getScene()->isReady() && sourceEditPanel->isVisible())

@@ -495,9 +495,31 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
 //  from the box to the border when focused?)
 TextEdit* createTitledTextEdit(const char* title, const char* text)
 {
-  TextEdit* widget = createTextEdit();
-  widget->node->setAttribute("box-anchor", "hfill");
-  widget->setEmptyText(title);
+  static const char* titledTextEditSVG = R"#(
+    <g id="textedit" class="inputbox textbox" layout="box">
+      <!-- invisible rect to set minimum width -->
+      <rect class="min-width-rect" width="150" height="36" fill="none"/>
+      <rect class="inputbox-bg" box-anchor="fill" width="20" height="20"/>
+
+      <g box-anchor="top left" margin="10 0 0 10" layout="box">
+        <rect class="inputbox-title-bg" box-anchor="fill" width="20" height="20"/>
+        <text class="inputbox-title" font-size="14" margin="2 5"></text>
+      </g>
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> proto;
+  if(!proto)
+    proto.reset(loadSVGFragment(titledTextEditSVG));
+
+  SvgG* textEditNode = static_cast<SvgG*>(proto->clone());
+  textEditNode->addChild(textEditInnerNode());
+  textEditNode->setAttribute("box-anchor", "hfill");
+  TextEdit* widget = new TextEdit(textEditNode);
+  widget->selectFirst(".inputbox-title")->setText(title);
+
+  //TextEdit* widget = createTextEdit();
+  //widget->node->setAttribute("box-anchor", "hfill");
+  //widget->setEmptyText(title);
   if(text)
     widget->setText(text);
   return widget;

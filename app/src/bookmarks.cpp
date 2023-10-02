@@ -402,6 +402,12 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 
 void MapsBookmarks::onMapEvent(MapEvent_t event)
 {
+  if(event == SUSPEND) {
+    YAML::Node order = app->config["places"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
+    for(const std::string& s : listsContent->getOrder())
+      order.push_back(s);
+    return;
+  }
   if(event != MAP_CHANGE)
     return;
   if(mapAreaBkmks) {

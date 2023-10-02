@@ -34,6 +34,7 @@ public:
 
   void addListResult(int64_t id, double lng, double lat, float rank, const char* json);
   void addMapResult(int64_t id, double lng, double lat, float rank, const char* json);
+  void searchPluginError(const char* err);
 
   std::unique_ptr<MarkerGroup> markers;
 
@@ -77,6 +78,7 @@ private:
   void populateResults(const std::vector<SearchResult>& results);
 
   Widget* resultsContent = NULL;
-  Button* cancelBtn;
-  TextEdit* queryText;
+  Button* cancelBtn = NULL;
+  Button* retryBtn = NULL;
+  TextEdit* queryText = NULL;
 };

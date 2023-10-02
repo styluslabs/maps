@@ -74,6 +74,7 @@ public:
   void addRoute(std::vector<Waypoint>&& route);
   bool onPickResult();
   bool tapEvent(LngLat location);
+  void routePluginError(const char* err);
 
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;
@@ -84,9 +85,9 @@ public:
   GpxFile recordedTrack;
   GpxFile navRoute;
 
-  Widget* tracksContent = NULL;
-  Widget* tracksPanel = NULL;
+  DragDropList* tracksContent = NULL;
   Widget* archivedContent = NULL;
+  Widget* tracksPanel = NULL;
   Widget* archivedPanel = NULL;
   Widget* statsContent = NULL;
   Widget* statsPanel = NULL;
@@ -99,6 +100,7 @@ public:
   TextBox* previewDistText = NULL;
   Button* sparkStats = NULL;
   TrackSparkline* trackSpark = NULL;
+  Button* retryBtn = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
@@ -113,7 +115,8 @@ private:
   void updateTrackMarker(GpxFile* track);
   void showTrack(GpxFile* track, bool show);
   void setTrackVisible(GpxFile* track, bool visible);
-  void populateTracks(bool archived);
+  void populateArchived();
+  void populateTracks();
   void populateStats(GpxFile* track);
   void populateWaypoints(GpxFile* track);
   Widget* createTrackEntry(GpxFile* track);

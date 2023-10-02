@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <fstream>
 #include "nfd.h"
+#include "sqlitepp.h"
 
 #include "touchhandler.h"
 #include "bookmarks.h"
@@ -30,6 +31,8 @@ std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
 sqlite3* MapsApp::bkmkDB = NULL;
 std::vector<Color> MapsApp::markerColors;
+
+bool SQLiteStmt::dbClosed = false;
 
 static Tooltips tooltipsInst;
 
@@ -180,6 +183,17 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr
   rapidjson::Document props;
   props.Parse(propstr.c_str());
   setPickResult(pos, namestr, props, priority);
+}
+
+void MapsApp::placeInfoPluginError(const char* err)
+{
+  Button* retryBtn = createToolbutton(MapsApp::uiIcon("retry"), "Retry", true);
+  retryBtn->onClicked = [=](){
+    std::string osmid = osmIdFromProps(pickResultProps);
+    pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, osmid);
+    retryBtn->setVisible(false);
+  };
+  infoContent->selectFirst(".info-section")->addWidget(retryBtn);
 }
 
 void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* value)
@@ -594,7 +608,7 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
   }
 
   auto& tileSources = map->getScene()->tileSources();
-  for(const auto& srcname : config["elevation_sources"]) {
+  for(const auto& srcname : config["sources"]["elevation"]) {
     for(auto& src : tileSources) {
       if(src->isRaster() && src->name() == srcname.Scalar()) {
         TileID tileId = lngLatTile(pos, src->maxZoom());
@@ -1516,7 +1530,7 @@ int main(int argc, char* argv[])
     app->loadSceneFile();
   }
   else
-    app->mapsSources->rebuildSource(app->config["last_source"].Scalar());
+    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
 
   // Alamo square
   app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, 0, 0, 0, 0});
@@ -1593,11 +1607,10 @@ int main(int argc, char* argv[])
     glfwSwapBuffers(glfwWin);
   }
 
-  while(sqlite3_stmt* stmt = sqlite3_next_stmt(MapsApp::bkmkDB, NULL)) {
-    PLATFORM_LOG("Leaked sqlite3_stmt: %s", sqlite3_sql(stmt));
+  while(sqlite3_stmt* stmt = sqlite3_next_stmt(MapsApp::bkmkDB, NULL))
     sqlite3_finalize(stmt);
-  }
   sqlite3_close(MapsApp::bkmkDB);
+  SQLiteStmt::dbClosed = true;
   gui->closeWindow(win);
   delete gui;
   delete painter;

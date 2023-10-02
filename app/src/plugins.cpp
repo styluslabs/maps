@@ -223,10 +223,7 @@ static int httpRequest(duk_context* ctx)
   auto hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [ctx, cbvar, url](UrlResponse&& response) {
     if(response.error)
       LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
-    else
-      MapsApp::runOnMainThread([=](){ invokeHttpReqCallback(ctx, cbvar, response); });
-    //std::lock_guard<std::mutex> lock(PluginManager::inst->jsMutex);
-    //invokeHttpReqCallback(ctx, cbvar, response);
+    MapsApp::runOnMainThread([=](){ invokeHttpReqCallback(ctx, cbvar, response); });
   });
   PluginManager::inst->notifyRequest(hnd);
   return 0;
@@ -313,11 +310,26 @@ static int addRoutePolyline(duk_context* ctx)
   return 0;
 }
 
+static int notifyError(duk_context* ctx)
+{
+  std::string type = duk_require_string(ctx, 0);
+  const char* msg = duk_require_string(ctx, 1);
+  if(type == "search")
+    PluginManager::inst->app->mapsSearch->searchPluginError(msg);
+  else if(type == "place")
+    PluginManager::inst->app->placeInfoPluginError(msg);
+  else if(type == "route")
+    PluginManager::inst->app->mapsTracks->routePluginError(msg);
+  return 0;
+}
+
 void PluginManager::createFns(duk_context* ctx)
 {
   // create C functions
   duk_push_c_function(ctx, registerFunction, 3);
   duk_put_global_string(ctx, "registerFunction");
+  duk_push_c_function(ctx, notifyError, 2);
+  duk_put_global_string(ctx, "notifyError");
   duk_push_c_function(ctx, httpRequest, DUK_VARARGS);
   duk_put_global_string(ctx, "httpRequest");
   duk_push_c_function(ctx, addSearchResult, 6);

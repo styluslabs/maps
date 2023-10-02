@@ -289,6 +289,11 @@ void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, c
   //return listResults.back();
 }
 
+void MapsSearch::searchPluginError(const char* err)
+{
+  retryBtn->setVisible(true);
+}
+
 // online map search C++ code removed 2022-12-11 (now handled via plugins)
 
 void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
@@ -427,6 +432,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     app->showPanel(searchPanel);
     cancelBtn->setVisible(!searchStr.empty());
   }
+  retryBtn->setVisible(false);
 
   if(phase == EDITING) {
     std::vector<std::string> autocomplete;
@@ -542,6 +548,10 @@ Button* MapsSearch::createPanel()
         <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
           <rect class="min-width-rect" fill="none" width="150" height="36"/>
         </g>
+        <g class="toolbutton retry-btn" display="none" layout="box">
+          <rect class="background" box-anchor="hfill" width="36" height="34"/>
+          <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#retry"/>
+        </g>
         <g class="toolbutton cancel-btn" display="none" layout="box">
           <rect class="background" box-anchor="hfill" width="36" height="34"/>
           <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#circle-x"/>
@@ -575,7 +585,12 @@ Button* MapsSearch::createPanel()
     clearSearch();
     searchText("", EDITING);  // show history
   };
-  cancelBtn->setVisible(false);
+
+  retryBtn = new Button(searchBoxNode->selectFirst(".retry-btn"));
+  retryBtn->onClicked = [this](){
+    if(!queryText->text().empty())
+      searchText(queryText->text(), RETURN);
+  };
 
   providerIdx = app->config["search"]["plugin"].as<int>(0);
   std::vector<std::string> cproviders = {"Offline Search"};

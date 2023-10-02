@@ -43,10 +43,21 @@ struct func_traits<Ret(*)(Args...)> {
 class SQLiteStmt
 {
 public:
+  // static (thread_local) SQLiteStmt is actually pretty reasonable for DBs open for the entire life of the
+  //  application; another approach is SQLiteDB.stmt() returning and caching ref to SQLiteStmt
+#ifndef SQLITEPP_STMT_NO_STATIC
+  static bool dbClosed;
+#endif
+
   sqlite3_stmt* stmt = NULL;
   SQLiteStmt(sqlite3_stmt* _stmt) : stmt(_stmt) {}
   SQLiteStmt(const SQLiteStmt&) = delete;
-  ~SQLiteStmt() { sqlite3_finalize(stmt); }
+  ~SQLiteStmt() {
+#ifndef SQLITEPP_STMT_NO_STATIC
+    if(dbClosed) return;
+#endif
+    sqlite3_finalize(stmt);
+  }
 
   SQLiteStmt(sqlite3* db, const char* sql) {
     if(sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)

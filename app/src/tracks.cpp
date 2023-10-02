@@ -840,28 +840,39 @@ void MapsTracks::loadTracks(bool archived)
   });
 }
 
-void MapsTracks::populateTracks(bool archived)
+void MapsTracks::populateArchived()
+{
+  if(!archiveLoaded)
+    loadTracks(true);
+  archiveLoaded = true;
+
+  app->gui->deleteContents(archivedContent, ".listitem");
+  for(GpxFile& track : tracks) {
+    if(track.archived)
+      archivedContent->addWidget(createTrackEntry(&track));
+  }
+}
+
+void MapsTracks::populateTracks()
 {
   tracksDirty = false;
-  Widget* content = archived ? archivedContent : tracksContent;
-  app->gui->deleteContents(content, ".listitem");
-
-  if(archived && !archiveLoaded) {
-    loadTracks(true);
-    archiveLoaded = true;
+  std::vector<std::string> order = tracksContent->getOrder();
+  if(order.empty()) {
+    for(const auto& key : app->config["tracks"]["list_order"])
+      order.push_back(key.Scalar());
   }
+  tracksContent->clear();
 
-  if(recordTrack && !archived)
-    content->addWidget(createTrackEntry(&recordedTrack));
+  if(recordTrack)
+    tracksContent->addItem("rec", createTrackEntry(&recordedTrack));
   for(GpxFile& track : tracks) {
-    if(track.archived == archived)
-      content->addWidget(createTrackEntry(&track));
+    if(!track.archived)
+      tracksContent->addItem(std::to_string(track.rowid), createTrackEntry(&track));
   }
-  if(!archived) {
-    Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived Tracks");
-    item->onClicked = [this](){ app->showPanel(archivedPanel, true);  populateTracks(true); };
-    content->addWidget(item);
-  }
+  Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived Tracks");
+  item->onClicked = [this](){ app->showPanel(archivedPanel, true);  populateArchived(); };
+  tracksContent->addItem("archved", item);
+  tracksContent->setOrder(order);
 }
 
 void MapsTracks::viewEntireTrack(GpxFile* track)
@@ -991,6 +1002,7 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
 
 void MapsTracks::createRoute(GpxFile* track)
 {
+  retryBtn->setVisible(false);
   track->routes.clear();
   track->modified = true;
   if(track->routeMode == "direct") {
@@ -1078,24 +1090,12 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   noteText->setText(wpt.desc.c_str());
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
 
-  auto editToolbar = createToolbar();
   auto titleEdit = createTitledTextEdit("Name");
   auto noteEdit = createTitledTextEdit("Note");
-  auto acceptNoteBtn = createToolbutton(MapsApp::uiIcon("accept"));
-  auto cancelNoteBtn = createToolbutton(MapsApp::uiIcon("cancel"));
-
   titleEdit->setText(wpt.name.c_str());
   noteEdit->setText(wpt.desc.c_str());
 
-  Widget* editContent = createColumn();
-  editContent->addWidget(titleEdit);  //createTitledRow("Name", titleEdit));
-  editContent->addWidget(noteEdit);  //createTitledRow("Note", noteEdit));
-  editToolbar->addWidget(acceptNoteBtn);
-  editToolbar->addWidget(cancelNoteBtn);
-  editContent->addWidget(editToolbar);
-  editContent->setVisible(false);
-
-  acceptNoteBtn->onClicked = [=](){
+  auto onAcceptEdit = [=](){
     auto it = track->findWaypoint(uid);
     it->name = titleEdit->text();
     it->desc = noteEdit->text();
@@ -1109,15 +1109,11 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
     }
 
     noteText->setText(noteEdit->text().c_str());
-    editContent->setVisible(false);
     noteText->setVisible(true);
     waypointsDirty = true;
   };
-
-  cancelNoteBtn->onClicked = [=](){
-    editContent->setVisible(false);
-    noteText->setVisible(true);
-  };
+  auto onCancelEdit = [=](){ noteText->setVisible(true); };
+  auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
 
   Widget* toolRow = createRow();
   Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), track->title.c_str(), true);
@@ -1313,6 +1309,13 @@ void MapsTracks::populateWaypoints(GpxFile* track)
 
 void MapsTracks::onMapEvent(MapEvent_t event)
 {
+  if(event == SUSPEND) {
+    YAML::Node order = app->config["tracks"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
+    for(const std::string& s : tracksContent->getOrder())
+      order.push_back(s);
+    return;
+  }
+
   if(app->pickedMarkerId > 0) {
     for(GpxFile& track : tracks) {
       for(auto& wpt : track.waypoints) {
@@ -1829,7 +1832,8 @@ Button* MapsTracks::createPanel()
   };
 
   // Tracks panel
-  tracksContent = createColumn();
+  Widget* tracksContainer = createColumn();
+  tracksContent = new DragDropList;  //createColumn();
 
   TextEdit* newTrackTitle = createTitledTextEdit("Title");
   TextEdit* newTrackFile = createTitledTextEdit("File");
@@ -1840,7 +1844,8 @@ Button* MapsTracks::createPanel()
     newTrackContent->setVisible(false);
   });
   newTrackTitle->onChanged = [=](const char* s){ newTrackContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
-  tracksContent->addWidget(newTrackContent);
+  tracksContainer->addWidget(newTrackContent);
+  tracksContainer->addWidget(tracksContent);
 
   Button* drawTrackBtn = createToolbutton(MapsApp::uiIcon("draw-track"), "Create Route");
   drawTrackBtn->onClicked = [=](){
@@ -1914,12 +1919,12 @@ Button* MapsTracks::createPanel()
   tracksTb->addWidget(drawTrackBtn);
   tracksTb->addWidget(loadTrackBtn);
   tracksTb->addWidget(recordTrackBtn);
-  tracksPanel = app->createMapPanel(tracksTb, tracksContent);
+  tracksPanel = app->createMapPanel(tracksTb, NULL, tracksContainer);
 
   tracksPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
       if(tracksDirty)
-        populateTracks(false);
+        populateTracks();
     }
     return false;
   });
@@ -2024,6 +2029,10 @@ Button* MapsTracks::createPanel()
 
   previewDistText = new TextBox(createTextNode(""));
 
+  retryBtn = createToolbutton(MapsApp::uiIcon("retry"), "Retry");
+  retryBtn->onClicked = [=](){ createRoute(activeTrack); };
+  retryBtn->setVisible(false);
+
   Button* mapCenterWayptBtn = createToolbutton(MapsApp::uiIcon("crosshair"), "Add map center");
   mapCenterWayptBtn->onClicked = [=](){ addWaypoint({app->getMapCenter(), ""}); };
 
@@ -2047,6 +2056,7 @@ Button* MapsTracks::createPanel()
 
   routeEditTb->addWidget(previewDistText);
   routeEditTb->addWidget(createStretch());
+  routeEditTb->addWidget(retryBtn);
   routeEditTb->addWidget(mapCenterWayptBtn);
   routeEditTb->addWidget(searchWayptBtn);
   routeEditTb->addWidget(bkmkWayptBtn);
