@@ -1000,6 +1000,80 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
   statsContent->selectFirst(".track-descent-speed")->setText(descentTime > 0 ? descentSpdStr.c_str() : notime);
 }
 
+static std::string distKmToStr(double distkm)
+{
+  if(MapsApp::metricUnits)
+    return fstring(distkm < 1 ? "%.0f m" : "%.2f km", distkm < 1 ? distkm*1000 : distkm);
+  else if(distkm*0.621371 < 0.1)
+    return fstring("%.0f ft", distkm*1000*3.28084);
+  else
+    return fstring("%.2f mi", distkm*0.621371);
+}
+
+void MapsTracks::updateDistances()
+{
+  const auto& wayPtItems = wayptContent->content->containerNode()->children();
+  auto& route = activeTrack->routes.back().pts;
+
+  if(activeTrack->routeMode == "direct") {
+    size_t rteidx = 0;
+    for(SvgNode* node : wayPtItems) {
+      auto it = activeTrack->findWaypoint(node->getStringAttr("__sortkey"));
+      while(rteidx < route.size()-1 && !(route[rteidx].lngLat() == it->lngLat())) ++rteidx;
+      SvgText* detail = static_cast<SvgText*>(node->asContainerNode()->selectFirst(".detail-text"));
+      std::string s = distKmToStr(route[rteidx].dist/1000);
+      if(!it->desc.empty())
+        s.append(u8" \u2022 ").append(it->desc);
+      detail->setText(s.c_str());
+    }
+    return;
+  }
+
+  double xmin = DBL_MAX, ymin = DBL_MAX, xmax = DBL_MIN, ymax = DBL_MIN;
+  for(const Waypoint& rtept : route) {
+    auto r = MapProjection::lngLatToProjectedMeters(rtept.lngLat());
+    xmin = std::min(xmin, r.x);
+    ymin = std::min(ymin, r.y);
+    xmax = std::max(xmax, r.x);
+    ymax = std::max(ymax, r.y);
+  }
+
+  isect2d::ISect2D<glm::vec2> collider;
+  collider.resize({64, 64}, {xmax-xmin, ymax-ymin});
+  Tangram::ProjectedMeters r0(xmin, ymin);
+  for(const Waypoint& rtept : route) {
+    auto r = MapProjection::lngLatToProjectedMeters(rtept.lngLat()) - r0;
+    isect2d::AABB<glm::vec2> aabb(r.x, r.y, r.x, r.y);
+    aabb.m_userData = (void*)(&rtept);
+    collider.insert(aabb);
+  }
+
+  glm::dvec2 radius{(xmax-xmin)/64, (ymax-ymin)/64};
+  for(SvgNode* node : wayPtItems) {
+    float dist = FLT_MAX;
+    Waypoint* rtePt = NULL;
+    auto it = activeTrack->findWaypoint(node->getStringAttr("__sortkey"));
+    auto r = MapProjection::lngLatToProjectedMeters(it->lngLat()) - r0;
+    isect2d::AABB<glm::vec2> aabb(r.x - radius.x, r.y - radius.y, r.x + radius.x, r.y + radius.y);
+    collider.intersect(aabb, [&](auto& a, auto& b) {
+      float d = glm::distance(a.getCentroid(), b.getCentroid());
+      if(d < dist) {
+        dist = d;
+        rtePt = (Waypoint*)(b.m_userData);
+      }
+      return true;
+    }, false);
+
+    if(!rtePt) continue;  // should never happen
+    double distkm = rtePt->dist/1000 + lngLatDist(rtePt->lngLat(), it->lngLat());
+    SvgText* detail = static_cast<SvgText*>(node->asContainerNode()->selectFirst(".detail-text"));
+    std::string s = distKmToStr(distkm);
+    if(!it->desc.empty())
+      s.append(u8" \u2022 ").append(it->desc);  // or \u00B7
+    detail->setText(s.c_str());
+  }
+}
+
 void MapsTracks::createRoute(GpxFile* track)
 {
   retryBtn->setVisible(false);
@@ -1012,6 +1086,7 @@ void MapsTracks::createRoute(GpxFile* track)
         track->routes.back().pts.push_back(wp);
     }
     updateStats(track->routes.back().pts);
+    updateDistances();
     updateTrackMarker(track);
   }
   else {
@@ -1033,6 +1108,7 @@ void MapsTracks::addRoute(std::vector<Waypoint>&& route)
   activeTrack->routes.back().pts = std::move(route);
   activeTrack->modified = true;
   updateStats(activeTrack->routes.back().pts);
+  updateDistances();
   updateTrackMarker(activeTrack);
 }
 
@@ -1356,13 +1432,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->map->markerSetVisible(previewMarker, pix > 2);
     }
     previewRoute = pts;
-
-    if(MapsApp::metricUnits)
-      previewDistText->setText(fstring(distkm < 1 ? "%.0f m" : "%.2f km", distkm < 1 ? distkm*1000 : distkm).c_str());
-    else if(distkm*0.621371 < 0.1)
-      previewDistText->setText(fstring("%.0f ft", distkm*1000*3.28084).c_str());
-    else
-      previewDistText->setText(fstring("%.2f mi", distkm*0.621371).c_str());
+    previewDistText->setText(distKmToStr(distkm).c_str());
   }
 }
 

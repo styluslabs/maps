@@ -253,7 +253,7 @@ void MarkerGroup::updateMarker(int id, Properties&& props)
     if(it->id == id) {
       it->props = std::move(props);
       for(auto& item : commonProps.items())
-        it->props.set(item.key, item.value);
+        it->props.setValue(item.key, item.value);
       map->markerSetPoint(it->markerId, it->pos);  // to force marker update
       if(it->markerId > 0)
         map->markerSetProperties(it->markerId, Properties(it->props));
@@ -285,7 +285,7 @@ void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props, in
   places.push_back({id, pos, std::move(props), cb, 0, 0, false});
   PlaceInfo& res = places.back();
   for(auto& item : commonProps.items())
-    res.props.set(item.key, item.value);
+    res.props.setValue(item.key, item.value);
   res.props.set("priority", places.size()-1);  //id < 0 ? places.size()-1 : id);
   double markerRadius = map->getZoom() >= 17 ? 25 : 50;
   bool collided = false;

@@ -130,6 +130,7 @@ private:
   void updateDB(GpxFile* track);
   Waypoint* addWaypoint(Waypoint wpt);
   void removeTrackMarkers(GpxFile* track);
+  void updateStats(std::vector<Waypoint>& locs);
 
   int pluginFn = 0;
   GpxFile* activeTrack = NULL;
