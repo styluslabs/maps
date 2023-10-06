@@ -164,7 +164,8 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   maxAlt = std::ceil(maxAlt/quant)*quant;  //+= 0.05*elev;
   maxZoom = locs.size()/8;  // min 8 points in view
   // exclude first, last, and unnamed waypoints
-  for(size_t ii = 1; ii < wpts.size() - 1; ++ii) {
+  waypoints.clear();
+  for(int ii = 1; ii < int(wpts.size()) - 1; ++ii) {
     if(!wpts[ii].name.empty())
       waypoints.push_back(wpts[ii]);
   }
@@ -205,7 +206,6 @@ void TrackPlot::draw(SvgPainter* svgp) const
 
   int plotw = w - (labelw + 10);
   int ploth = h - 15;
-  int nhorz = 5;
   plotWidth = plotw;
   p->setTextAlign(Painter::AlignHCenter | Painter::AlignBottom);
   if(plotVsDist) {
@@ -213,21 +213,28 @@ void TrackPlot::draw(SvgPainter* svgp) const
     real xMax = xMin + maxDist/1000/zoomScale;
     real dx = xMax - xMin;
     real anch = fewestSigDigits(xMin, xMax);
+    real dw = dx/4;
+    int prec = 0;
+    while(dw > 10) { dw /= 10; ++prec; }
+    while(dw < 1) { dw *= 10; --prec; }
+    dw = (dw > 5 ? 5 : dw > 2 ? 2 : 1) * std::pow(10, prec);
+    prec = std::max(0, -prec);
     // for n labels, find step size between 1/(n-1) and 1/n of dx
-    real dw = fewestSigDigits(dx/(nhorz - 1), dx/nhorz);
-    while(anch - dw > xMin) anch -= dw;
+    //real dw = fewestSigDigits(dx/nhorz, dx/(nhorz - 1));
+    //int prec = std::max(0, -int(std::floor(std::log10(dw))));
+    //while(anch - dw > xMin) anch -= dw;
     real dxlbl = dw*plotw/dx;
     real anchlbl = (anch - xMin)*(plotw/dx) + labelw + 10;
-    int prec = std::max(0, -int(std::floor(std::log10(dw))));
-    for(int ii = 0; ii < nhorz; ++ii)
+    for(int ii = 0; anch + ii*dw < xMax; ++ii)
       p->drawText(anchlbl + ii*dxlbl, h, fstring("%.*f", prec, anch + ii*dw).c_str());
     // vert grid lines
     p->setFillBrush(Brush::NONE);
-    p->setStroke(Color(0, 0, 0, 128), 0.75);
-    for(int ii = 0; ii < nhorz; ++ii)
+    p->setStroke(Color(0, 0, 0, 64), 0.75);
+    for(int ii = 0; anchlbl + ii*dxlbl < w; ++ii)
       p->drawLine(Point(anchlbl + ii*dxlbl, ploth), Point(anchlbl + ii*dxlbl, 0));
   }
   else {
+    int nhorz = 5;
     real xMin = minTime + zoomOffset;
     real xMax = xMin + (maxTime - minTime)/zoomScale;
     real dw = (xMax - xMin)/nhorz;
@@ -251,6 +258,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
 
   // plot
   p->clipRect(Rect::ltrb(labelw + 6, 0, w, h-15));  // clip plot to axes
+  p->save();
   p->translate(labelw + 10, 0);
   p->scale(plotVsDist ? plotw/maxDist : plotw/(maxTime - minTime), -ploth/(maxAlt - minAlt));
 
@@ -272,7 +280,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
   }
 
   // draw waypoints right to left to make drawing labels easier
+  p->restore();
   p->setFontSize(11);
+  p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real texty = 20;
   //for(auto it = waypoints.rbegin(); it != waypoints.rend(); ++it) {
   for(const Waypoint& wpt : waypoints) {
@@ -286,7 +296,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setFillBrush(Color::BLACK);
     p->setStroke(Color::NONE);
     //real textw = p->textBounds(x0, ploth - 20, wpt.name.c_str(), NULL);
-    p->drawText(x + 10, texty, wpt.name.c_str());  // note clip rect is still set
+    p->drawText(x + 4, texty, wpt.name.c_str());  // note clip rect is still set
     texty += 16;
   }
 }
@@ -294,7 +304,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
 class TrackSparkline : public CustomWidget
 {
 public:
-  TrackSparkline();
+  //TrackSparkline() {}
   void draw(SvgPainter* svgp) const override;
   void setTrack(const std::vector<Waypoint>& locs);
 
@@ -528,6 +538,7 @@ bool MapsTracks::loadGPX(GpxFile* track, const char* gpxSrc)
           track->routes.back().pts.back().loc.time = ttot;
           if(step > rtestep)
             ttot += atof(durstr);
+          rtestep = step;
         }
       }
 
@@ -905,7 +916,8 @@ void MapsTracks::populateStats(GpxFile* track)
   if(!isRecTrack)
     app->map->markerSetStylingFromPath(track->marker, "layers.selected-track.draw.track");
 
-  updateStats(track->activeWay()->pts);  // has to be done before TrackPlot::setTrack()
+  if(track->activeWay())
+    updateStats(track->activeWay()->pts);  // has to be done before TrackPlot::setTrack()
   if(activeTrack != track)
     viewEntireTrack(track);
   activeTrack = track;
@@ -916,8 +928,8 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
 {
   static const char* notime = u8"\u2014";  // emdash
   //auto& locs = track->activeWay()->pts;
-  if(!origLocs.empty())
-    locs.front().dist = 0;
+  //if(!origLocs.empty())
+  locs.front().dist = 0;
   // how to calculate max speed?
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
   double currSpeed = 0, maxSpeed = 0;
@@ -944,8 +956,8 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
     ascentTime += vert > 0 ? dt : 0;
     descentTime += vert < 0 ? dt : 0;
 
-    if(!origLocs.empty())  // track has been modified - recalc distances
-      locs[ii].dist = trackDist;
+    //if(!origLocs.empty())  // track has been modified - recalc distances
+    locs[ii].dist = trackDist;
   }
 
   const Location& loc = locs.back().loc;
@@ -993,11 +1005,14 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
 
   std::string descentStr = app->metricUnits ? fstring("%.0f m", trackDescent) : fstring("%.0f ft", trackDescent*3.28084);
   statsContent->selectFirst(".track-descent")->setText(descentStr.c_str());
-  sparkStats->selectFirst(".spark-decent")->setText(("-" + descentStr).c_str());
+  sparkStats->selectFirst(".spark-descent")->setText(descentStr.c_str());
 
   std::string descentSpdStr = app->metricUnits ? fstring("%.0f m/h", trackDescent/(descentTime/3600))
       : fstring("%.0f ft/h", (trackDescent*3.28084)/(descentTime/3600));
   statsContent->selectFirst(".track-descent-speed")->setText(descentTime > 0 ? descentSpdStr.c_str() : notime);
+
+  if(wayptPanel->isVisible())
+    trackSpark->setTrack(locs);
 }
 
 static std::string distKmToStr(double distkm)
@@ -1012,19 +1027,20 @@ static std::string distKmToStr(double distkm)
 
 void MapsTracks::updateDistances()
 {
-  const auto& wayPtItems = wayptContent->content->containerNode()->children();
+  auto wayPtItems = wayptContent->select(".listitem");  //->content->containerNode()->children();
   auto& route = activeTrack->routes.back().pts;
 
   if(activeTrack->routeMode == "direct") {
     size_t rteidx = 0;
-    for(SvgNode* node : wayPtItems) {
-      auto it = activeTrack->findWaypoint(node->getStringAttr("__sortkey"));
+    for(Widget* item : wayPtItems) {
+      auto it = activeTrack->findWaypoint(item->node->getStringAttr("__sortkey"));
       while(rteidx < route.size()-1 && !(route[rteidx].lngLat() == it->lngLat())) ++rteidx;
-      SvgText* detail = static_cast<SvgText*>(node->asContainerNode()->selectFirst(".detail-text"));
+      TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
       std::string s = distKmToStr(route[rteidx].dist/1000);
       if(!it->desc.empty())
         s.append(u8" \u2022 ").append(it->desc);
       detail->setText(s.c_str());
+      it->dist = route[rteidx].dist;  // for stats plot
     }
     return;
   }
@@ -1049,10 +1065,10 @@ void MapsTracks::updateDistances()
   }
 
   glm::dvec2 radius{(xmax-xmin)/64, (ymax-ymin)/64};
-  for(SvgNode* node : wayPtItems) {
+  for(Widget* item : wayPtItems) {
     float dist = FLT_MAX;
     Waypoint* rtePt = NULL;
-    auto it = activeTrack->findWaypoint(node->getStringAttr("__sortkey"));
+    auto it = activeTrack->findWaypoint(item->node->getStringAttr("__sortkey"));
     auto r = MapProjection::lngLatToProjectedMeters(it->lngLat()) - r0;
     isect2d::AABB<glm::vec2> aabb(r.x - radius.x, r.y - radius.y, r.x + radius.x, r.y + radius.y);
     collider.intersect(aabb, [&](auto& a, auto& b) {
@@ -1066,11 +1082,12 @@ void MapsTracks::updateDistances()
 
     if(!rtePt) continue;  // should never happen
     double distkm = rtePt->dist/1000 + lngLatDist(rtePt->lngLat(), it->lngLat());
-    SvgText* detail = static_cast<SvgText*>(node->asContainerNode()->selectFirst(".detail-text"));
+    TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
     std::string s = distKmToStr(distkm);
     if(!it->desc.empty())
       s.append(u8" \u2022 ").append(it->desc);  // or \u00B7
     detail->setText(s.c_str());
+    it->dist = rtePt->dist;  // for stats plot
   }
 }
 
@@ -1112,6 +1129,11 @@ void MapsTracks::addRoute(std::vector<Waypoint>&& route)
   updateTrackMarker(activeTrack);
 }
 
+void MapsTracks::routePluginError(const char* err)
+{
+  retryBtn->setVisible(true);
+}
+
 std::vector<Waypoint>::iterator GpxFile::findWaypoint(const std::string& uid)
 {
   auto it = waypoints.begin();
@@ -1149,9 +1171,11 @@ void MapsTracks::removeTrackMarkers(GpxFile* track)
 {
   if(track->marker > 0)
     app->map->markerRemove(track->marker);
+  track->marker = 0;
   for(auto& wpt: track->waypoints) {
     if(wpt.marker > 0)
       app->map->markerRemove(wpt.marker);
+    wpt.marker = 0;
   }
 }
 
@@ -1205,7 +1229,8 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
 
   addNoteBtn->onClicked = [=](){
     editContent->setVisible(true);
-    app->gui->setFocused(noteEdit);
+    noteText->setVisible(false);
+    app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit);
   };
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
@@ -1374,6 +1399,8 @@ void MapsTracks::populateWaypoints(GpxFile* track)
     viewEntireTrack(track);
     app->map->markerSetStylingFromPath(track->marker, "layers.selected-track.draw.track");
     setRouteMode(activeTrack->routeMode);
+    if(!track->routes.empty())
+      updateStats(track->routes.back().pts);  // spark stats
   }
 
   wayptContent->clear();
@@ -1472,11 +1499,13 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     routeBtn->onClicked = [=](){
       LngLat r1 = app->currLocation.lngLat(), r2 = app->pickResultCoord;
       double km = lngLatDist(r1, r2);
+      std::string namestr = app->pickResultName.empty() ?
+          fstring("%.6f, %.6f", r2.latitude, r2.longitude) : app->pickResultName;
       removeTrackMarkers(&navRoute);
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
       navRoute.waypoints.clear();
-      navRoute.addWaypoint({r1, "Current location"});
-      navRoute.addWaypoint({r2, app->pickResultName});
+      navRoute.addWaypoint({r1, "Start"});  //"Current location"
+      navRoute.addWaypoint({r2, namestr});
       populateWaypoints(&navRoute);
       createRoute(&navRoute);
     };
@@ -1484,10 +1513,12 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
 
     Button* measureBtn = createToolbutton(MapsApp::uiIcon("measure"), "Directions");
     measureBtn->onClicked = [=](){
+      std::string namestr = app->pickResultName.empty() ? fstring("%.6f, %.6f",
+          app->pickResultCoord.latitude, app->pickResultCoord.longitude) : app->pickResultName;
       removeTrackMarkers(&navRoute);
       navRoute.routeMode = "direct";
       navRoute.waypoints.clear();
-      navRoute.addWaypoint({app->pickResultCoord, app->pickResultName});
+      navRoute.addWaypoint({app->pickResultCoord, namestr});
       populateWaypoints(&navRoute);
     };
     tb->addWidget(measureBtn);
@@ -1623,13 +1654,13 @@ Button* MapsTracks::createPanel()
   statsContent->addWidget(createStatsRow({"Ascent speed", "track-ascent-speed", "Descent speed", "track-descent-speed"}));
 
   Button* vertAxisSelBtn = createToolbutton(NULL, "Altitude", true);
-  Button* horzAxisSelBtn = createToolbutton(NULL, "Distance", true);
   Menu* vertAxisMenu = createMenu(Menu::VERT_LEFT);
   vertAxisSelBtn->setMenu(vertAxisMenu);
   Button* plotAltiBtn = createCheckBoxMenuItem("Altitude");
   Button* plotSpeedBtn = createCheckBoxMenuItem("Speed");
   vertAxisMenu->addWidget(plotAltiBtn);
   vertAxisMenu->addWidget(plotSpeedBtn);
+  plotAltiBtn->setChecked(true);
 
   plotAltiBtn->onClicked = [=](){
     plotAltiBtn->setChecked(!plotAltiBtn->isChecked());
@@ -1655,12 +1686,14 @@ Button* MapsTracks::createPanel()
     trackPlot->redraw();
   };
 
-  Button* plotVsTimeBtn = createCheckBoxMenuItem("Time", "#radiobutton");
+  Button* horzAxisSelBtn = createToolbutton(NULL, "Distance", true);
   Button* plotVsDistBtn = createCheckBoxMenuItem("Distance", "#radiobutton");
+  Button* plotVsTimeBtn = createCheckBoxMenuItem("Time", "#radiobutton");
   Menu* horzAxisMenu = createMenu(Menu::VERT_LEFT);
   horzAxisSelBtn->setMenu(horzAxisMenu);
   horzAxisMenu->addWidget(plotVsDistBtn);
   horzAxisMenu->addWidget(plotVsTimeBtn);
+  plotVsDistBtn->setChecked(true);
 
   auto horzAxisSelFn = [=](bool vsdist){
     trackPlot->plotVsDist = vsdist;
@@ -1756,7 +1789,7 @@ Button* MapsTracks::createPanel()
       if(!track.archived)
         selectTrackDialog->addItems({track.title});
     }
-    MapsApp::gui->showModal(selectTrackDialog.get(), MapsApp::gui->windows.front()->modalOrSelf());
+    showModalCentered(selectTrackDialog.get(), MapsApp::gui);
   };
 
   Button* moreTrackOptionsBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
@@ -1903,6 +1936,7 @@ Button* MapsTracks::createPanel()
 
   // Tracks panel
   Widget* tracksContainer = createColumn();
+  tracksContainer->node->setAttribute("box-anchor", "fill");
   tracksContent = new DragDropList;  //createColumn();
 
   TextEdit* newTrackTitle = createTitledTextEdit("Title");
@@ -1911,7 +1945,6 @@ Button* MapsTracks::createPanel()
     tracks.emplace_back(newTrackTitle->text(), ftimestr("%F"), newTrackFile->text());
     updateDB(&tracks.back());
     populateWaypoints(&tracks.back());
-    newTrackContent->setVisible(false);
   });
   newTrackTitle->onChanged = [=](const char* s){ newTrackContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
   tracksContainer->addWidget(newTrackContent);
@@ -1976,11 +2009,13 @@ Button* MapsTracks::createPanel()
       if(editTrackBtn->isChecked())
         editTrackBtn->onClicked();
       app->map->markerSetVisible(trackHoverMarker, false);
-      if(activeTrack != &recordedTrack)
-        app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
-      if(!activeTrack->visible)
-        showTrack(activeTrack, false);
-      activeTrack = NULL;
+      if(activeTrack && app->panelHistory.back() != wayptPanel) {
+        if(activeTrack != &recordedTrack)
+          app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
+        if(!activeTrack->visible)
+          showTrack(activeTrack, false);
+        activeTrack = NULL;
+      }
     }
     return false;
   });
@@ -2043,12 +2078,14 @@ Button* MapsTracks::createPanel()
   Button* routePluginBtn = createToolbutton(MapsApp::uiIcon(hasPlugins ? "plugin" : "no-plugin"), "Plugin");
   routePluginBtn->setEnabled(hasPlugins);
   if(hasPlugins) {
-    Menu* routePluginMenu = createMenu(Menu::VERT_LEFT, false);
-    int ii = 0;
-    for(auto& fn : app->pluginManager->routeFns) {
-      routePluginMenu->addItem(fn.title.c_str(), [=](){ pluginFn = ii; });
-      ++ii;
-    }
+    std::vector<std::string> pluginTitles;
+    for(auto& fn : app->pluginManager->routeFns)
+      pluginTitles.push_back(fn.title.c_str());
+    Menu* routePluginMenu = createRadioMenu(pluginTitles, [=](size_t idx){
+      pluginFn = idx;
+      if(activeTrack && activeTrack->routeMode != "direct")
+        createRoute(activeTrack);
+    });
     routePluginBtn->setMenu(routePluginMenu);
   }
 
@@ -2078,20 +2115,24 @@ Button* MapsTracks::createPanel()
 
   // stats preview for route
   static const char* sparkStatsSVG = R"(
-    <g layout="flex" flex-direction="row" box-anchor="hfill">
-      <g layout="flex" flex-direction="column" box-anchor="vfill">
-        <text class="spark-dist" box-anchor="left"></text>
-        <text class="spark-time" box-anchor="left"></text>
-        <text class="spark-ascent" box-anchor="left"></text>
-        <text class="spark-descent" box-anchor="left"></text>
+    <g layout="box" box-anchor="hfill">
+      <rect class="background" box-anchor="fill" width="20" height="20"/>
+      <g class="spark-row-container" layout="flex" flex-direction="row" box-anchor="hfill">
+        <g layout="flex" flex-direction="column" box-anchor="vfill">
+          <text class="spark-dist" box-anchor="left"></text>
+          <text class="spark-time" box-anchor="left"></text>
+          <text class="spark-ascent" box-anchor="left"></text>
+          <text class="spark-descent" box-anchor="left"></text>
+        </g>
       </g>
     </g>
   )";
   sparkStats = new Button(loadSVGFragment(sparkStatsSVG));
   trackSpark = new TrackSparkline();
-  trackSpark->node->setAttribute("box-anchor", "fill");
+  trackSpark->mBounds = Rect::wh(200, 100);
+  trackSpark->node->setAttribute("box-anchor", "hfill");
   trackSpark->setMargins(1, 1);
-  sparkStats->addWidget(trackSpark);
+  sparkStats->selectFirst(".spark-row-container")->addWidget(trackSpark);
   sparkStats->onClicked = [=](){ populateStats(activeTrack); };
 
   // I think this will eventually be a floating toolbar
@@ -2156,16 +2197,15 @@ Button* MapsTracks::createPanel()
       directRoutePreview = false;
       app->map->markerSetVisible(previewMarker, false);
       app->crossHair->setVisible(false);
-      if(activeTrack->modified)
-        activeTrack->modified = !saveGPX(activeTrack);
-      //if(editTrackBtn->isChecked())
-      //  editTrackBtn->onClicked();
-      //app->map->markerSetVisible(trackHoverMarker, false);
-      if(activeTrack != &recordedTrack)
-        app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
-      if(!activeTrack->visible)
-        showTrack(activeTrack, false);
-      activeTrack = NULL;
+      if(activeTrack) {
+        if(activeTrack->modified)
+          activeTrack->modified = !saveGPX(activeTrack);
+        if(activeTrack != &recordedTrack)
+          app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
+        if(!activeTrack->visible)
+          showTrack(activeTrack, false);
+        activeTrack = NULL;
+      }
     }
     return false;
   });

@@ -78,8 +78,6 @@ std::string MapsApp::osmPlaceType(const rapidjson::Document& props)
 
 void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority)
 {
-  if(namestr.empty())
-    namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
   std::string osmid = osmIdFromProps(props);
   pickResultCoord = pos;
   pickResultName = namestr;
@@ -88,6 +86,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(mapsTracks->onPickResult())
     return;
 
+  if(namestr.empty())
+    namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
   // show marker
   if(pickResultMarker == 0)
     pickResultMarker = map->markerAdd();
@@ -1003,6 +1003,7 @@ Window* MapsApp::createGUI()
 
   legendContainer = createColumn();
   legendContainer->node->setAttribute("box-anchor", "bottom");
+  legendContainer->node->addClass("legend");
   legendContainer->setMargins(0, 0, 10, 0);
   mapsPanel->addWidget(legendContainer);
 
@@ -1039,9 +1040,10 @@ bool MapsApp::popPanel()
 {
   if(panelHistory.empty())
     return false;
-  panelHistory.back()->sdlUserEvent(gui, PANEL_CLOSED);
-  panelHistory.back()->setVisible(false);
+  Widget* popped = panelHistory.back();
   panelHistory.pop_back();
+  popped->sdlUserEvent(gui, PANEL_CLOSED);
+  popped->setVisible(false);
   if(!panelHistory.empty())
     panelHistory.back()->setVisible(true);
   else {
@@ -1247,6 +1249,7 @@ static std::string uiIconStr;
 
 static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
+.legend text { fill: inherit; }
 )#";
 
 static const char* moreWidgetSVG = R"#(

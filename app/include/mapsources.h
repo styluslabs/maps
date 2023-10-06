@@ -43,6 +43,7 @@ private:
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
   bool sceneVarsLoaded = false;
+  bool legendsLoaded = false;
   bool sourcesDirty = true;
   std::vector<std::string> layerKeys;
   std::vector<std::string> sourceKeys;

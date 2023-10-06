@@ -150,9 +150,9 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   scrollWidget->node->setAttribute("box-anchor", "fill");
   dialogBody->addWidget(scrollWidget);
 
-  dialog->setWinBounds(Rect::ltwh(400,400,500,700));
-
-  app->gui->showModal(dialog, app->gui->windows.front()->modalOrSelf());
+  //dialog->setWinBounds(Rect::ltwh(400,400,500,700));
+  //app->gui->showModal(dialog, app->gui->windows.front()->modalOrSelf());
+  showModalCentered(dialog, MapsApp::gui);
 }
 
 void MapsBookmarks::populateLists(bool archived)

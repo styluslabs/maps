@@ -258,7 +258,8 @@ bool MapsOffline::cancelDownload(int mapid)
       dl->cancel();
     return false;
   }
-  std::remove_if(offlinePending.begin(), offlinePending.end(), [mapid](auto a){ return a.id == mapid; });
+  offlinePending.erase(std::remove_if(offlinePending.begin(), offlinePending.end(),
+      [mapid](auto a){ return a.id == mapid; }), offlinePending.end());
   return true;
 }
 

@@ -197,11 +197,12 @@ static void invokeHttpReqCallback(duk_context* ctx, std::string cbvar, const Url
   duk_put_global_string(ctx, cbvar.c_str());  // release for GC
   // parse response JSON and call callback
   duk_push_lstring(ctx, response.content.data(), response.content.size());
+  duk_push_string(ctx, response.error ? response.error : "");
   //char c0 = response.content.size() > 1 ? response.content[0] : '\0';
   // TODO: use DUK_USE_CPP_EXCEPTIONS to catch parsing errors!
   //if(c0 == '[' || c0 == '{')
   //  duk_json_decode(ctx, -1);
-  PluginManager::dukTryCall(ctx, 1);
+  PluginManager::dukTryCall(ctx, 2);
   duk_pop(ctx);
 }
 

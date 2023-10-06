@@ -9,7 +9,7 @@ Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t
     item->setChecked(ii == initial);
     menu->addItem(item);
     item->onClicked = [=](){
-      for(Widget* btn : menu->select(".radiobutton"))
+      for(Widget* btn : menu->select(".cbmenuitem"))
         static_cast<Button*>(btn)->setChecked(btn == item);
       onChanged(ii);
     };
@@ -117,7 +117,7 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
             <g class="toolbutton cancel-btn" layout="box">
               <rect class="background" box-anchor="hfill" width="36" height="42"/>
               <g margin="0 3" box-anchor="fill" layout="flex" flex-direction="row">
-                <use class="icon" height="36" xlink:href=":/ui-icons.svg#back" />
+                <use class="icon" height="36" width="36" xlink:href=":/ui-icons.svg#back" />
                 <text class="title" display="none" margin="0 9">Cancel</text>
               </g>
             </g>
@@ -498,12 +498,15 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
   static const char* titledTextEditSVG = R"#(
     <g id="textedit" class="inputbox textbox" layout="box">
       <!-- invisible rect to set minimum width -->
-      <rect class="min-width-rect" width="150" height="36" fill="none"/>
-      <rect class="inputbox-bg" box-anchor="fill" width="20" height="20"/>
+      <rect class="min-width-rect" width="150" height="46" fill="none"/>
+      <rect class="inputbox-bg" box-anchor="fill" margin="10 0 0 0" width="20" height="20"/>
 
-      <g box-anchor="top left" margin="10 0 0 10" layout="box">
+      <g box-anchor="top left" margin="0 0 0 8" layout="box">
         <rect class="inputbox-title-bg" box-anchor="fill" width="20" height="20"/>
         <text class="inputbox-title" font-size="14" margin="2 5"></text>
+      </g>
+
+      <g class="textbox-wrapper" box-anchor="fill" layout="box" margin="10 0 0 0">
       </g>
     </g>
   )#";
@@ -512,7 +515,7 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
     proto.reset(loadSVGFragment(titledTextEditSVG));
 
   SvgG* textEditNode = static_cast<SvgG*>(proto->clone());
-  textEditNode->addChild(textEditInnerNode());
+  textEditNode->selectFirst(".textbox-wrapper")->asContainerNode()->addChild(textEditInnerNode());
   textEditNode->setAttribute("box-anchor", "hfill");
   TextEdit* widget = new TextEdit(textEditNode);
   widget->selectFirst(".inputbox-title")->setText(title);
@@ -545,4 +548,12 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
   container->addWidget(createTitledRow(NULL, acceptBtn, cancelBtn));  //tb
   container->setVisible(false);
   return container;
+}
+
+void showModalCentered(Window* modal, SvgGui* gui)
+{
+  Window* win = gui->windows.front()->modalOrSelf();
+  Rect pbbox = win->winBounds();
+  modal->setWinBounds(Rect::centerwh(pbbox.center(), std::min(pbbox.width() - 20, real(500)), pbbox.height() - 60));
+  gui->showModal(modal, win);
 }

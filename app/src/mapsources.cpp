@@ -224,6 +224,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->sceneUpdates = std::move(builder.updates);  //.clear();
     app->loadSceneFile();  //builder.getSceneYaml(baseUrl), builder.updates);
     sceneVarsLoaded = false;
+    legendsLoaded = false;
     currSource = srcname;
     if(!srcname.empty()) {
       app->config["sources"]["last_source"] = currSource;
@@ -311,14 +312,14 @@ void MapsSources::populateSources()
   }
   sourcesContent->clear();
 
-  std::vector<std::string> layerTitles = {"None"};
+  std::vector<std::string> layerTitles = {};  //"None"
   std::vector<std::string> sourceTitles = {};
-  layerKeys = {""};  // used for layerCombos
+  layerKeys = {};  // used for layerCombos
   sourceKeys = {};  // currently only used for quick menu
   for(const auto& src : mapSources) {
     std::string key = src.first.Scalar();
-    bool isLayer = src.second["layer"].as<bool>(false);
-    if(!isLayer && src.second["type"].Scalar() != "Update") {
+    bool isLayer = src.second["layer"].as<bool>(false) || src.second["type"].Scalar() == "Update";
+    if(!isLayer) {
       sourceKeys.push_back(key);
       sourceTitles.push_back(src.second["title"].Scalar());
     }
@@ -342,7 +343,7 @@ void MapsSources::populateSources()
         if(show)
           currLayers.push_back(key);
         else
-          std::remove(currLayers.begin(), currLayers.end(), key);
+          currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), key), currLayers.end());
         rebuildSource();  //currLayers
       };
       container->addWidget(showBtn);
@@ -390,7 +391,7 @@ void MapsSources::populateSources()
   sourcesContent->setOrder(order);
 
   if(!selectLayerDialog) {
-    selectLayerDialog.reset(createSelectDialog("Choose Layer", MapsApp::uiIcon("layer")));
+    selectLayerDialog.reset(createSelectDialog("Choose Layer", MapsApp::uiIcon("layers")));
     selectLayerDialog->onSelected = [this](int idx){
       currLayers.push_back(layerKeys[idx]);
       rebuildSource();  //currLayers);
@@ -413,6 +414,28 @@ void MapsSources::onMapEvent(MapEvent_t event)
     return;
   if(!sceneVarsLoaded && app->map->getScene()->isReady() && sourceEditPanel->isVisible())
     populateSceneVars();
+
+  if(!legendsLoaded && app->map->getScene()->isReady()) {
+    legendsLoaded = true;
+    // load legend widgets
+    app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
+    app->gui->deleteContents(app->legendContainer);
+    YAML::Node legends = app->readSceneValue("global.__legend");
+    for(const auto& legend : legends) {
+      Widget* widget = new Widget(loadSVGFragment(legend.second["svg"].Scalar().c_str()));
+      app->legendContainer->addWidget(widget);
+      widget->setMargins(10, 0, 10, 0);
+      widget->setVisible(false);
+
+      Button* menuitem = createCheckBoxMenuItem(legend.second["title"].Scalar().c_str());
+      menuitem->onClicked = [=](){
+        widget->setVisible(!widget->isVisible());
+        menuitem->setChecked(widget->isVisible());
+      };
+      legendMenu->addItem(menuitem);
+    }
+    legendBtn->setVisible(app->legendContainer->containerNode()->firstChild() != NULL);
+  }
 }
 
 void MapsSources::populateSceneVars()
@@ -437,8 +460,8 @@ void MapsSources::populateSceneVars()
                 auto spinBox = createTextSpinBox(uniform.second.get<float>(), 1, -INFINITY, INFINITY, "%.2f");
                 spinBox->onValueChanged = [=, &uniform](real val){
                   std::string path = "styles." + stylename + ".shaders.uniforms." + name;
-                  std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
-                      [&](const SceneUpdate& s){ return s.path == path; });
+                  app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
+                      [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
                   app->sceneUpdates.push_back(SceneUpdate{path, std::to_string(val)});
                   uniform.second.set<float>(val);
                   app->platform->requestRender();
@@ -462,8 +485,8 @@ void MapsSources::populateSceneVars()
       auto checkbox = createCheckBox("", value == "true");
       checkbox->onToggled = [=](bool newval){
         std::string path = "global." + name;
-        std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
-            [&](const SceneUpdate& s){ return s.path == path; });
+        app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
+            [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
         app->sceneUpdates.push_back(SceneUpdate{path, newval ? "true" : "false"});
         sourceModified();
         if(reload == "false")  // ... so default to reloading
@@ -474,24 +497,6 @@ void MapsSources::populateSceneVars()
       varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
     }
   }
-
-  // load legend widgets
-  app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
-  app->gui->deleteContents(app->legendContainer);
-  YAML::Node legends = app->readSceneValue("global.__legend");
-  for(const auto& legend : legends) {
-    Widget* widget = new Widget(loadSVGFragment(legend.second["svg"].Scalar().c_str()));
-    widget->setMargins(10, 0, 10, 0);
-    widget->setVisible(false);
-    app->legendContainer->addWidget(widget);
-
-    Button* menuitem = createCheckBoxMenuItem(legend.second["title"].Scalar().c_str());
-    legendMenu->addItem(legend.second["title"].Scalar().c_str(), [=](){
-      widget->setVisible(!widget->isVisible());
-      menuitem->setChecked(widget->isVisible());
-    });
-  }
-  legendBtn->setVisible(app->legendContainer->containerNode()->firstChild() != NULL);
 }
 
 void MapsSources::populateSourceEdit(std::string key)
@@ -502,6 +507,7 @@ void MapsSources::populateSourceEdit(std::string key)
   titleEdit->setText(mapSources[key]["title"].Scalar().c_str());
   app->showPanel(sourceEditPanel, true);
   //sourceEditPanel->selectFirst(".panel-title")->setText(mapSources[key]["title"].Scalar().c_str());
+  app->gui->deleteContents(layersContent);
 
   for(auto& src : currLayers) {
     Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[src]["title"].Scalar().c_str());
@@ -515,17 +521,17 @@ void MapsSources::populateSourceEdit(std::string key)
 
     Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
     discardBtn->onClicked = [=](){
-      std::remove(currLayers.begin(), currLayers.end(), src);
-      app->gui->deleteWidget(item);
+      currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), src), currLayers.end());
       rebuildSource();  //tempLayers);
+      app->gui->deleteWidget(item);
     };
     container->addWidget(discardBtn);
+    layersContent->addWidget(item);
   }
 
   Button* item = createListItem(MapsApp::uiIcon("add"), "Add Layer...");
-  item->onClicked = [=](){
-    MapsApp::gui->showModal(selectLayerDialog.get(), MapsApp::gui->windows.front()->modalOrSelf());
-  };
+  item->onClicked = [=](){ showModalCentered(selectLayerDialog.get(), MapsApp::gui); };
+  layersContent->addWidget(item);
 
   if(app->map->getScene()->isReady())
     populateSceneVars();
@@ -608,10 +614,10 @@ Button* MapsSources::createPanel()
   sourcesContent = new DragDropList;  //createColumn();
 
   Widget* srcEditContent = createColumn();
-  layersContent = createColumn();
-  layersContent->node->setAttribute("box-anchor", "hfill");
   varsContent = createColumn();
   varsContent->node->setAttribute("box-anchor", "hfill");
+  layersContent = createColumn();
+  layersContent->node->setAttribute("box-anchor", "hfill");
   srcEditContent->addWidget(varsContent);
   srcEditContent->addWidget(layersContent);
   //for(int ii = 1; ii <= MAX_SOURCES; ++ii) {
