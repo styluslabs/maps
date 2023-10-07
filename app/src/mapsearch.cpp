@@ -247,7 +247,8 @@ void MapsSearch::clearSearch()
   clearSearchResults();
   queryText->setText("");
   if(app->searchActive) {
-    app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
+    //app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
+    app->map->getScene()->hideExtraLabels = false;
     app->mapsBookmarks->restoreBookmarks();
   }
   app->searchActive = false;
@@ -324,7 +325,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
   bool sortByDist = queryStr.back() != '*' || app->config["search"]["sort"].as<std::string>("rank") == "dist";
   // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
   std::string query = fstring("SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
-      "MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;", sortByDist ? "-1" : "rank");
+      "MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;", sortByDist ? "-1.0" : "rank");
   DB_exec(searchDB, query.c_str(), [&](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
     double lng = sqlite3_column_double(stmt, 2);
@@ -481,7 +482,8 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     }
 
     if(!app->searchActive && phase == RETURN) {
-      map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
+      //map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
+      map->getScene()->hideExtraLabels = true;
       app->mapsBookmarks->hideBookmarks();  // also hide tracks?
       app->searchActive = true;
     }

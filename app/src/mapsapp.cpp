@@ -1562,7 +1562,7 @@ int main(int argc, char* argv[])
       app->map->render();
       // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
       if(!std::isnan(app->tapLocation.longitude)) {
-        if(app->panelHistory.back() == app->infoPanel)
+        if(!app->panelHistory.empty() && app->panelHistory.back() == app->infoPanel)
           app->popPanel();
         app->mapsTracks->tapEvent(app->tapLocation);
         app->tapLocation = {NAN, NAN};
