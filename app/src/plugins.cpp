@@ -347,23 +347,6 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addRoutePolyline");
 }
 
-// commands should go in toolbar or menu of appropriate panel; e.g. bookmarks panel for import places plugin
-// - so we need more detailed type than just "command"
-/*void PluginManager::showGUI()
-{
-  if(!ImGui::CollapsingHeader("Plugin Commands", ImGuiTreeNodeFlags_DefaultOpen))
-    return;
-  for(auto& cmd : commandFns) {
-    if(ImGui::Button(cmd.title.c_str())) {
-      std::lock_guard<std::mutex> lock(jsMutex);
-      duk_context* ctx = jsContext;
-      duk_get_global_string(ctx, cmd.name.c_str());
-      dukTryCall(ctx, 0);
-      duk_pop(ctx);
-    }
-  }
-}*/
-
 // for now, we need somewhere to put TextEdit for entering JS commands; probably would be opened from
 //  overflow menu, assuming we even keep it
 
@@ -387,11 +370,12 @@ Button* PluginManager::createPanel()
   pluginContent->addWidget(jsEdit);
   pluginContent->addWidget(runBtn);
   pluginContent->addWidget(resultText);
+  pluginContent->addWidget(createStretch());
 
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("textbox"), "Plugins");
   //toolbar->addWidget(createStretch());
   //toolbar->addWidget(maxZoomSpin);
-  Widget* pluginPanel = app->createMapPanel(toolbar, NULL, pluginContent);
+  Widget* pluginPanel = app->createMapPanel(toolbar, NULL, pluginContent, false);
 
   Button* pluginBtn = app->createPanelButton(MapsApp::uiIcon("textbox"), "Plugin console", pluginPanel);
   return pluginBtn;

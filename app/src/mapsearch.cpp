@@ -119,10 +119,10 @@ CREATE TRIGGER pois_insert AFTER INSERT ON pois BEGIN
   INSERT INTO pois_fts(rowid, name, tags) VALUES (NEW.rowid, NEW.name, NEW.tags);
 END;
 CREATE TRIGGER pois_delete AFTER DELETE ON pois BEGIN
-  INSERT INTO pois_fts(pois_fts, rowid, name, tags) VALUES('delete', OLD.rowid, OLD.name, OLD.tags);
+  INSERT INTO pois_fts(pois_fts, rowid, name, tags) VALUES ('delete', OLD.rowid, OLD.name, OLD.tags);
 END;
 CREATE TRIGGER pois_update AFTER UPDATE ON pois BEGIN
-  INSERT INTO pois_fts(pois_fts, rowid, name, tags) VALUES('delete', OLD.rowid, OLD.name, OLD.tags);
+  INSERT INTO pois_fts(pois_fts, rowid, name, tags) VALUES ('delete', OLD.rowid, OLD.name, OLD.tags);
   INSERT INTO pois_fts(rowid, name, tags) VALUES (NEW.rowid, NEW.name, NEW.tags);
 END;
 COMMIT;)#";

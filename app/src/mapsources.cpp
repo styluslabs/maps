@@ -10,6 +10,7 @@
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 #include "mapwidgets.h"
+#include "nfd.hpp"  // file dialogs
 
 #include "offlinemaps.h"
 
@@ -330,6 +331,7 @@ void MapsSources::populateSources()
 
     Button* item = createListItem(MapsApp::uiIcon("layers"), src.second["title"].Scalar().c_str());
     item->node->setAttr("__sourcekey", key.c_str());
+    item->setChecked(key == currSource);
     Widget* container = item->selectFirst(".child-container");
 
     Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
@@ -580,13 +582,26 @@ Button* MapsSources::createPanel()
   sourceTb->addWidget(saveBtn);
 
   Toolbar* importTb = createToolbar();
-  TextEdit* importEdit = createTextEdit();
+  TextEdit* importEdit = createTitledTextEdit("URL or YAML");
+  Button* importFileBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Open file...");
   Button* importAccept = createToolbutton(MapsApp::uiIcon("accept"), "Save");
   Button* importCancel = createToolbutton(MapsApp::uiIcon("cancel"), "Cancel");
+  importTb->addWidget(importFileBtn);
   importTb->addWidget(importEdit);
   importTb->addWidget(importAccept);
   importTb->addWidget(importCancel);
+  importTb->setVisible(false);
   importCancel->onClicked = [=](){ importTb->setVisible(false); };
+
+  importFileBtn->onClicked = [=](){
+    nfdchar_t* outPath;
+    nfdfilteritem_t filterItem[1] = { { "YAML files", "yaml,yml" } };
+    nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
+    if(result != NFD_OKAY)
+      return;
+    importSources(outPath);
+    importTb->setVisible(false);
+  };
 
   // JSON (YAML flow), tile URL, or path/URL to file
   importAccept->onClicked = [=](){
@@ -611,7 +626,11 @@ Button* MapsSources::createPanel()
   // we should check for conflicting w/ title of other source here
   titleEdit->onChanged = [this](const char* s){ saveBtn->setEnabled(s[0]); };
 
-  sourcesContent = new DragDropList;  //createColumn();
+  sourcesContent = new DragDropList;
+  Widget* sourcesContainer = createColumn();
+  sourcesContainer->node->setAttribute("box-anchor", "fill");
+  sourcesContainer->addWidget(importTb);
+  sourcesContainer->addWidget(sourcesContent);
 
   Widget* srcEditContent = createColumn();
   varsContent = createColumn();
@@ -620,12 +639,6 @@ Button* MapsSources::createPanel()
   layersContent->node->setAttribute("box-anchor", "hfill");
   srcEditContent->addWidget(varsContent);
   srcEditContent->addWidget(layersContent);
-  //for(int ii = 1; ii <= MAX_SOURCES; ++ii) {
-  //  layerCombos.push_back(createSelectBox(fstring("Layer %d", ii).c_str(), MapsApp::uiIcon("layers"), {}));
-  //  layerCombos.back()->onChanged = [this](int){ rebuildSource(); };
-  //  layerRows.push_back(createTitledRow(fstring("Layer %d", ii).c_str(), layerCombos.back()));
-  //  layersContent->addWidget(layerRows.back());
-  //}
 
   auto clearCacheFn = [this](std::string res){
     if(res == "OK") {
@@ -644,7 +657,11 @@ Button* MapsSources::createPanel()
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
-  overflowMenu->addItem("Import source", [=](){ importEdit->setText("");  importTb->setVisible(true); });
+  overflowMenu->addItem("Import source", [=](){
+    importTb->setVisible(true);
+    importEdit->setText("");
+    app->gui->setFocused(importEdit);
+  });
   overflowMenu->addItem("Clear cache", [=](){
     MapsApp::messageBox("Clear cache", "Delete all cached map data? This action cannot be undone.",
         {"OK", "Cancel"}, clearCacheFn);
@@ -660,7 +677,7 @@ Button* MapsSources::createPanel()
   sourcesHeader->addWidget(legendBtn);
   sourcesHeader->addWidget(offlineBtn);
   sourcesHeader->addWidget(overflowBtn);
-  sourcesPanel = app->createMapPanel(sourcesHeader, NULL, sourcesContent);
+  sourcesPanel = app->createMapPanel(sourcesHeader, NULL, sourcesContainer, false);
 
   sourcesPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {

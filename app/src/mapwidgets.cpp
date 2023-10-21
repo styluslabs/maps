@@ -461,8 +461,9 @@ Menubar* createMenubar() { return new Menubar(widgetNode("#toolbar")); }
 
 Button* createListItem(SvgNode* icon, const char* title, const char* note)
 {
+  // previously used margin="0 5", but I think any margin should be on container
   static const char* listItemProtoSVG = R"(
-    <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+    <g class="listitem" margin="0 0" layout="box" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="toolbutton drag-btn" margin="2 5">

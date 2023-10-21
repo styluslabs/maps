@@ -68,13 +68,12 @@ int MapsBookmarks::getListId(const char* listname, bool create)
 
 static Widget* createNewListWidget(std::function<void(int, std::string)> callback)
 {
-  Widget* newListContent = createColumn();
-  newListContent->node->setAttribute("box-anchor", "hfill");
-  TextEdit* newListTitle = createTextEdit();
+  TextEdit* newListTitle = createTitledTextEdit("Title");
   ColorPicker* newListColor = createColorPicker(MapsApp::markerColors, Color::BLUE);
-  Button* createListBtn = createPushbutton("Create");
-  Button* cancelListBtn = createPushbutton("Cancel");
-  createListBtn->onClicked = [=](){
+  Widget* newListRow = createRow();
+  newListRow->addWidget(newListTitle);
+  newListRow->addWidget(newListColor);
+  auto onCreateList = [=](){
     char colorstr[64];
     SvgWriter::serializeColor(colorstr, newListColor->color());
     std::string listname = newListTitle->text();
@@ -87,14 +86,9 @@ static Widget* createNewListWidget(std::function<void(int, std::string)> callbac
     int list_id = sqlite3_last_insert_rowid(MapsApp::bkmkDB);
     if(callback)
       callback(list_id, listname);
-    newListContent->setVisible(false);
   };
-  cancelListBtn->onClicked = [=](){ newListContent->setVisible(false); };
-  newListTitle->onChanged = [=](const char* s){ createListBtn->setEnabled(s[0]); };
-  newListContent->addWidget(createTitledRow("Title", newListTitle, newListColor));
-  //newListContent->addWidget(createTitledRow("Color", newListColor));
-  newListContent->addWidget(createTitledRow(NULL, createListBtn, cancelListBtn));
-  newListContent->setVisible(false);
+  auto newListContent = createInlineDialog({newListRow}, "Create", onCreateList);
+  newListTitle->onChanged = [=](const char* s){ newListContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
   newListContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
       newListColor->setColor(Color(0x12, 0xB5, 0xCB));
@@ -614,11 +608,11 @@ Button* MapsBookmarks::createPanel()
   listsCol->addWidget(newListContent);
   listsCol->addWidget(listsContent);
   auto listHeader = app->createPanelHeader(MapsApp::uiIcon("pin"), "Bookmark Lists");
-  listsPanel = app->createMapPanel(listHeader, NULL, listsCol);
+  listsPanel = app->createMapPanel(listHeader, NULL, listsCol, false);
 
   archivedContent = createColumn();
   auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Bookmaks");
-  archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
+  archivedPanel = app->createMapPanel(archivedHeader, archivedContent, NULL, false);
 
   listsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
@@ -637,30 +631,31 @@ Button* MapsBookmarks::createPanel()
   });
 
   // Bookmarks panel
-  bkmkContent = createColumn(); //createListContainer();
-  Widget* editListContent = createColumn();
+  bkmkContent = createColumn();
   TextEdit* listTitle = createTextEdit();
-  TextEdit* listColor = createTextEdit();  // obviously needs to be replaced with a color picker
-  Button* saveListBtn = createPushbutton("Apply");
-  saveListBtn->onClicked = [=](){
-    const char* query = "UPDATE lists SET title = ?, color = ? WHERE id = ?;";
-    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, listTitle->text().c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 2, listColor->text().c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_int(stmt, 3, activeListId);
-    });
+  ColorPicker* listColor = createColorPicker(app->markerColors, Color::CYAN);
+  Widget* editListRow = createRow();
+  editListRow->addWidget(listTitle);
+  editListRow->addWidget(listColor);
+  auto onAcceptListEdit = [=](){
+    char colorstr[64];
+    SvgWriter::serializeColor(colorstr, listColor->color());
+    SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(
+        listTitle->text(), colorstr, activeListId).exec();
     listsDirty = archiveDirty = true;
   };
-  editListContent->addWidget(createTitledRow("Title", listTitle));
-  editListContent->addWidget(createTitledRow("Color", listColor));
-  editListContent->addWidget(saveListBtn);
-  editListContent->setVisible(false);
+  auto editListContent = createInlineDialog({editListRow}, "Apply", onAcceptListEdit);
   bkmkContent->addWidget(editListContent);
 
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("folder"), "");
   Button* editListBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit List");
   editListBtn->onClicked = [=](){
-    editListContent->setVisible(!editListContent->isVisible());
+    bool show = !editListContent->isVisible();
+    if(show) {
+      SQLiteStmt(app->bkmkDB, "SELECT color FROM lists WHERE id = ?;").bind(activeListId).exec(
+          [&](const char* colorstr){ listColor->setColor(parseColor(colorstr, Color::CYAN)); });
+    }
+    editListContent->setVisible(show);
   };
 
   static const char* bkmkSortKeys[] = {"name", "date", "dist"};

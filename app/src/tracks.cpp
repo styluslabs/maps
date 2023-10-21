@@ -284,17 +284,23 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->setFontSize(11);
   p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real texty = 20;
-  //for(auto it = waypoints.rbegin(); it != waypoints.rend(); ++it) {
+  // lines
+  p->setFillBrush(Brush::NONE);
+  p->setStroke(Color::GREEN, 1.5);
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
     if(s < 0 || s > 1) continue;
     real x = s*plotw + (labelw + 10);
-    p->setFillBrush(Brush::NONE);
-    p->setStroke(Color::GREEN, 1.5);
     p->drawLine(Point(x, 15), Point(x, h));
-    if(texty >= h - 20) continue;
-    p->setFillBrush(Color::BLACK);
-    p->setStroke(Color::NONE);
+  }
+  // text (we want text on top of all lines)
+  p->setFillBrush(Color::BLACK);
+  p->setStroke(Color::NONE);
+  for(const Waypoint& wpt : waypoints) {
+    real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
+    if(s < 0 || s > 1) continue;
+    real x = s*plotw + (labelw + 10);
+    if(texty >= h - 20) texty = 20;  // back to top
     //real textw = p->textBounds(x0, ploth - 20, wpt.name.c_str(), NULL);
     p->drawText(x + 4, texty, wpt.name.c_str());  // note clip rect is still set
     texty += 16;
@@ -2024,7 +2030,7 @@ Button* MapsTracks::createPanel()
   tracksTb->addWidget(drawTrackBtn);
   tracksTb->addWidget(loadTrackBtn);
   tracksTb->addWidget(recordTrackBtn);
-  tracksPanel = app->createMapPanel(tracksTb, NULL, tracksContainer);
+  tracksPanel = app->createMapPanel(tracksTb, NULL, tracksContainer, false);
 
   tracksPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
@@ -2036,7 +2042,7 @@ Button* MapsTracks::createPanel()
 
   archivedContent = createColumn();
   auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Tracks");
-  archivedPanel = app->createMapPanel(archivedHeader, archivedContent);
+  archivedPanel = app->createMapPanel(archivedHeader, archivedContent, NULL, false);
 
   // waypoint panel
   Widget* wayptContainer = createColumn();

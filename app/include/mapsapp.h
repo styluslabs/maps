@@ -106,6 +106,7 @@ public:
   void dumpTileContents(float x, float y);
 
   Splitter* panelSplitter = NULL;
+  Widget* panelSeparator = NULL;
   Widget* panelContainer = NULL;
   Widget* panelContent = NULL;
   Widget* mainTbContainer = NULL;
@@ -143,4 +144,6 @@ public:
 private:
   void saveConfig();
   void sendMapEvent(MapEvent_t event);
+  void showPanelContainer(bool show);
+  void clearPickResult();
 };

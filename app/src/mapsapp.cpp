@@ -171,7 +171,13 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
         pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, osmid);
 
     };
-    infoContent->selectFirst(".info-section")->addWidget(createTitledRow("Information from ", providerSel));
+    Widget* providerRow = createRow();
+    providerRow->node->setAttribute("margin", "3 3");
+    providerRow->addWidget(createStretch());
+    providerRow->addWidget(new TextBox(createTextNode("Information from ")));
+    providerRow->addWidget(providerSel);
+    infoContent->selectFirst(".info-section")->addWidget(providerRow);
+    //infoContent->selectFirst(".info-section")->addWidget(createTitledRow("Information from ", providerSel));
     providerSel->onChanged("");
   }
 
@@ -282,8 +288,10 @@ void MapsApp::longPressEvent(float x, float y)
 {
   double lng, lat;
   map->screenPositionToLngLat(x, y, &lng, &lat);
+  // clear panel history unless editing track/route
+  if(!mapsTracks->activeTrack)
+    showPanel(infoPanel);
   setPickResult(LngLat(lng, lat), "", "");
-  mapsSearch->clearSearch();  // ???
 }
 
 void MapsApp::doubleTapEvent(float x, float y)
@@ -299,6 +307,14 @@ void MapsApp::doubleTapEvent(float x, float y)
   map->setCameraPositionEased(pos, 0.5f, Tangram::EaseType::quint);
 }
 
+void MapsApp::clearPickResult()
+{
+  pickResultProps.SetNull();
+  if(pickResultMarker > 0)
+    map->markerSetVisible(pickResultMarker, false);
+  pickResultCoord = LngLat(NAN, NAN);
+}
+
 void MapsApp::tapEvent(float x, float y)
 {
   //LngLat location;
@@ -312,11 +328,7 @@ void MapsApp::tapEvent(float x, float y)
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
     LOG("Picked label: %s", result ? result->touchItem.properties->getAsString("name").c_str() : "none");
     if (!result) {
-      pickResultProps.SetNull();
-      if(pickResultMarker > 0)
-        map->markerSetVisible(pickResultMarker, false);
-      pickResultCoord = LngLat(NAN, NAN);
-      //minimizePanel();  //hidePlaceInfo();
+      clearPickResult();
       return;
     }
     std::string itemId = result->touchItem.properties->getAsString("id");
@@ -326,8 +338,10 @@ void MapsApp::tapEvent(float x, float y)
     if(osmType.empty())
       osmType = "node";
     std::string namestr = result->touchItem.properties->getAsString("name");
+    // clear panel history unless editing track/route
+    if(!mapsTracks->activeTrack)
+      showPanel(infoPanel);    //mapsSearch->clearSearch();
     setPickResult(result->coordinates, namestr, result->touchItem.properties->toJson());
-    mapsSearch->clearSearch();  // ???
     tapLocation = {NAN, NAN};
   });
 
@@ -876,9 +890,12 @@ Window* MapsApp::createGUI()
     <svg class="window" layout="box">
       <g id="maps-container" box-anchor="fill" layout="box"></g>
       <g class="panel-layout" box-anchor="top left" margin="10 0 0 10" layout="flex" flex-direction="column">
-        <g id="main-tb-container" box-anchor="hfill" layout="box"></g>
+        <g id="main-tb-container" box-anchor="hfill" layout="box">
+          <rect class="background" fill="none" x="0" y="0" width="360" height="1"/>
+        </g>
+        <rect id="panel-separator" class="hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
         <g id="panel-container" display="none" box-anchor="hfill" layout="box">
-          <rect class="background" x="0" y="0" width="300" height="800"/>
+          <rect class="background" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
           <g id="panel-content" box-anchor="fill" layout="box"></g>
         </g>
       </g>
@@ -931,6 +948,7 @@ Window* MapsApp::createGUI()
   // adjust map center to account for sidebar
   Tangram::EdgePadding padding = {0,0,0,0};  //{200, 0, 0, 0};
   map->setPadding(padding);
+  panelSeparator = win->selectFirst("#panel-separator");
 #endif
   panelContainer = win->selectFirst("#panel-container");
   panelContent = win->selectFirst("#panel-content");
@@ -942,10 +960,16 @@ Window* MapsApp::createGUI()
   infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));  //createColumn(); //createListContainer();
   auto infoHeader = createPanelHeader(NULL, "");  //MapsApp::uiIcon("pin"), "");
   infoPanel = createMapPanel(infoHeader, infoContent);
+  infoPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == MapsApp::PANEL_CLOSED)
+      clearPickResult();
+    return false;
+  });
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
   Menubar* mainToolbar = createMenubar();  //createToolbar();
   mainToolbar->autoClose = true;
+  mainToolbar->selectFirst(".child-container")->node->setAttribute("justify-content", "space-between");
   Button* tracksBtn = mapsTracks->createPanel();
   Button* searchBtn = mapsSearch->createPanel();
   Button* sourcesBtn = mapsSources->createPanel();
@@ -1013,12 +1037,24 @@ Window* MapsApp::createGUI()
   return win;
 }
 
+void MapsApp::showPanelContainer(bool show)
+{
+  panelContainer->setVisible(show);
+  if(panelSeparator)
+    panelSeparator->setVisible(show);
+  if(panelSplitter) {
+    panelSplitter->setVisible(show);
+    mainTbContainer->setVisible(!show);
+  }
+}
+
 void MapsApp::showPanel(Widget* panel, bool isSubPanel)
 {
-  panel->setVisible(true);
   if(!panelHistory.empty()) {
-    if(panelHistory.back() == panel)
+    if(panelHistory.back() == panel) {
+      panel->setVisible(true);
       return;
+    }
     panelHistory.back()->setVisible(false);
     if(!isSubPanel) {
       for(Widget* w : panelHistory)
@@ -1026,13 +1062,9 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
       panelHistory.clear();
     }
   }
+  panel->setVisible(true);
   panelHistory.push_back(panel);
-  //panelContainer->addWidget(panel);
-  panelContainer->setVisible(true);
-  if(panelSplitter) {
-    panelSplitter->setVisible(true);
-    mainTbContainer->setVisible(false);
-  }
+  showPanelContainer(true);
   panel->sdlUserEvent(gui, PANEL_OPENED);
 }
 
@@ -1046,13 +1078,8 @@ bool MapsApp::popPanel()
   popped->setVisible(false);
   if(!panelHistory.empty())
     panelHistory.back()->setVisible(true);
-  else {
-    panelContainer->setVisible(false);
-    if(panelSplitter) {
-      panelSplitter->setVisible(false);
-      mainTbContainer->setVisible(true);
-    }
-  }
+  else
+    showPanelContainer(false);
   return true;
 }
 
@@ -1114,15 +1141,8 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widge
   });
 
   btn->onClicked = [=](){
-    if(btn->isChecked()) {
-      if(!panelContainer->isVisible()) {
-        panelContainer->setVisible(true);
-        if(panelSplitter) {
-          panelSplitter->setVisible(true);
-          mainTbContainer->setVisible(false);
-        }
-      }
-    }
+    if(btn->isChecked() && !panelContainer->isVisible())
+      showPanelContainer(true);
     else
       showPanel(panel);
   };
@@ -1139,11 +1159,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
       // options:
       // 1. hide container and splitter and show a floating restore btn
       // 2. use setSplitSize() to shrink panel to toolbar height
-      panelContainer->setVisible(false);
-      if(panelSplitter) {
-        panelSplitter->setVisible(false);
-        mainTbContainer->setVisible(true);
-      }
+      showPanelContainer(false);
     };
     header->addWidget(minimizeBtn);
   }
@@ -1427,6 +1443,7 @@ int main(int argc, char* argv[])
   addStringResources({{"ui-icons.svg", uiIconStr.c_str()}});
 
   SvgCssStylesheet* styleSheet = new SvgCssStylesheet;
+  styleSheet->parse_stylesheet(defaultColorsCSS);
   styleSheet->parse_stylesheet(defaultStyleCSS);
   styleSheet->parse_stylesheet(moreCSS);
   styleSheet->sort_rules();

@@ -84,6 +84,7 @@ public:
   std::vector<GpxFile> tracks;
   GpxFile recordedTrack;
   GpxFile navRoute;
+  GpxFile* activeTrack = NULL;
 
   DragDropList* tracksContent = NULL;
   Widget* archivedContent = NULL;
@@ -134,7 +135,6 @@ private:
   void updateDistances();
 
   int pluginFn = 0;
-  GpxFile* activeTrack = NULL;
   std::vector<Waypoint> origLocs;
   std::vector<LngLat> previewRoute;
   std::string insertionWpt;
