@@ -470,7 +470,7 @@ Widget* MapsOffline::createPanel()
   toolbar->addWidget(createStretch());
   //toolbar->addWidget(maxZoomSpin);
   toolbar->addWidget(saveBtn);
-  offlinePanel = app->createMapPanel(toolbar, offlineContent);
+  offlinePanel = app->createMapPanel(toolbar, offlineContent, NULL, false);
 
   offlinePanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_CLOSED) {

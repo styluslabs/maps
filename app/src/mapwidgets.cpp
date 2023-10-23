@@ -470,8 +470,8 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
           <use class="listitem-icon icon" width="36" height="36" xlink:href=""/>
         </g>
         <g layout="box" box-anchor="fill">
-          <text class="title-text" box-anchor="hfill" margin="0 10"></text>
-          <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
+          <text class="title-text" box-anchor="hfill" margin="0 10 0 10"></text>
+          <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10 2 10" font-size="12"></text>
         </g>
 
       </g>
@@ -486,8 +486,10 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
   TextLabel* titleLabel = new TextLabel(item->containerNode()->selectFirst(".title-text"));
   titleLabel->setText(title);
   TextLabel* noteLabel = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
-  if(note && note[0])
+  if(note && note[0]) {
+    titleLabel->node->setAttribute("margin", "0 10 5 10");
     noteLabel->setText(note);
+  }
   return item;
 }
 

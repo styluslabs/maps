@@ -31,6 +31,11 @@ struct sqlite3;
 typedef std::function<void(sqlite3_stmt*)> SQLiteStmtFn;
 bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb = SQLiteStmtFn(), SQLiteStmtFn bind = SQLiteStmtFn());
 
+struct sqlite3_context;
+struct sqlite3_value;
+extern LngLat searchRankOrigin;
+void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv);
+
 #include "isect2d.h"
 #include "mapscomponent.h"
 

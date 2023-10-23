@@ -22,27 +22,6 @@
 static sqlite3* searchDB = NULL;
 static sqlite3_stmt* insertStmt = NULL;
 
-static LngLat searchOrigin;
-
-static void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv)
-{
-  if(argc != 3) {
-    sqlite3_result_error(context, "osmSearchRank - Invalid number of arguments (3 required).", -1);
-    return;
-  }
-  if(sqlite3_value_type(argv[0]) != SQLITE_FLOAT || sqlite3_value_type(argv[1]) != SQLITE_FLOAT || sqlite3_value_type(argv[2]) != SQLITE_FLOAT) {
-    sqlite3_result_double(context, -1.0);
-    return;
-  }
-  // sqlite FTS5 rank is roughly -1*number_of_words_in_query; ordered from -\inf to 0
-  double rank = /*sortByDist ? -1.0 :*/ sqlite3_value_double(argv[0]);
-  double lon = sqlite3_value_double(argv[1]);
-  double lat = sqlite3_value_double(argv[2]);
-  double dist = lngLatDist(searchOrigin, LngLat(lon, lat));  // in kilometers
-  // obviously will want a more sophisticated ranking calculation in the future
-  sqlite3_result_double(context, rank/log2(1+dist));
-}
-
 static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vector<SearchData>& searchData)
 {
   using namespace Tangram;
@@ -138,7 +117,7 @@ static bool initSearch()
 
     // DB doesn't exist - create it
     if(sqlite3_open_v2(dbPath.c_str(), &searchDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
-      logMsg("Error creating %s", dbPath.c_str());
+      LOGE("Error creating %s", dbPath.c_str());
       sqlite3_close(searchDB);
       searchDB = NULL;
       return false;
@@ -157,12 +136,12 @@ static bool initSearch()
   char const* stmtStr = "INSERT INTO points_fts (tags,props,lng,lat) VALUES (?,?,?,?);";
   //char const* stmtStr = "INSERT INTO pois (name,tags,props,lng,lat,tile_id) VALUES (?,?,?,?,?,?);";
   if(sqlite3_prepare_v2(searchDB, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
-    logMsg("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
+    LOGE("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
     return false;
   }
 
   if(sqlite3_create_function(searchDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
-    logMsg("sqlite3_create_function: error creating osmSearchRank");
+    LOGE("sqlite3_create_function: error creating osmSearchRank for search DB");
   return true;
 }
 
@@ -452,7 +431,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     // use map center for origin if current location is offscreen
     if(phase != NEXTPAGE) {
       LngLat loc = app->currLocation.lngLat();
-      searchOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
+      searchRankOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
     }
     if(phase == RETURN) {
       DB_exec(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);", NULL, [&](sqlite3_stmt* stmt){
@@ -528,9 +507,13 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
       app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
     };
     double distkm = lngLatDist(app->currLocation.lngLat(), res.pos);
-    TextBox* distText = new TextBox(createTextNode(fstring("%.1f km", distkm).c_str()));
+    double dist = app->metricUnits ? distkm : distkm*0.621371;
+    int prec = dist >= 100 ? 0 : 1;
+    std::string diststr = fstring(app->metricUnits ? "%.*f km" : "%.*f mi", prec, dist);
+    TextBox* distText = new TextBox(createTextNode(diststr.c_str()));
     distText->node->addClass("weak");
     distText->node->setAttribute("font-size", "12");
+    distText->node->setAttribute("margin", "0 8 0 0");
     item->selectFirst(".child-container")->addWidget(distText);
     resultsContent->addWidget(item);
   }
@@ -607,7 +590,7 @@ Button* MapsSearch::createPanel()
   for(size_t ii = 0; ii < cproviders.size(); ++ii) {
     std::string title = cproviders[ii];
     searchPluginMenu->addItem(title.c_str(), [=](){
-      searchPanel->selectFirst(".panel-title")->setText(title.c_str());
+      static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
       app->config["search"]["plugin"] = providerIdx = ii;
     });
   }

@@ -55,8 +55,8 @@ public:
   LngLat getMapCenter();
   void getElevation(LngLat pos, std::function<void(double)> callback);
   //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
-  void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority = 1);
-  void setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority = 1);
+  void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props);  //, int priority = 1);
+  void setPickResult(LngLat pos, std::string namestr, std::string propstr);
   YAML::Node readSceneValue(const std::string& yamlPath);
   void placeInfoPluginError(const char* err);
 
@@ -117,7 +117,6 @@ public:
   Widget* gpsStatusBtn = NULL;
   Widget* crossHair = NULL;
   Widget* legendContainer = NULL;
-  std::unique_ptr<SvgNode> placeInfoProto;
   std::vector<Widget*> panelHistory;
 
   int64_t storageTotal = 0;
@@ -146,4 +145,6 @@ private:
   void sendMapEvent(MapEvent_t event);
   void showPanelContainer(bool show);
   void clearPickResult();
+
+  bool currLocPlaceInfo = false;  // special case of showing place info for current location
 };

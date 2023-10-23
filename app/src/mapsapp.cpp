@@ -76,12 +76,41 @@ std::string MapsApp::osmPlaceType(const rapidjson::Document& props)
   return val;
 }
 
-void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props, int priority)
+void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props)  //, int priority)
 {
+  static const char* placeInfoProtoSVG = R"#(
+    <g layout="flex" flex-direction="column" box-anchor="hfill">
+      <rect box-anchor="fill" width="48" height="48"/>
+      <g class="place-info-row" layout="flex" flex-direction="row" box-anchor="hfill" margin="6 0">
+        <text class="place-text" margin="0 6" font-size="14"></text>
+        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
+        <use class="icon elevation-icon" display="none" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
+        <text class="elevation-text" margin="0 6" font-size="14"></text>
+        <use class="icon direction-icon" width="18" height="18" xlink:href=":/ui-icons.svg#arrow-narrow-up"/>
+        <text class="dist-text" margin="0 6" font-size="14"></text>
+      </g>
+      <g class="currloc-info-row" display="none" layout="flex" flex-direction="row" box-anchor="hfill" margin="6 0">
+        <text class="lnglat-text" margin="0 10" font-size="12"></text>
+        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
+        <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
+        <text class="currloc-elevation-text" margin="0 6" font-size="14"></text>
+      </g>
+      <g class="action-container" layout="box" box-anchor="hfill" margin="0 3"></g>
+      <g class="waypt-section" layout="box" box-anchor="hfill"></g>
+      <g class="bkmk-section" layout="box" box-anchor="hfill"></g>
+      <g class="info-section" layout="flex" flex-direction="column" box-anchor="hfill"></g>
+    </g>
+  )#";
+
+  static std::unique_ptr<SvgNode> placeInfoProto;
+  if(!placeInfoProto)
+    placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
+
   std::string osmid = osmIdFromProps(props);
   pickResultCoord = pos;
   pickResultName = namestr;
   pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
+  currLocPlaceInfo = (locMarker > 0 && pickedMarkerId == locMarker);
   // allow pick result to be used as waypoint
   if(mapsTracks->onPickResult())
     return;
@@ -91,14 +120,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   // show marker
   if(pickResultMarker == 0)
     pickResultMarker = map->markerAdd();
-  map->markerSetVisible(pickResultMarker, true);
-  // 2nd value is priority (smaller number means higher priority)
-  //std::replace(namestr.begin(), namestr.end(), '"', '\'');
-  //map->markerSetStylingFromString(pickResultMarker, fstring(searchMarkerStyleStr, "pick-marker-red").c_str());
-  map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
-  // geometry must be set before properties for new marker!
-  map->markerSetPoint(pickResultMarker, pos);
-  map->markerSetProperties(pickResultMarker, {{{"priority", priority}, {"name", namestr}}});
+  map->markerSetVisible(pickResultMarker, !currLocPlaceInfo);
 
   // ensure marker is visible
   double scrx, scry;
@@ -107,8 +129,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
   // show place info panel
   gui->deleteContents(infoContent);  //, ".listitem");
-
   Widget* item = new Widget(placeInfoProto->clone());
+  infoContent->addWidget(item);
+
+  showPanel(infoPanel, true);
+  infoPanel->selectFirst(".minimize-btn")->setVisible(panelHistory.size() > 1);
 
   // actions toolbar
   Toolbar* toolbar = createToolbar();
@@ -117,13 +142,24 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   toolbar->addWidget(createStretch());
   item->selectFirst(".action-container")->addWidget(toolbar);
 
-  SvgText* titlenode = static_cast<SvgText*>(infoPanel->containerNode()->selectFirst(".panel-title"));
+  TextLabel* titlenode = static_cast<TextLabel*>(infoPanel->selectFirst(".panel-title"));
   titlenode->setText(namestr.c_str());
-  titlenode->setText(SvgPainter::breakText(titlenode, 250).c_str());
+  //titlenode->setText(SvgPainter::breakText(titlenode->textNode, 250).c_str());
 
-  SvgText* coordnode = static_cast<SvgText*>(item->containerNode()->selectFirst(".lnglat-text"));
-  if(coordnode)
-    coordnode->addText(fstring("%.6f, %.6f", pos.latitude, pos.longitude).c_str());
+  Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
+  if(bkmkSection)
+    item->selectFirst(".bkmk-section")->addWidget(bkmkSection);
+
+  if(currLocPlaceInfo) {
+    item->selectFirst(".place-info-row")->setVisible(false);
+    item->selectFirst(".currloc-info-row")->setVisible(true);
+    updateLocation(currLocation);  // set lng, lat, elevation text
+    return;
+  }
+
+  map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
+  map->markerSetPoint(pickResultMarker, pos);  // geometry must be set before properties for new marker!
+  map->markerSetProperties(pickResultMarker, {{{"name", namestr}}});  //{"priority", priority}
 
   Widget* distwdgt = item->selectFirst(".dist-text");
   if(distwdgt) {
@@ -140,14 +176,6 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
   if(placenode && !placetype.empty())
     placenode->addText(placetype.c_str());
-
-  Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
-  if(bkmkSection)
-    item->selectFirst(".bkmk-section")->addWidget(bkmkSection);
-
-  //SvgContainerNode* imghost = item->selectFirst(".image-container")->containerNode();
-  //imghost->addChild(resultIconNode->clone());
-  infoContent->addWidget(item);
 
   getElevation(pos, [this](double elev){
     Widget* elevWidget = infoContent->selectFirst(".elevation-text");
@@ -172,23 +200,21 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
 
     };
     Widget* providerRow = createRow();
-    providerRow->node->setAttribute("margin", "3 3");
-    providerRow->addWidget(createStretch());
+    providerRow->node->setAttribute("margin", "3 6");
     providerRow->addWidget(new TextBox(createTextNode("Information from ")));
+    providerRow->addWidget(createStretch());
     providerRow->addWidget(providerSel);
     infoContent->selectFirst(".info-section")->addWidget(providerRow);
     //infoContent->selectFirst(".info-section")->addWidget(createTitledRow("Information from ", providerSel));
     providerSel->onChanged("");
   }
-
-  showPanel(infoPanel, true);
 }
 
-void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr, int priority)
+void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr)
 {
   rapidjson::Document props;
   props.Parse(propstr.c_str());
-  setPickResult(pos, namestr, props, priority);
+  setPickResult(pos, namestr, props);
 }
 
 void MapsApp::placeInfoPluginError(const char* err)
@@ -313,6 +339,7 @@ void MapsApp::clearPickResult()
   if(pickResultMarker > 0)
     map->markerSetVisible(pickResultMarker, false);
   pickResultCoord = LngLat(NAN, NAN);
+  currLocPlaceInfo = false;
 }
 
 void MapsApp::tapEvent(float x, float y)
@@ -509,6 +536,8 @@ void MapsApp::mapUpdate(double time)
   reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(cpos.rotation));
 
   if(pickedMarkerId == locMarker) {
+    if(!mapsTracks->activeTrack)
+      showPanel(infoPanel);
     setPickResult(currLocation.lngLat(), "Current location", "");
     mapsSearch->clearSearch();  // ???
     pickedMarkerId = 0;
@@ -546,6 +575,20 @@ void MapsApp::updateLocation(const Location& _loc)
   }
   //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, currLocation.lngLat());
+
+  if(currLocPlaceInfo) {
+    SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
+    std::string locstr = fstring("%.6f, %.6f", currLocation.lat, currLocation.lng);
+    if(currLocation.poserr > 0)
+      locstr += fstring(" (%.0f m)", currLocation.poserr);
+    if(coordnode)
+      coordnode->setText(locstr.c_str());
+
+    SvgText* elevnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".currloc-elevation-text"));
+    double elev = currLocation.alt;
+    if(elevnode)
+      elevnode->setText(fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? elev : elev*3.28084).c_str());
+  }
 
   sendMapEvent(LOC_UPDATE);
 }
@@ -903,25 +946,6 @@ Window* MapsApp::createGUI()
   )#";
 #endif
 
-  static const char* placeInfoProtoSVG = R"#(
-    <g layout="flex" flex-direction="column" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g layout="flex" flex-direction="row" box-anchor="hfill">
-        <text class="place-text" margin="0 10" font-size="14"></text>
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
-        <!-- text class="lnglat-text weak" margin="0 10" font-size="12"></text -->
-        <use class="icon elevation-icon" display="none" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
-        <text class="elevation-text" margin="0 6" font-size="14"></text>
-        <use class="icon direction-icon" width="18" height="18" xlink:href=":/ui-icons.svg#arrow-narrow-up"/>
-        <text class="dist-text" margin="0 6" font-size="14"></text>
-      </g>
-      <g class="action-container" layout="box" box-anchor="hfill"></g>
-      <g class="waypt-section" layout="box" box-anchor="hfill"></g>
-      <g class="bkmk-section" layout="box" box-anchor="hfill"></g>
-      <g class="info-section" layout="flex" flex-direction="column" box-anchor="hfill"></g>
-    </g>
-  )#";
-
   static const char* gpsStatusSVG = R"#(
     <g class="gps-status-button" layout="box" box-anchor="hfill">
       <rect class="background" box-anchor="hfill" width="36" height="22"/>
@@ -933,8 +957,6 @@ Window* MapsApp::createGUI()
       </g>
     </g>
   )#";
-
-  placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
   Tooltips::inst = &tooltipsInst;
 
@@ -1093,12 +1115,14 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   Widget* titleWidget = new Widget(widgetNode("#panel-header-title"));
   if(icon)
     static_cast<SvgUse*>(titleWidget->containerNode()->selectFirst(".icon"))->setTarget(icon);
-  static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
+  TextLabel* titleLabel = new TextLabel(titleWidget->containerNode()->selectFirst(".panel-title"));
+  titleLabel->setText(title);
+  //static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
   toolbar->addWidget(titleWidget);
 
-  Widget* stretch = createStretch();
+  //Widget* stretch = createStretch();
   if(panelSplitter) {
-    stretch->addHandler([this](SvgGui* gui, SDL_Event* event) {
+    titleLabel->addHandler([this](SvgGui* gui, SDL_Event* event) {
       if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
         panelSplitter->sdlEvent(gui, event);
         return true;
@@ -1107,7 +1131,7 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
     });
   }
 
-  toolbar->addWidget(stretch);
+  //toolbar->addWidget(stretch);
   return toolbar;
 }
 
@@ -1155,6 +1179,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
   // what about just swiping down to minimize instead of a button?
   if(canMinimize) {
     auto minimizeBtn = createToolbutton(MapsApp::uiIcon(PLATFORM_MOBILE ? "chevron-down" : "chevron-up"));
+    minimizeBtn->node->addClass("minimize-btn");
     minimizeBtn->onClicked = [this](){
       // options:
       // 1. hide container and splitter and show a floating restore btn
@@ -1279,9 +1304,9 @@ static const char* moreWidgetSVG = R"#(
     <text class="note-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
   </g>
 
-  <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row">
+  <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
     <use class="panel-icon icon" width="36" height="36" xlink:href="" />
-    <text class="panel-title" margin="0 9"></text>
+    <text class="panel-title" box-anchor="hfill" margin="0 9"></text>
   </g>
 </svg>
 )#";
@@ -1505,6 +1530,10 @@ int main(int argc, char* argv[])
     logMsg("Error creating %s", dbPath.c_str());
     sqlite3_close(MapsApp::bkmkDB);
     MapsApp::bkmkDB = NULL;
+  }
+  else {
+    if(sqlite3_create_function(MapsApp::bkmkDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
+      LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
   }
 
   // GUI setup

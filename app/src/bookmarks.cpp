@@ -328,7 +328,7 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
     bkmkPanelDirty = false;
     app->showPanel(bkmkPanel, true);
     app->gui->deleteContents(bkmkContent, ".listitem");
-    bkmkPanel->selectFirst(".panel-title")->setText(listname.c_str());
+    static_cast<TextLabel*>(bkmkPanel->selectFirst(".panel-title"))->setText(listname.c_str());
     if(activeListId < 0)
       hideBookmarks(list_id);
     activeListId = list_id;
@@ -345,8 +345,9 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
   else
     it->second->setVisible(true);
 
+  searchRankOrigin = app->currLocation.lngLat();
   std::string srt = app->config["bookmarks"]["sort"].as<std::string>("date");
-  std::string strStr = srt == "name" ? "title" : srt == "dist" ? "osmSearchRank(-1, lng, lat)" : "timestamp DESC";
+  std::string strStr = srt == "name" ? "title" : srt == "dist" ? "osmSearchRank(-1.0, lng, lat)" : "timestamp DESC";
   std::string query = "SELECT rowid, title, props, notes, lng, lat, timestamp FROM bookmarks WHERE list_id = ? ORDER BY " + strStr + ";";
   DB_exec(app->bkmkDB, query.c_str(), [&](sqlite3_stmt* stmt){
     int rowid = sqlite3_column_int(stmt, 0);
@@ -493,8 +494,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
       sqlite3_bind_int(stmt, 3, rowid);
     });
     // update title
-    SvgText* titlenode = static_cast<SvgText*>(app->infoPanel->containerNode()->selectFirst(".panel-title"));
-    titlenode->setText(title.c_str());
+    static_cast<TextLabel*>(app->infoPanel->selectFirst(".panel-title"))->setText(title.c_str());
 
     auto it = bkmkMarkers.find(listid);
     if(it != bkmkMarkers.end())
@@ -632,7 +632,7 @@ Button* MapsBookmarks::createPanel()
 
   // Bookmarks panel
   bkmkContent = createColumn();
-  TextEdit* listTitle = createTextEdit();
+  TextEdit* listTitle = createTitledTextEdit("Title");
   ColorPicker* listColor = createColorPicker(app->markerColors, Color::CYAN);
   Widget* editListRow = createRow();
   editListRow->addWidget(listTitle);
@@ -652,8 +652,11 @@ Button* MapsBookmarks::createPanel()
   editListBtn->onClicked = [=](){
     bool show = !editListContent->isVisible();
     if(show) {
-      SQLiteStmt(app->bkmkDB, "SELECT color FROM lists WHERE id = ?;").bind(activeListId).exec(
-          [&](const char* colorstr){ listColor->setColor(parseColor(colorstr, Color::CYAN)); });
+      const char* query = "SELECT title, color FROM lists WHERE id = ?;";
+      SQLiteStmt(app->bkmkDB, query).bind(activeListId).exec([&](const char* title, const char* colorstr){
+        listTitle->setText(title);
+        listColor->setColor(parseColor(colorstr, Color::CYAN));
+      });
     }
     editListContent->setVisible(show);
   };
@@ -670,8 +673,9 @@ Button* MapsBookmarks::createPanel()
   sortBtn->setMenu(sortMenu);
 
   Button* mapAreaBkmksBtn = createToolbutton(MapsApp::uiIcon("fold-map-pin"), "Bookmarks in map area only");
-  mapAreaBkmksBtn->onClicked = [this](){
+  mapAreaBkmksBtn->onClicked = [=](){
     mapAreaBkmks = !mapAreaBkmks;
+    mapAreaBkmksBtn->setChecked(mapAreaBkmks);
     if(mapAreaBkmks)
       onMapEvent(MAP_CHANGE);
     else {

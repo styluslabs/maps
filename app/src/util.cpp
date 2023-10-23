@@ -173,6 +173,27 @@ bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
   return true;
 }
 
+LngLat searchRankOrigin;
+
+void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv)
+{
+  if(argc != 3) {
+    sqlite3_result_error(context, "osmSearchRank - Invalid number of arguments (3 required).", -1);
+    return;
+  }
+  if(sqlite3_value_type(argv[0]) != SQLITE_FLOAT || sqlite3_value_type(argv[1]) != SQLITE_FLOAT || sqlite3_value_type(argv[2]) != SQLITE_FLOAT) {
+    sqlite3_result_double(context, -1.0);
+    return;
+  }
+  // sqlite FTS5 rank is roughly -1*number_of_words_in_query; ordered from -\inf to 0
+  double rank = /*sortByDist ? -1.0 :*/ sqlite3_value_double(argv[0]);
+  double lon = sqlite3_value_double(argv[1]);
+  double lat = sqlite3_value_double(argv[2]);
+  double dist = lngLatDist(searchRankOrigin, LngLat(lon, lat));  // in kilometers
+  // obviously will want a more sophisticated ranking calculation in the future
+  sqlite3_result_double(context, rank/log2(1+dist));
+}
+
 // MarkerGroup
 // - we may alter this to use ClientDataSource (at least for alt markers)
 
