@@ -24,6 +24,10 @@
 #include "usvg/svgpainter.h"
 #include "mapwidgets.h"
 
+#if !defined(DEBUG) && !defined(NDEBUG)
+#error "One of DEBUG or NDEBUG must be defined!"
+#endif
+
 Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
 YAML::Node MapsApp::config;
@@ -346,7 +350,7 @@ void MapsApp::tapEvent(float x, float y)
 {
   //LngLat location;
   map->screenPositionToLngLat(x, y, &tapLocation.longitude, &tapLocation.latitude);
-#ifndef NDEBUG
+#if IS_DEBUG
   double xx, yy;
   map->lngLatToScreenPosition(tapLocation.longitude, tapLocation.latitude, &xx, &yy);
   LOG("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, tapLocation.longitude, tapLocation.latitude, xx, yy);
@@ -376,10 +380,11 @@ void MapsApp::tapEvent(float x, float y)
     if(!result || result->id == pickResultMarker)
       return;
     LOG("Marker %d picked", result->id);
-    // hide pick result marker, since there is already a marker!
-    map->markerSetVisible(pickResultMarker, false);
-    // looking for search marker or bookmark marker?
+    map->markerSetVisible(pickResultMarker, false);  // ???
     pickedMarkerId = result->id;
+    map->screenPositionToLngLat(
+        result->position[0], result->position[1], &pickResultCoord.longitude, &pickResultCoord.latitude);
+    //pickResultCoord = result->coordinates;  -- just set to center of marker for polylines/polygons
     tapLocation = {NAN, NAN};
   });
 
@@ -414,7 +419,7 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
   options.preserveMarkers = true;
-#ifdef DEBUG
+#if IS_DEBUG
   options.debugStyles = true;
 #endif
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
@@ -544,6 +549,7 @@ void MapsApp::mapUpdate(double time)
   }
 
   sendMapEvent(MAP_CHANGE);
+  pickedMarkerId = 0;  // prevent repeated searched for ignored marker
 }
 
 void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
@@ -893,7 +899,7 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
   real n = firstdigit < 2 ? 1 : firstdigit < 5 ? 2 : 5;
   real scaledist = n * pow10;
   std::string str = fstring(format, scaledist);
-#ifndef NDEBUG
+#if IS_DEBUG
   str += fstring("  (z%.2f)", map->getZoom());
 #endif
 

@@ -430,34 +430,21 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
   // - if this gives us too many false positives, we could add "Nearby bookmarks" title to section
   // - in the case of multiple bookmarks for a given osm_id, we just stack multiple subsections
-  const char* query1 = "SELECT rowid, osm_id, list_id, title, notes, lng, lat FROM bookmarks WHERE osm_id = ?;";
-  DB_exec(app->bkmkDB, query1, [&](sqlite3_stmt* stmt){
-    int rowid = sqlite3_column_int(stmt, 0);
-    int listid = sqlite3_column_int(stmt, 2);
-    const char* namestr = (const char*)(sqlite3_column_text(stmt, 3));
-    const char* notestr = (const char*)(sqlite3_column_text(stmt, 4));
-    content->addWidget(getPlaceInfoSubSection(rowid, listid, namestr, notestr));
-  }, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_text(stmt, 1, osm_id.c_str(), -1, SQLITE_TRANSIENT);
-  });
-
-  if(content->containerNode()->children().empty()) {
-    const char* query2 = "SELECT rowid, osm_id, list_id, title, notes, lng, lat FROM bookmarks WHERE "
-        "lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? LIMIT 1;";
-    DB_exec(app->bkmkDB, query2, [&](sqlite3_stmt* stmt){
-      if(osm_id.empty() || sqlite3_column_text(stmt, 1)[0] == '\0') {
-        int rowid = sqlite3_column_int(stmt, 0);
-        int listid = sqlite3_column_int(stmt, 2);
-        const char* namestr = (const char*)(sqlite3_column_text(stmt, 3));
-        const char* notestr = (const char*)(sqlite3_column_text(stmt, 4));
+  if(!osm_id.empty()) {
+    const char* query1 = "SELECT rowid, list_id, title, notes FROM bookmarks WHERE osm_id = ?;";
+    SQLiteStmt(app->bkmkDB, query1).bind(osm_id)
+      .exec([&](int rowid, int listid, const char* namestr, const char* notestr){
         content->addWidget(getPlaceInfoSubSection(rowid, listid, namestr, notestr));
-      }
-    }, [&](sqlite3_stmt* stmt){
-      constexpr double delta = 0.00001;
-      sqlite3_bind_double(stmt, 1, pos.longitude - delta);
-      sqlite3_bind_double(stmt, 2, pos.latitude - delta);
-      sqlite3_bind_double(stmt, 3, pos.longitude + delta);
-      sqlite3_bind_double(stmt, 4, pos.latitude + delta);
+    });
+  }
+  if(content->containerNode()->children().empty()) {
+    const char* query2 = "SELECT rowid, list_id, title, notes FROM bookmarks WHERE "
+        "lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? LIMIT 1;";
+    constexpr double delta = 0.00001;
+    SQLiteStmt(app->bkmkDB, query2)
+        .bind(pos.longitude - delta, pos.latitude - delta, pos.longitude + delta, pos.latitude + delta)
+        .exec([&](int rowid, int listid, const char* namestr, const char* notestr){
+          content->addWidget(getPlaceInfoSubSection(rowid, listid, namestr, notestr));
     });
   }
   //if(content->containerNode()->children().empty())
@@ -508,7 +495,16 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
 
   Widget* toolRow = createRow();
-  Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), liststr.c_str(), true);
+  //Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), liststr.c_str(), true);
+  // bit of a hack to use TextLabel on a toolbutton
+  Button* chooseListBtn = new Button(widgetNode("#toolbutton"));
+  chooseListBtn->setIcon(MapsApp::uiIcon("pin"));
+  chooseListBtn->node->setAttribute("box-anchor", "hfill");
+  TextLabel* listLabel = new TextLabel(chooseListBtn->containerNode()->selectFirst(".title"));
+  listLabel->node->setAttribute("box-anchor", "hfill");
+  listLabel->setVisible(true);
+  listLabel->setText(liststr.c_str());
+
   Button* removeBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete");
   Button* addNoteBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
 
@@ -527,10 +523,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   };
 
   auto setListFn = [=](int list_id, std::string listname){
-    DB_exec(app->bkmkDB, "UPDATE bookmarks SET list_id = ? WHERE rowid = ?;", {}, [=](sqlite3_stmt* stmt1){
-      sqlite3_bind_int(stmt1, 1, list_id);
-      sqlite3_bind_int(stmt1, 2, rowid);
-    });
+    SQLiteStmt(app->bkmkDB, "UPDATE bookmarks SET list_id = ? WHERE rowid = ?;").bind(list_id, rowid).exec();
     chooseListBtn->setText(listname.c_str());
   };
 
@@ -540,7 +533,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   };
 
   toolRow->addWidget(chooseListBtn);
-  toolRow->addWidget(createStretch());
+  //toolRow->addWidget(createStretch());
   toolRow->addWidget(removeBtn);
   toolRow->addWidget(addNoteBtn);
 

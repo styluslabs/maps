@@ -467,7 +467,6 @@ Widget* MapsOffline::createPanel()
 
   offlineContent = createColumn();
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("offline"), "Offline Maps");
-  toolbar->addWidget(createStretch());
   //toolbar->addWidget(maxZoomSpin);
   toolbar->addWidget(saveBtn);
   offlinePanel = app->createMapPanel(toolbar, offlineContent, NULL, false);

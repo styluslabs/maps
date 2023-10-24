@@ -672,7 +672,6 @@ Button* MapsSources::createPanel()
   });
 
   auto sourcesHeader = app->createPanelHeader(MapsApp::uiIcon("layers"), "Map Source");
-  sourcesHeader->addWidget(createStretch());
   sourcesHeader->addWidget(createBtn);
   sourcesHeader->addWidget(legendBtn);
   sourcesHeader->addWidget(offlineBtn);
@@ -686,7 +685,6 @@ Button* MapsSources::createPanel()
     }
     return false;
   });
-
 
   auto editHeader = app->createPanelHeader(MapsApp::uiIcon("edit"), "Edit Source");
   sourceEditPanel = app->createMapPanel(editHeader, srcEditContent, sourceTb);

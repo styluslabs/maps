@@ -33,6 +33,7 @@ struct GpxWay
 
 class TrackPlot;
 class TrackSparkline;
+class TrackSliders;
 
 struct GpxFile {
   std::string title;
@@ -102,6 +103,7 @@ public:
   Button* sparkStats = NULL;
   TrackSparkline* trackSpark = NULL;
   Button* retryBtn = NULL;
+  TrackSliders* trackSliders = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
@@ -138,6 +140,7 @@ private:
   std::vector<Waypoint> origLocs;
   std::vector<LngLat> previewRoute;
   std::string insertionWpt;
+  Waypoint trackHoverLoc = LngLat{0, 0};
   double cropStart = 0;
   double cropEnd = 1;
   double recordLastSave = 0;
