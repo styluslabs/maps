@@ -177,10 +177,6 @@ void MapsSources::sourceModified()
   saveBtn->setEnabled(!titleEdit->text().empty());
 }
 
-// New GUI
-
-constexpr int MAX_SOURCES = 8;
-
 void MapsSources::rebuildSource(const std::string& srcname)
 {
   SourceBuilder builder(mapSources);
@@ -206,13 +202,6 @@ void MapsSources::rebuildSource(const std::string& srcname)
         currLayers.push_back(srcname);
     }
   }
-  //else {
-  //  for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
-  //    int idx = layerCombos[ii]->index();
-  //    if(idx > 0)
-  //      builder.addLayer(layerKeys[idx]);
-  //  }
-  //}
 
   builder.updates = currUpdates;
   for(auto& src : currLayers)
@@ -235,26 +224,6 @@ void MapsSources::rebuildSource(const std::string& srcname)
   }
 
   saveBtn->setEnabled(srcname.empty());  // for existing source, don't enable saveBtn until edited
-
-  //bool multi = srcname.empty() || mapSources[srcname]["type"].Scalar() == "Multi";
-  //size_t ii = 0;
-  //for(; ii < builder.layerkeys.size(); ++ii) {
-  //  for(size_t jj = 0; jj < layerKeys.size(); ++jj) {
-  //    if(builder.layerkeys[ii] == layerKeys[jj]) {
-  //      //currSrcIdx[ii] = jj;
-  //      layerCombos[ii]->setIndex(jj);
-  //      layerRows[ii]->setVisible(multi);
-  //      break;  // next layer
-  //    }
-  //  }
-  //}
-  //
-  //layerCombos[ii]->setIndex(0);
-  //layerRows[ii]->setVisible(multi);
-  //for(++ii; ii < layerRows.size(); ++ii) {
-  //  layerCombos[ii]->setIndex(0);
-  //  layerRows[ii]->setVisible(false);
-  //}
 }
 
 std::string MapsSources::createSource(std::string savekey, const std::string& yamlStr)
@@ -283,11 +252,6 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
       YAML::Node layers = node["layers"] = YAML::Node(YAML::NodeType::Sequence);
       for(auto& src : currLayers)
         layers.push_back(YAML::Load("{source: " + src + "}"));
-      //for(size_t ii = 0; ii < layerCombos.size(); ++ii) {
-      //  int idx = layerCombos[ii]->index();
-      //  if(idx > 0)
-      //    layers.push_back(YAML::Load("{source: " + src + "}"));
-      //}
     }
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
     for(const SceneUpdate& upd : app->sceneUpdates) {
@@ -578,6 +542,7 @@ Button* MapsSources::createPanel()
   titleEdit->node->setAttribute("box-anchor", "hfill");
   saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save Source");
   //discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete Source");
+  sourceTb->node->setAttribute("margin", "0 3");
   sourceTb->addWidget(titleEdit);
   sourceTb->addWidget(saveBtn);
 
@@ -635,6 +600,7 @@ Button* MapsSources::createPanel()
   Widget* srcEditContent = createColumn();
   varsContent = createColumn();
   varsContent->node->setAttribute("box-anchor", "hfill");
+  varsContent->node->setAttribute("margin", "0 3");
   layersContent = createColumn();
   layersContent->node->setAttribute("box-anchor", "hfill");
   srcEditContent->addWidget(varsContent);

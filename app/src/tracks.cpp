@@ -1037,6 +1037,7 @@ void MapsTracks::updateDistances()
 {
   auto wayPtItems = wayptContent->select(".listitem");  //->content->containerNode()->children();
   auto& route = activeTrack->routes.back().pts;
+  if(route.empty()) return;
 
   if(activeTrack->routeMode == "direct") {
     size_t rteidx = 0;
