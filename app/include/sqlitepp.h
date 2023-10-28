@@ -64,6 +64,8 @@ public:
       LOGE("sqlite3_prepare_v2 error: %s", sqlite3_errmsg(db));
   }
 
+  SQLiteStmt(sqlite3* db, const std::string& sql) : SQLiteStmt(db, sql.c_str()) {}
+
   void bind_at(int loc) {}
   template<class... Args> void bind_at(int loc, bool arg0, Args... args)
   { sqlite3_bind_int(stmt, loc, arg0 ? 1 : 0); bind_at(loc+1, args...); }
@@ -115,14 +117,30 @@ public:
   bool exec() { return exec([](sqlite3_stmt*){}); }
 };
 
-// if we want to use static SQLiteStmt instances, we can set a static flag SQLiteStmt::dbClosed when main()
-//  exits to tell destructor to skip sqlite3_finalize()
-
 // can't be inside class due to GCC bug
 template<> inline int SQLiteStmt::get_col(int idx) { return sqlite3_column_int(stmt, idx); }
 template<> inline sqlite_int64 SQLiteStmt::get_col(int idx) { return sqlite3_column_int64(stmt, idx); }
 template<> inline float SQLiteStmt::get_col(int idx) { return float(sqlite3_column_double(stmt, idx)); }
 template<> inline double SQLiteStmt::get_col(int idx) { return sqlite3_column_double(stmt, idx); }
 template<> inline const char* SQLiteStmt::get_col(int idx) { return (const char*)sqlite3_column_text(stmt, idx); }
-template<> inline std::string SQLiteStmt::get_col(int idx) { return (const char*)sqlite3_column_text(stmt, idx); }
+template<> inline std::string SQLiteStmt::get_col(int idx)
+  { const char* res = (const char*)sqlite3_column_text(stmt, idx);  return res ? res : ""; }
 template<> inline sqlite3_stmt* SQLiteStmt::get_col(int idx) { return stmt; }
+
+class SQLiteDB
+{
+public:
+  sqlite3* db;
+
+  SQLiteDB(sqlite3* _db = NULL) : db(_db) {}
+  SQLiteDB(const SQLiteDB&) = delete;
+  ~SQLiteDB() { if(db) sqlite3_close(db); }
+
+  const char* errMsg() { return sqlite3_errmsg(db); }
+  bool exec(const char* sql) { return SQLiteStmt(db, sql).exec(); }
+  bool exec(const std::string& sql) { return exec(sql.c_str()); }
+  SQLiteStmt stmt(const char* sql) { return SQLiteStmt(db, sql); }
+  SQLiteStmt stmt(const std::string& sql) { return stmt(sql.c_str()); }
+
+  //std::unordered_map<std::string, sqlite3_stmt*> stmtCache;
+};

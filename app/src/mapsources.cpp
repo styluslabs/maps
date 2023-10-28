@@ -279,7 +279,7 @@ void MapsSources::populateSources()
 
   std::vector<std::string> layerTitles = {};  //"None"
   std::vector<std::string> sourceTitles = {};
-  layerKeys = {};  // used for layerCombos
+  layerKeys = {};  // used for selectLayerDialog
   sourceKeys = {};  // currently only used for quick menu
   for(const auto& src : mapSources) {
     std::string key = src.first.Scalar();

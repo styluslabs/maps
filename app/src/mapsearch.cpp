@@ -25,7 +25,6 @@ static sqlite3_stmt* insertStmt = NULL;
 static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vector<SearchData>& searchData)
 {
   using namespace Tangram;
-  // TODO: also support GeoJSON and TopoJSON for no source case
   auto tileData = task->source() ? task->source()->parse(*task) : Mvt::parseTile(*task, 0);
   for(const Layer& layer : tileData->layers) {
     for(const SearchData& searchdata : searchData) {
@@ -58,11 +57,7 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
 {
   /*int nchanges = sqlite3_total_changes(searchDB);
   const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
-  DB_exec(searchDB, query, {}, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_int(stmt, 1, task->tileId().z);
-    sqlite3_bind_int(stmt, 2, task->tileId().x);
-    sqlite3_bind_int(stmt, 3, task->tileId().y);
-  });
+  SQLiteStmt(searchDB, query).bind(task->tileId().z, task->tileId().x, task->tileId().y).exec();
   if(sqlite3_total_changes(searchDB) == nchanges)  // total_changes() is a bit safer than changes() here
     return;
   // bind tile_id
@@ -174,7 +169,8 @@ bool MapsSearch::indexMBTiles()
     // mbtiles spec: https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md
     sqlite3* tileDB;
     if(sqlite3_open_v2(dbfile.c_str(), &tileDB, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
-      logMsg("Error opening tile DB: %s\n", sqlite3_errmsg(tileDB));
+      LOGE("Error opening tile DB: %s\n", sqlite3_errmsg(tileDB));
+      sqlite3_close(tileDB);
       continue;
     }
     int min_row, max_row, min_col, max_col, max_zoom;
@@ -196,7 +192,7 @@ bool MapsSearch::indexMBTiles()
       if(--tileCount == 0) {
         sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
         //sqlite3_finalize(insertStmt);  // then ... stmt = NULL;
-        logMsg("Search index built.\n");
+        LOG("Search index built.\n");
       }
     }};
 

@@ -4,7 +4,8 @@
 #include "util.h"
 //#include "imgui.h"
 #include <deque>
-#include "sqlite3/sqlite3.h"
+//#include "sqlite3/sqlite3.h"
+#include "sqlitepp.h"
 // "private" headers
 #include "scene/scene.h"
 #include "data/mbtilesDataSource.h"
@@ -13,6 +14,7 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
+#include "nfd.h"
 
 #include "mapsources.h"
 #include "mapwidgets.h"
@@ -317,6 +319,127 @@ void MapsOffline::resumeDownloads()
   });
 }
 
+#include "md5.h"
+
+static void udf_md5(sqlite3_context* context, int argc, sqlite3_value** argv)
+{
+  if(argc != 1) {
+    sqlite3_result_error(context, "sqlite md5() - Invalid number of arguments (1 required).", -1);
+    return;
+  }
+  MD5 md5;
+  int len = sqlite3_value_bytes(argv[0]);
+  std::string hash = md5(sqlite3_value_blob(argv[0]), len);
+  sqlite3_result_text(context, hash.c_str(), -1, SQLITE_TRANSIENT);
+}
+
+bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
+{
+  if(destsrc != app->mapsSources->currSource) {
+    bool old_async = std::exchange(app->load_async, false);
+    // loading source will ensure mbtiles cache is created if enabled for source
+    app->mapsSources->rebuildSource(destsrc);
+    app->load_async = old_async;
+  }
+
+  auto& tileSources = app->map->getScene()->tileSources();
+  std::string destpath = tileSources.front()->offlineInfo().cacheFile;
+  if(destpath.empty())
+    destpath = tileSources.front()->offlineInfo().url;
+  if(destpath.empty() || Url::getPathExtension(destpath) != "mbtiles") {
+    MapsApp::messageBox("Import map", "Cannot import to selected source: no cache file found", {"OK"});
+    return false;
+  }
+
+  SQLiteDB srcDB;
+  if(sqlite3_open_v2(srcpath.c_str(), &srcDB.db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
+    MapsApp::messageBox("Import map", fstring("Cannot import from %s: cannot open file", srcpath.c_str()), {"OK"});
+    return false;
+  }
+  if(!srcDB.exec(fstring("ATTACH DATABASE %s AS dest;", destpath.c_str()))) {
+    MapsApp::messageBox("Import map",
+        fstring("Cannot import to selected source: attach database failed - %s", srcDB.errMsg()), {"OK"});
+    return false;
+  }
+
+  // mbtiles cache does not set json metadata field, so we cannot compare that
+  //bool formatConflict = false;
+  //srcDB.stmt("SELECT s.value, d.value FROM metadata AS s LEFT JOIN dest.metadata AS d ON s.name = d.name "
+  //    " WHERE s.name = 'format';").exec([&](std::string key, std::string sval, std::string dval) {
+  //  if(!dval.empty() && sval != dval)
+  //    formatConflict = true;
+  //});
+  //if(formatConflict) {
+  //  MapsApp::messageBox("Import map", "Cannot import to selected source: tile format does not match!", {"OK"});
+  //  return false;
+  //}
+
+  int offlineId = int(time(NULL));
+  bool hasTiles = false, hasMap = false, hasImages = false;
+  srcDB.stmt("SELECT name FROM sqlite_master WHERE type IN 'table';")  //('table', 'view')
+      .exec([&](std::string tblname){
+    if(tblname == "map") hasMap = true;
+    else if(tblname == "images") hasImages = true;
+    else if(tblname == "tiles") hasTiles = true;
+  });
+  if(hasTiles) {
+    if(sqlite3_create_function(srcDB.db, "md5", 1, SQLITE_UTF8, 0, udf_md5, 0, 0) != SQLITE_OK) {
+      MapsApp::messageBox("Import map", fstring("Import failed with SQL error: %s", srcDB.errMsg()), {"OK"});
+      return false;
+    }
+    // CREATE TRIGGER IF NOT EXISTS insert_tile INSTEAD OF INSERT ON tiles
+    // BEGIN
+    //   INSERT INTO map VALUES(NEW.zoom_level, NEW.tile_column, NEW.tile_row, md5(NEW.tile_data));
+    //   INSERT INTO images VALUES(NEW.tile_data, SELECT tile_id FROM map WHERE
+    //     map.zoom_level = NEW.zoom_level AND map.tile_column = NEW.tile_column AND map.tile_row = NEW.tile_row);
+    //   -- rowid == last_insert_rowid();
+    // END;
+    const char* query = R"#(BEGIN;
+      REPLACE INTO dest.map SELECT zoom_level, tile_column, tile_row, md5(tile_data) FROM tiles;
+      DELETE FROM dest.images WHERE tile_id NOT IN (SELECT tile_id FROM dest.map);  -- delete orphaned tiles
+      REPLACE INTO dest.images SELECT tiles.tile_data, dmap.tile_id FROM tiles JOIN dest.map AS dmap ON
+        tiles.zoom_level = dmap.zoom_level AND tiles.tile_column = dmap.tile_column AND tiles.tile_row = dmap.tile_row;
+      REPLACE INTO dest.offline_tiles SELECT dmap.tile_id, %d FROM tiles JOIN dest.map AS dmap ON
+        tiles.zoom_level = dmap.zoom_level AND tiles.tile_column = dmap.tile_column AND tiles.tile_row = dmap.tile_row;
+      COMMIT;)#";
+    if(!srcDB.exec(fstring(query, offlineId))) {
+      MapsApp::messageBox("Import map", fstring("Import failed with SQL error: %s", srcDB.errMsg()), {"OK"});
+      return false;
+    }
+  }
+  else if(hasMap && hasImages) {
+    const char* query = R"#(BEGIN;
+      REPLACE INTO dest.map SELECT * FROM map;
+      DELETE FROM dest.images WHERE tile_id NOT IN (SELECT tile_id FROM dest.map);  -- delete orphaned tiles
+      REPLACE INTO dest.images SELECT * FROM images;
+      REPLACE INTO dest.offline_tiles SELECT tile_id, %d FROM map;
+      COMMIT;)#";
+    if(!srcDB.exec(fstring(query, offlineId))) {
+      MapsApp::messageBox("Import map", fstring("Import failed with SQL error: %s", srcDB.errMsg()), {"OK"});
+      return false;
+    }
+  }
+  else{
+    MapsApp::messageBox("Import map", fstring("Import failed: unknown MBTiles schema in %s", srcpath.c_str()), {"OK"});
+    return false;
+  }
+
+  const char* boundsSql = "SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column),"
+      " max(zoom_level) FROM tiles WHERE zoom_level = (SELECT max(zoom_level) FROM tiles);";
+  srcDB.stmt(boundsSql).exec([&](int min_row, int max_row, int min_col, int max_col, int max_zoom){
+    LngLat lngLat00 = MapProjection::projectedMetersToLngLat(
+        MapProjection::tileSouthWestCorner(TileID(min_col, max_row, max_zoom)));
+    LngLat lngLat11 = MapProjection::projectedMetersToLngLat(
+        MapProjection::tileSouthWestCorner(TileID(max_col+1, min_row-1, max_zoom)));
+
+    std::string maptitle = FSPath(srcpath).baseName();
+    const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title) VALUES (?,?,?,?,?,?,?,?);";
+    SQLiteStmt(app->bkmkDB, query).bind(offlineId, lngLat00.longitude, lngLat00.latitude,
+        lngLat11.longitude, lngLat11.latitude, max_zoom, app->mapsSources->currSource, maptitle).exec();
+  });
+  return true;
+}
+
 // GUI
 
 void MapsOffline::updateProgress()
@@ -351,17 +474,14 @@ void MapsOffline::populateOffline()
 {
   app->gui->deleteContents(offlineContent, ".listitem");
 
-  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title FROM offlinemaps ORDER BY timestamp DESC;";
-  DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
-    int mapid = sqlite3_column_int(stmt, 0);
-    double lng0 = sqlite3_column_double(stmt, 1), lat0 = sqlite3_column_double(stmt, 2);
-    double lng1 = sqlite3_column_double(stmt, 3), lat1 = sqlite3_column_double(stmt, 4);
-    std::string sourcestr = (const char*)(sqlite3_column_text(stmt, 5));
-    std::string titlestr = (const char*)(sqlite3_column_text(stmt, 6));
+  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title, timestamp FROM offlinemaps ORDER BY timestamp DESC;";
+  SQLiteStmt(app->bkmkDB, query).exec([&](int mapid, double lng0, double lat0, double lng1, double lat1,
+      std::string sourcestr, std::string titlestr, int timestamp){
     auto srcinfo = app->mapsSources->mapSources[sourcestr];
 
-    Button* item = createListItem(MapsApp::uiIcon("fold-map"), titlestr.c_str(),
-        srcinfo ? srcinfo["title"].Scalar().c_str() : sourcestr.c_str());
+    std::string detail = srcinfo ? srcinfo["title"].Scalar() : sourcestr;
+    detail.append(u8" \u2022 ").append(ftimestr("%FT%H.%M.%S", timestamp));
+    Button* item = createListItem(MapsApp::uiIcon("fold-map"), titlestr.c_str(), detail.c_str());
     item->node->setAttr("__mapid", mapid);
     item->onClicked = [=](){
       bool checked = !item->isChecked();
@@ -409,50 +529,56 @@ Widget* MapsOffline::createPanel()
       " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, maxzoom INTEGER, source TEXT, title TEXT,"
       " done INTEGER DEFAULT 0, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
 
-  TextEdit* titleEdit = createTextEdit();
+  TextEdit* titleEdit = createTitledTextEdit("Title");
   SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%.0f");
-  Button* confirmBtn = createPushbutton("Download");
-  Button* cancelBtn = createPushbutton("Cancel");
+  Widget* maxZoomRow = createTitledRow("Max zoom", maxZoomSpin);
 
-  Widget* downloadPanel = createColumn();
-  downloadPanel->addWidget(createTitledRow("Title", titleEdit));
-  downloadPanel->addWidget(createTitledRow("Max zoom", maxZoomSpin));
-  downloadPanel->addWidget(createTitledRow(NULL, confirmBtn, cancelBtn));
-  downloadPanel->setVisible(false);
-
-  confirmBtn->onClicked = [=](){
+  auto downloadFn = [=](){
     LngLat lngLat00, lngLat11;
     app->getMapBounds(lngLat00, lngLat11);
     int offlineId = int(time(NULL));
     int maxZoom = int(maxZoomSpin->value());
     saveOfflineMap(offlineId, lngLat00, lngLat11, maxZoom);
-
     const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title) VALUES (?,?,?,?,?,?,?,?);";
-    DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_int(stmt, 1, offlineId);
-      sqlite3_bind_double(stmt, 2, lngLat00.longitude);
-      sqlite3_bind_double(stmt, 3, lngLat00.latitude);
-      sqlite3_bind_double(stmt, 4, lngLat11.longitude);
-      sqlite3_bind_double(stmt, 5, lngLat11.latitude);
-      sqlite3_bind_int(stmt, 6, maxZoom);
-      sqlite3_bind_text(stmt, 7, app->mapsSources->currSource.c_str(), -1, SQLITE_TRANSIENT);
-      sqlite3_bind_text(stmt, 8, titleEdit->text().c_str(), -1, SQLITE_TRANSIENT);
-    });
-
-    downloadPanel->setVisible(false);
+    SQLiteStmt(app->bkmkDB, query).bind(offlineId, lngLat00.longitude, lngLat00.latitude,
+        lngLat11.longitude, lngLat11.latitude, maxZoom, app->mapsSources->currSource, titleEdit->text()).exec();
     populateOffline();
     auto item = static_cast<Button*>(offlineContent->selectFirst(".listitem"));
     if(item) item->onClicked();
   };
 
-  cancelBtn->onClicked = [=](){ downloadPanel->setVisible(false); };
+  Widget* downloadPanel = createInlineDialog({titleEdit, maxZoomRow}, "Download", downloadFn);  //createColumn();
+
+  Button* openBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Install Offline Map");
+  openBtn->onClicked = [=](){
+    nfdchar_t* outPath;
+    nfdfilteritem_t filterItem[1] = { { "MBTiles files", "mbtiles" } };
+    nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
+    if(result != NFD_OKAY)
+      return;
+
+    std::string srcpath(outPath);
+    std::vector<std::string> layerKeys;
+    std::vector<std::string> layerTitles;
+    for(const auto& src : app->mapsSources->mapSources) {
+      std::string type = src.second["type"].Scalar();
+      if(type == "Raster" || type == "Vector") {
+        layerKeys.push_back(src.first.Scalar());
+        layerTitles.push_back(src.second["title"].Scalar());
+      }
+    }
+    if(!selectDestDialog)
+      selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
+    selectDestDialog->addItems(layerTitles);
+    selectDestDialog->onSelected = [=](int idx){
+      importFile(layerKeys[idx], srcpath);
+    };
+  };
 
   Button* saveBtn = createToolbutton(MapsApp::uiIcon("download"), "Save Offline Map");
   saveBtn->onClicked = [=](){
-    char timestr[64];
-    time_t t = mSecSinceEpoch()/1000;
-    strftime(timestr, sizeof(timestr), "%FT%H.%M.%S", localtime(&t));  //"%Y-%m-%d %HH%M"
-    titleEdit->setText(timestr);
+    titleEdit->setText(ftimestr("%FT%H.%M.%S").c_str());
+    titleEdit->selectAll();
 
     int maxZoom = 0;
     auto& tileSources = app->map->getScene()->tileSources();
@@ -467,7 +593,7 @@ Widget* MapsOffline::createPanel()
 
   offlineContent = createColumn();
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("offline"), "Offline Maps");
-  //toolbar->addWidget(maxZoomSpin);
+  toolbar->addWidget(openBtn);
   toolbar->addWidget(saveBtn);
   offlinePanel = app->createMapPanel(toolbar, offlineContent, NULL, false);
 

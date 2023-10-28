@@ -1998,10 +1998,8 @@ Button* MapsTracks::createPanel()
       populateStats(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
     else {
       recordTrack = true;
-      char timestr[64];
-      time_t t = mSecSinceEpoch()/1000;
-      strftime(timestr, sizeof(timestr), "%FT%H.%M.%S", localtime(&t));  //"%Y-%m-%d %HH%M"
-      FSPath gpxPath(app->baseDir, std::string(timestr) + ".gpx");
+      std::string timestr = ftimestr("%FT%H.%M.%S");
+      FSPath gpxPath(app->baseDir, timestr + ".gpx");
       recordedTrack = GpxFile(timestr, "", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
       recordedTrack.loaded = true;
       recordedTrack.tracks.emplace_back();
