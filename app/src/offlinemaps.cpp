@@ -118,7 +118,7 @@ static void offlineDLMain()
   }
 }
 
-#include "md5.h"
+#include "hash-library/md5.h"
 
 static void udf_md5(sqlite3_context* context, int argc, sqlite3_value** argv)
 {
@@ -299,6 +299,7 @@ bool MapsOffline::cancelDownload(int mapid)
 static void deleteOfflineMap(int mapid)
 {
   int64_t offlineSize = 0;
+  bool purge = MapsApp::config["storage"]["purge_offline"].as<bool>(true);
   FSPath cachedir(MapsApp::baseDir, "cache");
   for(auto& file : lsDirectory(cachedir)) {
     //for(auto& src : mapSources) ... this doesn't work because cache file may be specified in scene yaml
@@ -310,24 +311,21 @@ static void deleteOfflineMap(int mapid)
     auto s = std::make_unique<Tangram::MBTilesDataSource>(
         *MapsApp::platform, cachefile.baseName(), cachefile.path, "", true);
     offlineSize -= s->getOfflineSize();
-    s->deleteOfflineMap(mapid);
+    s->deleteOfflineMap(mapid, purge);
     offlineSize += s->getOfflineSize();
   }
   MapsApp::platform->notifyStorage(0, offlineSize);  // this can trigger cache shrink, so wait until all sources processed
+  MapsSearch::onDelOfflineMap(mapid);
 
-  DB_exec(MapsApp::bkmkDB, "DELETE FROM offlinemaps WHERE mapid = ?;", NULL,
-      [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, mapid); });
+  SQLiteStmt(MapsApp::bkmkDB, "DELETE FROM offlinemaps WHERE mapid = ?;").bind(mapid).exec();
 }
 
 void MapsOffline::downloadCompleted(int id, bool canceled)
 {
-  if(canceled) {
+  if(canceled)
     deleteOfflineMap(id);
-  }
-  else {
-    DB_exec(MapsApp::bkmkDB, "UPDATE offlinemaps SET done = 1 WHERE mapid = ?;", NULL,
-        [&](sqlite3_stmt* stmt){ sqlite3_bind_int(stmt, 1, id); });
-  }
+  else
+    SQLiteStmt(MapsApp::bkmkDB, "UPDATE offlinemaps SET done = 1 WHERE mapid = ?;").bind(id).exec();
   populateOffline();
 }
 

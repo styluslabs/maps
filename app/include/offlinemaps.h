@@ -20,6 +20,7 @@ private:
   MarkerID rectMarker = 0;
   Widget* offlineContent = NULL;
 
+  bool importFile(std::string destsrc, std::string srcpath);
   void populateOffline();
   bool cancelDownload(int mapid);
   std::unique_ptr<SelectDialog> selectDestDialog;

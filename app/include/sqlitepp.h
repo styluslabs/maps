@@ -52,11 +52,12 @@ public:
   sqlite3_stmt* stmt = NULL;
   SQLiteStmt(sqlite3_stmt* _stmt) : stmt(_stmt) {}
   SQLiteStmt(const SQLiteStmt&) = delete;
+  SQLiteStmt(SQLiteStmt&& other) : stmt(std::exchange(other.stmt, nullptr)) {}
   ~SQLiteStmt() {
 #ifndef SQLITEPP_STMT_NO_STATIC
     if(dbClosed) return;
 #endif
-    sqlite3_finalize(stmt);
+    if(stmt) sqlite3_finalize(stmt);
   }
 
   SQLiteStmt(sqlite3* db, const char* sql) {

@@ -30,6 +30,7 @@ public:
   bool indexMBTiles();
 
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
+  static void onDelOfflineMap(int mapId);
   static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
 
   void addListResult(int64_t id, double lng, double lat, float rank, const char* json);

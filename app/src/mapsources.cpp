@@ -125,7 +125,8 @@ int64_t MapsSources::shrinkCache(int64_t maxbytes)
 {
   std::vector< std::unique_ptr<Tangram::MBTilesDataSource> > dbsources;
   std::vector< std::pair<int, int> > tiles;
-  auto insertTile = [&](int timestamp, int size){ tiles.emplace_back(timestamp, size); };
+  int totalTiles = 0;
+  auto insertTile = [&](int offline_id, int t, int size){ ++totalTiles; if(!offline_id) tiles.emplace_back(t, size); };
 
   FSPath cachedir(app->baseDir, "cache");
   for(auto& file : lsDirectory(cachedir)) {
@@ -133,7 +134,14 @@ int64_t MapsSources::shrinkCache(int64_t maxbytes)
     if(cachefile.extension() != "mbtiles") continue;
     dbsources.push_back(std::make_unique<Tangram::MBTilesDataSource>(
         *app->platform, cachefile.baseName(), cachefile.path, "", true));
+    int ntiles = totalTiles;
     dbsources.back()->getTileSizes(insertTile);
+    // delete empty cache file
+    if(totalTiles == ntiles) {
+      LOG("Deleting empty cache file %s", cachefile.c_str());
+      dbsources.pop_back();
+      removeFile(cachefile.path);
+    }
   }
 
   std::sort(tiles.rbegin(), tiles.rend());  // sort by timestamp, descending (newest to oldest)

@@ -11,7 +11,7 @@
 #include "data/tileData.h"
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
-#include "sqlite3/sqlite3.h"
+#include "sqlitepp.h"
 //#include "isect2d.h"
 
 #include "ugui/svggui.h"
@@ -55,17 +55,37 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
 
 void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
-  /*int nchanges = sqlite3_total_changes(searchDB);
+  /*
+  int tileId = -1;
+  SQLiteStmt(searchDB, "SELECT id FROM tiles WHERE z = ? AND x = ? AND y = ?;")
+      .bind(task->tileId().z, task->tileId().x, task->tileId().y).exec([&](int id) { tileId = id; });
+  if(tileId >= 0) {
+    SQLiteStmt(searchDB, "INSERT INTO offline_tiles (tile_id, offline_id VALUES (?,?);")
+        .bind(tileId, mapId).exec();
+    return;
+  }
+
+  //int nchanges = sqlite3_total_changes(searchDB);
   const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
   SQLiteStmt(searchDB, query).bind(task->tileId().z, task->tileId().x, task->tileId().y).exec();
-  if(sqlite3_total_changes(searchDB) == nchanges)  // total_changes() is a bit safer than changes() here
-    return;
+  //if(sqlite3_total_changes(searchDB) == nchanges)  // total_changes() is a bit safer than changes() here
+  //  return;
   // bind tile_id
   sqlite3_bind_int64(insertStmt, 6, sqlite3_last_insert_rowid(searchDB));*/
 
   sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
   processTileData(task, insertStmt, searchData);
   sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
+}
+
+void MapsSearch::onDelOfflineMap(int mapId)
+{
+  //DELETE FROM tiles WHERE id IN (SELECT tile_id FROM offline_tiles WHERE offline_id = ? AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?));
+  const char* query = R"#(BEGIN;
+    DELETE FROM offline_tiles WHERE offline_id = ?;
+    DELETE FROM tiles WHERE id NOT IN (SELECT tile_id FROM offline_tiles);
+    COMMIT;)#";
+  SQLiteStmt(searchDB, query).bind(mapId).exec();
 }
 
 std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
@@ -79,6 +99,8 @@ std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
 static const char* POI_SCHEMA = R"#(BEGIN;
 CREATE TABLE tiles(id INTEGER PRIMARY KEY, z INTEGER, x INTEGER, y INTEGER, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));
 CREATE UNIQUE INDEX tiles_tile_id ON tiles (z, x, y);
+CREATE TABLE offline_tiles(tile_id INTEGER, offline_id INTEGER);
+CREATE UNIQUE INDEX offline_index ON offline_tiles (tile_id, offline_id);
 CREATE TABLE pois(name TEXT, tags TEXT, props TEXT, lng REAL, lat REAL, tile_id INTEGER);
 CREATE VIRTUAL TABLE pois_fts USING fts5(name, tags, content='pois');
 CREATE INDEX pois_tile_id ON pois (tile_id);
