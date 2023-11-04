@@ -378,9 +378,11 @@ void MapsSources::populateSources()
 void MapsSources::onMapEvent(MapEvent_t event)
 {
   if(event == SUSPEND) {
-    YAML::Node order = app->config["sources"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
-    for(const std::string& s : sourcesContent->getOrder())
-      order.push_back(s);
+    std::vector<std::string> order = sourcesContent->getOrder();
+    if(order.empty()) return;
+    YAML::Node ordercfg = app->config["sources"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
+    for(const std::string& s : order)
+      ordercfg.push_back(s);
     return;
   }
 

@@ -118,15 +118,28 @@ public:
   bool exec() { return exec([](sqlite3_stmt*){}); }
 };
 
+#ifndef NDEBUG
+#define CHK_COL(idx, type) \
+  do { \
+    int ctype = sqlite3_column_type(stmt, idx); \
+    if(ctype != type && ctype != SQLITE_NULL) \
+      LOGW("Requested data type does not match type of column %d in %s", idx, sqlite3_sql(stmt)); \
+  } while(0)
+#else
+#define CHK_COL(idx, type) do { } while(0)
+#endif
+
 // can't be inside class due to GCC bug
-template<> inline int SQLiteStmt::get_col(int idx) { return sqlite3_column_int(stmt, idx); }
-template<> inline sqlite_int64 SQLiteStmt::get_col(int idx) { return sqlite3_column_int64(stmt, idx); }
-template<> inline float SQLiteStmt::get_col(int idx) { return float(sqlite3_column_double(stmt, idx)); }
-template<> inline double SQLiteStmt::get_col(int idx) { return sqlite3_column_double(stmt, idx); }
-template<> inline const char* SQLiteStmt::get_col(int idx) { return (const char*)sqlite3_column_text(stmt, idx); }
+template<> inline int SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_INTEGER); return sqlite3_column_int(stmt, idx); }
+template<> inline sqlite_int64 SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_INTEGER); return sqlite3_column_int64(stmt, idx); }
+template<> inline float SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_FLOAT); return float(sqlite3_column_double(stmt, idx)); }
+template<> inline double SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_FLOAT); return sqlite3_column_double(stmt, idx); }
+template<> inline const char* SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_TEXT); return (const char*)sqlite3_column_text(stmt, idx); }
 template<> inline std::string SQLiteStmt::get_col(int idx)
-  { const char* res = (const char*)sqlite3_column_text(stmt, idx);  return res ? res : ""; }
+  { CHK_COL(idx, SQLITE_TEXT); const char* res = (const char*)sqlite3_column_text(stmt, idx);  return res ? res : ""; }
 template<> inline sqlite3_stmt* SQLiteStmt::get_col(int idx) { return stmt; }
+
+#undef CHK_COL
 
 class SQLiteDB
 {
