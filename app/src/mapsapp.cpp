@@ -1693,6 +1693,7 @@ bool userLoadSvg(char* svg, Texture* texture)
   doc->boundsCalculator = &boundsCalc;
 
   if(doc->hasClass("reflow-icons")) {
+    real pad = doc->hasClass("reflow-icons-pad") ? 2 : 0;
     size_t nicons = doc->children().size();
     int nside = int(std::sqrt(nicons) + 0.5);
     int ii = 0;
@@ -1702,11 +1703,12 @@ bool userLoadSvg(char* svg, Texture* texture)
       if(child->type() != SvgNode::DOC) continue;
       auto childdoc = static_cast<SvgDocument*>(child);
       if(prev) {
-        childdoc->m_x = ii%nside ? prev->m_x + prev->width().px() : 0;
+        childdoc->m_x = ii%nside ? prev->m_x + prev->width().px() + pad : 0;
         childdoc->m_y = ii%nside ? prev->m_y : prev->m_y + rowheight;
         //childdoc->invalidate(false); ... shouldn't be necessary
       }
-      rowheight = ii%nside ? std::max(rowheight, childdoc->height().px()) : childdoc->height().px();
+      real h = childdoc->height().px() + pad;
+      rowheight = ii%nside ? std::max(rowheight, h) : h;
       prev = childdoc;
       ++ii;
     }
