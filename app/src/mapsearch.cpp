@@ -569,6 +569,11 @@ Button* MapsSearch::createPanel()
   queryText = new TextEdit(textEditNode);
   setMinWidth(queryText, 100);
 
+  Button* textEditOverlay = new Button(loadSVGFragment(
+      "<rect display='none' fill='none' box-anchor='fill' width='20' height='20'/>"));
+  textEditNode->addChild(textEditOverlay->node);
+  textEditOverlay->onClicked = [=](){ searchText("", RETURN); };
+
   queryText->onChanged = [this](const char* s){
     searchText(s, EDITING);
   };
@@ -595,11 +600,11 @@ Button* MapsSearch::createPanel()
       searchText(queryText->text(), RETURN);
   };
 
-  providerIdx = app->config["search"]["plugin"].as<int>(0);
   std::vector<std::string> cproviders = {"Offline Search"};
   for(auto& fn : app->pluginManager->searchFns)
     cproviders.push_back(fn.title.c_str());
 
+  providerIdx = std::min(int(cproviders.size())-1, app->config["search"]["plugin"].as<int>(0));
   auto searchTb = app->createPanelHeader(MapsApp::uiIcon("search"), cproviders[providerIdx].c_str());
   bool hasPlugins = !app->pluginManager->searchFns.empty();
   Button* searchPluginBtn = createToolbutton(MapsApp::uiIcon(hasPlugins ? "plugin" : "no-plugin"), "Plugin");
@@ -607,9 +612,28 @@ Button* MapsSearch::createPanel()
   Menu* searchPluginMenu = createMenu(Menu::VERT_LEFT, false);
   for(size_t ii = 0; ii < cproviders.size(); ++ii) {
     std::string title = cproviders[ii];
+
+    bool slow = false, noquery = false;
+    if(ii > 0) {
+      StringRef type(app->pluginManager->searchFns[ii-1].type);
+      slow = type.contains("-slow");
+      noquery = type.contains("-noquery");
+
+
+      searchOnMapMove = !slow;
+      if(noquery)
+        queryText->setText("");
+      queryText->setEmptyText(noquery ? "Tap to update" : "");
+      queryText->setEnabled(!noquery);
+      textEditOverlay->setVisible(noquery);  //slow?
+    }
+
+
     searchPluginMenu->addItem(title.c_str(), [=](){
       static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
       app->config["search"]["plugin"] = providerIdx = ii;
+      if(!queryText->text().empty())
+        searchText(queryText->text(), RETURN);
     });
   }
   searchPluginBtn->setMenu(searchPluginMenu);

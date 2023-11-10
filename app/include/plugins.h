@@ -23,10 +23,11 @@ public:
   void createFns(duk_context* ctx);
   std::string evalJS(const char* s);
   void cancelRequests(UrlReqType type);
+  void notifyRequest(UrlRequestHandle handle);
+  UrlReqType clearRequest(UrlRequestHandle handle);
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
   void jsPlaceInfo(int fnIdx, std::string id);
   void jsRoute(int fnIdx, std::string routeMode, const std::vector<LngLat>& waypts);
-  void notifyRequest(UrlRequestHandle handle);
   static bool dukTryCall(duk_context* ctx, int nargs);
 
   template <typename... Types>

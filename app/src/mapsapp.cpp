@@ -22,6 +22,7 @@
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
+#include "usvg/svgparser.h"
 #include "mapwidgets.h"
 
 #if !defined(DEBUG) && !defined(NDEBUG)
@@ -212,6 +213,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     //infoContent->selectFirst(".info-section")->addWidget(createTitledRow("Information from ", providerSel));
     providerSel->onChanged("");
   }
+
+  if(props.IsObject() && props.HasMember("place_info")) {
+    for(auto& info : props["place_info"].GetArray())
+      addPlaceInfo(info["icon"].GetString(), info["title"].GetString(), info["value"].GetString());
+  }
 }
 
 void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr)
@@ -251,8 +257,16 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
 
   Widget* row = new Widget(rowProto->clone());
   Widget* content = new Widget(row->containerNode()->selectFirst(".value-container"));
-  static_cast<SvgUse*>(row->containerNode()->selectFirst(".icon"))->setTarget(MapsApp::uiIcon(icon));
   infoContent->selectFirst(".info-section")->addWidget(row);
+
+  auto iconUseNode = static_cast<SvgUse*>(row->containerNode()->selectFirst(".icon"));
+  if(icon[0] == '<') {
+    SvgDocument* svgDoc = SvgParser().parseString(value);
+    if(svgDoc)
+      iconUseNode->setTarget(svgDoc, std::shared_ptr<SvgDocument>(svgDoc));
+  }
+  else
+    iconUseNode->setTarget(MapsApp::uiIcon(icon));
 
   if(value[0] == '<') {
     SvgNode* node = loadSVGFragment(value);

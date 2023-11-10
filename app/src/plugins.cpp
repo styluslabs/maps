@@ -93,7 +93,7 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
   duk_get_global_string(ctx, searchFns[fnIdx].name.c_str());
   // query
   duk_push_string(ctx, queryStr.c_str());
-  // bounds
+  // bounds - left,bottom,right,top
   auto arr_idx = duk_push_array(ctx);
   duk_push_number(ctx, lngLat00.longitude);
   duk_put_prop_index(ctx, arr_idx, 0);
@@ -151,6 +151,18 @@ void PluginManager::notifyRequest(UrlRequestHandle handle)
 {
   if(inState != NONE)
     pendingRequests.push_back({inState, handle});
+}
+
+PluginManager::UrlReqType PluginManager::clearRequest(UrlRequestHandle handle)
+{
+  for(auto it = pendingRequests.begin(); it != pendingRequests.end(); ++it) {
+    if(it->handle == handle) {
+      UrlReqType type = it->type;
+      pendingRequests.erase(it);
+      return type;
+    }
+  }
+  return NONE;
 }
 
 std::string PluginManager::evalJS(const char* s)
@@ -221,10 +233,15 @@ static int httpRequest(duk_context* ctx)
   //duk_push_global_stash(ctx);
   //duk_dup(ctx, 1);  // callback
   //duk_put_prop_string(ctx, -2, cbvar.c_str());
-  auto hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [ctx, cbvar, url](UrlResponse&& response) {
+  UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [=](UrlResponse&& response) {
     if(response.error)
       LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
-    MapsApp::runOnMainThread([=](){ invokeHttpReqCallback(ctx, cbvar, response); });
+    MapsApp::runOnMainThread([=](){
+      // set state for any secondary requests
+      PluginManager::inst->inState = PluginManager::inst->clearRequest(hnd);
+      invokeHttpReqCallback(ctx, cbvar, response);
+      PluginManager::inst->inState = PluginManager::NONE;
+    });
   });
   PluginManager::inst->notifyRequest(hnd);
   return 0;
