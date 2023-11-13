@@ -43,7 +43,7 @@ public:
   bool moreMapResultsAvail = false;
   bool moreListResultsAvail = false;
   // search flags
-  enum { MAP_SEARCH = 1, SORT_BY_DIST = 2, MORE_RESULTS = 0x8000 };
+  enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, MORE_RESULTS = 0x8000 };
 
   enum SearchPhase { EDITING, RETURN, NEXTPAGE };
   void searchText(std::string query, SearchPhase phase);
@@ -65,6 +65,8 @@ private:
   LngLat dotBounds00, dotBounds11;
   std::string searchStr;
   bool mapResultsChanged = false;  // protected by resultsMutex
+  bool searchOnMapMove = true;
+  bool unifiedSearch = false;
 
   void offlineListSearch(std::string queryStr, LngLat, LngLat);
   void offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11);

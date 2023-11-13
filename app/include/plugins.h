@@ -8,6 +8,7 @@
 struct PluginFn
 {
   std::string name;  //Tangram::JSFunctionIndex jsFnIdx;
+  std::string type;
   std::string title;
 };
 

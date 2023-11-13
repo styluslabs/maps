@@ -181,19 +181,19 @@ static int registerFunction(duk_context* ctx)
 {
   // alternative is to pass fn object instead of name, which we can then add to globals w/ generated name
   const char* name = duk_require_string(ctx, 0);
-  std::string fntype = duk_require_string(ctx, 1);
+  StringRef fntype = duk_require_string(ctx, 1);
   const char* title = duk_require_string(ctx, 2);
 
-  if(fntype == "search")
-    PluginManager::inst->searchFns.push_back({name, title});
-  else if(fntype == "place")
-    PluginManager::inst->placeFns.push_back({name, title});
-  else if(fntype == "route")
-    PluginManager::inst->routeFns.push_back({name, title});
-  else if(fntype == "command")
-    PluginManager::inst->commandFns.push_back({name, title});
+  if(fntype.startsWith("search"))
+    PluginManager::inst->searchFns.push_back({name, fntype.data(), title});
+  else if(fntype.startsWith("place"))
+    PluginManager::inst->placeFns.push_back({name, fntype.data(), title});
+  else if(fntype.startsWith("route"))
+    PluginManager::inst->routeFns.push_back({name, fntype.data(), title});
+  else if(fntype.startsWith("command"))
+    PluginManager::inst->commandFns.push_back({name, fntype.data(), title});
   else
-    LOGE("Unsupported plugin function type %s", fntype.c_str());
+    LOGE("Unsupported plugin function type %s", fntype.data());
   return 0;
 }
 
@@ -264,7 +264,7 @@ static int addSearchResult(duk_context* ctx)
     ms->addMapResult(osm_id, lng, lat, score, json);
     ms->moreMapResultsAvail = flags & MapsSearch::MORE_RESULTS;
   }
-  else {
+  if(flags & MapsSearch::LIST_SEARCH) {
     ms->addListResult(osm_id, lng, lat, score, json);
     ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
   }

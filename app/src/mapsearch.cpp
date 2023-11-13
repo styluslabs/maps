@@ -339,12 +339,12 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 
 void MapsSearch::onMapEvent(MapEvent_t event)
 {
-  if(event != MAP_CHANGE)
+  if(event != MAP_CHANGE || !app->searchActive)
     return;
   Map* map = app->map;
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
-  if(app->searchActive && ((moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
+  if(searchOnMapMove && ((moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
       || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude)) {
     updateMapResults(lngLat00, lngLat11);
@@ -353,6 +353,8 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
     markers->onZoom();
   }
+  // any map pan or zoom can potentially affect ranking of list results
+  retryBtn->setVisible(true);
 
   if(app->pickedMarkerId > 0) {
     if(markers->onPicked(app->pickedMarkerId))
@@ -434,65 +436,56 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   if(phase == EDITING) {
     std::vector<std::string> autocomplete;
-    std::string histq = "SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;";
-    DB_exec(searchDB, histq.c_str(), [&](sqlite3_stmt* stmt){
-      autocomplete.emplace_back( (const char*)(sqlite3_column_text(stmt, 0)) );
-    }, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, (query + "%").c_str(), -1, SQLITE_TRANSIENT);
-      // LIMIT 5 - leave room for results if running live search
-      sqlite3_bind_int(stmt, 2, query.size() > 2 && providerIdx == 0 ? 5 : 25);
-    });
+    SQLiteStmt(searchDB, "SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;")
+        .bind(query + "%", query.size() > 1 && providerIdx == 0 ? 5 : 25) // LIMIT 5 to leave room for results
+        .exec([&](const char* q){ autocomplete.emplace_back(q); });
     populateAutocomplete(autocomplete);
+    if(query.size() < 2) // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
+      return;
   }
 
-  if(query.size() > 2 || phase == NEXTPAGE) {
-    // use map center for origin if current location is offscreen
-    if(phase != NEXTPAGE) {
-      LngLat loc = app->currLocation.lngLat();
-      searchRankOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
-    }
-    if(phase == RETURN) {
-      DB_exec(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);", NULL, [&](sqlite3_stmt* stmt){
-        sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
-      });
-      // handle lat,lng string
-      if(isDigit(query[0]) || query[0] == '-') {
-        LngLat pos = parseLngLat(query.c_str());
-        if(!std::isnan(pos.latitude) && !std::isnan(pos.longitude)) {
-          // if we close search, no way to edit lat,lng from history
-          //if(app->panelHistory.size() == 1)
-          //  app->popPanel();  // just close search
-          app->setPickResult(pos, "", "");
-          return;
-        }
+  // use map center for origin if current location is offscreen
+  if(phase != NEXTPAGE) {
+    LngLat loc = app->currLocation.lngLat();
+    searchRankOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
+  }
+  if(phase == RETURN && query.size() > 1) {
+    SQLiteStmt(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);").bind(query).exec();
+    // handle lat,lng string
+    if(isDigit(query[0]) || query[0] == '-') {
+      LngLat pos = parseLngLat(query.c_str());
+      if(!std::isnan(pos.latitude) && !std::isnan(pos.longitude)) {
+        // if we close search, no way to edit lat,lng from history
+        //if(app->panelHistory.size() == 1)
+        //  app->popPanel();  // just close search
+        app->setPickResult(pos, "", "");
+        return;
       }
+    }
+    if(providerIdx == 0 || !unifiedSearch)
       updateMapResults(lngLat00, lngLat11);
-    }
+  }
 
-    if(providerIdx == 0) {
-      offlineListSearch(searchStr, lngLat00, lngLat11);
-      resultsUpdated();
-    }
-    else if(phase != EDITING) {
-      bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
-      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, sortByDist ? SORT_BY_DIST : 0);
-    }
+  if(providerIdx == 0) {
+    offlineListSearch(searchStr, lngLat00, lngLat11);
+    resultsUpdated();
+  }
+  else if(phase != EDITING) {
+    bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
+    int flags = LIST_SEARCH | (unifiedSearch ? MAP_SEARCH : 0) | (sortByDist ? SORT_BY_DIST : 0);
+    app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
+  }
 
-    if(!app->searchActive && phase == RETURN) {
-      //map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
-      map->getScene()->hideExtraLabels = true;
-      app->mapsBookmarks->hideBookmarks();  // also hide tracks?
-      app->searchActive = true;
-    }
+  if(!app->searchActive && phase == RETURN) {
+    //map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
+    map->getScene()->hideExtraLabels = true;
+    app->mapsBookmarks->hideBookmarks();  // also hide tracks?
+    app->searchActive = true;
   }
 }
 
-// or should we put results in resultList and show that immediately?
 void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
 {
-  //autoCompContainer->setVisible(true);
-  //window()->gui()->deleteContents(autoCompList, ".listitem");
-
   for(size_t ii = 0; ii < history.size(); ++ii) {
     std::string query = history[ii];
     Button* item = createListItem(MapsApp::uiIcon("clock"), history[ii].c_str());
@@ -600,6 +593,21 @@ Button* MapsSearch::createPanel()
       searchText(queryText->text(), RETURN);
   };
 
+  auto onSetProvider = [=](int idx) {
+    std::string typestr = idx > 0 ? app->pluginManager->searchFns[idx-1].type : "";
+    StringRef type(typestr);
+    searchOnMapMove = !type.contains("-slow");
+    unifiedSearch = type.contains("-unified");
+    bool noquery = type.contains("-noquery");
+    if(noquery) {
+      queryText->setText("");
+      app->gui->setFocused(textEditOverlay);  // hide cursor
+    }
+    queryText->setEmptyText(noquery ? "Tap to update" : "");
+    queryText->setEnabled(!noquery);
+    textEditOverlay->setVisible(noquery);  //&& slow?
+  };
+
   std::vector<std::string> cproviders = {"Offline Search"};
   for(auto& fn : app->pluginManager->searchFns)
     cproviders.push_back(fn.title.c_str());
@@ -612,32 +620,17 @@ Button* MapsSearch::createPanel()
   Menu* searchPluginMenu = createMenu(Menu::VERT_LEFT, false);
   for(size_t ii = 0; ii < cproviders.size(); ++ii) {
     std::string title = cproviders[ii];
-
-    bool slow = false, noquery = false;
-    if(ii > 0) {
-      StringRef type(app->pluginManager->searchFns[ii-1].type);
-      slow = type.contains("-slow");
-      noquery = type.contains("-noquery");
-
-
-      searchOnMapMove = !slow;
-      if(noquery)
-        queryText->setText("");
-      queryText->setEmptyText(noquery ? "Tap to update" : "");
-      queryText->setEnabled(!noquery);
-      textEditOverlay->setVisible(noquery);  //slow?
-    }
-
-
     searchPluginMenu->addItem(title.c_str(), [=](){
       static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
       app->config["search"]["plugin"] = providerIdx = ii;
-      if(!queryText->text().empty())
+      onSetProvider(ii);
+      if(!queryText->isEnabled() || !queryText->text().empty())
         searchText(queryText->text(), RETURN);
     });
   }
   searchPluginBtn->setMenu(searchPluginMenu);
   searchTb->addWidget(searchPluginBtn);
+  onSetProvider(providerIdx);
 
   // result sort order
   static const char* resultSortKeys[] = {"rank", "dist"};
@@ -653,10 +646,7 @@ Button* MapsSearch::createPanel()
   sortBtn->setMenu(sortMenu);
   searchTb->addWidget(sortBtn);
 
-  //Widget* searchContent = createColumn(); //createListContainer();
-  resultsContent = createColumn(); //createListContainer();
-  //searchContent->addWidget(new Widget(searchBoxNode));
-  //searchContent->addWidget(resultsContent);
+  resultsContent = createColumn();
   searchPanel = app->createMapPanel(searchTb, resultsContent, new Widget(searchBoxNode));
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
