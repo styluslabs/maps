@@ -220,7 +220,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->sceneYaml = builder.getSceneYaml(baseUrl);
     app->sceneFile = baseUrl + "__GUI_SOURCES__";
     app->sceneUpdates = std::move(builder.updates);  //.clear();
-    app->loadSceneFile();  //builder.getSceneYaml(baseUrl), builder.updates);
+    app->loadSceneFile();
     sceneVarsLoaded = false;
     legendsLoaded = false;
     currSource = srcname;

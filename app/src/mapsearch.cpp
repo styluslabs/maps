@@ -283,12 +283,13 @@ void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, c
   rapidjson::Document& tags = listResults.back().tags;
   tags.Parse(json);
   if(!tags.IsObject() || !tags.HasMember("name"))
-    mapResults.pop_back();
+    listResults.pop_back();
   //return listResults.back();
 }
 
 void MapsSearch::searchPluginError(const char* err)
 {
+  retryBtn->setIcon(MapsApp::uiIcon("retry"));
   retryBtn->setVisible(true);
 }
 
@@ -383,6 +384,7 @@ void MapsSearch::resultsUpdated()
 
   // zoom out if necessary to show first 5 results
   if(mapResultsChanged) {
+    mapResultsChanged = false;
     Map* map = app->map;
     //createMarkers();
 
@@ -433,6 +435,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     cancelBtn->setVisible(!searchStr.empty());
   }
   retryBtn->setVisible(false);
+  retryBtn->setIcon(MapsApp::uiIcon("refresh"));  // error cleared
 
   if(phase == EDITING) {
     std::vector<std::string> autocomplete;
@@ -553,6 +556,7 @@ Button* MapsSearch::createPanel()
           <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#circle-x"/>
         </g>
       </g>
+      <rect class="noquery-overlay" display='none' fill='none' box-anchor='fill' width='20' height='20'/>
     </g>
   )#";
 
@@ -562,15 +566,11 @@ Button* MapsSearch::createPanel()
   queryText = new TextEdit(textEditNode);
   setMinWidth(queryText, 100);
 
-  Button* textEditOverlay = new Button(loadSVGFragment(
-      "<rect display='none' fill='none' box-anchor='fill' width='20' height='20'/>"));
-  textEditNode->addChild(textEditOverlay->node);
+  SvgNode* overlayNode = searchBoxNode->selectFirst(".noquery-overlay");
+  Button* textEditOverlay = new Button(overlayNode);
   textEditOverlay->onClicked = [=](){ searchText("", RETURN); };
 
-  queryText->onChanged = [this](const char* s){
-    searchText(s, EDITING);
-  };
-
+  queryText->onChanged = [this](const char* s){ searchText(s, EDITING); };
   queryText->addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
       if(!queryText->text().empty())
@@ -599,10 +599,8 @@ Button* MapsSearch::createPanel()
     searchOnMapMove = !type.contains("-slow");
     unifiedSearch = type.contains("-unified");
     bool noquery = type.contains("-noquery");
-    if(noquery) {
+    if(noquery)
       queryText->setText("");
-      app->gui->setFocused(textEditOverlay);  // hide cursor
-    }
     queryText->setEmptyText(noquery ? "Tap to update" : "");
     queryText->setEnabled(!noquery);
     textEditOverlay->setVisible(noquery);  //&& slow?
@@ -624,7 +622,12 @@ Button* MapsSearch::createPanel()
       static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
       app->config["search"]["plugin"] = providerIdx = ii;
       onSetProvider(ii);
-      if(!queryText->isEnabled() || !queryText->text().empty())
+      app->gui->setFocused(queryText->isEnabled() ? (Widget*)queryText : (Widget*)textEditOverlay);
+      if(queryText->isEnabled() && queryText->text().empty()) {
+        clearSearch();
+        searchText("", EDITING);  // show history
+      }
+      else
         searchText(queryText->text(), RETURN);
     });
   }
@@ -651,9 +654,10 @@ Button* MapsSearch::createPanel()
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_OPENED) {
-      app->gui->setFocused(queryText);
-      // show history
-      searchText("", EDITING);
+      if(queryText->isEnabled()) {
+        app->gui->setFocused(queryText);
+        searchText("", EDITING);  // show history
+      }
     }
     else if(event->type == MapsApp::PANEL_CLOSED)
       clearSearch();
@@ -675,17 +679,24 @@ Button* MapsSearch::createPanel()
   searchMenu->addHandler([this, searchMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(searchMenu->selectFirst(".child-container"));
-
-      // TODO: pinned searches - timestamp column = INF?
-      DB_exec(searchDB, "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;", [&](sqlite3_stmt* stmt){
-        std::string s = (const char*)(sqlite3_column_text(stmt, 0));
-        searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
+      if(providerIdx > 0 && !queryText->isEnabled()) {  // noquery plugin
+        const char* title = app->pluginManager->searchFns[providerIdx-1].title.c_str();
+        searchMenu->addItem(title, MapsApp::uiIcon("search"), [=](){
           app->showPanel(searchPanel);
-          queryText->setText(s.c_str());
-          searchText(s, RETURN);
+          searchText("", RETURN);
         });
-      });
-
+      }
+      else {
+        // TODO: pinned searches - timestamp column = INF?
+        const char* sql = "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;";
+        SQLiteStmt(searchDB, sql).exec([&](std::string s){
+          searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
+            app->showPanel(searchPanel);
+            queryText->setText(s.c_str());
+            searchText(s, RETURN);
+          });
+        });
+      }
     }
     return false;
   });

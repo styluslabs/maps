@@ -43,7 +43,7 @@ public:
   bool moreMapResultsAvail = false;
   bool moreListResultsAvail = false;
   // search flags
-  enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, MORE_RESULTS = 0x8000 };
+  enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, UPDATE_RESULTS = 0x4000, MORE_RESULTS = 0x8000 };
 
   enum SearchPhase { EDITING, RETURN, NEXTPAGE };
   void searchText(std::string query, SearchPhase phase);

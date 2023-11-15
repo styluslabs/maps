@@ -268,6 +268,8 @@ static int addSearchResult(duk_context* ctx)
     ms->addListResult(osm_id, lng, lat, score, json);
     ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
   }
+  if(flags & MapsSearch::UPDATE_RESULTS)  // flag set for final result
+    ms->resultsUpdated();
   return 0;
 }
 
