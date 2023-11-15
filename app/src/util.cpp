@@ -127,8 +127,11 @@ template void yamlRemove<int>(YAML::Node node, int key);
 std::string osmIdFromProps(const rapidjson::Document& props)
 {
   std::string osm_id;
-  if(props.IsObject() && props.HasMember("osm_id") && props.HasMember("osm_type"))
+  if(!props.IsObject()) {}
+  else if(props.HasMember("osm_id") && props.HasMember("osm_type"))
     osm_id = props["osm_type"].GetString() + std::string(":") + props["osm_id"].GetString();
+  else if(props.HasMember("wiki"))
+    osm_id = std::string("wiki:") + props["wiki"].GetString();
   return osm_id;
 }
 

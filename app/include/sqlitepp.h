@@ -61,8 +61,12 @@ public:
   }
 
   SQLiteStmt(sqlite3* db, const char* sql) {
-    if(sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    // sqlite3_prepare_v2 only compiles a single statement!
+    const char* leftover = NULL;
+    if(sqlite3_prepare_v2(db, sql, -1, &stmt, &leftover) != SQLITE_OK)
       LOGE("sqlite3_prepare_v2 error: %s", sqlite3_errmsg(db));
+    if(leftover && leftover[0])
+      LOGW("Remainder of SQL will be ignored: %s", leftover);
   }
 
   SQLiteStmt(sqlite3* db, const std::string& sql) : SQLiteStmt(db, sql.c_str()) {}
@@ -149,9 +153,10 @@ public:
   SQLiteDB(sqlite3* _db = NULL) : db(_db) {}
   SQLiteDB(const SQLiteDB&) = delete;
   ~SQLiteDB() { if(db) sqlite3_close(db); }
+  sqlite3* release() { return std::exchange(db, nullptr); }
 
   const char* errMsg() { return sqlite3_errmsg(db); }
-  bool exec(const char* sql) { return SQLiteStmt(db, sql).exec(); }
+  bool exec(const char* sql) { return sqlite3_exec(db, sql, NULL, NULL, NULL) == SQLITE_OK; }
   bool exec(const std::string& sql) { return exec(sql.c_str()); }
   SQLiteStmt stmt(const char* sql) { return SQLiteStmt(db, sql); }
   SQLiteStmt stmt(const std::string& sql) { return stmt(sql.c_str()); }

@@ -49,7 +49,7 @@ public:
   void longPressEvent(float x, float y);
   void hoverEvent(float x, float y);
 
-  void loadSceneFile(bool setPosition = false);
+  void loadSceneFile(bool async = true, bool setPosition = false);
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   LngLat getMapCenter();
@@ -76,11 +76,6 @@ public:
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;
   std::string sceneYaml;
-  bool load_async = true;
-  //bool show_gui = false;
-  //bool recreate_context = false;
-  //bool wireframe_mode = false;
-  //bool single_tile_worker = false;
 
   float density = 1.0;
   float pixel_scale = 2.0;

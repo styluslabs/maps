@@ -38,11 +38,11 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
           for(const std::string& field : searchdata.fields)
             tags.append(feature.props.getString(field)).append(" ");
           // insert row
-          //sqlite3_bind_text(stmt, 1, featname.c_str(), -1, SQLITE_STATIC);
-          sqlite3_bind_text(stmt, 1, tags.c_str(), tags.size() - 1, SQLITE_STATIC);  // drop trailing separator
-          sqlite3_bind_text(stmt, 2, feature.props.toJson().c_str(), -1, SQLITE_TRANSIENT);
-          sqlite3_bind_double(stmt, 3, lnglat.longitude);
-          sqlite3_bind_double(stmt, 4, lnglat.latitude);
+          sqlite3_bind_text(stmt, 1, featname.c_str(), -1, SQLITE_STATIC);
+          sqlite3_bind_text(stmt, 2, tags.c_str(), tags.size() - 1, SQLITE_STATIC);  // drop trailing separator
+          sqlite3_bind_text(stmt, 3, feature.props.toJson().c_str(), -1, SQLITE_TRANSIENT);
+          sqlite3_bind_double(stmt, 4, lnglat.longitude);
+          sqlite3_bind_double(stmt, 5, lnglat.latitude);
           if(sqlite3_step(stmt) != SQLITE_DONE)
             LOGE("sqlite3_step failed: %s\n", sqlite3_errmsg(sqlite3_db_handle(stmt)));
           //sqlite3_clear_bindings(stmt);  -- retain binding for tile_id set by caller
@@ -55,7 +55,6 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
 
 void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
-  /*
   int tileId = -1;
   SQLiteStmt(searchDB, "SELECT id FROM tiles WHERE z = ? AND x = ? AND y = ?;")
       .bind(task->tileId().z, task->tileId().x, task->tileId().y).exec([&](int id) { tileId = id; });
@@ -68,10 +67,8 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
   //int nchanges = sqlite3_total_changes(searchDB);
   const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
   SQLiteStmt(searchDB, query).bind(task->tileId().z, task->tileId().x, task->tileId().y).exec();
-  //if(sqlite3_total_changes(searchDB) == nchanges)  // total_changes() is a bit safer than changes() here
-  //  return;
-  // bind tile_id
-  sqlite3_bind_int64(insertStmt, 6, sqlite3_last_insert_rowid(searchDB));*/
+  //if(sqlite3_total_changes(searchDB) == nchanges) return; // total_changes() is a bit safer than changes() here
+  sqlite3_bind_int64(insertStmt, 6, sqlite3_last_insert_rowid(searchDB));  // bind tile_id
 
   sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
   processTileData(task, insertStmt, searchData);
@@ -81,11 +78,9 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
 void MapsSearch::onDelOfflineMap(int mapId)
 {
   //DELETE FROM tiles WHERE id IN (SELECT tile_id FROM offline_tiles WHERE offline_id = ? AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?));
-  const char* query = R"#(BEGIN;
-    DELETE FROM offline_tiles WHERE offline_id = ?;
-    DELETE FROM tiles WHERE id NOT IN (SELECT tile_id FROM offline_tiles);
-    COMMIT;)#";
-  SQLiteStmt(searchDB, query).bind(mapId).exec();
+  // need to use sqlite3_exec for multiple statments in single string
+  SQLiteStmt(searchDB, "DELETE FROM offline_tiles WHERE offline_id = ?;").bind(mapId).exec();
+  SQLiteStmt(searchDB, "DELETE FROM tiles WHERE id NOT IN (SELECT tile_id FROM offline_tiles);").exec();
 }
 
 std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
@@ -130,8 +125,6 @@ static bool initSearch()
     sqlite3_close(searchDB);
     searchDB = NULL;
 
-    ASSERT(0 && "Add support for name column!");
-
     // DB doesn't exist - create it
     if(sqlite3_open_v2(dbPath.c_str(), &searchDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
       LOGE("Error creating %s", dbPath.c_str());
@@ -140,18 +133,13 @@ static bool initSearch()
       return false;
     }
 
-    //CREATE VIRTUAL TABLE points_fts USING fts5(name, tags, props UNINDEXED, lng UNINDEXED, lat UNINDEXED);
-    DB_exec(searchDB, POI_SCHEMA);
+    sqlite3_exec(searchDB, POI_SCHEMA, NULL, NULL, NULL);
     // search history - NOCASE causes comparisions to be case-insensitive but still stores case
     DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
   }
-  //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF", NULL, NULL, &errorMessage);
-  //sqlite3_exec(searchDB, "PRAGMA count_changes=OFF", NULL, NULL, &errorMessage);
-  //sqlite3_exec(searchDB, "PRAGMA journal_mode=MEMORY", NULL, NULL, &errorMessage);
-  //sqlite3_exec(searchDB, "PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
+  //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF; PRAGMA count_changes=OFF; PRAGMA journal_mode=MEMORY; PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
 
-  char const* stmtStr = "INSERT INTO points_fts (tags,props,lng,lat) VALUES (?,?,?,?);";
-  //char const* stmtStr = "INSERT INTO pois (name,tags,props,lng,lat,tile_id) VALUES (?,?,?,?,?,?);";
+  char const* stmtStr = "INSERT INTO pois (name,tags,props,lng,lat,tile_id) VALUES (?,?,?,?,?,?);";
   if(sqlite3_prepare_v2(searchDB, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
     LOGE("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
     return false;

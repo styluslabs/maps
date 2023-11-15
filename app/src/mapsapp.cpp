@@ -265,8 +265,10 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     if(svgDoc)
       iconUseNode->setTarget(svgDoc, std::shared_ptr<SvgDocument>(svgDoc));
   }
-  else
+  else if(icon[0])
     iconUseNode->setTarget(MapsApp::uiIcon(icon));
+  else
+    row->selectFirst(".image-container")->setVisible(false);  // no icon
 
   if(value[0] == '<') {
     SvgNode* node = loadSVGFragment(value);
@@ -294,6 +296,13 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         wrapper->setAttribute("box-anchor", "hfill");
         node = wrapper;
       }
+    }
+    else if(node->type() == SvgNode::TEXT) {
+      SvgText* textnode = static_cast<SvgText*>(node);
+      if(textnode->hasClass("wrap-text"))
+        textnode->setText(SvgPainter::breakText(textnode, icon[0] ? 250 : 300).c_str());
+      else if(textnode->hasClass("elide-text"))
+        SvgPainter::elideText(textnode, icon[0] ? 250 : 300);
     }
     content->containerNode()->addChild(node);
     return;
@@ -367,11 +376,11 @@ void MapsApp::tapEvent(float x, float y)
 #if IS_DEBUG
   double xx, yy;
   map->lngLatToScreenPosition(tapLocation.longitude, tapLocation.latitude, &xx, &yy);
-  LOG("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, tapLocation.longitude, tapLocation.latitude, xx, yy);
+  LOGD("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, tapLocation.longitude, tapLocation.latitude, xx, yy);
 #endif
 
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
-    LOG("Picked label: %s", result ? result->touchItem.properties->getAsString("name").c_str() : "none");
+    LOGD("Picked label: %s", result ? result->touchItem.properties->getAsString("name").c_str() : "none");
     if (!result) {
       clearPickResult();
       return;
@@ -393,7 +402,7 @@ void MapsApp::tapEvent(float x, float y)
   map->pickMarkerAt(x, y, [&](const Tangram::MarkerPickResult* result) {
     if(!result || result->id == pickResultMarker)
       return;
-    LOG("Marker %d picked", result->id);
+    LOGD("Marker %d picked", result->id);
     map->markerSetVisible(pickResultMarker, false);  // ???
     pickedMarkerId = result->id;
     map->screenPositionToLngLat(
@@ -426,7 +435,7 @@ void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, b
   }
 }
 
-void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> updates,
+void MapsApp::loadSceneFile(bool async, bool setPosition)
 {
   // sceneFile will be used iff sceneYaml is empty
   Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition, sceneUpdates);  //, updates};
@@ -439,7 +448,7 @@ void MapsApp::loadSceneFile(bool setPosition)  //std::vector<SceneUpdate> update
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
-  map->loadScene(std::move(options), load_async);
+  map->loadScene(std::move(options), async);
 }
 
 MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(this))

@@ -10,7 +10,7 @@ public:
   MapsSources(MapsApp* _app);
 
   void addSource(const std::string& key, YAML::Node srcnode);
-  void rebuildSource(const std::string& srcname = "");
+  void rebuildSource(const std::string& srcname = "", bool async = true);
   int64_t shrinkCache(int64_t maxbytes);
   void onMapEvent(MapEvent_t event);
   Button* createPanel();

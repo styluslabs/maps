@@ -185,7 +185,7 @@ void MapsSources::sourceModified()
   saveBtn->setEnabled(!titleEdit->text().empty());
 }
 
-void MapsSources::rebuildSource(const std::string& srcname)
+void MapsSources::rebuildSource(const std::string& srcname, bool async)
 {
   SourceBuilder builder(mapSources);
   // support comma separated list of sources
@@ -220,7 +220,7 @@ void MapsSources::rebuildSource(const std::string& srcname)
     app->sceneYaml = builder.getSceneYaml(baseUrl);
     app->sceneFile = baseUrl + "__GUI_SOURCES__";
     app->sceneUpdates = std::move(builder.updates);  //.clear();
-    app->loadSceneFile();
+    app->loadSceneFile(async);
     sceneVarsLoaded = false;
     legendsLoaded = false;
     currSource = srcname;
