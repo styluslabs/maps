@@ -1340,8 +1340,7 @@ static const char* moreWidgetSVG = R"#(
 </svg>
 )#";
 
-static std::mutex taskQueueMutex;
-static std::vector< std::function<void()> > taskQueue;
+static ThreadSafeQueue< std::function<void()> > taskQueue;
 static std::thread::id mainThreadId;
 
 void PLATFORM_WakeEventLoop()
@@ -1354,8 +1353,7 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
   if(std::this_thread::get_id() == mainThreadId)
     fn();
   else {
-    std::lock_guard<std::mutex> lock(taskQueueMutex);
-    taskQueue.push_back(fn);
+    taskQueue.push_back(std::move(fn));
     glfwPostEmptyEvent();
   }
 }
@@ -1616,13 +1614,9 @@ int main(int argc, char* argv[])
   while(runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
 
-    {
-      std::lock_guard<std::mutex> lock(taskQueueMutex);
-      while(!taskQueue.empty()) {
-        taskQueue.back()();
-        taskQueue.pop_back();
-      }
-    }
+    std::function<void()> queuedFn;
+    while(taskQueue.pop_front(queuedFn))
+      queuedFn();
 
     int fbWidth = 0, fbHeight = 0;
     glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);

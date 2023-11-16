@@ -26,6 +26,7 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
 {
   using namespace Tangram;
   auto tileData = task->source() ? task->source()->parse(*task) : Mvt::parseTile(*task, 0);
+  if(!tileData) return;
   for(const Layer& layer : tileData->layers) {
     for(const SearchData& searchdata : searchData) {
       if(searchdata.layer == layer.name) {
@@ -35,8 +36,11 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
             continue;  // skip POIs w/o name or geometry
           auto lnglat = tileCoordToLngLat(task->tileId(), feature.points.front());
           std::string tags;
-          for(const std::string& field : searchdata.fields)
-            tags.append(feature.props.getString(field)).append(" ");
+          for(const std::string& field : searchdata.fields) {
+            const std::string& s = feature.props.getString(field);
+            if(!s.empty())
+              tags.append(s).append(" ");
+          }
           // insert row
           sqlite3_bind_text(stmt, 1, featname.c_str(), -1, SQLITE_STATIC);
           sqlite3_bind_text(stmt, 2, tags.c_str(), tags.size() - 1, SQLITE_STATIC);  // drop trailing separator
@@ -73,6 +77,7 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
   sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
   processTileData(task, insertStmt, searchData);
   sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
+  LOGD("Search indexing completed for tile %s", task->tileId().toString().c_str());
 }
 
 void MapsSearch::onDelOfflineMap(int mapId)
@@ -281,25 +286,14 @@ void MapsSearch::searchPluginError(const char* err)
   retryBtn->setVisible(true);
 }
 
-// online map search C++ code removed 2022-12-11 (now handled via plugins)
-
 void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
 {
-  const char* query = "SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
-      "MATCH ? AND lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? ORDER BY rank LIMIT 1000;";
-  DB_exec(searchDB, query, [&](sqlite3_stmt* stmt){
-    int rowid = sqlite3_column_int(stmt, 0);
-    double lng = sqlite3_column_double(stmt, 2);
-    double lat = sqlite3_column_double(stmt, 3);
-    double score = sqlite3_column_double(stmt, 4);
-    const char* json = (const char*)(sqlite3_column_text(stmt, 1));
+  const char* query = "SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON pois.ROWID = pois_fts.ROWID WHERE pois_fts "
+      "MATCH ? AND pois.lng >= ? AND pois.lat >= ? AND pois.lng <= ? AND pois.lat <= ? ORDER BY rank LIMIT 1000;";
+  SQLiteStmt(searchDB, query)
+      .bind(queryStr, lnglat00.longitude, lnglat00.latitude, lngLat11.longitude, lngLat11.latitude)
+      .exec([&](int rowid, double lng, double lat, double score, const char* json){
     addMapResult(rowid, lng, lat, score, json);
-  }, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_text(stmt, 1, queryStr.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_double(stmt, 2, lnglat00.longitude);
-    sqlite3_bind_double(stmt, 3, lnglat00.latitude);
-    sqlite3_bind_double(stmt, 4, lngLat11.longitude);
-    sqlite3_bind_double(stmt, 5, lngLat11.latitude);
   });
   moreMapResultsAvail = mapResults.size() >= 1000;
 }
@@ -310,19 +304,11 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
   // if '*' not appended to string, we assume catagorical search - no info for ranking besides dist
   bool sortByDist = queryStr.back() != '*' || app->config["search"]["sort"].as<std::string>("rank") == "dist";
   // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
-  std::string query = fstring("SELECT rowid, props, lng, lat, rank FROM points_fts WHERE points_fts "
-      "MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;", sortByDist ? "-1.0" : "rank");
-  DB_exec(searchDB, query.c_str(), [&](sqlite3_stmt* stmt){
-    int rowid = sqlite3_column_int(stmt, 0);
-    double lng = sqlite3_column_double(stmt, 2);
-    double lat = sqlite3_column_double(stmt, 3);
-    double score = sqlite3_column_double(stmt, 4);
-    const char* json = (const char*)(sqlite3_column_text(stmt, 1));
-    addListResult(rowid, lng, lat, score, json);
-  }, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_text(stmt, 1, queryStr.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 2, offset);
-  });
+  std::string query = fstring("SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON"
+      " pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;",
+      sortByDist ? "-1.0" : "rank");
+  SQLiteStmt(searchDB, query).bind(queryStr, offset).exec([&](int rowid, double lng, double lat,
+      double score, const char* json){ addListResult(rowid, lng, lat, score, json); });
   moreListResultsAvail = listResults.size() - offset >= 20;
 }
 
@@ -333,17 +319,20 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   Map* map = app->map;
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
-  if(searchOnMapMove && ((moreMapResultsAvail && map->getZoom() - prevZoom > 0.5f)
-      || lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
-      || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude)) {
+  bool zoomedin = map->getZoom() - prevZoom > 0.5f;
+  bool zoomedout = map->getZoom() - prevZoom < 0.5f;
+  bool mapmoved = lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
+      || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude;
+  if(searchOnMapMove && (mapmoved || (moreMapResultsAvail && zoomedin))) {
     updateMapResults(lngLat00, lngLat11);
     prevZoom = map->getZoom();
   }
-  else if(!mapResults.empty() && std::abs(map->getZoom() - prevZoom) > 0.5f) {
+  else if(!mapResults.empty() && (zoomedin || zoomedout)) {
     markers->onZoom();
   }
   // any map pan or zoom can potentially affect ranking of list results
-  retryBtn->setVisible(true);
+  if(mapmoved || zoomedin || zoomedout)
+    retryBtn->setVisible(true);
 
   if(app->pickedMarkerId > 0) {
     if(markers->onPicked(app->pickedMarkerId))
@@ -410,10 +399,10 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     // add synonyms to query (e.g., add "fast food" to "restaurant" query)
     if(providerIdx == 0 && !query.empty()) {
       // jsCallFn will return empty string in case of error
-      std::string tfquery = app->pluginManager->jsCallFn("transformQuery", query);
+      std::string tfquery = phase == RETURN ? app->pluginManager->jsCallFn("transformQuery", query) : "";
       searchStr = tfquery.empty() ? query + "*" : tfquery;
       std::replace(searchStr.begin(), searchStr.end(), '\'', ' ');
-      LOG("Search string: %s", searchStr.c_str());
+      LOGD("Search string: %s", searchStr.c_str());
     }
     else
       searchStr = query;
@@ -425,21 +414,25 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   retryBtn->setVisible(false);
   retryBtn->setIcon(MapsApp::uiIcon("refresh"));  // error cleared
 
+  // use map center for origin if current location is offscreen
+  if(phase != NEXTPAGE) {
+    LngLat loc = app->currLocation.lngLat();
+    searchRankOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
+  }
+
   if(phase == EDITING) {
     std::vector<std::string> autocomplete;
     SQLiteStmt(searchDB, "SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;")
         .bind(query + "%", query.size() > 1 && providerIdx == 0 ? 5 : 25) // LIMIT 5 to leave room for results
         .exec([&](const char* q){ autocomplete.emplace_back(q); });
     populateAutocomplete(autocomplete);
-    if(query.size() < 2) // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
-      return;
+    if(query.size() > 1 && providerIdx == 0) {  // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
+      offlineListSearch("name:" + searchStr, lngLat00, lngLat11);  // restrict live search to name
+      resultsUpdated();
+    }
+    return;
   }
 
-  // use map center for origin if current location is offscreen
-  if(phase != NEXTPAGE) {
-    LngLat loc = app->currLocation.lngLat();
-    searchRankOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
-  }
   if(phase == RETURN && query.size() > 1) {
     SQLiteStmt(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);").bind(query).exec();
     // handle lat,lng string
@@ -461,7 +454,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     offlineListSearch(searchStr, lngLat00, lngLat11);
     resultsUpdated();
   }
-  else if(phase != EDITING) {
+  else {  //if(phase != EDITING) {
     bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (unifiedSearch ? MAP_SEARCH : 0) | (sortByDist ? SORT_BY_DIST : 0);
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);

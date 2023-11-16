@@ -53,7 +53,7 @@ public:
     OfflineDownloader(Platform& _platform, const OfflineMapInfo& ofl, const OfflineSourceInfo& src);
     ~OfflineDownloader();
     size_t remainingTiles() const { return m_queued.size() + m_pending.size(); }
-    bool fetchNextTile();
+    bool fetchNextTile(int maxPending);
     void cancel();
     std::string name;
     int totalTiles = 0;
@@ -74,28 +74,27 @@ private:
 
 static MapsOffline* mapsOfflineInst = NULL;  // for updateProgress()
 static int maxOfflineDownloads = 4;
-static std::deque<OfflineMapInfo> offlinePending;
-static std::mutex mutexOfflineQueue;
-static std::vector<std::unique_ptr<OfflineDownloader>> offlineDownloaders;
+static std::atomic<Timestamp> prevProgressUpdate(0);
+static ThreadSafeQueue<OfflineMapInfo, std::list<OfflineMapInfo>> offlinePending;
+static ThreadSafeQueue<std::unique_ptr<OfflineDownloader>> offlineDownloaders;
+
 
 static void offlineDLStep()
 {
-  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
-
   Platform& platform = *MapsApp::platform;
   while(!offlinePending.empty()) {
     if(offlineDownloaders.empty()) {
-      auto& dl = offlinePending.front();
-      for(auto& source : dl.sources)
-        offlineDownloaders.emplace_back(new OfflineDownloader(platform, dl, source));
+      auto& ol = offlinePending.front();  // safe because only this thread can remove final item from offlinePending
+      for(auto& source : ol.sources)
+        offlineDownloaders.emplace_back(new OfflineDownloader(platform, ol, source));
     }
     while(!offlineDownloaders.empty()) {
-      // DB access (and this network requests for missing tiles) are async, so activeUrlRequests() won't update
-      int nreq = maxOfflineDownloads - int(platform.activeUrlRequests());
-      while(nreq > 0 && offlineDownloaders.back()->fetchNextTile()) --nreq;
-      if(nreq <= 0 || offlineDownloaders.back()->remainingTiles())
-        return;  // m_queued empty, m_pending not empty
-      LOGD("completed offline tile downloads for layer %s", offlineDownloaders.back()->name.c_str());
+      //int nreq = std::max(1, maxOfflineDownloads - int(platform.activeUrlRequests()));
+      auto& dl = offlineDownloaders.back();
+      while(dl->fetchNextTile(maxOfflineDownloads)) {}
+      if(dl->remainingTiles())
+        return;
+      LOGD("completed offline tile downloads for layer %s", dl->name.c_str());
       offlineDownloaders.pop_back();
     }
     LOG("completed offline tile downloads for map %d", offlinePending.front().id);
@@ -103,10 +102,9 @@ static void offlineDLStep()
     MapsApp::runOnMainThread([id=offlinePending.front().id, canceled=offlinePending.front().canceled](){
       mapsOfflineInst->downloadCompleted(id, canceled);
     });
-
     offlinePending.pop_front();
   }
-  platform.onUrlRequestsThreshold = nullptr;  // all done!
+  //platform.onUrlRequestsThreshold = nullptr;  // all done!
 }
 
 static void offlineDLMain()
@@ -191,10 +189,10 @@ void OfflineDownloader::cancel()
   canceled = true;  //m_pending.clear();
 }
 
-bool OfflineDownloader::fetchNextTile()
+bool OfflineDownloader::fetchNextTile(int maxPending)
 {
   std::unique_lock<std::mutex> lock(m_mutexQueue);
-  if(m_queued.empty()) return false;
+  if(m_queued.empty() || int(m_pending.size()) >= maxPending) return false;
   auto task = std::make_shared<BinaryTileTask>(m_queued.front(), nullptr);
   // prevent redundant write to offline_tiles table if importing from mbtiles file
   bool needdata = !searchData.empty() && task->tileId().z == srcMaxZoom;
@@ -211,37 +209,36 @@ bool OfflineDownloader::fetchNextTile()
 void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
 {
   std::unique_lock<std::mutex> lock(m_mutexQueue);
-
   TileID tileId = task->tileId();
   auto pendingit = std::find(m_pending.begin(), m_pending.begin(), tileId);
   if(pendingit == m_pending.end()) {
     LOGW("Pending tile entry not found for tile!");
     return;
   }
-  // put back in queue (at end) on failure
-  if(canceled) {}
-  else if(!task->hasData()) {
-    m_queued.push_back(*pendingit);
+  if(!canceled && !task->hasData()) {
+    // put back in queue (at end) on failure
+    m_queued.push_back(*pendingit);  //tileId
     LOGW("%s: download of offline tile %s failed - will retry", name.c_str(), task->tileId().toString().c_str());
-  } else {
-    if(!searchData.empty() && task->tileId().z == srcMaxZoom)
-      MapsSearch::indexTileData(task.get(), offlineId, searchData);
-    LOGD("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
   }
   m_pending.erase(pendingit);
   lock.unlock();
 
-  MapsApp::runOnMainThread([](){
-    mapsOfflineInst->updateProgress();
-  });
-
+  if(!canceled && task->hasData()) {
+    if(!searchData.empty() && task->tileId().z == srcMaxZoom)
+      MapsSearch::indexTileData(task.get(), offlineId, searchData);
+    LOGD("%s: completed download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
+  }
+  Timestamp t0 = mSecSinceEpoch();
+  if(t0 - prevProgressUpdate > 1000) {
+    prevProgressUpdate = t0;
+    MapsApp::runOnMainThread([](){ mapsOfflineInst->updateProgress(); });
+  }
   semOfflineWorker.post();
 }
 
 void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, int maxZoom)
 {
   Map* map = app->map;
-  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
   // don't load tiles outside visible region at any zoom level (as using TileID::getChild() recursively
   //  would do - these could potentially outnumber the number of desired tiles!)
   double heightkm = lngLatDist(lngLat00, LngLat(lngLat00.longitude, lngLat11.latitude));
@@ -263,8 +260,8 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
     }
   }
 
-  MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
-  MapsApp::platform->urlRequestsThreshold = maxOfflineDownloads - 1;
+  //MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
+  //MapsApp::platform->urlRequestsThreshold = maxOfflineDownloads - 1;
   semOfflineWorker.post();
   runOfflineWorker = true;
   if(!offlineWorker)
@@ -282,20 +279,20 @@ MapsOffline::~MapsOffline()
 
 int MapsOffline::numOfflinePending() const
 {
-  return offlinePending.size();
+  return offlinePending.queue.size();
 }
 
 bool MapsOffline::cancelDownload(int mapid)
 {
-  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
   if(offlinePending.front().id == mapid) {
     offlinePending.front().canceled = true;
-    for(auto& dl : offlineDownloaders)
+    std::unique_lock<std::mutex> lock(offlineDownloaders.mutex);
+    for(auto& dl : offlineDownloaders.queue)
       dl->cancel();
     return false;
   }
-  offlinePending.erase(std::remove_if(offlinePending.begin(), offlinePending.end(),
-      [mapid](auto a){ return a.id == mapid; }), offlinePending.end());
+  std::unique_lock<std::mutex> lock(offlinePending.mutex);
+  offlinePending.queue.remove_if([mapid](auto a){ return a.id == mapid; });
   return true;
 }
 
@@ -335,7 +332,6 @@ void MapsOffline::downloadCompleted(int id, bool canceled)
 void MapsOffline::resumeDownloads()
 {
   // caller should restore map source if necessary
-  //std::string prevsrc = app->mapsSources->currSource;
   const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, maxzoom, source FROM offlinemaps WHERE done = 0 ORDER BY timestamp;";
   SQLiteStmt(app->bkmkDB, query).exec([&](int mapid, double lng0, double lat0, double lng1, double lat1, int maxZoom, std::string sourcestr) {
     app->mapsSources->rebuildSource(sourcestr, false);
@@ -374,17 +370,6 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
     return false;
   }
 
-  //bool formatConflict = false;
-  //srcDB.stmt("SELECT s.value, d.value FROM metadata AS s LEFT JOIN dest.metadata AS d ON s.name = d.name "
-  //    " WHERE s.name = 'format';").exec([&](std::string key, std::string sval, std::string dval) {
-  //  if(!dval.empty() && sval != dval)
-  //    formatConflict = true;
-  //});
-  //if(formatConflict) {
-  //  MapsApp::messageBox("Import map", "Cannot import to selected source: tile format does not match!", {"OK"});
-  //  return false;
-  //}
-
   std::string importSql;
   int offlineId = int(time(NULL));
   bool hasTiles = false, hasMap = false, hasImages = false;
@@ -401,6 +386,8 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
     //     map.zoom_level = NEW.zoom_level AND map.tile_column = NEW.tile_column AND map.tile_row = NEW.tile_row);
     //   -- rowid == last_insert_rowid();
     // END;
+    // since tiles from multiple sources can be merged into dest, we could have mixture of compressed and
+    //  uncompressed (but should mostly be gzip), so set compression=unknown
     const char* query = R"#(ATTACH DATABASE '%s' AS src;
       BEGIN;
       REPLACE INTO map SELECT zoom_level, tile_column, tile_row, md5(tile_data) FROM src.tiles;
@@ -409,6 +396,7 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
         s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
       REPLACE INTO offline_tiles SELECT map.tile_id, %d FROM src.tiles AS s JOIN map ON
         s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
+      REPLACE INTO metadata(name, value) VALUES ('compression', 'unknown');
       COMMIT;
       DETACH DATABASE src;)#";
     importSql = fstring(query, srcpath.c_str(), offlineId);
@@ -420,6 +408,7 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
       DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM map);  -- delete orphaned tiles
       REPLACE INTO images SELECT * FROM src.images;
       REPLACE INTO offline_tiles SELECT tile_id, %d FROM src.map;
+      REPLACE INTO metadata(name, value) VALUES ('compression', 'unknown');
       COMMIT;
       DETACH DATABASE src;)#";
     importSql = fstring(query, srcpath.c_str(), offlineId);
@@ -436,23 +425,22 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
   srcDB.stmt(boundsSql).exec([&](int min_row, int max_row, int min_col, int max_col, int max_zoom){
     maxZoom = max_zoom;
     lngLat00 = MapProjection::projectedMetersToLngLat(
-        MapProjection::tileSouthWestCorner(TileID(min_col, max_row, max_zoom)));
+        MapProjection::tileSouthWestCorner(TileID(min_col, (1 << max_zoom) - 1 - min_row, max_zoom)));
     lngLat11 = MapProjection::projectedMetersToLngLat(
-        MapProjection::tileSouthWestCorner(TileID(max_col+1, min_row-1, max_zoom)));
+        MapProjection::tileSouthWestCorner(TileID(max_col+1, (1 << max_zoom) - 1 - max_row - 1, max_zoom)));
   });
-  sqlite3_close(srcDB.release());  // avoid database is locked error if offline worker threads starts immediately
+  sqlite3_close(srcDB.release());  // probably not necessary
 
   // note that we set done = 1 since import is not resumable
   std::string maptitle = FSPath(srcpath).baseName();
   const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title,done) VALUES (?,?,?,?,?,?,?,?,?);";
   SQLiteStmt(app->bkmkDB, query).bind(offlineId, lngLat00.longitude, lngLat00.latitude,
       lngLat11.longitude, lngLat11.latitude, maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
+  app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(lngLat00, lngLat11, {32}), 0.5f);
 
-  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
-  // queue offline downloads
   offlinePending.push_back({offlineId, lngLat00, lngLat11, 0, maxZoom, {}, false});
   offlinePending.back().sources.push_back(
-  {tileSource->name(), destpath, importSql, {}, tileSource->maxZoom(), {}});
+      {tileSource->name(), destpath, importSql, {}, tileSource->maxZoom(), {}});
   if(!tileSource->isRaster())
     Tangram::YamlPath("global.search_data").get(
         app->map->getScene()->config(), offlinePending.back().sources.back().searchData);
@@ -470,17 +458,19 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
 void MapsOffline::updateProgress()
 {
   if(!offlinePanel->isVisible()) return;
-  std::unique_lock<std::mutex> lock(mutexOfflineQueue);
+  std::unique_lock<std::mutex> lock(offlinePending.mutex);
 
   for(Widget* item : offlineContent->select(".listitem")) {
     int mapid = item->node->getIntAttr("__mapid");
-    for(size_t ii = 0; ii < offlinePending.size(); ++ii) {
-      if(offlinePending[ii].id == mapid) {
-        if(offlinePending[ii].canceled)
+    int ii = 0;
+    for(auto& ol : offlinePending.queue) {
+      if(ol.id == mapid) {
+        if(ol.canceled)
           item->selectFirst(".detail-text")->setText("Canceling...");
         else if(ii == 0) {
+          std::unique_lock<std::mutex> lock2(offlineDownloaders.mutex);
           int total = 0, remaining = 0;
-          for(auto& dl : offlineDownloaders) {
+          for(auto& dl : offlineDownloaders.queue) {
             total += dl->totalTiles;
             remaining += dl->remainingTiles();
           }
@@ -488,9 +478,10 @@ void MapsOffline::updateProgress()
         }
         else
           item->selectFirst(".detail-text")->setText("Download pending");
-        item->selectFirst(".delete-btn")->setText("Cancel");
+        //item->selectFirst(".delete-btn")->setText("Cancel");
         break;
       }
+      ++ii;
     }
   }
 }
@@ -600,7 +591,8 @@ Widget* MapsOffline::createPanel()
       selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
     selectDestDialog->addItems(layerTitles);
     selectDestDialog->onSelected = [=](int idx){
-      importFile(layerKeys[idx], srcpath);
+      if(importFile(layerKeys[idx], srcpath))
+        populateOffline();
     };
     showModalCentered(selectDestDialog.get(), MapsApp::gui);
   };
