@@ -37,8 +37,6 @@ bool MapsApp::metricUnits = true;
 sqlite3* MapsApp::bkmkDB = NULL;
 std::vector<Color> MapsApp::markerColors;
 
-bool SQLiteStmt::dbClosed = false;
-
 static Tooltips tooltipsInst;
 
 
@@ -1680,9 +1678,8 @@ int main(int argc, char* argv[])
   }
 
   while(sqlite3_stmt* stmt = sqlite3_next_stmt(MapsApp::bkmkDB, NULL))
-    sqlite3_finalize(stmt);
+    LOGW("SQLite statement was not finalized: %s", sqlite3_sql(stmt));  //sqlite3_finalize(stmt);
   sqlite3_close(MapsApp::bkmkDB);
-  SQLiteStmt::dbClosed = true;
   gui->closeWindow(win);
   delete gui;
   delete painter;

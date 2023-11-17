@@ -43,22 +43,11 @@ struct func_traits<Ret(*)(Args...)> {
 class SQLiteStmt
 {
 public:
-  // static (thread_local) SQLiteStmt is actually pretty reasonable for DBs open for the entire life of the
-  //  application; another approach is SQLiteDB.stmt() returning and caching ref to SQLiteStmt
-#ifndef SQLITEPP_STMT_NO_STATIC
-  static bool dbClosed;
-#endif
-
   sqlite3_stmt* stmt = NULL;
   SQLiteStmt(sqlite3_stmt* _stmt) : stmt(_stmt) {}
   SQLiteStmt(const SQLiteStmt&) = delete;
   SQLiteStmt(SQLiteStmt&& other) : stmt(std::exchange(other.stmt, nullptr)) {}
-  ~SQLiteStmt() {
-#ifndef SQLITEPP_STMT_NO_STATIC
-    if(dbClosed) return;
-#endif
-    if(stmt) sqlite3_finalize(stmt);
-  }
+  ~SQLiteStmt() { if(stmt) sqlite3_finalize(stmt); }
 
   SQLiteStmt(sqlite3* db, const char* sql) {
     // sqlite3_prepare_v2 only compiles a single statement!
@@ -76,7 +65,7 @@ public:
   { sqlite3_bind_int(stmt, loc, arg0 ? 1 : 0); bind_at(loc+1, args...); }
   template<class... Args> void bind_at(int loc, int arg0, Args... args)
   { sqlite3_bind_int(stmt, loc, arg0); bind_at(loc+1, args...); }
-  template<class... Args> void bind_at(int loc, sqlite_int64 arg0, Args... args)
+  template<class... Args> void bind_at(int loc, int64_t arg0, Args... args)
   { sqlite3_bind_int64(stmt, loc, arg0); bind_at(loc+1, args...); }
   template<class... Args> void bind_at(int loc, double arg0, Args... args)
   { sqlite3_bind_double(stmt, loc, arg0); bind_at(loc+1, args...); }
@@ -104,22 +93,30 @@ public:
   };
 
   template<class F>
-  bool exec(F&& cb) {
-    if(!stmt) return false;
-    //auto t0 = std::chrono::high_resolution_clock::now();
+  bool exec(F&& cb, bool single_step = false) {
+    if(!stmt) { LOGE("Attemping to exec null statement!"); return false; }
+#ifdef SQLITEPP_LOGTIME
+    auto t0 = std::chrono::high_resolution_clock::now();
+#endif
     int res;
-    while((res = sqlite3_step(stmt)) == SQLITE_ROW) {
-      //if(cb)
+    if(single_step)
+      res = sqlite3_step(stmt);
+    else {
+      while((res = sqlite3_step(stmt)) == SQLITE_ROW)
         apply_tuple(cb, _columns<typename func_traits<F>::argument_tuple>::get(*this));
     }
     bool ok = res == SQLITE_DONE || res == SQLITE_OK;
     if(!ok)
-      LOGE("sqlite3_step error: %s", sqlite3_errmsg(sqlite3_db_handle(stmt)));
+      LOGE("sqlite3_step error for %s: %s", sqlite3_sql(stmt), sqlite3_errmsg(sqlite3_db_handle(stmt)));
+#ifdef SQLITEPP_LOGTIME
+    auto t1 = std::chrono::high_resolution_clock::now();
+    LOG("Query time: %.6f s for %s\n", std::chrono::duration<float>(t1 - t0).count(), sqlite3_sql(stmt));
+#endif
     sqlite3_reset(stmt);
     return ok;
   }
 
-  bool exec() { return exec([](sqlite3_stmt*){}); }
+  bool exec() { return exec([](sqlite3_stmt*){}, true); }
 };
 
 #ifndef NDEBUG
@@ -135,7 +132,7 @@ public:
 
 // can't be inside class due to GCC bug
 template<> inline int SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_INTEGER); return sqlite3_column_int(stmt, idx); }
-template<> inline sqlite_int64 SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_INTEGER); return sqlite3_column_int64(stmt, idx); }
+template<> inline int64_t SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_INTEGER); return sqlite3_column_int64(stmt, idx); }
 template<> inline float SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_FLOAT); return float(sqlite3_column_double(stmt, idx)); }
 template<> inline double SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_FLOAT); return sqlite3_column_double(stmt, idx); }
 template<> inline const char* SQLiteStmt::get_col(int idx) { CHK_COL(idx, SQLITE_TEXT); return (const char*)sqlite3_column_text(stmt, idx); }
@@ -152,10 +149,16 @@ public:
 
   SQLiteDB(sqlite3* _db = NULL) : db(_db) {}
   SQLiteDB(const SQLiteDB&) = delete;
-  ~SQLiteDB() { if(db) sqlite3_close(db); }
+  ~SQLiteDB() {
+    if(!db) return;
+    while(sqlite3_stmt* stmt = sqlite3_next_stmt(db, NULL))
+      LOGW("SQLite statement was not finalized: %s", sqlite3_sql(stmt));
+    sqlite3_close(db);
+  }
   sqlite3* release() { return std::exchange(db, nullptr); }
 
   const char* errMsg() { return sqlite3_errmsg(db); }
+  int totalChanges() { return sqlite3_total_changes(db); }
   bool exec(const char* sql) { return sqlite3_exec(db, sql, NULL, NULL, NULL) == SQLITE_OK; }
   bool exec(const std::string& sql) { return exec(sql.c_str()); }
   SQLiteStmt stmt(const char* sql) { return SQLiteStmt(db, sql); }
