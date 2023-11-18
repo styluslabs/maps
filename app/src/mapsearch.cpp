@@ -59,25 +59,22 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
 
 void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
-  int tileId = -1;
+  int64_t tileId = -1;
   SQLiteStmt(searchDB, "SELECT id FROM tiles WHERE z = ? AND x = ? AND y = ?;")
-      .bind(task->tileId().z, task->tileId().x, task->tileId().y).exec([&](int id) { tileId = id; });
-  if(tileId >= 0) {
-    SQLiteStmt(searchDB, "INSERT INTO offline_tiles (tile_id, offline_id VALUES (?,?);")
-        .bind(tileId, mapId).exec();
-    return;
+      .bind(task->tileId().z, task->tileId().x, task->tileId().y).exec([&](int64_t id) { tileId = id; });
+  if(tileId < 0) {
+    const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
+    SQLiteStmt(searchDB, query).bind(task->tileId().z, task->tileId().x, task->tileId().y).exec();
+    tileId = sqlite3_last_insert_rowid(searchDB);
+    sqlite3_bind_int64(insertStmt, 6, tileId);  // bind tile_id
+
+    sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
+    processTileData(task, insertStmt, searchData);
+    sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
+    LOGD("Search indexing completed for tile %s", task->tileId().toString().c_str());
   }
-
-  //int nchanges = sqlite3_total_changes(searchDB);
-  const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
-  SQLiteStmt(searchDB, query).bind(task->tileId().z, task->tileId().x, task->tileId().y).exec();
-  //if(sqlite3_total_changes(searchDB) == nchanges) return; // total_changes() is a bit safer than changes() here
-  sqlite3_bind_int64(insertStmt, 6, sqlite3_last_insert_rowid(searchDB));  // bind tile_id
-
-  sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
-  processTileData(task, insertStmt, searchData);
-  sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
-  LOGD("Search indexing completed for tile %s", task->tileId().toString().c_str());
+  if(tileId >= 0)
+    SQLiteStmt(searchDB, "INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(tileId, mapId).exec();
 }
 
 void MapsSearch::onDelOfflineMap(int mapId)

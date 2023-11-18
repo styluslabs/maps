@@ -1456,6 +1456,11 @@ int main(int argc, char* argv[])
   glfwMakeContextCurrent(glfwWin);
   glfwSwapInterval(1); // Enable vsync
   //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+  {
+    //float xscale, yscale; glfwGetWindowContentScale(glfwWin, &xscale, &yscale);
+    const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    SvgLength::defaultDpi = std::max(mode->width, mode->height)/11.2;
+  }
 
   int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
   //int nvglFBFlags = NVG_IMAGE_SRGB;
@@ -1475,6 +1480,8 @@ int main(int argc, char* argv[])
 
   Painter::sharedVg = nvgContext;
   Painter::loadFont("sans", "/home/mwhite/maps/tangram-es/scenes/fonts/roboto-regular.ttf");
+  if(Painter::loadFont("fallback", "/home/mwhite/maps/tangram-es/scenes/fonts/DroidSansFallback.ttf"))
+    Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback
 
   // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
   SvgParser::openStream = [](const char* name) -> std::istream* {
@@ -1731,7 +1738,7 @@ bool userLoadSvg(char* svg, Texture* texture)
     doc->setHeight(b.height());
   }
 
-  int w = int(doc->width().px(96) + 0.5), h = int(doc->height().px(96) + 0.5);
+  int w = int(doc->width().px() + 0.5), h = int(doc->height().px() + 0.5);
   Image img(w, h);
   // this fn will be run on a thread if loading scene async, so we cannot use shared nvg context
   NVGcontext* drawCtx = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_SRGB | NVGSW_PATHS_XC);

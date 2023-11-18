@@ -53,7 +53,7 @@ public:
     // sqlite3_prepare_v2 only compiles a single statement!
     const char* leftover = NULL;
     if(sqlite3_prepare_v2(db, sql, -1, &stmt, &leftover) != SQLITE_OK)
-      LOGE("sqlite3_prepare_v2 error: %s", sqlite3_errmsg(db));
+      LOGE("sqlite3_prepare_v2 error: %s in %s", sqlite3_errmsg(db), sql);
     if(leftover && leftover[0])
       LOGW("Remainder of SQL will be ignored: %s", leftover);
   }

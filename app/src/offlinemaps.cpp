@@ -57,6 +57,7 @@ public:
     void cancel();
     std::string name;
     int totalTiles = 0;
+    int maxRetries = 4;
 
 private:
     void tileTaskCallback(std::shared_ptr<TileTask> _task);
@@ -210,15 +211,21 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
 {
   std::unique_lock<std::mutex> lock(m_mutexQueue);
   TileID tileId = task->tileId();
-  auto pendingit = std::find(m_pending.begin(), m_pending.begin(), tileId);
+  auto pendingit = m_pending.begin();  //std::find(m_pending.begin(), m_pending.begin(), tileId);
+  for(; pendingit != m_pending.end(); ++pendingit) {
+    if(pendingit->x == tileId.x && pendingit->y == tileId.y && pendingit->z == tileId.z)
+      break;
+  }
   if(pendingit == m_pending.end()) {
     LOGW("Pending tile entry not found for tile!");
     return;
   }
   if(!canceled && !task->hasData()) {
     // put back in queue (at end) on failure
-    m_queued.push_back(*pendingit);  //tileId
-    LOGW("%s: download of offline tile %s failed - will retry", name.c_str(), task->tileId().toString().c_str());
+    if(++pendingit->s - pendingit->z <= maxRetries)  // use TileID.s to track number of retries
+      m_queued.push_back(*pendingit);
+    else
+      LOGW("%s: download of offline tile %s failed", name.c_str(), task->tileId().toString().c_str());
   }
   m_pending.erase(pendingit);
   lock.unlock();
@@ -492,7 +499,7 @@ void MapsOffline::populateOffline()
 
   const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title, timestamp FROM offlinemaps ORDER BY timestamp DESC;";
   SQLiteStmt(app->bkmkDB, query).exec([&](int mapid, double lng0, double lat0, double lng1, double lat1,
-      std::string sourcestr, std::string titlestr, int timestamp){
+      std::string sourcestr, std::string titlestr, int64_t timestamp){
     auto srcinfo = app->mapsSources->mapSources[sourcestr];
 
     std::string detail = srcinfo ? srcinfo["title"].Scalar() : sourcestr;
