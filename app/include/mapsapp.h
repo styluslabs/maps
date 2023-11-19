@@ -59,6 +59,7 @@ public:
   void setPickResult(LngLat pos, std::string namestr, std::string propstr);
   YAML::Node readSceneValue(const std::string& yamlPath);
   void placeInfoPluginError(const char* err);
+  int getPanelWidth() const { return 350; }
 
   Location currLocation;
   float orientation = 0;

@@ -712,16 +712,13 @@ Button* MapsBookmarks::createPanel()
   bkmkMenu->addHandler([this, bkmkMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(bkmkMenu->selectFirst(".child-container"));
-      const char* query = "SELECT b.rowid, b.title, b.props, b.notes, b.lng, b.lat FROM bookmarks AS b "
+      int uiWidth = app->getPanelWidth();
+      const char* query = "SELECT b.title, b.props, b.lng, b.lat FROM bookmarks AS b "
           "JOIN lists ON lists.id = b.list_id WHERE lists.archived = 0 ORDER BY timestamp LIMIT 8;";
-      DB_exec(app->bkmkDB, query, [&](sqlite3_stmt* stmt){
-        std::string namestr = (const char*)(sqlite3_column_text(stmt, 1));
-        std::string propstr = (const char*)(sqlite3_column_text(stmt, 2));
-        double lng = sqlite3_column_double(stmt, 4);
-        double lat = sqlite3_column_double(stmt, 5);
-        //const char* notestr = (const char*)(sqlite3_column_text(stmt, 2));
-        bkmkMenu->addItem(namestr.c_str(), MapsApp::uiIcon("pin"), [=](){
-          app->setPickResult(LngLat(lng, lat), namestr, propstr); });
+      SQLiteStmt(app->bkmkDB, query).exec([&](std::string name, std::string props, double lng, double lat){
+        Button* item = bkmkMenu->addItem(name.c_str(), MapsApp::uiIcon("pin"),
+            [=](){ app->setPickResult(LngLat(lng, lat), name, props); });
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
       });
     }
     return false;

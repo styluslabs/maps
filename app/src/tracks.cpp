@@ -2251,6 +2251,7 @@ Button* MapsTracks::createPanel()
   Menu* tracksMenu = createMenu(Menu::VERT_LEFT);
   tracksMenu->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
+      int uiWidth = app->getPanelWidth();
       gui->deleteContents(tracksMenu->selectFirst(".child-container"));
       if(recordTrack) {
         Button* item = createCheckBoxMenuItem("Current track");
@@ -2260,6 +2261,7 @@ Button* MapsTracks::createPanel()
       }
       for(size_t ii = 0; ii < 9 && ii < tracks.size(); ++ii) {
         Button* item = createCheckBoxMenuItem(tracks[ii].title.c_str());
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
         item->onClicked = [ii, this](){ setTrackVisible(&tracks[ii], !tracks[ii].visible); };
         item->setChecked(tracks[ii].visible);
         tracksMenu->addItem(item);

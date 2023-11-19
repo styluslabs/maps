@@ -6,6 +6,7 @@
 #include "data/mbtilesDataSource.h"
 #include "data/networkDataSource.h"
 
+#include "usvg/svgpainter.h"
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
@@ -415,6 +416,51 @@ void MapsSources::onMapEvent(MapEvent_t event)
   }
 }
 
+void MapsSources::updateSceneVar(const std::string& path, const std::string& newval, bool reload)
+{
+  app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
+      [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
+  app->sceneUpdates.push_back(SceneUpdate{path, newval});
+  sourceModified();
+  if(reload) {
+    app->loadSceneFile();
+    sceneVarsLoaded = false;
+  }
+  else
+    app->map->updateGlobals({app->sceneUpdates.back()});
+}
+
+Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& name)
+{
+  auto& styles = app->map->getScene()->styles();
+  for(auto& style : styles) {
+    if(style->getName() == stylename) {
+      for(auto& uniform : style->styleUniforms()) {
+        if(uniform.first.name == name) {
+          if(uniform.second.is<float>()) {
+            auto spinBox = createTextSpinBox(uniform.second.get<float>(), 1, -INFINITY, INFINITY, "%.2f");
+            spinBox->onValueChanged = [=, &uniform](real val){
+              std::string path = "styles." + stylename + ".shaders.uniforms." + name;
+              app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
+                  [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
+              app->sceneUpdates.push_back(SceneUpdate{path, std::to_string(val)});
+              uniform.second.set<float>(val);
+              app->platform->requestRender();
+              sourceModified();
+            };
+            return spinBox;
+          }
+          LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), name.c_str());
+          return NULL;
+        }
+      }
+      break;
+    }
+  }
+  LOGE("Cannot find style uniform %s.%s referenced in gui_variables!", stylename.c_str(), name.c_str());
+  return NULL;
+}
+
 void MapsSources::populateSceneVars()
 {
   sceneVarsLoaded = true;
@@ -422,56 +468,35 @@ void MapsSources::populateSceneVars()
 
   YAML::Node vars = app->readSceneValue("global.gui_variables");
   for(const auto& var : vars) {
-    std::string name = var["name"].as<std::string>("");
-    std::string label = var["label"].as<std::string>("");
-    std::string reload = var["reload"].as<std::string>("");
-    std::string stylename = var["style"].as<std::string>("");
-    if(!stylename.empty()) {
-      // shader uniform
-      auto& styles = app->map->getScene()->styles();
-      for(auto& style : styles) {
-        if(style->getName() == stylename) {
-          for(auto& uniform : style->styleUniforms()) {
-            if(uniform.first.name == name) {
-              if(uniform.second.is<float>()) {
-                auto spinBox = createTextSpinBox(uniform.second.get<float>(), 1, -INFINITY, INFINITY, "%.2f");
-                spinBox->onValueChanged = [=, &uniform](real val){
-                  std::string path = "styles." + stylename + ".shaders.uniforms." + name;
-                  app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
-                      [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
-                  app->sceneUpdates.push_back(SceneUpdate{path, std::to_string(val)});
-                  uniform.second.set<float>(val);
-                  app->platform->requestRender();
-                  sourceModified();
-                };
-                varsContent->addWidget(createTitledRow(label.c_str(), spinBox));
-              }
-              else
-                LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), name.c_str());
-              return;
-            }
-          }
-          break;
-        }
-      }
-      LOGE("Cannot find style uniform %s.%s referenced in gui_variables!", stylename.c_str(), name.c_str());
+    std::string name = var.first.Scalar();  //.as<std::string>("");
+    std::string label = var.second["label"].as<std::string>("");
+    std::string stylename = var.second["style"].as<std::string>("");
+    bool reload = var.second["reload"].as<std::string>("") != "false";
+    if(!stylename.empty()) {  // shader uniform
+      Widget* uwidget = processUniformVar(stylename, name);
+      if(uwidget)
+        varsContent->addWidget(createTitledRow(label.c_str(), uwidget));
     }
-    else {
-      // global variable, accessed in scene file by JS functions
+    else {  // global variable
       std::string value = app->readSceneValue("global." + name).as<std::string>("");
-      auto checkbox = createCheckBox("", value == "true");
-      checkbox->onToggled = [=](bool newval){
-        std::string path = "global." + name;
-        app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
-            [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
-        app->sceneUpdates.push_back(SceneUpdate{path, newval ? "true" : "false"});
-        sourceModified();
-        if(reload == "false")  // ... so default to reloading
-          app->map->updateGlobals({app->sceneUpdates.back()});
-        else
-          app->loadSceneFile();
-      };
-      varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
+      if(value == "true" || value == "false") {
+        auto checkbox = createCheckBox("", value == "true");
+        checkbox->onToggled = [=](bool newval){
+          updateSceneVar("global." + name, newval ? "true" : "false", reload);
+        };
+        varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
+      }
+      else {
+        auto textedit = createTitledTextEdit(label.c_str(), value.c_str());
+        textedit->addHandler([=](SvgGui* gui, SDL_Event* event){
+          if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
+            updateSceneVar("global." + name, textedit->text(), reload);
+            return true;
+          }
+          return false;
+        });
+        varsContent->addWidget(textedit);
+      }
     }
   }
 }
@@ -672,10 +697,12 @@ Button* MapsSources::createPanel()
   sourcesMenu->addHandler([this, sourcesMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(sourcesMenu->selectFirst(".child-container"));
+      int uiWidth = app->getPanelWidth();
       for(int ii = 0; ii < 10 && ii < sourceKeys.size(); ++ii) {
         std::string key = sourceKeys[ii];
-        sourcesMenu->addItem(mapSources[key]["title"].Scalar().c_str(),
-            [this, key](){ rebuildSource(key); });
+        Button* item = sourcesMenu->addItem(
+            mapSources[key]["title"].Scalar().c_str(), [this, key](){ rebuildSource(key); });
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
       }
     }
     return false;

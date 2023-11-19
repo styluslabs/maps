@@ -16,10 +16,13 @@ public:
   Button* createPanel();
 
   std::string currSource;
+  bool sceneVarsLoaded = false;
 
 private:
   std::string createSource(std::string savekey, const std::string& yamlStr = "");
   void populateSources();
+  void updateSceneVar(const std::string& path, const std::string& newval, bool reload);
+  Widget* processUniformVar(const std::string& stylename, const std::string& name);
   void populateSceneVars();
   void populateSourceEdit(std::string key);
   void sourceModified();
@@ -42,7 +45,6 @@ private:
   TextEdit* titleEdit = NULL;
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
-  bool sceneVarsLoaded = false;
   bool legendsLoaded = false;
   bool sourcesDirty = true;
   std::vector<std::string> layerKeys;

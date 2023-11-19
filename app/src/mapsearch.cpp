@@ -12,8 +12,8 @@
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
 #include "sqlitepp.h"
-//#include "isect2d.h"
 
+#include "usvg/svgpainter.h"
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
@@ -666,13 +666,15 @@ Button* MapsSearch::createPanel()
       }
       else {
         // TODO: pinned searches - timestamp column = INF?
+        int uiWidth = app->getPanelWidth();
         const char* sql = "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;";
         SQLiteStmt(searchDB, sql).exec([&](std::string s){
-          searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
+          Button* item = searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
             app->showPanel(searchPanel);
             queryText->setText(s.c_str());
             searchText(s, RETURN);
           });
+          SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
         });
       }
     }

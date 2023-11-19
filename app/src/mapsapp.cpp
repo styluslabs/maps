@@ -985,6 +985,15 @@ Window* MapsApp::createGUI()
     </g>
   )#";
 
+  static const char* reorientSVG = R"#(
+    <g class="reorient-btn toolbutton" layout="box">
+      <rect class="background" width="42" height="42"/>
+      <g margin="0 3" box-anchor="fill" layout="box">
+        <use class="icon" width="28" height="28" xlink:href=":/ui-icons.svg#compass" />
+      </g>
+    </g>
+  )#";
+
   Tooltips::inst = &tooltipsInst;
 
   SvgDocument* winnode = createWindowNode(mainWindowSVG);
@@ -1006,7 +1015,7 @@ Window* MapsApp::createGUI()
   mapsWidget->node->setAttribute("box-anchor", "fill");
   mapsWidget->isFocusable = true;
 
-  infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));  //createColumn(); //createListContainer();
+  infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));
   auto infoHeader = createPanelHeader(NULL, "");  //MapsApp::uiIcon("pin"), "");
   infoPanel = createMapPanel(infoHeader, infoContent);
   infoPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
@@ -1041,7 +1050,7 @@ Window* MapsApp::createGUI()
   // recenter, reorient btns
   Toolbar* floatToolbar = createVertToolbar();
   // we could switch to different orientation modes (travel direction, compass direction) w/ multiple taps
-  reorientBtn = createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
+  reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->onClicked = [this](){
     CameraPosition camera = map->getCameraPosition();
     camera.tilt = 0;
@@ -1599,6 +1608,7 @@ int main(int argc, char* argv[])
     else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
       app->pluginManager->reload(MapsApp::baseDir + "plugins");
       app->loadSceneFile();  // reload scene
+      app->mapsSources->sceneVarsLoaded = false;
     }
     return false;
   });
