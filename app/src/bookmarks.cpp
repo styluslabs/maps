@@ -707,7 +707,7 @@ Button* MapsBookmarks::createPanel()
   for(auto& node : vislists)
     populateBkmks(node.as<int>(-1), false);
 
-  Menu* bkmkMenu = createMenu(Menu::VERT_LEFT);
+  Menu* bkmkMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
   //bkmkMenu->autoClose = true;
   bkmkMenu->addHandler([this, bkmkMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
@@ -718,7 +718,7 @@ Button* MapsBookmarks::createPanel()
       SQLiteStmt(app->bkmkDB, query).exec([&](std::string name, std::string props, double lng, double lat){
         Button* item = bkmkMenu->addItem(name.c_str(), MapsApp::uiIcon("pin"),
             [=](){ app->setPickResult(LngLat(lng, lat), name, props); });
-        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
       });
     }
     return false;

@@ -10,7 +10,7 @@
 #include <iomanip>
 #include "pugixml.hpp"
 #include "yaml-cpp/yaml.h"
-#include "sqlite3/sqlite3.h"
+#include "sqlitepp.h"
 #include "util/yamlPath.h"
 #include "util/mapProjection.h"
 #include "nfd.hpp"  // file dialogs
@@ -349,10 +349,9 @@ void TrackSparkline::draw(SvgPainter* svgp) const
   p->fillRect(Rect::wh(w, h), Color::WHITE);
 
   // plot
-  int plotw = w - 10;
-  int ploth = h - 15;
-  p->clipRect(Rect::ltrb(6, 0, w, h-15));  // clip plot to axes
-  p->translate(10, 0);
+  int plotw = w;
+  int ploth = h;
+  p->clipRect(Rect::ltrb(0, 0, w, h));  // clip plot to axes
   p->scale(plotw/maxDist, -ploth/(maxAlt - minAlt));
 
   p->translate(0, -maxAlt);  // + minAlt);
@@ -514,7 +513,8 @@ bool MapsTracks::loadGPX(GpxFile* track, const char* gpxSrc)
     return false;
   const char* gpxname = gpx.child("name").child_value();
   const char* gpxdesc = gpx.child("desc").child_value();
-  if(gpxname[0]) track->title = gpxname;
+  // value set in UI (and stored in DB) takes precedence
+  if(gpxname[0] && track->title.empty()) track->title = gpxname;
   if(gpxdesc[0]) track->desc = gpxdesc;
 
   pugi::xml_node wpt = gpx.child("wpt");
@@ -797,12 +797,8 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       app->map->markerSetProperties(track->marker, {{{"color", buff}}});
       app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  // force refresh
     }
-    if(track->rowid >= 0) {
-      DB_exec(app->bkmkDB, "UPDATE tracks SET style = ? WHERE rowid = ?;", NULL, [&](sqlite3_stmt* stmt1){
-        sqlite3_bind_text(stmt1, 1, buff, -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt1, 2, track->rowid);
-      });
-    }
+    if(track->rowid >= 0)
+      SQLiteStmt(app->bkmkDB, "UPDATE tracks SET style = ? WHERE rowid = ?;").bind(buff, track->rowid).exec();
   };
   container->addWidget(colorBtn);
 
@@ -810,19 +806,15 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
     Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowMenu->addItem(track->archived ? "Unarchive" : "Archive", [=](){
-      //std::string q1 = fstring("UPDATE lists_state SET order = (SELECT COUNT(1) FROM lists WHERE archived = %d) WHERE list_id = ?;", archived ? 0 : 1);
-      //DB_exec(app->bkmkDB, q1.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, rowid); });
       std::string q2 = fstring("UPDATE tracks SET archived = %d WHERE rowid = ?;", track->archived ? 0 : 1);
-      DB_exec(app->bkmkDB, q2.c_str(), NULL, [&](sqlite3_stmt* stmt1){ sqlite3_bind_int(stmt1, 1, track->rowid); });
+      SQLiteStmt(app->bkmkDB, q2).bind(track->rowid).exec();
       track->archived = !track->archived;
       if(!track->archived) tracksDirty = true;
       app->gui->deleteWidget(item);
     });
 
     overflowMenu->addItem("Delete", [=](){
-      DB_exec(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?", NULL, [=](sqlite3_stmt* stmt){
-        sqlite3_bind_int(stmt, 1, track->rowid);
-      });
+      SQLiteStmt(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?").bind(track->rowid).exec();
       for(auto it = tracks.begin(); it != tracks.end(); ++it) {
         if(it->rowid == track->rowid) {
           removeTrackMarkers(track);
@@ -842,18 +834,12 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 void MapsTracks::loadTracks(bool archived)
 {
   const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch'), style FROM tracks WHERE archived = ?;";
-  DB_exec(app->bkmkDB, query, [this, archived](sqlite3_stmt* stmt){
-    int rowid = sqlite3_column_int(stmt, 0);
-    const char* title = (const char*)(sqlite3_column_text(stmt, 1));
-    const char* filename = (const char*)(sqlite3_column_text(stmt, 2));
-    const char* date = (const char*)(sqlite3_column_text(stmt, 3));
-    const char* style = (const char*)(sqlite3_column_text(stmt, 4));
+  SQLiteStmt(app->bkmkDB, query).bind(archived).exec(
+      [&](int rowid, const char* title, const char* filename, const char* date, const char* style) {
     tracks.emplace_back(title, date, filename);
     tracks.back().rowid = rowid;
     tracks.back().style = style ? style : "";
     tracks.back().archived = archived;
-  }, [=](sqlite3_stmt* stmt){
-    sqlite3_bind_int(stmt, 1, archived ? 1 : 0);
   });
 }
 
@@ -924,9 +910,11 @@ void MapsTracks::populateStats(GpxFile* track)
 
   if(track->activeWay())
     updateStats(track->activeWay()->pts);  // has to be done before TrackPlot::setTrack()
-  if(activeTrack != track)
+  if(activeTrack != track) {
     viewEntireTrack(track);
-  activeTrack = track;
+    activeTrack = track;
+    retryBtn->setVisible(false);
+  }
   trackPlot->setTrack(track->activeWay()->pts, track->waypoints);
 }
 
@@ -1035,9 +1023,10 @@ static std::string distKmToStr(double distkm)
 
 void MapsTracks::updateDistances()
 {
-  auto wayPtItems = wayptContent->select(".listitem");  //->content->containerNode()->children();
+  if(activeTrack->routes.empty()) return;
   auto& route = activeTrack->routes.back().pts;
   if(route.empty()) return;
+  auto wayPtItems = wayptContent->select(".listitem");  //->content->containerNode()->children();
 
   if(activeTrack->routeMode == "direct") {
     size_t rteidx = 0;
@@ -1285,8 +1274,9 @@ Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
 
   auto it = activeTrack->addWaypoint(wpt, insertionWpt);
   std::string uid = it->uid;
-  //if(it->name.empty())
-  //  it->name = fstring("Waypoint %d", activeTrack->wayPtSerial);
+  // we want to show all points in measure mode
+  if(it->name.empty() && activeTrack == &navRoute && navRoute.routeMode == "direct")
+    it->name = fstring("Waypoint %d", activeTrack->wayPtSerial);
   if(it->loc.alt == 0) {
     app->getElevation(it->lngLat(), [=](double ele){
       if(!activeTrack) return;
@@ -1343,15 +1333,14 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
   container->addWidget(discardBtn);
 
   item->onClicked = [=](){
-    if(activeTrack == &navRoute) {
+    if(activeTrack == &navRoute && navRoute.routeMode != "direct") {
       replaceWaypt = true;
       insertionWpt = wp.uid;
       app->showPanel(app->mapsSearch->searchPanel, true);
     }
     else {
       auto it = activeTrack->findWaypoint(uid);
-      bool wasTapToAdd = tapToAddWaypt;
-      tapToAddWaypt = false;
+      bool wasTapToAdd = std::exchange(tapToAddWaypt, false);
       app->setPickResult(it->lngLat(), it->name, "");
       tapToAddWaypt = wasTapToAdd;
       setPlaceInfoSection(activeTrack, *it);
@@ -1400,6 +1389,7 @@ void MapsTracks::populateWaypoints(GpxFile* track)
     setRouteMode(activeTrack->routeMode);
     if(!track->routes.empty())
       updateStats(track->routes.back().pts);  // spark stats
+    retryBtn->setVisible(false);
   }
 
   wayptContent->clear();
@@ -1408,6 +1398,21 @@ void MapsTracks::populateWaypoints(GpxFile* track)
       addWaypointItem(wp);
   }
   updateDistances();
+}
+
+bool MapsTracks::findPickedWaypoint(GpxFile* track)
+{
+  for(auto& wpt : track->waypoints) {
+    if(app->pickedMarkerId == wpt.marker) {
+      bool wasTapToAdd = std::exchange(tapToAddWaypt, false);
+      app->setPickResult(wpt.lngLat(), wpt.name, "");
+      tapToAddWaypt = wasTapToAdd;
+      setPlaceInfoSection(track, wpt);
+      app->pickedMarkerId = 0;
+      return true;
+    }
+  }
+  return false;
 }
 
 void MapsTracks::onMapEvent(MapEvent_t event)
@@ -1444,19 +1449,11 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->pickedMarkerId = 0;
     }
     else {
-      for(GpxFile& track : tracks) {
-        for(auto& wpt : track.waypoints) {
-          if(app->pickedMarkerId == wpt.marker) {
-            bool wasTapToAdd = tapToAddWaypt;
-            tapToAddWaypt = false;
-            app->setPickResult(wpt.lngLat(), wpt.name, "");
-            tapToAddWaypt = wasTapToAdd;
-            setPlaceInfoSection(&track, wpt);
-            app->pickedMarkerId = 0;
+      if(!activeTrack || !findPickedWaypoint(activeTrack)) {  // navRoute is not in tracks
+        for(GpxFile& track : tracks) {
+          if(track.visible && &track != activeTrack && findPickedWaypoint(&track))
             break;
-          }
         }
-        if(app->pickedMarkerId == 0) break;
       }
     }
   }
@@ -1529,13 +1526,16 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       std::string namestr = app->pickResultName.empty() ?
           fstring("%.6f, %.6f", r2.latitude, r2.longitude) : app->pickResultName;
       removeTrackMarkers(&navRoute);
+      navRoute.title = "Navigation";
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
       navRoute.waypoints.clear();
+      navRoute.wayPtSerial = 0;
       if(km > 0.01)
         navRoute.addWaypoint({r1, "Start"});  //"Current location"
       navRoute.addWaypoint({r2, namestr});
-      populateWaypoints(&navRoute);
+      activeTrack = NULL;
       createRoute(&navRoute);
+      populateWaypoints(&navRoute);
     };
     tb->addWidget(routeBtn);
 
@@ -1544,9 +1544,13 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       std::string namestr = app->pickResultName.empty() ? fstring("%.6f, %.6f",
           app->pickResultCoord.latitude, app->pickResultCoord.longitude) : app->pickResultName;
       removeTrackMarkers(&navRoute);
+      navRoute.title = "Measurement";
       navRoute.routeMode = "direct";
+      navRoute.routes.clear();
       navRoute.waypoints.clear();
+      navRoute.wayPtSerial = 0;
       navRoute.addWaypoint({app->pickResultCoord, namestr});
+      activeTrack = NULL;
       populateWaypoints(&navRoute);
     };
     tb->addWidget(measureBtn);
@@ -1623,16 +1627,14 @@ void MapsTracks::updateDB(GpxFile* track)
 {
   if(track->filename.empty())
     track->filename = FSPath(MapsApp::baseDir, track->title + ".gpx").c_str();
-  const char* query = track->rowid >= 0 ? "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;"
-      : "INSERT INTO tracks (title,filename) VALUES (?,?);";
-  DB_exec(app->bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-    sqlite3_bind_text(stmt, 1, track->title.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, track->filename.c_str(), -1, SQLITE_TRANSIENT);
-    if(track->rowid >= 0)
-      sqlite3_bind_int(stmt, 3, track->rowid);
-  });
-  if(track->rowid < 0)
+  if(track->rowid < 0) {
+    SQLiteStmt(app->bkmkDB, "INSERT INTO tracks (title,filename) VALUES (?,?);")
+        .bind(track->title, track->filename).exec();
     track->rowid = sqlite3_last_insert_rowid(app->bkmkDB);
+  }
+  else
+    SQLiteStmt(app->bkmkDB, "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;")
+        .bind(track->title, track->filename, track->rowid).exec();
   track->loaded = true;
   tracksDirty = true;
 }
@@ -1959,21 +1961,23 @@ Button* MapsTracks::createPanel()
   tracksContainer->node->setAttribute("box-anchor", "fill");
   tracksContent = new DragDropList;  //createColumn();
 
+  Button* drawTrackBtn = createToolbutton(MapsApp::uiIcon("draw-track"), "Create Route");
   TextEdit* newTrackTitle = createTitledTextEdit("Title");
   TextEdit* newTrackFile = createTitledTextEdit("File");
   Widget* newTrackContent = createInlineDialog({newTrackTitle, newTrackFile}, "Create", [=](){
     tracks.emplace_back(newTrackTitle->text(), ftimestr("%F"), newTrackFile->text());
     updateDB(&tracks.back());
     populateWaypoints(&tracks.back());
-  });
+    drawTrackBtn->setChecked(false);
+  }, [=](){ drawTrackBtn->setChecked(false); });
   newTrackTitle->onChanged = [=](const char* s){ newTrackContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
   tracksContainer->addWidget(newTrackContent);
   tracksContainer->addWidget(tracksContent);
 
-  Button* drawTrackBtn = createToolbutton(MapsApp::uiIcon("draw-track"), "Create Route");
   drawTrackBtn->onClicked = [=](){
     newTrackTitle->setText(ftimestr("%FT%H.%M.%S").c_str());  //"%Y-%m-%d %HH%M"
-    newTrackContent->setVisible(true);
+    newTrackContent->setVisible(!newTrackContent->isVisible());
+    drawTrackBtn->setChecked(newTrackContent->isVisible());
   };
 
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
@@ -2072,10 +2076,10 @@ Button* MapsTracks::createPanel()
   TextEdit* saveRouteTitle = createTitledTextEdit("Title");
   TextEdit* saveRouteFile = createTitledTextEdit("File");
   Widget* saveRouteContent = createInlineDialog({saveRouteTitle, saveRouteFile}, "Create", [=](){
-    navRoute.title = saveRouteTitle->text();
-    navRoute.desc = ftimestr("%F");
-    navRoute.filename = saveRouteFile->text();
     tracks.push_back(std::move(navRoute));
+    tracks.back().title = saveRouteTitle->text();
+    tracks.back().desc = ftimestr("%F");
+    tracks.back().filename = saveRouteFile->text();
     updateDB(&tracks.back());
     populateWaypoints(&tracks.back());
   });
@@ -2139,7 +2143,7 @@ Button* MapsTracks::createPanel()
     <g layout="box" box-anchor="hfill" margin="3 3">
       <rect class="background" box-anchor="fill" width="20" height="20"/>
       <g class="spark-row-container" layout="flex" flex-direction="row" box-anchor="hfill">
-        <g layout="flex" flex-direction="column" box-anchor="vfill" margin="0 2">
+        <g layout="flex" flex-direction="column" box-anchor="vfill" margin="0 2" font-size="14">
           <text class="spark-dist" box-anchor="left"></text>
           <text class="spark-time" box-anchor="left"></text>
           <text class="spark-ascent" box-anchor="left"></text>
@@ -2150,7 +2154,7 @@ Button* MapsTracks::createPanel()
   )";
   sparkStats = new Button(loadSVGFragment(sparkStatsSVG));
   trackSpark = new TrackSparkline();
-  trackSpark->mBounds = Rect::wh(200, 90);
+  trackSpark->mBounds = Rect::wh(200, 80);
   trackSpark->node->setAttribute("box-anchor", "hfill");
   trackSpark->setMargins(1, 1);
   sparkStats->selectFirst(".spark-row-container")->addWidget(trackSpark);
@@ -2248,7 +2252,7 @@ Button* MapsTracks::createPanel()
   }
 
   // main toolbar button ... quick menu - recent tracks?
-  Menu* tracksMenu = createMenu(Menu::VERT_LEFT);
+  Menu* tracksMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
   tracksMenu->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       int uiWidth = app->getPanelWidth();
@@ -2261,10 +2265,10 @@ Button* MapsTracks::createPanel()
       }
       for(size_t ii = 0; ii < 9 && ii < tracks.size(); ++ii) {
         Button* item = createCheckBoxMenuItem(tracks[ii].title.c_str());
-        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
+        tracksMenu->addItem(item);
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
         item->onClicked = [ii, this](){ setTrackVisible(&tracks[ii], !tracks[ii].visible); };
         item->setChecked(tracks[ii].visible);
-        tracksMenu->addItem(item);
       }
     }
     return false;

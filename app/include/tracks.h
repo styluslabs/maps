@@ -135,6 +135,7 @@ private:
   void removeTrackMarkers(GpxFile* track);
   void updateStats(std::vector<Waypoint>& locs);
   void updateDistances();
+  bool findPickedWaypoint(GpxFile* track);
 
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;

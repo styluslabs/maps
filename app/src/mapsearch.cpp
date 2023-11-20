@@ -335,6 +335,8 @@ void MapsSearch::onMapEvent(MapEvent_t event)
     if(markers->onPicked(app->pickedMarkerId))
       app->pickedMarkerId = 0;
   }
+  // make sure extra labels still hidden if scene reloaded or source changed
+  map->getScene()->hideExtraLabels = true;
 }
 
 void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
@@ -652,7 +654,7 @@ Button* MapsSearch::createPanel()
   markers.reset(new MarkerGroup(app->map, "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
 
   // main toolbar button
-  Menu* searchMenu = createMenu(Menu::VERT_LEFT);
+  Menu* searchMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
   //searchMenu->autoClose = true;
   searchMenu->addHandler([this, searchMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
@@ -674,7 +676,7 @@ Button* MapsSearch::createPanel()
             queryText->setText(s.c_str());
             searchText(s, RETURN);
           });
-          SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
+          SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
         });
       }
     }

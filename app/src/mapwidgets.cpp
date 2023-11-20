@@ -534,23 +534,32 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
 Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel)
 {
-  Widget* container = createColumn();
-  container->node->setAttribute("box-anchor", "hfill");
+  static const char* inlineDialogSVG = R"#(
+    <g class="col-layout" box-anchor="hfill" layout="flex" flex-direction="column">
+      <g class="child-container" box-anchor="hfill" layout="flex" flex-direction="column"></g>
+      <g class="dialog-buttons" margin="2 4" box-anchor="hfill" layout="flex" flex-direction="row"></g>
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> proto;
+  if(!proto)
+    proto.reset(loadSVGFragment(inlineDialogSVG));
+
+  Widget* dialog = new Widget(proto->clone());
+  Widget* container = dialog->selectFirst(".child-container");
+  for(Widget* child : widgets)
+    container->addWidget(child);
+  Widget* btns = dialog->selectFirst(".dialog-buttons");
   //Button* acceptBtn = createToolbutton(MapsApp::uiIcon("accept"), acceptLabel, true);
   //Button* cancelBtn = createToolbutton(MapsApp::uiIcon("cancel"), "Cancel", true);
   Button* acceptBtn = createPushbutton(acceptLabel);
   Button* cancelBtn = createPushbutton("Cancel");
-  acceptBtn->onClicked = [=](){ container->setVisible(false); onAccept(); };
-  cancelBtn->onClicked = [=](){ container->setVisible(false); if(onCancel) onCancel(); };
+  acceptBtn->onClicked = [=](){ dialog->setVisible(false); onAccept(); };
+  cancelBtn->onClicked = [=](){ dialog->setVisible(false); if(onCancel) onCancel(); };
   acceptBtn->node->addClass("accept-btn");
-  for(Widget* child : widgets)
-    container->addWidget(child);
-  //Toolbar* tb = createToolbar();
-  //tb->addWidget(acceptBtn);
-  //tb->addWidget(cancelBtn);
-  container->addWidget(createTitledRow(NULL, acceptBtn, cancelBtn));  //tb
-  container->setVisible(false);
-  return container;
+  btns->addWidget(acceptBtn);
+  btns->addWidget(cancelBtn);
+  dialog->setVisible(false);
+  return dialog;
 }
 
 void showModalCentered(Window* modal, SvgGui* gui)

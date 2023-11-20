@@ -35,6 +35,8 @@ public:
 
 void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
 {
+  // skip layer if already added
+  for(auto& k : layerkeys) { if(k == key) return; }
   YAML::Node src = sources[key];
   if(!src) {
     LOGE("Invalid map source %s", key.c_str());
@@ -79,9 +81,12 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     return;
   }
 
-  for(const auto& update : src["updates"]) {
+  for(const auto& update : src["updates"])
     updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
-  }
+  // raster/vector only updates
+  const char* updkey = sources[layerkeys[0]]["type"].Scalar() == "Raster" ? "updates_raster" : "updates_vector";
+  for(const auto& update : src[updkey])
+    updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
 }
 
 std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
@@ -298,7 +303,7 @@ void MapsSources::populateSources()
       sourceKeys.push_back(key);
       sourceTitles.push_back(src.second["title"].Scalar());
     }
-    if(src.second["type"].Scalar() != "Multi") {
+    if(src.second["type"].Scalar() != "Multi" || isLayer) {
       layerKeys.push_back(key);
       layerTitles.push_back(src.second["title"].Scalar());
     }
@@ -692,17 +697,18 @@ Button* MapsSources::createPanel()
   sourceEditPanel = app->createMapPanel(editHeader, srcEditContent, sourceTb);
 
   // main toolbar button
-  Menu* sourcesMenu = createMenu(Menu::VERT_LEFT);
+  Menu* sourcesMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
   //sourcesMenu->autoClose = true;
   sourcesMenu->addHandler([this, sourcesMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(sourcesMenu->selectFirst(".child-container"));
       int uiWidth = app->getPanelWidth();
+      if(sourceKeys.empty()) populateSources();
       for(int ii = 0; ii < 10 && ii < sourceKeys.size(); ++ii) {
         std::string key = sourceKeys[ii];
-        Button* item = sourcesMenu->addItem(
-            mapSources[key]["title"].Scalar().c_str(), [this, key](){ rebuildSource(key); });
-        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 50);
+        Button* item = sourcesMenu->addItem(mapSources[key]["title"].Scalar().c_str(),
+            MapsApp::uiIcon("layers"), [this, key](){ rebuildSource(key); });
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
       }
     }
     return false;

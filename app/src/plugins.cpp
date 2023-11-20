@@ -372,7 +372,7 @@ void PluginManager::createFns(duk_context* ctx)
 Button* PluginManager::createPanel()
 {
   Widget* pluginContent = createColumn();
-  pluginContent->node->setAttribute("box-anchor", "hfill");
+  pluginContent->node->setAttribute("box-anchor", "fill");
 
   TextEdit* jsEdit = createTextEdit();
   jsEdit->node->setAttribute("box-anchor", "hfill");
@@ -391,10 +391,12 @@ Button* PluginManager::createPanel()
   pluginContent->addWidget(resultText);
   pluginContent->addWidget(createStretch());
 
+  Button* refreshBtn = createToolbutton(MapsApp::uiIcon("refresh"), "Reload plugins");
+  refreshBtn->onClicked = [=](){ reload(MapsApp::baseDir + "plugins"); };
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("textbox"), "Plugins");
-  //toolbar->addWidget(createStretch());
-  //toolbar->addWidget(maxZoomSpin);
-  Widget* pluginPanel = app->createMapPanel(toolbar, NULL, pluginContent, false);
+  toolbar->addWidget(createStretch());
+  toolbar->addWidget(refreshBtn);
+  Widget* pluginPanel = app->createMapPanel(toolbar, pluginContent, NULL, false);
 
   Button* pluginBtn = app->createPanelButton(MapsApp::uiIcon("textbox"), "Plugin console", pluginPanel);
   return pluginBtn;

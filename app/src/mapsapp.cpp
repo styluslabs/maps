@@ -435,6 +435,10 @@ void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, b
 
 void MapsApp::loadSceneFile(bool async, bool setPosition)
 {
+  for(auto& upd : sceneUpdates) {
+    if(upd.value.c_str()[0] == '#')  // handle problem w/ passing around colors
+      upd.value = '"' + upd.value + '"';
+  }
   // sceneFile will be used iff sceneYaml is empty
   Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition, sceneUpdates);  //, updates};
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
@@ -988,7 +992,7 @@ Window* MapsApp::createGUI()
   static const char* reorientSVG = R"#(
     <g class="reorient-btn toolbutton" layout="box">
       <rect class="background" width="42" height="42"/>
-      <g margin="0 3" box-anchor="fill" layout="box">
+      <g margin="0 0" box-anchor="fill" layout="box">
         <use class="icon" width="28" height="28" xlink:href=":/ui-icons.svg#compass" />
       </g>
     </g>
