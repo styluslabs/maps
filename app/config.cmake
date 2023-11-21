@@ -55,6 +55,7 @@ target_compile_definitions(maps-app PRIVATE GLM_FORCE_CTOR_INIT)
 target_compile_definitions(maps-app PRIVATE PUGIXML_NO_XPATH)
 target_compile_definitions(maps-app PRIVATE PUGIXML_NO_EXCEPTIONS)
 target_compile_definitions(maps-app PRIVATE NO_PAINTER_GL)
+#target_compile_definitions(maps-app PRIVATE FONS_SDF)
 
 # native file dialogs library
 add_subdirectory(app/deps/nfd)

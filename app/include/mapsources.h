@@ -32,6 +32,8 @@ private:
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;
   DragDropList* sourcesContent = NULL;
+  Widget* archivedPanel = NULL;
+  Widget* archivedContent = NULL;
   std::string baseUrl;
   std::string srcFile;
   YAML::Node mapSources;
@@ -48,6 +50,5 @@ private:
   bool legendsLoaded = false;
   bool sourcesDirty = true;
   std::vector<std::string> layerKeys;
-  std::vector<std::string> sourceKeys;
   std::unique_ptr<SelectDialog> selectLayerDialog;
 };

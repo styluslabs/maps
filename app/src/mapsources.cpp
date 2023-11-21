@@ -231,10 +231,15 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     sceneVarsLoaded = false;
     legendsLoaded = false;
     currSource = srcname;
-    if(!srcname.empty()) {
+    if(!srcname.empty())
       app->config["sources"]["last_source"] = currSource;
-      for(Widget* item : sourcesContent->select(".listitem"))
-        static_cast<Button*>(item)->setChecked(item->node->getStringAttr("__sourcekey", "") == currSource);
+    for(Widget* item : sourcesContent->select(".listitem")) {
+      std::string key = item->node->getStringAttr("__sourcekey", "");
+      static_cast<Button*>(item)->setChecked(key == currSource);
+      Button* showbtn = static_cast<Button*>(item->selectFirst(".show-btn"));
+      if(showbtn)
+        showbtn->setChecked(
+            std::find(builder.layerkeys.begin(), builder.layerkeys.end(), key) != builder.layerkeys.end());
     }
   }
 
@@ -291,32 +296,33 @@ void MapsSources::populateSources()
       order.push_back(key.Scalar());
   }
   sourcesContent->clear();
+  app->gui->deleteContents(archivedContent, ".listitem");
 
   std::vector<std::string> layerTitles = {};  //"None"
-  std::vector<std::string> sourceTitles = {};
-  layerKeys = {};  // used for selectLayerDialog
-  sourceKeys = {};  // currently only used for quick menu
-  for(const auto& src : mapSources) {
-    std::string key = src.first.Scalar();
-    bool isLayer = src.second["layer"].as<bool>(false) || src.second["type"].Scalar() == "Update";
-    if(!isLayer) {
-      sourceKeys.push_back(key);
-      sourceTitles.push_back(src.second["title"].Scalar());
-    }
-    if(src.second["type"].Scalar() != "Multi" || isLayer) {
+  layerKeys = {};
+
+  std::vector<std::string> allKeys;
+  for(const auto& src : mapSources)
+    allKeys.push_back(src.first.Scalar());
+  std::sort(allKeys.begin(), allKeys.end());
+  for(const std::string& key : allKeys) {
+    auto src = mapSources[key];
+    bool archived = src["archived"].as<bool>(false);
+    bool isLayer = src["layer"].as<bool>(false) || src["type"].Scalar() == "Update";
+    if(src["type"].Scalar() != "Multi" || isLayer) {
       layerKeys.push_back(key);
-      layerTitles.push_back(src.second["title"].Scalar());
+      layerTitles.push_back(src["title"].Scalar());
     }
 
-    Button* item = createListItem(MapsApp::uiIcon("layers"), src.second["title"].Scalar().c_str());
+    Button* item = createListItem(MapsApp::uiIcon("layers"), src["title"].Scalar().c_str());
     item->node->setAttr("__sourcekey", key.c_str());
     item->setChecked(key == currSource);
     Widget* container = item->selectFirst(".child-container");
 
     Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
-
     if(isLayer) {
       Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
+      showBtn->node->addClass("show-btn");
       showBtn->onClicked = [=](){
         if(key == currSource) return;
         bool show = !showBtn->isChecked();
@@ -343,6 +349,17 @@ void MapsSources::populateSources()
     Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowBtn->setMenu(overflowMenu);
+
+    overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
+      if(archived)
+        mapSources[key].remove("archived");
+      else
+        mapSources[key]["archived"] = true;
+      app->gui->deleteWidget(item);
+      sourcesDirty = true;
+      saveSources();
+    });
+
     auto deleteSrcFn = [=](std::string res){
       if(res != "OK") return;
       mapSources.remove(key);
@@ -367,8 +384,14 @@ void MapsSources::populateSources()
 
     container->addWidget(editBtn);
     container->addWidget(overflowBtn);
-    sourcesContent->addItem(key, item);  //addWidget(item);
+    if(archived)
+      archivedContent->addWidget(item);
+    else
+      sourcesContent->addItem(key, item);  //addWidget(item);
   }
+  Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived Sources");
+  item->onClicked = [this](){ app->showPanel(archivedPanel, true); if(sourcesDirty) populateSources(); };
+  sourcesContent->addItem("archived", item);
   sourcesContent->setOrder(order);
 
   if(!selectLayerDialog) {
@@ -632,6 +655,10 @@ Button* MapsSources::createPanel()
   // we should check for conflicting w/ title of other source here
   titleEdit->onChanged = [this](const char* s){ saveBtn->setEnabled(s[0]); };
 
+  archivedContent = createColumn();
+  auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Sources");
+  archivedPanel = app->createMapPanel(archivedHeader, archivedContent, NULL, false);
+
   sourcesContent = new DragDropList;
   Widget* sourcesContainer = createColumn();
   sourcesContainer->node->setAttribute("box-anchor", "fill");
@@ -703,12 +730,17 @@ Button* MapsSources::createPanel()
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(sourcesMenu->selectFirst(".child-container"));
       int uiWidth = app->getPanelWidth();
-      if(sourceKeys.empty()) populateSources();
-      for(int ii = 0; ii < 10 && ii < sourceKeys.size(); ++ii) {
-        std::string key = sourceKeys[ii];
+      if(sourcesDirty) populateSources();
+      int ii = 0;
+      auto sources = sourcesContent->getOrder();
+      for(const std::string& key : sources) {
+        auto src = mapSources[key];
+        bool isLayer = src["layer"].as<bool>(false) || src["type"].Scalar() == "Update";
+        if(isLayer) continue;
         Button* item = sourcesMenu->addItem(mapSources[key]["title"].Scalar().c_str(),
             MapsApp::uiIcon("layers"), [this, key](){ rebuildSource(key); });
         SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
+        if(++ii >= 10) break;
       }
     }
     return false;

@@ -833,7 +833,8 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 
 void MapsTracks::loadTracks(bool archived)
 {
-  const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch'), style FROM tracks WHERE archived = ?;";
+  const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch'), style"
+      " FROM tracks WHERE archived = ? ORDER BY title;";
   SQLiteStmt(app->bkmkDB, query).bind(archived).exec(
       [&](int rowid, const char* title, const char* filename, const char* date, const char* style) {
     tracks.emplace_back(title, date, filename);
@@ -1226,7 +1227,7 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   };
 
   addNoteBtn->onClicked = [=](){
-    editContent->setVisible(true);
+    showInlineDialogModal(editContent);
     noteText->setVisible(false);
     app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit);
   };
@@ -1303,7 +1304,7 @@ Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
 // if other panels end up needing this, use onMapEvent(PICK_RESULT) instead
 bool MapsTracks::onPickResult()
 {
-  if(!activeTrack || !(tapToAddWaypt || stealPickResult || replaceWaypt))  //app->panelHistory.back() == wayptPanel)
+  if(!activeTrack || !(tapToAddWaypt || stealPickResult || replaceWaypt))
     return false;
   addWaypoint({app->pickResultCoord, app->pickResultName});
   while(app->panelHistory.back() != wayptPanel && app->popPanel()) {}
@@ -1312,7 +1313,7 @@ bool MapsTracks::onPickResult()
 
 bool MapsTracks::tapEvent(LngLat location)
 {
-  if(!activeTrack || !tapToAddWaypt || stealPickResult || replaceWaypt)  //app->panelHistory.back() != wayptPanel ||
+  if(!activeTrack || !tapToAddWaypt || stealPickResult || replaceWaypt)
     return false;
   addWaypoint({location, ""});
   return true;
@@ -1976,8 +1977,8 @@ Button* MapsTracks::createPanel()
 
   drawTrackBtn->onClicked = [=](){
     newTrackTitle->setText(ftimestr("%FT%H.%M.%S").c_str());  //"%Y-%m-%d %HH%M"
-    newTrackContent->setVisible(!newTrackContent->isVisible());
-    drawTrackBtn->setChecked(newTrackContent->isVisible());
+    showInlineDialogModal(newTrackContent);
+    drawTrackBtn->setChecked(true);
   };
 
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
@@ -2090,7 +2091,7 @@ Button* MapsTracks::createPanel()
     if(activeTrack->filename.empty()) {
       saveRouteTitle->setText("");
       saveRouteFile->setText("");
-      saveRouteContent->setVisible(true);
+      showInlineDialogModal(saveRouteContent);
     }
     else
       activeTrack->modified = !saveGPX(activeTrack);
@@ -2134,7 +2135,7 @@ Button* MapsTracks::createPanel()
   wayptsOverflow->addItem(showAllWptsBtn);
 
   wayptsOverflow->addItem("Rename", [=](){
-    editRouteContent->setVisible(true);
+    showInlineDialogModal(editRouteContent);
     editRouteTitle->setText(activeTrack->title.c_str());
   });
 
@@ -2263,12 +2264,18 @@ Button* MapsTracks::createPanel()
         item->setChecked(recordedTrack.visible);
         tracksMenu->addItem(item);
       }
-      for(size_t ii = 0; ii < 9 && ii < tracks.size(); ++ii) {
-        Button* item = createCheckBoxMenuItem(tracks[ii].title.c_str());
-        tracksMenu->addItem(item);
-        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
-        item->onClicked = [ii, this](){ setTrackVisible(&tracks[ii], !tracks[ii].visible); };
-        item->setChecked(tracks[ii].visible);
+      auto items = tracksContent->getOrder();
+      for(size_t ii = 0; ii < recordTrack ? 9 : 10 && ii < items.size(); ++ii) {
+        for(size_t jj = 0; jj < tracks.size(); ++jj) {
+          if(std::to_string(tracks[jj].rowid) == items[ii]) {
+            Button* item = createCheckBoxMenuItem(tracks[jj].title.c_str());
+            tracksMenu->addItem(item);
+            SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
+            item->onClicked = [jj, this](){ setTrackVisible(&tracks[jj], !tracks[jj].visible); };
+            item->setChecked(tracks[jj].visible);
+            break;
+          }
+        }
       }
     }
     return false;

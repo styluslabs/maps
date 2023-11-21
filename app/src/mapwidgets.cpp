@@ -559,7 +559,25 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
   btns->addWidget(acceptBtn);
   btns->addWidget(cancelBtn);
   dialog->setVisible(false);
+
+  dialog->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(event->type == SvgGui::OUTSIDE_MODAL) {
+      gui->closeMenus(dialog->parent(), true);
+      if(onCancel) onCancel();
+      return true;
+    }
+    return false;
+  });
+
   return dialog;
+}
+
+// show inline dialog modally - also possible to show non-modal just using setVisible()
+void showInlineDialogModal(Widget* dialog)
+{
+  Window* win = dialog->window();
+  if(win && win->gui())
+    win->gui()->showMenu(dialog);
 }
 
 void showModalCentered(Window* modal, SvgGui* gui)

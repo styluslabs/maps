@@ -86,4 +86,5 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note = NULL
 TextEdit* createTitledTextEdit(const char* title, const char* text = NULL);
 Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel = {});
+void showInlineDialogModal(Widget* dialog);
 void showModalCentered(Window* modal, SvgGui* gui);

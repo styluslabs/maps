@@ -117,6 +117,28 @@ public:
   }
 
   bool exec() { return exec([](sqlite3_stmt*){}, true); }
+
+  template<class... Args>
+  bool onerow(Args&... args) {
+    if(!stmt) return false;
+    int res = sqlite3_step(stmt);
+    // no rows - not an error, but return false to inform caller no data was written
+    if(res == SQLITE_DONE || res == SQLITE_OK) {
+      sqlite3_reset(stmt);
+      return false;
+    }
+    if(res == SQLITE_ROW) {
+      std::tie(args...) = columns<Args...>(0);
+      res = sqlite3_step(stmt);
+      if(res == SQLITE_ROW)
+        LOGW("sqlite3_step returned multiple rows for %s", sqlite3_sql(stmt));
+    }
+    bool ok = res == SQLITE_ROW || res == SQLITE_DONE || res == SQLITE_OK;
+    if(!ok)
+      LOGE("sqlite3_step error for %s: %s", sqlite3_sql(stmt), sqlite3_errmsg(sqlite3_db_handle(stmt)));
+    sqlite3_reset(stmt);
+    return ok;
+  }
 };
 
 #ifndef NDEBUG

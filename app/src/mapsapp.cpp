@@ -1123,6 +1123,8 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
         w->sdlUserEvent(gui, PANEL_CLOSED);
       panelHistory.clear();
     }
+    else  // remove previous instance from history (should only apply to place info panel)
+      panelHistory.erase(std::remove(panelHistory.begin(), panelHistory.end(), panel), panelHistory.end());
   }
   panel->setVisible(true);
   panelHistory.push_back(panel);

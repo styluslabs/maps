@@ -617,7 +617,7 @@ Widget* MapsOffline::createPanel()
     if(maxZoomSpin->value() > maxZoom)
       maxZoomSpin->setValue(maxZoom);
 
-    downloadPanel->setVisible(true);
+    showInlineDialogModal(downloadPanel);
   };
 
   offlineContent = createColumn();
