@@ -233,8 +233,12 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     currSource = srcname;
     if(!srcname.empty())
       app->config["sources"]["last_source"] = currSource;
-    for(Widget* item : sourcesContent->select(".listitem")) {
+    auto sourcesItems = sourcesContent->select(".listitem");
+    auto archiveItems = archivedContent->select(".listitem");
+    sourcesItems.insert(sourcesItems.end(), archiveItems.begin(), archiveItems.end());
+    for(Widget* item : sourcesItems) {
       std::string key = item->node->getStringAttr("__sourcekey", "");
+      if(key.empty()) continue;
       static_cast<Button*>(item)->setChecked(key == currSource);
       Button* showbtn = static_cast<Button*>(item->selectFirst(".show-btn"));
       if(showbtn)
@@ -304,7 +308,8 @@ void MapsSources::populateSources()
   std::vector<std::string> allKeys;
   for(const auto& src : mapSources)
     allKeys.push_back(src.first.Scalar());
-  std::sort(allKeys.begin(), allKeys.end());
+  std::sort(allKeys.begin(), allKeys.end(), [&](auto& a, auto& b){
+      return mapSources[a]["title"].Scalar() < mapSources[b]["title"].Scalar(); });
   for(const std::string& key : allKeys) {
     auto src = mapSources[key];
     bool archived = src["archived"].as<bool>(false);
@@ -355,9 +360,9 @@ void MapsSources::populateSources()
         mapSources[key].remove("archived");
       else
         mapSources[key]["archived"] = true;
-      app->gui->deleteWidget(item);
       sourcesDirty = true;
       saveSources();
+      app->gui->deleteWidget(item);
     });
 
     auto deleteSrcFn = [=](std::string res){
@@ -735,6 +740,7 @@ Button* MapsSources::createPanel()
       auto sources = sourcesContent->getOrder();
       for(const std::string& key : sources) {
         auto src = mapSources[key];
+        if(!src) continue;
         bool isLayer = src["layer"].as<bool>(false) || src["type"].Scalar() == "Update";
         if(isLayer) continue;
         Button* item = sourcesMenu->addItem(mapSources[key]["title"].Scalar().c_str(),

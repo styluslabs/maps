@@ -533,7 +533,7 @@ void MapsApp::saveConfig()
 
   //std::string s = YAML::Dump(config);
   YAML::Emitter emitter;
-  emitter.SetStringFormat(YAML::DoubleQuoted);
+  //emitter.SetStringFormat(YAML::DoubleQuoted);
   emitter << config;
   FileStream fs(configFile.c_str(), "wb");
   fs.write(emitter.c_str(), emitter.size());
@@ -1294,8 +1294,13 @@ void MapsApp::messageBox(std::string title, std::string message,
 #define GLFW_INCLUDE_GLEXT
 #define GL_GLEXT_PROTOTYPES
 #include "ugui/example/glfwSDL.h"
-#define NANOVG_SW_IMPLEMENTATION
 #define NVG_LOG PLATFORM_LOG
+#define USE_NVG_GL 0
+#if USE_NVG_GL
+#define NANOVG_GL3_IMPLEMENTATION
+#include "nanovg-2/src/nanovg_vtex.h"
+#endif
+#define NANOVG_SW_IMPLEMENTATION
 #define NVGSWU_GLES2
 #define NVGSW_QUIET_FRAME  // suppress axis-aligned scissor warning
 #include "nanovg-2/src/nanovg_sw.h"
@@ -1456,12 +1461,14 @@ int main(int argc, char* argv[])
   //Url sceneUrl = baseUrl.resolve(Url(sceneFile));
 
   if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
-  /*glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+#if USE_NVG_GL
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); */
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
-  glfwWindowHint(GLFW_SAMPLES, 2);
+#endif
+  glfwWindowHint(GLFW_SAMPLES, MapsApp::config["msaa_samples"].as<int>(2));
   glfwWindowHint(GLFW_STENCIL_BITS, 8);
 
   GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "Maps (DEBUG)", NULL, NULL);
@@ -1479,8 +1486,11 @@ int main(int argc, char* argv[])
 
   int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
   //int nvglFBFlags = NVG_IMAGE_SRGB;
-
+#if USE_NVG_GL
+  NVGcontext* nvgContext = nvglCreate(nvgFlags);  // | NVG_DEBUG);
+#else
   NVGcontext* nvgContext = nvgswCreate(nvgFlags);  // | NVG_DEBUG);
+#endif
   if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return -1; }
 
   glfwSwapInterval(0);
@@ -1544,8 +1554,10 @@ int main(int argc, char* argv[])
   Painter* painter = new Painter(Painter::sharedVg);
   //NVGLUframebuffer* nvglFB = nvgluCreateFramebuffer(nvgContext, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
   //nvgluSetFramebufferSRGB(1);  // no-op for GLES - sRGB enabled iff FB is sRGB
+#if !USE_NVG_GL
   NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
   uint32_t* swFB = NULL;
+#endif
 
   SvgPainter boundsPaint(painter);
   SvgDocument::sharedBoundsCalc = &boundsPaint;
@@ -1671,7 +1683,7 @@ int main(int argc, char* argv[])
     }
     if(!dirty.isValid())
       continue;
-
+#if !USE_NVG_GL
     bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
     if(!swFB || sizeChanged)
       swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
@@ -1684,11 +1696,11 @@ int main(int argc, char* argv[])
       for(int yy = dirty.top; yy < dirty.bottom; ++yy)
         memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
     }
-
+#endif
     dirty = Rect::wh(fbWidth, fbHeight);
     //painter->fillRect(Rect::wh(fbWidth, fbHeight), Color::RED);
     painter->endFrame();
-
+#if !USE_NVG_GL
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_DEPTH_TEST);
@@ -1696,7 +1708,7 @@ int main(int argc, char* argv[])
     glDisable(GL_CULL_FACE);
     nvgswuBlit(swBlitter, swFB, fbWidth, fbHeight,
         int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
-
+#endif
     glfwSwapBuffers(glfwWin);
   }
 
@@ -1708,8 +1720,12 @@ int main(int argc, char* argv[])
   delete painter;
   delete app;
   delete tangramMap;
+#if USE_NVG_GL
+  nvglDelete(nvgContext);
+#else
   nvgswuDeleteBlitter(swBlitter);
   nvgswDelete(nvgContext);
+#endif
   NFD_Quit();
   glfwTerminate();
   return 0;
