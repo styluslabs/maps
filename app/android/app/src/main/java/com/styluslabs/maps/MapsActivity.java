@@ -207,19 +207,19 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   @Keep
-  String getFontFilePath(final String key)
+  public String getFontFilePath(final String key)
   {
     return FontConfig.getFontFile(key);
   }
 
   @Keep
-  String getFontFallbackFilePath(final int importance, final int weightHint)
+  public String getFontFallbackFilePath(final int importance, final int weightHint)
   {
     return FontConfig.getFontFallback(importance, weightHint);
   }
 
   @Keep
-  void cancelUrlRequest(final long requestHandle)
+  public void cancelUrlRequest(final long requestHandle)
   {
     Object request = httpRequestHandles.remove(requestHandle);
     if (request != null) {
@@ -228,7 +228,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   @Keep
-  void startUrlRequest(@NonNull final String url,
+  public void startUrlRequest(@NonNull final String url,
       @NonNull final String headers, @NonNull final String payload, final long requestHandle)
   {
     final HttpHandler.Callback callback = new HttpHandler.Callback() {
@@ -260,6 +260,44 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     Object request = httpHandler.startRequest(url, headers, payload, callback);
     if (request != null) {
       httpRequestHandles.put(requestHandle, request);
+    }
+  }
+
+  @Keep
+  public boolean extractAssets(String assetpath, String outpath)
+  {
+    try {
+      AssetManager assetManager = getAssets();
+      String[] files = assetManager.list(assetpath);
+      if(!files) return false;
+      if(outpath.isEmpty())
+        outpath = getExternalFilesDir(null);
+      for(String filename : files) {
+        String srcpath = assetpath + "/" + filename;
+        String dstpath = outpath + "/" + filename;
+        // check for directory
+        if(!extractAssets(srcpath, dstpath)) {
+          File dstfile = new File(dstpath);
+          // ensure that path exists
+          if(!dstfile.exists())
+            dstfile.getParentFile().mkdirs();
+          FileOutputStream out = new FileOutputStream(dstfile);
+          // this returns InputStream object
+          InputStream in = assetManager.open(srcpath);
+          // copy byte by byte ... doesn't seem to be a more elegant soln!
+          byte[] buf = new byte[65536];
+          int len;
+          while((len = in.read(buf)) > 0)
+            out.write(buf, 0, len);
+          in.close();
+          out.close();
+        }
+      }
+      return true;
+    }
+    catch(IOException e) {
+      // oh well, no tips
+      return false;
     }
   }
 

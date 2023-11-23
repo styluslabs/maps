@@ -1042,7 +1042,37 @@ Window* MapsApp::createGUI()
   mainToolbar->addButton(bkmkBtn);
   mainToolbar->addButton(tracksBtn);
   mainToolbar->addButton(sourcesBtn);
-  mainToolbar->addButton(pluginBtn);
+  //mainToolbar->addButton(pluginBtn);
+
+  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
+  Menu* overflowMenu = createMenu(Menu::VERT_RIGHT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
+  overflowBtn->setMenu(overflowMenu);
+  overflowMenu->addItem(pluginBtn);
+  Button* metricCb = createCheckBoxMenuItem("Use metric units");
+  metricCb->onClicked = [=](){
+    metricUnits = !metricUnits;
+    config["metric_units"] = metricUnits;
+    metricCb->setChecked(metricUnits);
+    loadSceneFile();  // reload map
+  };
+  metricCb->setChecked(metricUnits);
+  overflowMenu->addItem(metricCb);
+
+  Menu* debugMenu = createMenu(Menu::HORZ);
+  const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
+      "Tile info", "Labels", "Tangram Info", "Draw all labels", "Tangram stats", "Selection buffer"};
+  for(int ii = 0; ii < 9; ++ii) {
+    Button* debugCb = createCheckBoxMenuItem(debugFlags[ii]);
+    debugCb->onClicked = [=](){
+      debugCb->setChecked(!debugCb->isChecked());
+      setDebugFlag(Tangram::DebugFlags(ii), debugCb->isChecked());
+      //loadSceneFile();  -- most debug flags shouldn't require scene reload
+    };
+    debugMenu->addItem(debugCb);
+  }
+  overflowMenu->addSubmenu("Debug", debugMenu);
+
+  mainToolbar->addButton(overflowBtn);
 
   // main toolbar at bottom is better than top for auto-close menus (so menu isn't obstructed by finger)
   mainTbContainer = win->selectFirst("#main-tb-container");
@@ -1177,7 +1207,7 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   return toolbar;
 }
 
-Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widget* panel)
+Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widget* panel, bool menuitem)
 {
   static const char* protoSVG = R"#(
     <g id="toolbutton" class="toolbutton" layout="box">
@@ -1193,10 +1223,15 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widge
   if(!proto)
     proto.reset(loadSVGFragment(protoSVG));
 
-  Button* btn = new Button(proto->clone());
-  btn->setIcon(icon);
-  btn->setTitle(title);
-  setupTooltip(btn, title);
+  Button* btn = NULL;
+  if(menuitem)
+    btn = createMenuItem(title, icon);
+  else {
+    btn = new Button(proto->clone());
+    btn->setIcon(icon);
+    btn->setTitle(title);
+    setupTooltip(btn, title);
+  }
 
   panel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE)
@@ -1295,10 +1330,11 @@ void MapsApp::messageBox(std::string title, std::string message,
 #define GL_GLEXT_PROTOTYPES
 #include "ugui/example/glfwSDL.h"
 #define NVG_LOG PLATFORM_LOG
-#define USE_NVG_GL 0
+#define USE_NVG_GL 1
 #if USE_NVG_GL
 #define NANOVG_GL3_IMPLEMENTATION
 #include "nanovg-2/src/nanovg_vtex.h"
+#include "nanovg-2/src/nanovg_gl_utils.h"
 #endif
 #define NANOVG_SW_IMPLEMENTATION
 #define NVGSWU_GLES2
@@ -1567,20 +1603,6 @@ int main(int argc, char* argv[])
   Tangram::Map* tangramMap = new Tangram::Map(std::make_unique<Tangram::LinuxPlatform>());
   MapsApp::platform = &tangramMap->getPlatform();
   MapsApp* app = new MapsApp(tangramMap);
-
-  // debug flags can be set in config file or from command line
-  auto debugNode = app->config["debug"];
-  if(debugNode.IsMap()) {
-    setDebugFlag(DebugFlags::freeze_tiles, debugNode["freeze_tiles"].as<bool>(false));
-    setDebugFlag(DebugFlags::proxy_colors, debugNode["proxy_colors"].as<bool>(false));
-    setDebugFlag(DebugFlags::tile_bounds, debugNode["tile_bounds"].as<bool>(false));
-    setDebugFlag(DebugFlags::tile_infos, debugNode["tile_infos"].as<bool>(false));
-    setDebugFlag(DebugFlags::labels, debugNode["labels"].as<bool>(false));
-    setDebugFlag(DebugFlags::tangram_infos, debugNode["tangram_infos"].as<bool>(false));
-    setDebugFlag(DebugFlags::draw_all_labels, debugNode["draw_all_labels"].as<bool>(false));
-    setDebugFlag(DebugFlags::tangram_stats, debugNode["tangram_stats"].as<bool>(false));
-    setDebugFlag(DebugFlags::selection_buffer, debugNode["selection_buffer"].as<bool>(false));
-  }
   app->map->setupGL();
 
   // DB setup
@@ -1696,8 +1718,11 @@ int main(int argc, char* argv[])
       for(int yy = dirty.top; yy < dirty.bottom; ++yy)
         memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
     }
+#else
+    if(dirty != painter->deviceRect)
+      nvgluSetScissor(int(dirty.left), fbHeight - int(dirty.bottom), int(dirty.width()), int(dirty.height()));
 #endif
-    dirty = Rect::wh(fbWidth, fbHeight);
+    //dirty = Rect::wh(fbWidth, fbHeight);
     //painter->fillRect(Rect::wh(fbWidth, fbHeight), Color::RED);
     painter->endFrame();
 #if !USE_NVG_GL

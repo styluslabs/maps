@@ -95,7 +95,7 @@ public:
   Window* createGUI();
   void showPanel(Widget* panel, bool isSubPanel = false);
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
-  Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel);
+  Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel, bool menuitem = false);
   Widget* createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
   bool popPanel();
   void addPlaceInfo(const char* icon, const char* title, const char* value);

@@ -538,8 +538,9 @@ void MapsSources::populateSourceEdit(std::string key)
 {
   if(currSource != key)
     rebuildSource(key);
+  std::string title = mapSources[key] ? mapSources[key]["title"].Scalar() : "Untitled";
 
-  titleEdit->setText(mapSources[key]["title"].Scalar().c_str());
+  titleEdit->setText(title.c_str());
   app->showPanel(sourceEditPanel, true);
   //sourceEditPanel->selectFirst(".panel-title")->setText(mapSources[key]["title"].Scalar().c_str());
   app->gui->deleteContents(layersContent);
@@ -591,6 +592,8 @@ void MapsSources::importSources(const std::string& src)
           YAML::Node newsources = YAML::Load(response.content.data(), response.content.size());
           for(auto& node : newsources)
             mapSources[node.first.Scalar()] = node.second;
+          saveSources();
+          populateSources();
         } catch (std::exception& e) {
           MapsApp::messageBox("Import error", fstring("Error parsing '%s': %s", src.c_str(), e.what()));
         }
@@ -600,8 +603,11 @@ void MapsSources::importSources(const std::string& src)
   }
   if(key.empty())
     MapsApp::messageBox("Import error", fstring("Unable to create source from '%s'", src.c_str()));
-  else
+  else {
+    saveSources();
     populateSourceEdit(key);  // so user can edit title
+    sourcesDirty = true;
+  }
 }
 
 Button* MapsSources::createPanel()
@@ -633,7 +639,7 @@ Button* MapsSources::createPanel()
     nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
     if(result != NFD_OKAY)
       return;
-    importSources(outPath);
+    importSources(std::string("file://") + outPath);
     importTb->setVisible(false);
   };
 

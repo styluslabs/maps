@@ -398,6 +398,6 @@ Button* PluginManager::createPanel()
   toolbar->addWidget(refreshBtn);
   Widget* pluginPanel = app->createMapPanel(toolbar, pluginContent, NULL, false);
 
-  Button* pluginBtn = app->createPanelButton(MapsApp::uiIcon("textbox"), "Plugin console", pluginPanel);
+  Button* pluginBtn = app->createPanelButton(MapsApp::uiIcon("textbox"), "Plugin console", pluginPanel, true);
   return pluginBtn;
 }
