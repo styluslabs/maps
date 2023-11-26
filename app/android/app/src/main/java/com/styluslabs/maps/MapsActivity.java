@@ -263,6 +263,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
+  // assetpath = "" reads from assets/  outpath = "" writes to
   @Keep
   public boolean extractAssets(String assetpath, String outpath)
   {

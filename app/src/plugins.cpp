@@ -234,6 +234,7 @@ static int httpRequest(duk_context* ctx)
   //duk_dup(ctx, 1);  // callback
   //duk_put_prop_string(ctx, -2, cbvar.c_str());
   UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [=](UrlResponse&& response) {
+    if(!PluginManager::inst) return;  // app shutting down
     if(response.error)
       LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
     MapsApp::runOnMainThread([=](){

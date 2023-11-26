@@ -180,13 +180,18 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(placenode && !placetype.empty())
     placenode->addText(placetype.c_str());
 
-  getElevation(pos, [this](double elev){
+   auto elevFn = [this](double elev){
     Widget* elevWidget = infoContent->selectFirst(".elevation-text");
     if(elevWidget) {
       elevWidget->setText(fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? elev : elev*3.28084).c_str());
       infoContent->selectFirst(".elevation-icon")->setVisible(true);  //elevWidget->setVisible(true);
     }
-  });
+  };
+
+  if(props.IsObject() && props.HasMember("ele"))
+    elevFn(props["ele"].GetDouble());
+  else
+    getElevation(pos, elevFn);
 
   if(!osmid.empty() && !pluginManager->placeFns.empty()) {
     std::vector<std::string> cproviders = {"None"};
@@ -1053,7 +1058,7 @@ Window* MapsApp::createGUI()
     metricUnits = !metricUnits;
     config["metric_units"] = metricUnits;
     metricCb->setChecked(metricUnits);
-    loadSceneFile();  // reload map
+    mapsSources->rebuildSource(mapsSources->currSource);  //loadSceneFile();
   };
   metricCb->setChecked(metricUnits);
   overflowMenu->addItem(metricCb);
@@ -1582,6 +1587,7 @@ int main(int argc, char* argv[])
   setGuiResources(widgetDoc, styleSheet);
   SvgGui* gui = new SvgGui();
   MapsApp::gui = gui;  // needed by glfwSDLEvent()
+  gui->fullRedraw = USE_NVG_GL;  // see below
   // scaling
   gui->paintScale = 2.0;  //210.0/150.0;
   gui->inputScale = 1/gui->paintScale;
@@ -1598,8 +1604,6 @@ int main(int argc, char* argv[])
   SvgPainter boundsPaint(painter);
   SvgDocument::sharedBoundsCalc = &boundsPaint;
 
-  //char* apiKey = getenv("NEXTZEN_API_KEY");
-  //MapsApp::apiKey = apiKey ? apiKey : "";
   Tangram::Map* tangramMap = new Tangram::Map(std::make_unique<Tangram::LinuxPlatform>());
   MapsApp::platform = &tangramMap->getPlatform();
   MapsApp* app = new MapsApp(tangramMap);
@@ -1677,22 +1681,12 @@ int main(int argc, char* argv[])
     glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
     painter->deviceRect = Rect::wh(fbWidth, fbHeight);
 
-    // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
-    if(MapsApp::platform->notifyRender()) {
-      auto t0 = std::chrono::high_resolution_clock::now();
-      double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
-      app->mapUpdate(currTime);
-      app->mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);
-      app->map->render();
-      // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
-      if(!std::isnan(app->tapLocation.longitude)) {
-        if(!app->panelHistory.empty() && app->panelHistory.back() == app->infoPanel)
-          app->popPanel();
-        app->mapsTracks->tapEvent(app->tapLocation);
-        app->tapLocation = {NAN, NAN};
-      }
-    }
+    // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
+    //  we expect the vast majority of all frames drawn by app to be map changes (panning, zooming), the total
+    //  benefit from partial update would be relatively small.  Furthermore, smooth map interaction is even more
+    //  important than smooth UI interaction, so if map can't redraw at 60fps, we should focus on fixing that.
 
+    // Just call Painter:endFrame() again to draw UI over map if UI isn't dirty
     Rect dirty = gui->layoutAndDraw(painter);
     if(SvgGui::debugLayout) {
       XmlStreamWriter xmlwriter;
@@ -1703,29 +1697,49 @@ int main(int argc, char* argv[])
       PLATFORM_LOG("Post-layout SVG written to debug_layout.svg\n");
       SvgGui::debugLayout = false;
     }
-    if(!dirty.isValid())
-      continue;
-#if !USE_NVG_GL
-    bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
-    if(!swFB || sizeChanged)
-      swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
-    nvgswSetFramebuffer(painter->vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
 
-    // clear dirty rect to transparent pixels
-    if(SvgGui::debugDirty)
-      memset(swFB, 0, fbWidth*fbHeight*4);
-    else {
-      for(int yy = dirty.top; yy < dirty.bottom; ++yy)
-        memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
+    // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
+    if(MapsApp::platform->notifyRender()) {
+      auto t0 = std::chrono::high_resolution_clock::now();
+      double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
+      app->mapUpdate(currTime);
+      //app->mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
+      app->map->render();
+      // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
+      if(!std::isnan(app->tapLocation.longitude)) {
+        if(!app->panelHistory.empty() && app->panelHistory.back() == app->infoPanel)
+          app->popPanel();
+        app->mapsTracks->tapEvent(app->tapLocation);
+        app->tapLocation = {NAN, NAN};
+      }
     }
+    else if(dirty.isValid())
+      app->map->render();  // only have to rerender map, not update
+    else
+      continue;  // neither map nor UI is dirty
+
+#if USE_NVG_GL
+    //if(dirty != painter->deviceRect)
+    //  nvgluSetScissor(int(dirty.left), fbHeight - int(dirty.bottom), int(dirty.width()), int(dirty.height()));
+    Painter::vgInUse = true;  // to avoid error in case of repeated endFrame
+    painter->endFrame();  // render UI over map
+    //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
 #else
-    if(dirty != painter->deviceRect)
-      nvgluSetScissor(int(dirty.left), fbHeight - int(dirty.bottom), int(dirty.width()), int(dirty.height()));
-#endif
-    //dirty = Rect::wh(fbWidth, fbHeight);
-    //painter->fillRect(Rect::wh(fbWidth, fbHeight), Color::RED);
-    painter->endFrame();
-#if !USE_NVG_GL
+    if(dirty.isValid()) {
+      bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
+      if(!swFB || sizeChanged)
+        swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
+      nvgswSetFramebuffer(painter->vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
+
+      // clear dirty rect to transparent pixels
+      if(SvgGui::debugDirty)
+        memset(swFB, 0, fbWidth*fbHeight*4);
+      else {
+        for(int yy = dirty.top; yy < dirty.bottom; ++yy)
+          memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
+      }
+      painter->endFrame();
+    }
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_DEPTH_TEST);
@@ -1801,6 +1815,7 @@ bool userLoadSvg(char* svg, Texture* texture)
   NVGcontext* drawCtx = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_SRGB | NVGSW_PATHS_XC);
   {
     Painter painter(&img, drawCtx);
+    painter.setBackgroundColor(::Color::INVALID_COLOR);
     painter.beginFrame();
     painter.translate(0, h);
     painter.scale(1, -1);

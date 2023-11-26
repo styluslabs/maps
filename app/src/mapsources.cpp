@@ -239,7 +239,8 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     for(Widget* item : sourcesItems) {
       std::string key = item->node->getStringAttr("__sourcekey", "");
       if(key.empty()) continue;
-      static_cast<Button*>(item)->setChecked(key == currSource);
+      if(!currSource.empty())
+        static_cast<Button*>(item)->setChecked(key == currSource);
       Button* showbtn = static_cast<Button*>(item->selectFirst(".show-btn"));
       if(showbtn)
         showbtn->setChecked(
