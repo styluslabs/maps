@@ -1475,8 +1475,8 @@ int main(int argc, char* argv[])
 
   // config
   mainThreadId = std::this_thread::get_id();
-  MapsApp::baseDir = "/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
-  FSPath configPath(MapsApp::baseDir, "tangram-es/scenes/config.yaml");
+  MapsApp::baseDir = "./";  //"/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
+  FSPath configPath(MapsApp::baseDir, "config.yaml");
   MapsApp::configFile = configPath.c_str();
   MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
       : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));

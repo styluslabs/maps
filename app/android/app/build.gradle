@@ -3,8 +3,6 @@ apply plugin: 'com.android.application'
 android {
   compileSdkVersion 30
 
-  def apiKey = project.hasProperty('nextzenApiKey') ? nextzenApiKey : System.getenv('NEXTZEN_API_KEY')
-
   defaultConfig {
     applicationId 'com.styluslabs.maps'
     minSdkVersion 14
@@ -21,7 +19,6 @@ android {
                  '-fPIC',
                  '-fexceptions',
                  '-frtti',
-                 '-DNEXTZEN_API_KEY=\\"' + apiKey + '\\"',
                  // linker
                  '-Wl,--exclude-libs,ALL', // dont export static lib symbols
                  //warnings
@@ -57,12 +54,11 @@ android {
   }
 
   sourceSets.main {
-    assets.srcDirs = ['../../../scenes']
+    assets.srcDirs = ['../../../assets']
   }
 
-
   androidResources {
-    ignoreAssetsPattern '!*.ttf'
+    ignoreAssetsPattern '!old_*'
   }
 
   lintOptions {

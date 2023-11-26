@@ -1627,7 +1627,7 @@ Waypoint MapsTracks::interpTrack(const std::vector<Waypoint>& locs, double s, si
 void MapsTracks::updateDB(GpxFile* track)
 {
   if(track->filename.empty())
-    track->filename = FSPath(MapsApp::baseDir, track->title + ".gpx").c_str();
+    track->filename = FSPath(MapsApp::baseDir, "tracks/" + track->title + ".gpx").c_str();
   if(track->rowid < 0) {
     SQLiteStmt(app->bkmkDB, "INSERT INTO tracks (title,filename) VALUES (?,?);")
         .bind(track->title, track->filename).exec();
@@ -2006,7 +2006,7 @@ Button* MapsTracks::createPanel()
     else {
       recordTrack = true;
       std::string timestr = ftimestr("%FT%H.%M.%S");
-      FSPath gpxPath(app->baseDir, timestr + ".gpx");
+      FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
       recordedTrack = GpxFile(timestr, "", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
       recordedTrack.loaded = true;
       recordedTrack.tracks.emplace_back();

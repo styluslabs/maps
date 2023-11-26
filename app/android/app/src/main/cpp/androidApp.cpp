@@ -7,9 +7,7 @@
 #include "JniHelpers.h"
 #include "JniThreadBinding.h"
 
-#include "imgui.h"
-#include "imgui_impl_generic.h"
-#include "imgui_impl_opengl3.h"
+#include "svggui.h"
 
 static SDL_Scancode Android_Keycodes[] = {
     SDL_SCANCODE_UNKNOWN, /* AKEYCODE_UNKNOWN */
@@ -385,29 +383,63 @@ JNI_FN(onPause)()
 
 JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)
 {
-  static const int translateAction[] = {1, -1, 0 /*motion*/, -1 /*cancel*/, 0, 1, -1};
+  static const int translateAction[] = {SDL_FINGERDOWN, SDL_FINGERUP, SDL_FINGERMOTION,
+      SDL_FINGERUP /*cancel*/, SDL_FINGERMOTION, SDL_FINGERDOWN, SDL_FINGERUP};
 
-  ImGui_ImplGeneric_UpdateMousePos(x, y);
-  if(action != 2)
-    ImGui_ImplGeneric_MouseButtonCallback(IMGUI_GENERIC_BUTTON_LEFT, translateAction[action], 0);
-
-  if (!ImGui::GetIO().WantCaptureMouse)
-    app->touchHandler->touchEvent(ptrId, translateAction[action], t/1000.0, x, y, p);
-  else
-    MapsApp::platform->requestRender();  // note that desktop (GLFW) app rerenders upon any GLFW event
+  SDL_Event event = {0};
+  event.type = translateAction[action];
+  event.tfinger.touchId = SDL_TOUCH_MOUSEID;
+  event.tfinger.fingerId = ptrId;
+  event.tfinger.x = x;
+  event.tfinger.y = y;
+  event.tfinger.dx = 0;  //button;
+  event.tfinger.dy = 0;  //device->buttons;
+  event.tfinger.pressure = p;
+  MapsApp::gui->sdlEvent(&event);
 }
 
-JNI_FN(charInput)(JNIEnv* env, jobject obj, jint c, jint cursorPos)
+JNI_FN(charInput)(JNIEnv* env, jobject obj, jint cp, jint cursorPos)
 {
-  ImGui_ImplGeneric_CharCallback(c);
-  MapsApp::platform->requestRender();
+  static const uint8_t firstByteMark[7] = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
+  unsigned short bytesToWrite = 0;
+  const uint32_t byteMask = 0xBF;
+  const uint32_t byteMark = 0x80;
+
+  SDL_Event event = {0};
+  event.text.type = SDL_TEXTINPUT;
+  event.text.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
+
+  // UTF-32 codepoint to UTF-8
+  if(cp < 0x80) bytesToWrite = 1;
+  else if(cp < 0x800) bytesToWrite = 2;
+  else if(cp < 0x10000) bytesToWrite = 3;
+  else bytesToWrite = 4;
+
+  uint8_t* out = (uint8_t*)event.text.text;
+  switch (bytesToWrite) {
+    case 4: out[3] = (uint8_t)((cp | byteMark) & byteMask); cp >>= 6;
+    case 3: out[2] = (uint8_t)((cp | byteMark) & byteMask); cp >>= 6;
+    case 2: out[1] = (uint8_t)((cp | byteMark) & byteMask); cp >>= 6;
+    case 1: out[0] = (uint8_t) (cp | firstByteMark[bytesToWrite]);
+  }
+  out[bytesToWrite] = '\0';
+
+  MapsApp::gui->sdlEvent(&event);
 }
 
 JNI_FN(keyEvent)(JNIEnv* env, jobject obj, jint key, jint action)
 {
-  //LOGW("Key event: Android %d, SDL %d, action %d", key, Android_Keycodes[key], action);
-  ImGui_ImplGeneric_KeyCallback(Android_Keycodes[key], 0, action, 0);
-  MapsApp::platform->requestRender();
+  SDL_Event event = {0};
+  event.key.type = action < 0 ? SDL_KEYUP : SDL_KEYDOWN;
+  event.key.state = action < 0 ? SDL_RELEASED : SDL_PRESSED;
+  event.key.repeat = 0;  //action == GLFW_REPEAT;
+  event.key.keysym.scancode = key;  //(SDL_Scancode)scancode;
+  event.key.keysym.sym = Android_Keycodes[key];  //key < 0 || key > GLFW_KEY_LAST ? SDLK_UNKNOWN : keyMap[key];
+  //event.key.keysym.mod = (mods & GLFW_MOD_SHIFT ? KMOD_SHIFT : 0) | (mods & GLFW_MOD_CONTROL ? KMOD_CTRL : 0)
+  //    | (mods & GLFW_MOD_ALT ? KMOD_ALT : 0) | (mods & GLFW_MOD_SUPER ? KMOD_GUI : 0)
+  //    | (mods & GLFW_MOD_CAPS_LOCK ? KMOD_CAPS : 0) | (mods & GLFW_MOD_NUM_LOCK ? KMOD_NUM : 0);
+  event.key.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
+  MapsApp::gui->sdlEvent(&event);
 }
 
 JNI_FN(onUrlComplete)(JNIEnv* env, jobject obj, jlong handle, jbyteArray data, jstring err)
