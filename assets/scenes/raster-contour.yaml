@@ -1,0 +1,280 @@
+# Hillshading and contour lines from DEM (elevation) tiles
+# - contours calculated in shader actually look pretty good, although we will eventually have to generate
+#  vector contours w/ elevation labels of course
+
+# - elevation tile data format: https://github.com/tilezen/joerd/blob/master/docs/formats.md
+#  - cannot be used with linear filtering (GL_LINEAR), and GLES doesn't support filtering with f32 (only f16
+#   or smaller), so we have to set `filtering: nearest` and do interpolation ourselves
+#  - also, Tangram doesn't use GLSL #version statement (although shader block can request extensions), so we
+#   have to use texture2D instead of texelFetch (GLSL 1.30+)
+#  - see https://github.com/SableRaf/Processing-Experiments/blob/master/2013/Shaders/filtersAndBlendModes/Filters/Bicubic/data/shader.glsl and links therein for some alternative interpolation methods; also https://vec3.ca/bicubic-filtering-in-fewer-taps/
+
+# - Many algorithms for computing hillshading (i.e., normals) from elevation
+#  - https://www.usna.edu/Users/oceano/pguth/md_help/html/demb1f3n.htm
+#  - Zevenbergen & Thorne: 2nd order central finite diff - vec2(h21 - h01, h12 - h10)/dxy/2 (where h11 is central texel)
+#  - Horn: Sobel operator (3rd order finite diff w/ 8 surrounding pixels)
+
+# - slight seams between tiles are sometimes visible - I don't think there is any way to completely eliminate
+#  these other than adding a 1 pixel border around each tile with pixels from adjacent tiles (as mapbox-gl does)
+#  ... or use precalculated normal tiles for hillshading instead of calculating from elevation
+# - mapbox-gl calculates gradient from elevation in 1st pass ("hillshade_prepare") using Horn (Sobel operator)
+#  and GL_NEAREST, then in 2nd pass ("hillshade") calculates normal (reading gradients from texture w/
+#  GL_LINEAR) and does some fancy adjustments to get final hillshading
+# - Carto SDK generates normals from elevation on CPU (also using Horn/Sobel)
+
+global:
+    contour_color: '#C56008'  #vec4(0.773,0.376,0.031,1.)
+
+    gui_variables:
+        u_exaggerate:
+            style: hillshade
+            label: Hillshade Exaggeration
+        #contour_color:
+        #    label: Contour Color
+
+    __legend:
+        slope_angle:
+            title: Slope Angle
+            svg: |
+                <svg xmlns="http://www.w3.org/2000/svg" width="400" height="80">
+                  <defs>
+                    <linearGradient id="grad" x1="0" x2="1.111">
+                      <stop offset="0.00" stop-color="#00FF00" />
+                      <stop offset="0.25" stop-color="#FFFF00" />
+                      <stop offset="0.35" stop-color="#FF0000" />
+                      <stop offset="0.45" stop-color="#FF00FF" />
+                      <stop offset="0.60" stop-color="#0000FF" />
+                      <stop offset="0.90" stop-color="#000000" />
+                    </linearGradient>
+                  </defs>
+
+                  <rect x="0" y="0" rx="4" ry="4" width="400" height="80" fill="white" />
+                  <g transform="translate(20, 8) scale(4)">
+                    <rect x="0" y="0" rx="1" ry="1" width="90" height="12" fill="url(#grad)" />
+                    <g transform="translate(-2, 16)" font-size="4">
+                      <!-- text x="0" y="0">0°</text -->
+                      <text x="15" y="0">15°</text>
+                      <text x="25" y="0">25°</text>
+                      <text x="35" y="0">35°</text>
+                      <text x="45" y="0">45°</text>
+                      <text x="60" y="0">60°</text>
+                      <text x="90" y="0">90°</text>
+                    </g>
+                  </g>
+                </svg>
+
+
+sources:
+    elevation:
+        type: Raster
+        url: https://tile.nextzen.org/tilezen/terrain/v1/256/terrarium/{z}/{x}/{y}.png
+        #url: https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png
+        url_params:
+            api_key: global.sdk_api_key
+        max_zoom: 14
+        zoom_offset: -1
+        filtering: nearest
+        cache: terrarium
+
+
+styles:
+    hillshade:
+        base: polygons
+        raster: custom
+        #texcoords: true
+        shaders:
+            defines:
+                # not sure if there is any way to figure this out in shader
+                ELEVATION_MAX_ZOOM: 14.0
+                ELEVATION_INDEX: 0
+                SHOW_CONTOURS: false
+                SHOW_ANGLE: false
+            uniforms:
+                u_exaggerate: 4.5
+                CONTOUR_COLOR: global.contour_color
+                u_min_slope_angle: 0.2618  # we could use stop-opacity="0" instead
+                # some more colormaps: https://www.fabiocrameri.ch/
+                u_slope_angle: |
+                    data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="1">
+                      <defs>
+                        <linearGradient id="grad" x1="0" x2="1.111">
+                          <stop offset="0.00" stop-color="#00FF00" />
+                          <stop offset="0.25" stop-color="#FFFF00" />
+                          <stop offset="0.35" stop-color="#FF0000" />
+                          <stop offset="0.45" stop-color="#FF00FF" />
+                          <stop offset="0.60" stop-color="#0000FF" />
+                          <stop offset="0.90" stop-color="#000000" />
+                        </linearGradient>
+                      </defs>
+                      <rect x="0" y="0" width="32" height="1" fill="url(#grad)" />
+                    </svg>
+                # https://github.com/der-stefan/OpenTopoMap/blob/master/mapnik/relief_color_text_file.txt
+                # - stop offset in meters/10000
+                u_terrain_color: |
+                    data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="51" height="1">
+                      <defs>
+                        <linearGradient id="grad" x1="0" x2="1.98">
+                          <stop offset="0.0000" stop-color="rgb( 17, 120,   3)" />
+                          <stop offset="0.0100" stop-color="rgb( 72, 162,  69)" />
+                          <stop offset="0.0300" stop-color="rgb(231, 218, 158)" />
+                          <stop offset="0.1500" stop-color="rgb(161,  67,   0)" />
+                          <stop offset="0.3000" stop-color="rgb(130,  30,  30)" />
+                          <stop offset="0.4000" stop-color="rgb(110, 110, 110)" />
+                          <stop offset="0.5000" stop-color="rgb(255, 255, 255)" />
+                          <stop offset="0.6000" stop-color="rgb(255, 255, 255)" />
+                        </linearGradient>
+                      </defs>
+                      <rect x="0" y="0" width="51" height="1" fill="url(#grad)" />
+                    </svg>
+
+            blocks_disabled:
+                # for testing
+                color: |
+                    vec2 uv = currentRasterUV(ELEVATION_INDEX);
+                    if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
+                      color = vec4(100.0*(uv.x - 1.0), 100.0*(0.0 - uv.x), 0.0, 1.0);  //discard;
+                    else
+                      discard;  //color = vec4(uv.x, uv.y, 0.0, 1.0);
+
+            blocks:
+                global: |
+                    #ifdef TANGRAM_FRAGMENT_SHADER
+                    float getElevation(sampler2D tex, vec2 uv) {
+                        vec4 h = texture2D(tex, uv);
+                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // in meters
+                    }
+                    #endif
+
+                normal: |
+                    // Using 9 texel patch, estimate 1st and 2nd deriv to smooth elevation and normal
+                    vec2 st = currentRasterUV(ELEVATION_INDEX);
+                    // polygons are not clipped to tile, so prevent drawing outside of tile where no elevation data
+                    // this creates seams between raster tiles when MSAA enabled - if we end up keeping MSAA we
+                    //  can create a separate style for raster tiles
+                    if(st.x < 0.0 || st.x > 1.0 || st.y < 0.0 || st.y > 1.0)
+                      discard;
+                    vec2 texwh = rasterPixelSize(ELEVATION_INDEX);
+                    vec2 duv = 1./texwh;
+                    vec2 ij = st * texwh;
+                    // this fixes seams on raster tiles, but adds seams in polygons!
+                    //if(ij.x < -0.5 || ij.x > texwh.x+0.5 || ij.y < -0.5 || ij.y > texwh.y+0.5)
+                    //  discard;
+                    vec2 cen_ij = floor(ij) + 0.5;
+                    vec2 uv = cen_ij*duv;
+                    float h00 = getElevation(u_rasters[ELEVATION_INDEX], uv - duv);
+                    float h01 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(-duv.x, 0.));
+                    float h02 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(-duv.x, duv.y));
+                    float h10 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(0., -duv.y));
+                    float h11 = getElevation(u_rasters[ELEVATION_INDEX], uv);
+                    float h12 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(0., duv.y));
+                    float h20 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(duv.x, -duv.y));
+                    float h21 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(duv.x, 0.));
+                    float h22 = getElevation(u_rasters[ELEVATION_INDEX], uv + duv);
+                    // handle edge of tile by extrapolating
+                    bvec2 bot = lessThan(cen_ij, vec2(1.));
+                    bvec2 top = greaterThan(cen_ij + 1., texwh);
+                    if(bot.x) { h00 = 2.*h10 - h20; h01 = 2.*h11 - h21; h02 = 2.*h12 - h22; }
+                    if(top.x) { h20 = 2.*h10 - h00; h21 = 2.*h11 - h01; h22 = 2.*h12 - h02; }
+                    if(bot.y) { h00 = 2.*h01 - h02; h10 = 2.*h11 - h12; h20 = 2.*h21 - h22; }
+                    if(top.y) { h02 = 2.*h01 - h00; h12 = 2.*h11 - h10; h22 = 2.*h21 - h20; }
+                    // proj meters per elevation tile pixel (u_tile_origin.z is tile zoom, u_map_position.z is real zoom)
+                    vec2 dxy_elev = 2.*3.141592*6378137.0*exp2(-min(ELEVATION_MAX_ZOOM, u_tile_origin.z))*duv;
+                    // offset from pixel center
+                    vec2 f = ij - cen_ij;
+                    // 2nd order finite diff - mixed partials needed to (almost) eliminate hillshading pixelation
+                    float ddxy = (h22 - h20 - h02 + h00)/4.;
+                    mat2 curv = mat2(h21 - 2.*h11 + h01, ddxy, ddxy, h12 - 2.*h11 + h10);
+                    // interpolated slope and elevation
+                    vec2 grad0 = vec2(h21 - h01, h12 - h10)/2.0;
+                    vec2 grad = (grad0 + curv*f)/dxy_elev;
+                    float elev = h11 + dot(f, grad0) + 0.5*dot(f, curv*f);  // 2nd order does help a bit w/ contour lines
+                    // no underwater terrain for now
+                    float hscale = elev > 0. ? u_exaggerate : 0.;  // /pow(u_meters_per_pixel, 0.7)/65536.;
+                    normal = normalize(vec3(-hscale*grad, 1.));
+
+                color: |
+                    #if ELEVATION_INDEX
+                    vec4 base_color = sampleRaster(0);
+                    #else
+                    vec4 base_color = v_color;
+                    #endif
+                    #ifdef SHOW_CONTOURS
+                    float z = u_map_position.z;
+                    if(z < 10.) {
+                        // terrain colormap (i.e., map height to color) for low zooms
+                        vec4 relief = texture2D(u_terrain_color, vec2(elev/5000., 0.5));
+                        color = mix(base_color, relief, 0.5);
+                    } else {
+                        // contour lines
+                        // slope from gradient calculated above
+                        float slope = length(grad);
+                        // contour line radius in pixels
+                        //float linehw = 0.5;
+                        // spacing between contour lines in meters - 10m has too many artifacts
+                        float interval = z >= 13.5 ? 25. : z >= 11.5 ? 50. : 100.;  //z >= 11. ? 100. : 200.;
+                        float zstep = z >= 13.5 ? 13.5 : z >= 11.5 ? 11.5 : 9.5;
+                        float linehw = mix(0.3, 0.5, clamp(0.5*(z - zstep), 0., 1.));
+                        //float intervals[4] = float[](10., 20., 50., 100.);  -- need GLES 3
+                        //float interval = 10.*clamp(exp2(15. - u_tile_origin.z), 1., 100.);
+                        // no underwater contour lines!
+                        float hc = max(elev, interval/2.);
+                        // distance in pixels to nearest contour lines (above and below)
+                        float dup = fract(hc/interval)*interval/slope / u_meters_per_pixel;
+                        float ddn = abs(1. - fract(hc/interval))*interval/slope / u_meters_per_pixel;
+                        // contour line pixel coverage
+                        float cov = max(0.5 - dup + linehw, 0.) + max(0.5 - ddn + linehw, 0.);
+                        // coarse lines
+                        float coarsehw = 2.*linehw;  //0.75;
+                        float coarse = z >= 13.5 ? 100. : z >= 11.5 ? 200. : 500.;
+                        dup = fract(hc/coarse)*coarse/slope / u_meters_per_pixel;
+                        ddn = abs(1. - fract(hc/coarse))*coarse/slope / u_meters_per_pixel;
+                        cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
+                    #ifdef SHOW_ANGLE
+                        float angle = atan(slope);
+                        vec4 tint = texture2D(u_slope_angle, vec2(angle/(3.14159*0.5), 0.5));
+                        base_color = mix(base_color, tint, elev > 0. && angle >= u_min_slope_angle ? 0.5 : 0.0);
+                    #endif
+                        // blend
+                        color = mix(base_color, CONTOUR_COLOR, min(cov, 1.));
+                    }
+                    #else
+                    #ifdef SHOW_ANGLE
+                        float angle = atan(length(grad));
+                        vec4 tint = texture2D(u_slope_angle, vec2(angle/(3.14159*0.5), 0.5));
+                        base_color = mix(base_color, tint, elev > 0. && angle >= u_min_slope_angle ? 0.5 : 0.0);
+                    #endif
+                    color = base_color;
+                    #endif
+
+
+lights:
+    #point1: { type: point, position: [0, 0, 200px], origin: ground }
+    #light1: { type: directional, direction: [1, 1, -.9], diffuse: 0.8, ambient: 0.3 }
+    #light1: { type: directional, origin: world, direction: [1, 1, -1], diffuse: 0.3, ambient: 0.7 }
+    # single light - use exaggeration ~ 1.5
+    #light1: { type: directional, origin: world, direction: [1, -1, -1], diffuse: 0.4, ambient: 0.7 }
+    # Google Terrain style lighting, where flat areas are brighter than slopes - use exaggeration ~ 4
+    light1: { type: directional, direction: [0, 0, -1], diffuse: 0.2, ambient: 0.35 }
+    light2: { type: directional, direction: [1, -1, -1], diffuse: 0.2, ambient: 0.35 }
+
+
+#osmand-raster:
+#    type: Raster
+#    url: https://tile.osmand.net/hd/{z}/{x}/{y}.png
+#    #user-agent: OsmAnd~
+#    rasters: [elevation]
+#    cache: osmand-raster2x
+
+#normals:
+#    type: Raster
+#    url: https://elevation-tiles-prod.s3.amazonaws.com/normal/{z}/{x}/{y}.png
+#    url_params:
+#        api_key: global.sdk_api_key
+
+#layers:
+#    earth:
+#        data: { source: osmand-raster }
+#        draw:
+#            hillshade:
+#                color: white
+#                order: 0

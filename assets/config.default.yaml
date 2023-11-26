@@ -1,0 +1,30 @@
+# Stylus Labs Maps config
+sources:
+  file: mapsources.yaml
+  last_source: stylus-osm
+  elevation: ["elevation"]
+  common_imports:
+    - markers.yaml
+    - secrets.yaml
+
+storage:
+  # cache size thresholds
+  shrink_at: 600
+  shrink_to: 400
+  # immediately delete tiles when deleting offline map?
+  purge_offline: true
+
+view:
+  lng: -122.434668
+  lat: 37.776444
+  zoom: 15
+
+metric_units: true
+
+# color choices for tracks and markers; from https://colorkit.co
+colors: ["#1abc9c","#16a085","#2ecc71","#27ae60","#3498db","#2980b9","#9b59b6","#8e44ad","#34495e","#2c3e50","#f1c40f","#f39c12","#e67e22","#d35400","#e74c3c","#c0392b"]
+
+# for debugging
+num_tile_workers: 2
+
+msaa_samples: 2

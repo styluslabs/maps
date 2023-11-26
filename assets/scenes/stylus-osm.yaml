@@ -1,0 +1,1348 @@
+# adaption of tangram default scene.yaml to Stylus Labs vector tile schema
+# - OpenMapTiles schema omits some important information, unnecessarily groups OSM tags, uses too many layers
+#  resulting in larger tiles due to duplicated data, etc.; Shortbread schema has even more layers
+# - don't seem to be many services using mapzen schema (except HERE)
+# - mapzen walkabout style is nice, but way too big - nearly 10K lines
+# - no one uses mapbox schema except mapbox?
+# - trying to create scene file that works for multiple schema isn't practical (either w/ globals or stacking yaml files)
+
+global:
+    camera_settings: { type: isometric, axis: [-.2, .2] }
+    # globals required for hillshading
+    earth_style: polygons
+    earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
+    elevation_sources: []
+
+    color:
+        background: [.97, .955, .94] #'#f0ebeb'
+        earth: white
+        default_label: black
+        default_halo: white
+        landuse: honeydew
+        parks: '#bddec5'
+        park_detail: '#9dbea5'
+        golf: hsl(124, 83%, 88%)  #'#C8FACC'
+        industry: '#C0CDCD'
+        retail: '#FEF0D0'
+        civic: '#D9CFC3'
+        water: '#9dc3de'
+        water_name: "#51909c"
+        water_halo: "#e2eef0"
+        beach: '#FEEFC3'  #[1.000,0.953,0.900]
+        ice: white
+        rock: grey
+        road: '#fff'
+        casing_16: '#999'
+        casing_18: '#aaa'
+        tunnel: '#E3E3E3'
+        tunnel_casing: '#A0A0A0'
+        motorway: '#FDE293'
+        motorway_link: '#FDE293'  #'#aaa'
+        motorway_muted: '#eee'
+        path: '#fff'
+        transit: '#EB322F'
+        rail: [0.588,0.671,0.698]
+        pier: [0.993,0.993,0.993]
+        ferry: '#8db3ce'
+        runway_13: '#C7CADC'  #'#FFE4B5'
+        taxiway: '#BCBCCC'
+        airport: '#E8EAEF'  #'#ddd'
+        airport_name: '#487585'
+        road_name: '#666'
+        road_halo: white
+        ferry_name: '#8db3ce'
+        ferry_halo: white
+        border: wheat
+        border_country: [0.824, 0.651, 0.329, 1.00]
+        city_point: white
+        city_point_halo: black
+        place_name: [0, 0, 0, .8]
+        place_halo: white
+        hood_name: rgba(136, 45, 23, 0.9)
+        hood_halo: white
+        bldg: [.83, .83, .83]
+        bldg_3d: [.83, .83, .83, 0.5]
+        bldg_3d_line: [.75, .75, .73, 0.5]
+        park_name: darkgreen
+        park_halo: white
+        housenumber: [0.30,0.30,0.30]  #"#d2b17d"
+        housenumber_halo: [0.913,0.925,0.933]  #rgba(38,38,38,0.15)
+        aerialway: '#444'
+        aerialway_name: black
+        aerialway_halo: white
+        piste_name: black
+        piste_halo: white
+        piste:
+            novice: '#2FB439'  #[0.367,0.750,0.622]
+            easy: '#2F76B4'  #[0.367,0.750,0.622]
+            intermediate: '#F54141'  #[0.420,0.678,0.863]
+            advanced: '#2E2E2E'  #[0.450,0.450,0.450]
+            expert: '#2E2E2E'  #[0.450,0.450,0.450]
+            freeride: '#FFA500'
+        #urban_7: lightgrey
+        #urban_9: [.88, .88, .88]
+        #motorway_5: '#F89595'
+        #motorway_7: '#D16768'
+        #runway_16: '#fff'
+        #runway_casing: orange
+
+    piste_color_fn: function() { return global.color.piste[feature.difficulty] || 'white'; }
+    piste_symbols: { easy: '●', intermediate: '■', advanced: '◆', expert: '◆◆' }
+    piste_name_fn: |
+        function() {
+            const sym = global.piste_symbols[feature.difficulty] || '';
+            return feature.name ? (sym + ' ' + feature.name) : sym;
+        }
+
+    # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
+    priority_boundary: 0
+    priority_continent: 6
+    priority_neighborhood: 15
+    priority_park: 21
+    priority_forest: 22
+    # road labels
+    priority_motorway_ref: 25
+    priority_motorway_name: 26
+    priority_road_primary: 30
+    priority_road_secondary: 40
+    priority_road_tertiary: 50
+    priority_road_minor: 60
+    # transit line labels
+    priority_transit_ref: 19
+    priority_transit_ref_tram: 24
+    priority_transit_ref_bus: 29
+    # transit stops
+    priority_bus_stop: 20  # bus stops only shown when show_transit = true
+    priority_station_transit: 5 # transit station priority when show_transit = true
+    priority_station_default: 29  # transit station priority when show_transit = false
+    priority_station_tram: 6  # only shown when show_transit = true
+    # we want to show every traffic light if showing any
+    priority_traffic_light: 4
+    # housenumbers only shown at high zoom and unlikely to collide
+    priority_housenumber: 350
+    # POIs - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
+    # - looks like it's faster to let Tangram convert string to number instead of using Number() in JS fn
+    priority_poi_default: function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_viewpoint: function() { return '31.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_toilet: function() { return '32.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_university: function() { return '33.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_grocery: function() { return '34.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_culture: function() { return '41.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_restaurant: function() { return '43.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_cafe: function() { return '44.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_convenience: function() { return '51.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_school: function() { return '52.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_religion: function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+    priority_poi_parking: function() { return '102.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+
+    priority_place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
+    priority_place_fn: function() { return (global.priority_place[feature.class] || 14) + 100.0/(100 + (feature.population || 1)); }
+
+    # if we want to easily add on top of various raster sources, have MapsSources set global._vector_order to
+    #  layer number for vector source
+    show_polygons: true  # function() { return !(global._vector_order > 0); }
+    show_bike: false
+    show_transit: false
+    show_trails: false
+    show_motorways: true
+
+    gui_variables:
+        show_polygons: { label: Polygons }
+        show_bike: { label: Bike }
+        show_transit: { label: Transit }
+        show_trails: { label: Hike }
+        show_motorways: { label: Motorways }
+
+    # specify fields indexed for search
+    search_data:
+        - layer: poi
+          fields: name, name_en, amenity, leisure, shop, sport, tourism, cuisine
+        - layer: place
+          fields: name, name_en
+
+
+sources:
+    osm:
+        type: MVT
+        cache: stylus-osm
+        #url: file:///home/mwhite/maps/tilemaker/sf.mbtiles
+        #url: file:///home/mwhite/maps/sf.mbtiles  # maptiler 2017 extract
+        #url: file:///home/mwhite/maps/SanFrancisco-bbbike.mbtiles   # from bbbike.org, but no bike info!
+        #url: http://tiles.basemaps.cartocdn.com/vectortiles/carto.streets/v1/{z}/{x}/{y}.mvt
+        #url: https://6ug7hetxl9.execute-api.us-east-2.amazonaws.com/data/v3/{z}/{x}/{y}.pbf
+        max_zoom: 14
+        rasters: global.elevation_sources
+
+
+fonts:
+    Open Sans:
+        - weight: 400
+          url: fonts/OpenSans-Regular.woff
+        - weight: 400
+          style: italic
+          url: fonts/OpenSans-Italic.woff
+        - weight: 600
+          url: fonts/OpenSans-Semibold.woff
+
+
+scene:
+    background:
+        color: global.color.background
+
+
+cameras:
+    camera1: global.camera_settings
+
+
+#lights:
+#    light1: { type: directional, origin: world, direction: [1, 1, -1], diffuse: 0.5, ambient: 0.7 }
+#    #light2: { type: directional, origin: world, direction: [1, 1, -1], diffuse: [.3, .3, .3, 1.], ambient: [0.7, 0.7, 0.7, 1.] }
+
+
+#textures:
+
+
+styles:
+    heightglow:
+        base: polygons
+        blend: translucent
+        blend_order: -2
+        lighting: vertex
+        shaders:
+            blocks:
+                color: "color.rgb += vec3(worldPosition().z / 800.);"
+    heightglowline:
+        base: lines
+        blend_order: -1
+        mix: heightglow
+    unlit-lines:
+        base: lines
+        lighting: false
+    # dash only supported for styles, not draw block because each dash pattern requires separate shader
+    dashed-path:
+        mix: unlit-lines
+        dash: [3.0, 0.5]
+    dashed-track:
+        mix: unlit-lines
+        dash: [2.5, 1.0]
+    dashed-steps:
+        mix: unlit-lines
+        dash: [0.5, 0.5]
+    dashed-bike:
+        mix: unlit-lines
+        dash: [1.0, 1.0]
+    #dashed-tunnel:
+    #    base: lines
+    #    lighting: false
+    #    dash: [3, 2]
+    transit-lines:
+        base: lines
+        blend: overlay
+        blend_order: -2
+        draw: # default draw parameters
+            color: gray  #function() { return feature.colour || 'gray'; }
+            alpha: 0.25
+            width: 6px
+            outline:
+                color: [.8, .8, .8]
+                alpha: 0.25
+                width: 1px
+            interactive: true
+    #terrain:
+    #    mix: hillshade
+    #    shaders:
+    #        defines:
+    #            CONTOUR_COLOR: vec4(0.7,0.7,0.7,1.)
+    #            SHOW_CONTOURS: global.show_trails
+    #            ELEVATION_INDEX: 0
+
+
+layers:
+    #earth:
+    #    data: { source: elevation }
+    #    enabled: global.show_polygons
+    #    draw:
+    #        polygons:
+    #            style: global.earth_style
+    #            color: global.color.earth
+    #            order: 0
+
+    landcover:
+        data: { source: osm, layer: landuse }
+        enabled: global.show_polygons
+        #filter: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
+        draw:
+            polygons:
+                visible: false
+                style: global.earth_style
+                order: 3
+                color: global.color.landuse
+        green:
+            filter: { class: [forest, grass, farmland, wetland] }
+            draw: { polygons: { visible: true, color: global.color.parks } }
+        # golf course can be inside park, so make sure it is drawn on top
+        golf:
+            filter: { class: golf_course }
+            draw: { polygons: { visible: true, order: 2, color: global.color.golf } }
+        park:
+            filter: { class: park }
+            draw: { polygons: { visible: true, order: 1, color: global.color.parks } }
+        beach:
+            filter: { class: sand }
+            draw: { polygons: { visible: true, color: global.color.beach } }
+        ice:
+            filter: { class: ice }
+            draw: { polygons: { visible: true, color: global.color.ice } }
+        rock:
+            filter: { class: rock }
+            draw: { polygons: { visible: true, color: global.color.rock } }
+
+    landuse:
+        data: { source: osm, layer: landuse }
+        enabled: global.show_polygons
+        #filter: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
+        draw:
+            polygons:
+                visible: false
+                style: global.earth_style
+                order: 1
+                color: global.color.landuse
+        green:
+            filter: { class: [zoo, playground, pitch, cemetery] }
+            draw: { polygons: { visible: true, color: global.color.park_detail } }
+        retail:
+            filter: { landuse: [retail] }  #industrial, commercial
+            draw: { polygons: { visible: true, color: global.color.retail } }
+        civic:
+            filter: { amenity: [university, college] }  # class: school
+            draw: { polygons: { visible: true, color: global.color.civic } }
+        #urban:
+        #    filter: { kind: urban_area }
+        #    draw: { polygons: { color: [[7, global.color.urban_7], [9, global.color.urban_9]] } }
+
+    park:
+        data: { source: osm, layer: landuse }
+        enabled: global.show_polygons
+        filter:
+            class: [national_park, protected_area, nature_reserve]
+            #any: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
+        draw:
+            polygons:
+                style: global.earth_style
+                order: 1
+                color: global.color.parks
+
+    water:
+        data: { source: osm, layer: water }
+        enabled: global.show_polygons
+        filter: { $geometry: polygon }
+        draw:
+            polygons:
+                order: 5
+                color: global.color.water
+        #ocean:
+        #    filter: { class: ocean}
+        #inter:
+        #    filter: { class: [lake, river] }
+
+    water_name:
+        data: { source: osm, layer: water }
+        filter:
+            name: true
+            $geometry: [polygon, point]
+            any: [ { $zoom: { min: 17 } }, { area: { min: 500px2 } } ]
+        draw:
+            text:
+                #interactive: true
+                text_source: name
+                transition: { show: { time: 0s }, hide: { time: 1s } }
+                font:
+                    family: Open Sans
+                    fill: global.color.water_name
+                    stroke: { color: global.color.water_halo, width: 2 }
+                    style: italic
+                    size: 12px
+        oceans:
+            filter: { class: ocean, $zoom: { min: 1, max: 8 } }
+            draw: { text: { font: { size: 14pt } } }
+        seas:
+            filter: { class: [lake, sea], $zoom: { min: 7 } }
+            draw: { text: { font: { size: [[9, 9px], [17, 10px], [18, 12px]] } } }
+
+    waterway:
+        data: { source: osm, layer: water }
+        enabled: global.show_polygons
+        filter: { $geometry: line }
+        draw:
+            lines:
+                order: 4
+                color: global.color.water
+                width: [[7,0.5px],[8,1px],[15,2px]]
+
+    waterway_name:
+        data: { source: osm, layer: water }
+        filter:
+            name: true
+            class: river
+        enabled: global.show_polygons
+        draw:
+            text:
+                text_source: name
+                #buffer: 3px
+                font:
+                    family: Open Sans
+                    fill: global.color.water_name
+                    stroke: { color: global.color.water_halo, width: 2 }
+                    style: italic
+                    size: [[11, 0px], [12, 8px], [14, 9px], [16, 10px], [17, 11px]]
+        #minor:
+        #    filter: { class: [stream, canal] }
+
+    transportation:
+        data: { source: osm, layer: transportation }
+        filter: { not: { class: [transit, route, aeroway] } }
+        draw:
+            lines:
+                style: unlit-lines
+                color: global.color.road
+                width: 0
+                order: 40
+                outline:
+                    visible: global.show_polygons
+                    color: [[16, global.color.casing_16], [18, global.color.casing_18]]
+                    width: 0  #[[15, 0], [16, 2]]
+                    order: 10 # put all outlines below all roads
+        rounded:
+            filter: { $zoom: { min: 18 } }
+            draw: { lines: { cap: round } }
+        bridge:
+            filter: { brunnel: bridge }
+            priority: 1
+            draw: { lines: { order: 100 } }
+        tunnel:
+            filter: { brunnel: tunnel, $zoom: { min: 14 } }
+            priority: 1
+            draw: { lines: { color: global.color.tunnel, outline: { color: global.color.tunnel_casing } } }
+        motorway:
+            filter: { class: motorway }
+            draw:
+                lines:
+                    order: 80
+                    color: 'function() { return global.show_motorways ? global.color.motorway : global.color.motorway_muted; }'
+                    #[[5, global.color.motorway_5], [7, global.color.motorway_7]]
+                    width: [[5, 1px], [8, 1.5px], [14, 2px], [15, 12]]
+                    outline:
+                        width: [[14, 0], [15, 2]]
+            link:
+                filter: { ramp: 1 }
+                draw:
+                    lines:
+                        #color: global.color.motorway_link
+                        width: [[13, 0], [14, 12]]
+        major_road:
+            filter: { class: [trunk, primary, secondary], $zoom: { min: 10 } }
+            draw:
+                lines:
+                    order: 70
+                    width: [[10, 0], [13, 2px], [14, 2px], [16, 12]]
+                    outline:
+                        width: [[16, 0], [17, 1]]
+        minor_road:
+            filter: { class: [tertiary, minor, service] }
+            draw:
+                lines:
+                    order: 60
+                    width: [[13, 0px], [14, 1px], [15, 8]]
+                    outline:
+                        width: [[17, 0], [18, 1]]
+            service:
+                filter: { class: service }
+                draw: { lines: { width: [[15, 0px], [16, 4px], [17, 8]] } }
+            parking:
+                filter: { service: parking_aisle }
+                draw: { lines: { width: [[15, 0px], [16, 2px], [17, 4]] } }
+
+        paths:
+            filter: { class: path }
+            draw:
+                lines:
+                    order: 50
+                    style: dashed-path
+                    color: global.color.path
+                    width: [[14, 0px], [15, 1px], [18, 3px]]
+            steps:
+                filter: { highway: steps }
+                draw: { lines: { style: dashed-steps, width: [[14, 0px], [15, 3px], [18, 6px]] } }
+            unpaved:
+                enabled: global.show_trails
+                filter:
+                    - highway: false  # highway=path in OSM
+                    - { highway: footway, surface: unpaved }
+                draw: { lines: { color: '#B06000', width: [[10, 1px], [18, 3px]] } }
+
+        tracks:
+            filter: { class: track }
+            draw:
+                lines:
+                    order: 50
+                    style: dashed-track
+                    color: global.color.path
+                    width: [[14, 1px], [15, 2px], [18, 4px]]
+
+        # unpaved road: dashed w/ outline?  track: same as unpaved road if motor_vehicle: yes, otherwise like path
+        rail:
+            filter: { class: rail, $zoom: { min: 10 } }
+            draw:
+                lines:
+                    order: 40
+                    color: global.color.rail
+                    width: [[12, 1px], [14, 1px], [16, 2px]]
+            tunnel:
+                filter: { brunnel: tunnel }
+                draw: { lines: { width: [[16, 0px], [17, 2px]] } }
+            hidden:
+                filter: { not: { railway: [rail, light_rail, narrow_gauge, tram, funicular] } }
+                draw: { lines: { visible: false } }
+
+        pier:
+            filter: { class: pier }
+            draw:
+                lines:
+                    color: global.color.pier
+                    width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
+
+        ferry:
+            filter: { class: ferry }
+            draw:
+                lines:
+                    style: dashed-path
+                    color: global.color.ferry
+                    width: [[14, 1px], [18, 2px]]
+
+        aerialway:
+            filter: { class: aerialway }
+            draw:
+                lines:
+                    order: 150  # aerialway would more often be over bridge vs under
+                    color: global.color.aerialway
+                    width: [[14, 0.5px], [15, 1.0px], [16, 2m]]
+                # maybe use dashed line instead?
+                points:
+                    color: global.color.aerialway
+                    size: [[14, 1.25px], [15, 3px], [16, 3px]]
+                    collide: false
+                    placement: spaced
+                    placement_spacing: 10px
+                    placement_min_length_ratio: 0
+            gondola:
+                filter: { aerialway: [gondola, cable_car, mixed_lift] }
+                draw:
+                    lines: { width: [[12, 1px], [13, 1px], [14, 2px], [15, 2.5px], [16, 2.5px]] }
+                    points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
+            chair_lift:
+                filter: { aerialway: chair_lift }
+                draw:
+                    lines: { width: [[12, 1px], [13, 1px], [14, 2px], [15, 2.5px], [16, 2.5px]] }
+                    points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
+            aerialway_label:
+                filter: { $zoom: { min: 14 } }
+                draw:
+                    text:
+                        text_source: name
+                        font:
+                            family: Open Sans
+                            fill: global.color.aerialway_name
+                            stroke: { color: global.color.aerialway_halo, width: 3 }
+                            size: 12px
+
+        piste:
+            filter: { class: piste, $zoom: { min: 10 } }
+            piste_areas:
+                filter: { $geometry: polygon, $zoom: { min: 13 } }
+                enabled: global.show_polygons
+                draw:
+                    polygons:
+                        visible: global.show_trails
+                        style: global.earth_style
+                        order: 1
+                        color: global.piste_color_fn
+            piste_lines:
+                filter: { $geometry: line }
+                draw:
+                    lines:
+                        order: 65
+                        color: global.piste_color_fn
+                        width: [[10,0px],[11,1px],[12,1.25px],[13,2px],[18,3m]]
+                        outline:
+                            color: global.color.piste_halo
+                            width: [[13, 0px], [14, 2px]]
+                    text:
+                        visible: global.show_trails
+                        text_source: global.piste_name_fn
+                        font:
+                            family: Open Sans
+                            fill: global.piste_color_fn
+                            stroke: { color: global.color.piste_halo, width: 3 }
+                            size: 12px
+
+        road-icons:
+            arrows:
+                # oneway arrows and shields are distinct groups!
+                exclusive: true
+                filter: { oneway: 1, $zoom: { min: 17 } }
+                draw:
+                    points:
+                        texture: pois
+                        sprite: arrow
+                        flat: true
+                        size: [[17, 18px], [18, 20px], [20, 32px]]
+                        placement: spaced
+                        placement_spacing: [[17, 70px], [20, 175px]]
+                        angle: auto
+
+    shields:
+        enabled: global.show_motorways
+        data: { source: osm, layer: transportation }
+        filter:
+            #function() { const s = feature.maxspeed.split(" "); return parseInt(s[0]) >= (s[1] == "mph" ? 50 : 80); }
+            ref: true
+            not: { class: [transit, route, aeroway] }
+            any:
+                - { class: motorway, $zoom: { min: 5 } }
+                - { class: [trunk, primary], $zoom: { min: 10 } }
+                - $zoom: { min: 13 }
+        draw:
+            points:
+                #style: poi-points
+                #color: red
+                style: points
+                texture: pois
+                sprite: shield  #function() { return feature.network; }
+                #sprite_default: shield
+                priority: global.priority_motorway_ref
+                # faster roads get higher priority
+                #priority: function() { return global.priority_motorway_ref - parseInt(feature.maxspeed)/200; }
+                size: function() { return [(feature.ref.split(";")[0].length || 4)*6.5, 14]; }
+                # midpoint generates too many labels (overwhelming label collider)
+                placement: spaced
+                placement_spacing: 30px
+                placement_min_length_ratio: 0
+                repeat_distance: 150px
+                repeat_group: shields
+                text:
+                    anchor: center
+                    text_source: function() { return feature.ref.split(";")[0]; }
+                    font:
+                        size: 10px
+                        fill: black
+
+    transportation_name:
+        data: { source: osm, layer: transportation }
+        filter:
+            name: true
+            not: { class: [rail, aeroway, route, piste, aerialway] }
+        draw:
+            text:
+                #interactive: true
+                text_source: |
+                    function() {
+                       return feature.name.replace(" Avenue", " Ave.").replace(" Street", " St.").replace(" Boulevard", " Blvd.").replace(" Drive", " Dr.").replace(" Lane", " Ln.").replace(" Road", " Rd.");
+                    }
+                transition: { show: { time: 0s }, hide: { time: 1s } }
+                font:
+                    family: Open Sans
+                    fill: global.color.road_name
+                    stroke: { color: global.color.road_halo, width: 2 }
+                    size: 12px
+
+        motorway:
+            exclusive: true
+            filter: { class: motorway, $zoom: {min: 13} }
+            draw:
+                text:
+                    visible: global.show_motorways
+                    repeat_distance: 200px
+                    repeat_group: road_labels
+                    priority: global.priority_motorway_name
+                    font:
+                        stroke: { width: 4 }
+
+        primary:
+            exclusive: true
+            filter:
+                any:
+                    - {class: trunk, $zoom: {min: 13}}
+                    - {class: primary, $zoom: {min: 14}}
+            draw:
+                text:
+                    repeat_distance: 100px
+                    repeat_group: roads
+                    priority: global.priority_road_primary
+                    font:
+                        size: 14px
+                        stroke: { width: 4 }
+
+        secondary:
+            exclusive: true
+            filter: { class: secondary, $zoom: { min: 14 } }
+            draw:
+                text:
+                    repeat_distance: 100px
+                    repeat_group: roads
+                    priority: global.priority_road_secondary
+                    font:
+                        size: 14px
+                        stroke: { width: 4 }
+
+        tertiary:
+            exclusive: true
+            filter: { class: tertiary, $zoom: { min: 15 } }
+            draw:
+                text:
+                    priority: global.priority_road_tertiary
+                    font:
+                        size: 12px
+                        stroke: { width: 4 }
+
+        minor:
+            exclusive: true
+            filter: { class: minor, $zoom: { min: 16 } }
+            draw:
+                text:
+                    priority: global.priority_road_minor
+                    font:
+                        size: 10px
+                        stroke: { width: 4 }
+
+        ferry:
+            exclusive: true
+            filter: { class: ferry }
+            draw:
+                text:
+                    text_wrap: 20
+                    font:
+                        fill: global.color.ferry_name
+                        stroke: { color: global.color.ferry_halo, width: 4px }
+                        style: italic
+
+    airports:
+        data: { source: osm, layer: transportation }
+        filter: { aeroway: true }
+
+        footprint:
+            enabled: global.show_polygons
+            filter: { aeroway: aerodrome }
+            draw:
+                polygons:
+                    style: global.earth_style
+                    order: 1
+                    color: global.color.airport
+
+        taxiways:
+            filter: { aeroway: taxiway, $zoom: { min: 13 } }
+            draw:
+                lines:
+                    color: global.color.taxiway
+                    order: 50
+                    width: [[13, 0px], [14, 2px], [17, 10px]]
+
+        runways:
+            filter: { aeroway: [runway, airstrip], $zoom: { min: 12 } }
+            draw:
+                lines:
+                    color: global.color.runway_13  #[[13, global.color.runway_13], [16, global.color.runway_16]]
+                    width: [[12, 3px], [13, 5px], [14, 10px], [15, 75]]
+                    order: 55
+                    cap: square
+                    #outline:
+                    #    color: global.color.runway_casing
+                    #    width: [[11, 0px], [12, 1px], [13, 2px], [15, 12.5]]
+
+    airport_name:
+        data: { source: osm, layer: transportation }
+        filter:
+            aeroway: aerodrome
+            any:
+                - { aerodrome: international, $zoom: { min: 12 } }
+                - { aerodrome: regional, $zoom: { min: 13 } }
+                - $zoom: { min: 14 }
+        draw:
+            text:
+                interactive: true
+                text_source: name
+                transition: { show: { time: 0s }, hide: { time: 1s } }
+                font:
+                    family: Open Sans
+                    fill: global.color.airport_name
+                    stroke: { color: global.color.default_halo, width: 2 }
+                    size: [[12, 12px], [13, 14px]]
+
+    bicycle:
+        data: { source: osm, layer: transportation }
+        filter:
+            any:
+                - { class: [track, path], bicycle: [designated, yes] }
+                - { class: track, highway: cycleway }
+                - cycleway: true
+                - cycleway_right: true
+                - cycleway_left: true
+        enabled: global.show_bike
+        draw:
+            lines:
+                style: unlit-lines
+                color: '#008800'  #global.color.road
+                width: [[13, 2px], [14, 3px]]
+                order: 120
+        track:
+            exclusive: true
+            priority: 1
+            filter:
+                any:
+                    - { class: [track, path], bicycle: [designated, yes] }
+                    - { class: track, highway: cycleway }
+                    - cycleway: [track, opposite_track]
+                    - cycleway_left: [track, opposite_track]
+                    - cycleway_right: [track, opposite_track]
+            draw: { lines: { color: '#004C00' } }
+            unpaved:
+                filter: { surface: unpaved }
+                draw: { lines: { style: dashed-bike, color: '#B06000' } }
+        lane:
+            exclusive: true
+            priority: 2
+            filter:
+                any:
+                    - cycleway: [lane, opposite_lane]
+                    - cycleway_left: [lane, opposite_lane]
+                    - cycleway_right: [lane, opposite_lane]
+            draw: { lines: { color: '#008800' } }
+        shared:
+            exclusive: true
+            priority: 3
+            filter:
+                any:
+                    - cycleway: [shared_lane, shoulder]
+                    - cycleway_left: [shared_lane, shoulder]
+                    - cycleway_right: [shared_lane, shoulder]
+            draw: { lines: { style: dashed-bike, color: '#008800' } }
+
+    transit:
+        data: { source: osm, layer: transit }
+        filter:
+            $zoom: {min: 12}
+            any:
+                #- class: transit
+                - { route: [train, light_rail, subway, tram, monorail] }
+                - { route: [bus, trolleybus], $zoom: {min: 14} }
+        enabled: global.show_transit
+        draw:
+            lines:
+                width: [[13, 3px], [14, 4px]]
+                order: 150
+                #style: transit-lines
+                color: function() { return feature.color || global.color.transit; }
+            text:
+                interactive: true
+                priority: global.priority_transit_ref
+                text_source: ref  #'function() { return feature.ref.length < 6 ? feature.ref : ''; }'
+                # non-zero offset bypasses addCurvedTextLabels, which generates massive number of label
+                #  objects, resulting in label collider pegging CPU
+                offset: [0px, -0.5px]
+                repeat_distance: 400px
+                font:
+                    family: Open Sans
+                    fill: white  #'function() { return feature.color == "yellow" ? "#555": "white"; }'
+                    stroke:
+                        color: function() { return feature.color || global.color.transit; }
+                        width: 3
+                    size: 14px
+        secondary:
+            filter: { route: [light_rail, tram, monorail] }
+            draw:
+                lines: { width: [[13, 2px], [14, 3px]] }
+                text: { priority: global.priority_transit_ref_tram }
+        bus:
+            filter: { route: [bus, trolleybus] }
+            draw:
+                lines: { width: [[14, 1px], [16, 2px]] }
+                text: { priority: global.priority_transit_ref_bus }
+
+
+    buildings:
+        data: { source: osm, layer: building }
+        filter: { $zoom: { min: 14 } }
+        enabled: global.show_polygons
+        draw:
+            polygons:
+                style: heightglow
+                order: 10
+                color: global.color.bldg
+
+        # extrude 3d buildings
+        extruded:
+            filter: { $zoom: { min: 15 } }
+            draw:
+                polygons:
+                    # JS call much slower than extruding geometry
+                    #extrude: function () { return feature.render_height > 20 || $zoom >= 16; }
+                    extrude: true
+                    color: global.color.bldg_3d
+                    order: 1001
+                lines:
+                    style: heightglowline
+                    width: 2px
+                    color: global.color.bldg_3d_line
+                    order: 1000
+                    extrude: true
+
+
+    housenumber:
+        data: { source: osm, layer: building }
+        filter: { $zoom: { min: 19 } }
+        #enabled: false
+        draw:
+            text:
+                #order: 1
+                priority: global.priority_housenumber
+                text_source: housenumber
+                font:
+                    family: Open Sans
+                    size: 11px
+                    fill: global.color.housenumber
+                    stroke: { color: global.color.housenumber_halo, width: 2px }
+
+
+    peaks:
+        data: { source: osm, layer: poi }
+        enabled: global.show_trails
+        filter:
+            class: [peak, volcano]
+            #rank: 1.0  # only the highest peak in each tile
+            ele: true
+            #$zoom: { max: 13 }
+        draw:
+            points:
+                texture: pois
+                sprite: peak
+                size: 14px
+                interactive: true
+                collide: true
+                priority: function() { return 30 + (1 - feature.ele/10000); }
+                transition: { show: { time: 0s }, hide: { time: 1s } }
+                text:
+                    interactive: true
+                    text_source: |
+                        function() {
+                            const ele = global.metric_units ? feature.ele : feature.ele*3.2808399;
+                            if(!feature.name) { return ele.toFixed(0); }
+                            const name = feature.name.length > 17 ? feature.name.substring(0, 17) + "…" : feature.name;
+                            return name + "\n" + ele.toFixed(0);
+                        }
+                    text_wrap: 100
+                    max_lines: 2
+                    font:
+                        family: Open Sans
+                        style: italic
+                        size: 8pt
+                        fill: global.color.default_label
+                        stroke: { color: global.color.default_halo, width: 3 }
+
+    pois:
+        data: { source: osm, layer: poi }
+        draw:
+            points:
+                style: poi-points
+                texture: pois
+                size: [[13, 16px], [15, 20px]]
+                interactive: true
+                collide: true
+                transition: { show: { time: 0s }, hide: { time: 1s } }
+                text:
+                    interactive: true
+                    anchor: [right, left, bottom, top]
+                    max_lines: 2
+                    font:
+                        family: Open Sans
+                        size: 1.2em
+                        fill: global.color.default_label
+                        stroke: { color: global.color.default_halo, width: 3 }
+        parks:
+            exclusive: true
+            priority: 1
+            filter:
+                name: true
+                all:
+                    - any:
+                        - { leisure: [park, golf_course] }
+                        - { amenity: [grave_yard] }
+                        - { landuse: [cemetery] }
+                    - any:
+                        - { $zoom: { min: 17 } }
+                        - { area: { min: 2000px2 } }
+            draw:
+                points:
+                    sprite: tree
+                    color: global.poi_color.outdoor
+                    priority: global.priority_park
+                    text:
+                        font:
+                            size: 10pt
+                            style: italic
+                            fill: global.color.park_name
+                            stroke: { color: global.color.park_halo, width: 3 }
+            golf:
+                filter: { leisure: golf_course }
+                draw: { points: { sprite: golf } }
+            cemetery:
+                filter:
+                    - { amenity: [grave_yard] }
+                    - { landuse: [cemetery] }
+                draw: { points: { sprite: cemetery } }
+
+        forest:
+            exclusive: true
+            priority: 2
+            filter:
+                class: forest
+                any:
+                    - { $zoom: { min: 7 }, tier: 1 }
+                    - { $zoom: { min: 9 }, tier: { max: 3 } }
+            draw:
+                points:
+                    visible: false
+                text:
+                    priority: global.priority_forest
+                    font:
+                        size: 9pt
+                        style: italic
+                        fill: global.color.park_name
+                        stroke: { color: global.color.park_halo, width: 3 }
+
+        station:
+            exclusive: true
+            priority: 3
+            filter:
+                railway: [station, tram_stop]
+                $zoom: { min: 13 }
+            # show_transit: stations at 13, station labels at 14; default: stations at 15, station labels at 16
+            # - trying to implement this logic w/o using JS functions was a horrible disaster
+            draw:
+                points:
+                    visible: 'function() { return $zoom >= (global.show_transit ? 13 : 15); }'
+                    priority: 'function() { return global.show_transit ? global.priority_station_transit : global.priority_station_default; }'
+                    sprite: train
+                    color: global.poi_color.public
+                    size: [[13, 12px], [15, 18px]]
+                    text:
+                        visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
+                        optional: 'function() { return !global.show_transit; }'
+                        font:
+                            size: 12px
+            tram:
+                filter:
+                    - railway: tram_stop
+                    - station: light_rail
+                draw:
+                    points:
+                        sprite: tram
+                        priority: global.priority_station_tram
+                        size: [[13, 10px], [15, 16px]]
+                        visible: global.show_transit
+
+        bus_stop:
+            exclusive: true
+            priority: 4
+            filter: { highway: bus_stop,  $zoom: { min: 16 } }  # [{ class: bus, subclass: bus_stop }, { class: bus_stop } ]
+            draw:
+                points:
+                    sprite: bus
+                    color: global.poi_color.public
+                    size: [[16, 12px], [18, 16px]]
+                    visible: global.show_transit
+                    priority: global.priority_bus_stop
+                    text: { visible: false }
+
+        traffic_signals:
+            exclusive: true
+            priority: 5
+            filter: { $zoom: { min: 19 }, highway: traffic_signals }
+            draw:
+                points:
+                    style: points
+                    interactive: false
+                    sprite: traffic_light
+                    priority: global.priority_traffic_light
+                    text: { visible: false }
+
+        not_landuse:
+            exclusive: true
+            filter:
+                $zoom: { min: 14 }
+                any:
+                    - name: true
+                    - tourism: [viewpoint, camp_site, information]
+                    - amenity: [parking, bicycle_rental, drinking_water, water_point, toilets]
+                not:
+                    - { railway: subway_entrance }
+                    #- 'function() { return global.search_active; }'
+            draw:
+                points:
+                    #interactive: true  -- already set on parent
+                    sprite: global.poi_sprite_fn
+                    color: global.poi_color_fn
+                    priority: global.priority_poi_default
+                    # transition.selected < 0 to indicate label should be hidden when search results shown
+                    transition: { selected: { time: -1s } }
+                    text:
+                        font:
+                            size: 12px
+                            fill: global.color.default_label
+                            stroke: { color: global.color.default_halo, width: 3 }
+            # make label optional at higher zoom to show more POI icons
+            labels:
+                filter: { $zoom: { min: 17 } }
+                draw: { points: { text: { optional: true } } }
+            # add generic icon at high zoom
+            generic:
+                filter: { $zoom: { min: 18 }, name: true }
+                draw: { points: { sprite_default: generic } }
+            points:
+                viewpoint:
+                    exclusive: true
+                    filter: { tourism: [viewpoint, camp_site] }
+                    draw:
+                        points:
+                            visible: global.show_trails
+                            priority: global.priority_poi_viewpoint
+                    default:
+                        filter: { $zoom: { min: 17 } }
+                        draw: { points: { visible: true } }
+                parking:
+                    exclusive: true
+                    filter: { amenity: parking }
+                    draw:
+                        points:
+                            visible: global.show_trails    # parking == trailhead!
+                            priority: global.priority_poi_parking
+                    default:
+                        filter: { $zoom: { min: 18 } }
+                        draw: { points: { visible: true } }
+                information:
+                    exclusive: true
+                    filter: { tourism: information }
+                    draw: { points: { visible: false } }
+                    show:
+                        filter: { $zoom: { min: 17 } }
+                        draw: { points: { visible: true } }
+                bike_rental:
+                    exclusive: true
+                    filter: { amenity: bicycle_rental }  #{ class: amenity, subclass: bicycle_rental }
+                    draw: { points: { visible: global.show_bike } }
+                university:
+                    exclusive: true
+                    filter: { amenity: university }
+                    draw: { points: { priority: global.priority_poi_university } }
+                school:
+                    exclusive: true
+                    filter: { amenity: [school, college, kindergarten] }
+                    draw: { points: { visible: false, priority: global.priority_poi_school } }
+                    show:
+                        filter: { $zoom: { min: 16 } }
+                        draw: { points: { visible: true } }
+                restaurant:
+                    exclusive: true
+                    filter: { amenity: [restaurant, fast_food] }
+                    draw: { points: { priority: global.priority_poi_restaurant } }
+                cafe:
+                    exclusive: true
+                    filter:
+                        - amenity: [cafe, ice_cream]
+                        - shop: [beverages, confectionery, bakery, pastry]
+                    draw: { points: { priority: global.priority_poi_cafe } }
+                grocery:
+                    exclusive: true
+                    filter: { shop: supermarket }
+                    draw: { points: { priority: global.priority_poi_grocery } }
+                convenience:
+                    exclusive: true
+                    filter: { shop: [convenience, greengrocer, deli, delicatessen, butcher, farm] }
+                    draw: { points: { priority: global.priority_poi_convenience } }
+                culture:
+                    exclusive: true
+                    filter:
+                        - amenity: [cinema, theatre, concert_hall, arts_centre, library]
+                        - tourism: museum
+                    draw: { points: { priority: global.priority_poi_culture } }
+                church:
+                    exclusive: true
+                    filter: { amenity: place_of_worship }
+                    draw: { points: { visible: false, priority: global.priority_poi_religion } }
+                    show:
+                        filter: { $zoom: { min: 16 } }
+                        draw: { points: { visible: true } }
+                toilet:
+                    exclusive: true
+                    filter: { amenity: [drinking_water, water_point, toilets] }
+                    draw: { points: { visible: false, priority: global.priority_poi_toilet } }
+                    show:
+                        filter: { $zoom: { min: 18 } }
+                        draw: { points: { visible: true } }
+
+    boundaries:
+        data: { source: osm, layer: boundary }
+        draw:
+            lines:
+                visible: false
+                order: 3
+                width: 2px
+                color: global.color.border
+
+            text:
+                priority: global.priority_boundary
+                text_source:
+                    left: 'adm0_l'
+                    right: 'adm0_r'
+                font:
+                    family: Open Sans
+                    size: 12px
+                    fill: global.color.place_name
+                    stroke: { color: global.color.place_halo, width: 4 }
+                    transform: uppercase
+                    weight: bold
+
+        country:
+            filter: { admin_level: 2 }
+            draw:
+                lines:
+                    visible: true
+                    color: global.color.border_country
+
+        region:
+            filter: { admin_level: [3, 4] }
+            draw:
+                lines:
+                    visible: true
+
+    places:
+        data: { source: osm, layer: place }
+
+        continents:
+            filter: { class: continent, $geometry: point }
+            draw:
+                text:
+                    priority: global.priority_continent
+                    font:
+                        family: Open Sans
+                        size: 12px
+                        fill: global.color.place_name
+                        stroke: { color: global.color.place_halo, width: 4 }
+                        transform: uppercase
+
+        # city labels with points - there may be some strange behavior due to proxy tiles w/ z < 9 when
+        #  tiles with z >= 9 are missing
+        city-points:
+            filter:
+                class: city
+                $zoom: { max: 9 }
+            draw:
+                points:
+                    size: 6px
+                    color: global.color.city_point
+                    #collide: false
+                    interactive: true
+                    outline: { color: global.color.city_point_halo, width: 1px }
+                    text:
+                        priority: global.priority_place_fn
+                        #collide: true
+                        #optional: false
+                        interactive: true
+                        font:
+                            family: Open Sans
+                            fill: global.color.place_name
+                            stroke: { color: global.color.place_halo, width: 4 }
+                            #transform: uppercase
+                            weight: bold
+                            size: [[8, 10px], [12, 16px]]
+            city-100k:
+                filter: { population: { min: 100000, max: 500000 } }
+                draw: { points: { text: { font: { size: [[8, 12px], [12, 18px]] } } } }
+            city-500k:
+                filter: { population: { min: 500000 } }
+                draw: { points: { text: { font: { size: [[8, 14px], [12, 20px]] } } } }
+
+
+        # places w/text-only labels (not accompanying point)
+        text-only:
+            draw:
+                text:
+                    visible: false
+                    interactive: true
+                    priority: global.priority_place_fn
+                    font:
+                        family: Open Sans
+                        size: 12px
+                        fill: global.color.place_name
+                        stroke: { color: global.color.place_halo, width: 4 }
+                        #transform: uppercase
+
+            countries:
+                exclusive: true
+                filter:
+                    class: country
+                    any:
+                        - { population: { min: 100000000 } }
+                        - { $zoom: { min: 5, max: 8 }, population: { min: 1000000 } }
+                        # - population: { min: 10000000 }
+                draw: { text: { visible: true, font: { weight: bold, size: [[6, 14px], [8, 20px]] } } }
+
+            regions:
+                exclusive: true
+                filter:
+                    class: [state, province]
+                    $zoom: { min: 5, max: 9 }
+                draw: { text: { visible: true, font: { size: [[6, 12px], [8, 16px]] } } }
+                # use short name when available at low-zooms
+                short:
+                    filter: { $zoom: { max: 7 } }
+                    draw: { text: { text_source: 'name:short' } }
+
+            cities:
+                exclusive: true
+                filter:
+                    class: [city, town, village, suburb, hamlet]
+                    $zoom: { min: 9 } # show city point labels below z11
+                city:
+                    filter: { class: city, $zoom: { min: 9, max: 14 } }
+                    draw: { text: { visible: true, font: { weight: bold, size: [[8, 10px], [12, 16px]] } } }
+                    city-100k:
+                        filter: { population: { min: 100000, max: 500000 } }
+                        draw: { text: { font: { size: [[8, 12px], [12, 18px]] } } }
+                    city-500k:
+                        filter: { population: { min: 500000 } }
+                        draw: { text: { font: { size: [[8, 14px], [12, 20px]] } } }
+                town:
+                    filter: { class: town, $zoom: { min: 9, max: 14 } }
+                    draw: { text: { visible: true, font: { size: [[8, 10px], [12, 14px]] } } }
+                village:
+                    filter: { class: village, $zoom: { min: 10, max: 15 } }
+                    draw: { text: { visible: true, font: { size: [[8, 9px], [12, 12px]] } } }
+                hamlet:
+                    filter: { class: [suburb, hamlet], $zoom: { min: 13, max: 15 } }
+                    draw: { text: { visible: true, font: { size: [[8, 8px], [12, 10px]] } } }
+
+            neighborhoods:
+                exclusive: true
+                filter:
+                    - { class: [neighbourhood, quarter], $zoom: { min: 13 } }
+                    #- { class: microhood, $zoom: { min: 15 } }
+                draw:
+                    text:
+                        priority: global.priority_neighborhood
+                        visible: true
+                        interactive: false
+                        font:
+                            size: [[13, 11px], [14, 11px], [15, 13px]]
+                            style: italic
+                            fill: global.color.hood_name
+                            stroke: { color: global.color.hood_halo }
+                            transform: uppercase

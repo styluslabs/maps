@@ -1,0 +1,270 @@
+global:
+    poi_icons:
+        tourism: { "viewpoint": "viewpoint", "camp_site": "campground", "information": "information",
+          "museum": "museum", "hotel": "hotel", "motel": "hotel", "hostel": "hotel", "guest_house": "hotel",
+          "bed_and_breakfast": "hotel", "chalet": "hotel", "alpine_hut": "hotel", "attraction": "attraction",
+          "artwork": "artwork", "gallery": "shop", "wikipedia": wikipedia }
+        historic: { "monument": "artwork" }
+        leisure: { "fitness_centre": "gym", "sports_centre": "gym", "park": "tree", "golf_course": "golf" }
+        amenity: { "parking": "parking", "bicycle_rental": "bike_shop", "university": "university",
+          "school": "university", "college": "university", "kindergarten": "university", "restaurant": "restaurant",
+          "fast_food": "restaurant", "food_court": "restaurant", "ice_cream": "restaurant", "cafe": "cafe",
+          "pharmacy": "pharmacy", "bar": "bar", "pub": "bar", "nightclub": "bar", "library": "library",
+          "cinema": "theatre", "theatre": "theatre", "concert_hall": "theatre", "arts_centre": "theatre",
+          "place_of_worship": "church", "bank": "bank", "hospital": "hospital", "clinic": "doctor",
+          "doctors": "doctor", "fuel": "fuel", "dentist": "dentist", "toilets": "toilet",
+          "drinking_water": "drinking_water", "water_point": "drinking_water" }
+        shop: { "beverages": "cafe", "confectionery": "cafe", "bakery": "bakery", "pastry": "bakery",
+          "supermarket": "grocery", "convenience": "convenience", "greengrocer": "convenience", "deli": "convenience",
+          "delicatessen": "convenience", "butcher": "convenience", "farm": "convenience", "alcohol": "liquor",
+          "wine": "liquor", "clothes": "clothes", "tailor": "clothes", "fashion_accessories": "clothes",
+          "shoes": "clothes", "fashion": "clothes", "hardware": "hardware", "doityourself": "hardware",
+          "bicycle": "bike_shop", "chemist": "pharmacy", "car_repair": "auto_repair", "laundry": "laundry",
+          "dry_cleaning": "laundry", "hairdresser": "scissor", "beauty": "scissor" }
+        railway: { "station": "train", "tram_stop": "tram" }
+        station: { "light_rail": "tram" }
+
+    poi_type: { "viewpoint": "public", "campground": "public", "information": "public", "parking": "public", "toilet": "public", "drinking_water": "public", "artwork": "culture", "museum": "culture", "attraction": "culture", "university": "culture", "library": "culture", "theatre": "culture", "church": "culture", "shop": "shop", "bike_shop": "shop", "pharmacy": "shop", "fuel": "shop", "grocery": "shop", "convenience": "shop", "liquor": "shop", "clothes": "shop", "hardware": "shop", "gym": "service", "bank": "service", "dentist": "service", "auto_repair": "service", "laundry": "service", "scissor": "service", "restaurant": "food", "cafe": "food", "bar": "food", "bakery": "food", "hospital": "medical", "doctor": "medical", "hotel": "lodging", "tree": "outdoor", "golf": "outdoor" }
+
+    poi_color:
+        public: "#1A73E8"
+        culture: "#12B5CB"
+        lodging: "#F06292"
+        shop: "#5491F5"
+        service: "#9398DD"
+        food: "#F68C30"
+        medical: "#EE675C"
+        outdoor: "#34A853"
+        generic: "#78909C"
+
+    poi_color_fn: function() { return global.poi_color[global.poi_type[global.poi_sprite_fn()]] || global.poi_color.generic; }
+
+    poi_sprite_fn: |
+        function()
+        {
+          const t = global.poi_icons;
+          return t.tourism[feature.tourism] || t.leisure[feature.leisure] || t.amenity[feature.amenity] ||
+              t.historic[feature.historic] || t.shop[feature.shop] || (feature.shop ? "shop" : "");
+        }
+
+
+textures:
+    pois:
+        url: img/pois.svg
+        density: 2
+        # sprites set from svg ids
+
+    pick-marker:
+        density: 2
+        url: |
+            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24">
+              <g fill="#CF513D" stroke="#000" stroke-opacity="0.2" stroke-width="1" stroke-alignment="inner">
+                <path d="M5 8c0-3.517 3.271-6.602 7-6.602s7 3.085 7 6.602c0 3.455-2.563 7.543-7 14.527-4.489-7.073-7-11.072-7-14.527"/>
+              </g>
+            </svg>
+
+    bookmark-marker:
+        density: 2
+        url: |
+            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24">
+              <g fill="#FF0000" stroke="none" stroke-opacity="0.2" stroke-width="1" stroke-alignment="inner">
+                <path d="M5 8c0-3.517 3.271-6.602 7-6.602s7 3.085 7 6.602c0 3.455-2.563 7.543-7 14.527-4.489-7.073-7-11.072-7-14.527"/>
+              </g>
+            </svg>
+
+
+styles:
+    loc-points:
+        base: points
+        blend_order: 1000
+
+    poi-points:
+        base: points
+        # make sure this is drawn over search dots
+        blend_order: 1
+        shaders:
+            #defines: { DEST_COLOR: vec3(0.812,0.318,0.239) } # #CF513D
+            blocks:  # see core/shaders/point.fs to see how this is used
+                global: |
+                    #ifdef TANGRAM_FRAGMENT_SHADER
+                    #define TANGRAM_CUSTOM_MAIN
+                    void main()
+                    {
+                      vec4 tex = texture2D(u_tex, v_texcoords);
+                      float bg = tex.r;
+                      float icon = tex.g;
+                      vec4 color = icon*vec4(1.0) + (1.0-icon)*(bg*v_color);  //icon*v_outline_color?
+                      color.a *= v_alpha;
+                      gl_FragColor = color;
+                    }
+                    #endif
+
+
+layers:
+    pick-marker:
+        draw:
+            marker:
+                style: points
+                texture: pick-marker
+                size: 32px
+                interactive: true
+                #collide: false
+                # this indicates all colliding labels should be hidden immediately (see labelManager.cpp)
+                transition: { selected: { time: 1s } }
+                priority: -1  #'function() { return feature.priority; }'
+                offset: [0px, -11px]
+                text:
+                    text_source: name
+                    anchor: [right, left, bottom, top]
+                    #collide: true
+                    #optional: true
+                    max_lines: 2
+                    offset: [0px, -11px]
+                    font:
+                        family: Open Sans
+                        weight: 600
+                        size: 12px
+                        fill: black
+                        stroke: { color: white, width: 2px }
+
+    bookmark-marker:
+        draw:
+            marker:
+                style: poi-points
+                texture: bookmark-marker
+                size: 26px
+                interactive: true
+                collide: true
+                color: function() { return feature.color || '#12B5CB'; }
+                priority: 'function() { return (1+feature.priority)/1E6; }'
+                offset: [0px, -11px]
+                text:
+                    text_source: name
+                    anchor: [right, left, bottom, top]
+                    collide: true
+                    optional: true
+                    max_lines: 2
+                    offset: [0px, -11px]
+                    font:
+                        family: Open Sans
+                        weight: 600
+                        size: 12px
+                        fill: black
+                        stroke: { color: white, width: 2px }
+
+    search-marker:
+        draw:
+            marker:
+                style: poi-points
+                texture: pois
+                sprite: global.poi_sprite_fn
+                sprite_default: generic
+                color: "#CF513D"
+                size: [[13, 16px], [15, 20px]]
+                interactive: true
+                collide: true
+                priority: 'function() { return (1+feature.priority)/1E6; }'
+                text:
+                    text_source: name
+                    anchor: [right, left, bottom, top]
+                    collide: true
+                    optional: true
+                    max_lines: 2
+                    font:
+                        family: Open Sans
+                        weight: 600
+                        size: 12px
+                        fill: black
+                        stroke: { color: white, width: 2px }
+
+    search-dot:
+        draw:
+            marker:
+                style: points
+                collide: false
+                size: 6px
+                color: "#CF513D"
+                outline:
+                    width: 1px
+                    color: "#9A291D"
+
+    loc-marker:
+        draw:
+            marker:
+                style: loc-points
+                interactive: true
+                collide: false
+                size: 18px
+                color: "#0000FF"
+                priority: -1000
+                outline:
+                    width: 2px
+                    color: "#FFFFFF"
+
+    waypoint:
+        draw:
+            marker:
+                style: poi-points
+                texture: bookmark-marker
+                size: 26px
+                interactive: true
+                collide: true
+                color: function() { return feature.color || '#12B5CB'; }
+                priority: 'function() { return (1+feature.priority)/1E6; }'
+                offset: [0px, -11px]
+                text:
+                    text_source: name
+                    anchor: [right, left, bottom, top]
+                    collide: true
+                    optional: true
+                    max_lines: 2
+                    offset: [0px, -11px]
+                    font:
+                        family: Open Sans
+                        weight: 600
+                        size: 12px
+                        fill: black
+                        stroke: { color: white, width: 2px }
+
+    track-marker:
+        draw:
+            marker:
+                style: points
+                interactive: true
+                collide: false
+                size: 12px
+                color: function() { return feature.color || '#0000FF'; }
+                outline:
+                    width: 1px
+                    #color: "#9A291D"
+                    color: white
+
+    track:
+        draw:
+            track:
+                style: lines
+                interactive: true
+                color: function() { return feature.color || '#0000FF'; }
+                width: 2px
+                order: 5000
+
+    selected-track:
+        draw:
+            track:
+                style: lines
+                interactive: true
+                color: function() { return feature.color || '#0000FF'; }
+                width: 2px
+                order: 5000
+                outline:
+                    width: 2px
+                    color: white
+
+    recording-track:
+        draw:
+            track:
+                style: lines
+                interactive: true
+                color: function() { return feature.color || '#FF0000'; }
+                width: 4px
+                order: 5000
