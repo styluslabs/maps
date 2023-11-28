@@ -91,7 +91,7 @@ public:
   std::unique_ptr<MapsSearch> mapsSearch;
   std::unique_ptr<PluginManager> pluginManager;
 
-  std::unique_ptr<Map> map;
+  Map* map;
   std::unique_ptr<Painter> painter;
   std::unique_ptr<Window> win;
 
@@ -104,6 +104,7 @@ public:
   bool popPanel();
   void addPlaceInfo(const char* icon, const char* title, const char* value);
   void dumpTileContents(float x, float y);
+  bool drawFrame(int fbWidth, int fbHeight);
 
   Splitter* panelSplitter = NULL;
   Widget* panelSeparator = NULL;
@@ -143,6 +144,7 @@ public:
   static bool metricUnits;
   static std::vector<Color> markerColors;
   static ThreadSafeQueue< std::function<void()> > taskQueue;
+  static std::thread::id mainThreadId;
   static bool runApplication;
 
 private:

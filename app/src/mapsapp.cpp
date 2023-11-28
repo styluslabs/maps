@@ -2,7 +2,6 @@
 #include "tangram.h"
 #include "scene/scene.h"
 #include "util.h"
-#include "glm/common.hpp"
 #include "pugixml.hpp"
 #include "rapidjson/document.h"
 #include <sys/stat.h>
@@ -24,6 +23,7 @@
 #include "usvg/svgpainter.h"
 #include "usvg/svgparser.h"
 #include "mapwidgets.h"
+#include "resources.h"
 
 #if !defined(DEBUG) && !defined(NDEBUG)
 #error "One of DEBUG or NDEBUG must be defined!"
@@ -36,9 +36,21 @@ std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
 sqlite3* MapsApp::bkmkDB = NULL;
 std::vector<Color> MapsApp::markerColors;
-
+SvgGui* MapsApp::gui = NULL;
+bool MapsApp::runApplication = true;
+ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
+std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
 
+void MapsApp::runOnMainThread(std::function<void()> fn)
+{
+  if(std::this_thread::get_id() == mainThreadId)
+    fn();
+  else {
+    taskQueue.push_back(std::move(fn));
+    PLATFORM_WakeEventLoop();
+  }
+}
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 {
@@ -1029,7 +1041,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   floatToolbar->setMargins(0, 10, 10, 0);
   mapsPanel->addWidget(floatToolbar);
 
-  ScaleBarWidget* scaleBar = new ScaleBarWidget(map.get());
+  ScaleBarWidget* scaleBar = new ScaleBarWidget(map);
   scaleBar->node->setAttribute("box-anchor", "bottom left");
   scaleBar->setMargins(0, 0, 10, 10);
   mapsPanel->addWidget(scaleBar);
@@ -1239,111 +1251,6 @@ void MapsApp::messageBox(std::string title, std::string message,
   gui->showModal(dialog, gui->windows.front()->modalOrSelf());
 }
 
-
-#if 1  //PLATFORM_DESKTOP
-#include "ugui/svggui_platform.h"
-#include "usvg/svgparser.h"
-#include "usvg/svgwriter.h"
-#include "ulib/platformutil.h"
-
-//#define GLFW_INCLUDE_NONE
-#define GLFW_INCLUDE_GLEXT
-#define GL_GLEXT_PROTOTYPES
-#include "ugui/example/glfwSDL.h"
-#define NVG_LOG PLATFORM_LOG
-#define USE_NVG_GL 1
-#if USE_NVG_GL
-#define NANOVG_GL3_IMPLEMENTATION
-#include "nanovg-2/src/nanovg_vtex.h"
-#include "nanovg-2/src/nanovg_gl_utils.h"
-#endif
-#define NANOVG_SW_IMPLEMENTATION
-#define NVGSWU_GLES2
-#define NVGSW_QUIET_FRAME  // suppress axis-aligned scissor warning
-#include "nanovg-2/src/nanovg_sw.h"
-#include "nanovg-2/src/nanovg_sw_utils.h"
-
-#include "../linux/src/linuxPlatform.h"
-
-
-SvgGui* MapsApp::gui = NULL;
-bool MapsApp::runApplication = true;
-
-// String resources:
-typedef std::unordered_map<std::string, const char*> ResourceMap;
-static ResourceMap resourceMap;
-
-static void addStringResources(std::initializer_list<ResourceMap::value_type> values)
-{
-  resourceMap.insert(values);
-}
-
-const char* getResource(const std::string& name)
-{
-  auto it = resourceMap.find(name);
-  return it != resourceMap.end() ? it->second : NULL;
-}
-
-static std::string uiIconStr;
-
-// SVG for icons
-//#define LOAD_RES_FN loadIconRes
-//#include "scribbleres/res_icons.cpp"
-
-#include "ugui/theme.cpp"
-
-static const char* moreCSS = R"#(
-.listitem.checked { fill: var(--checked); }
-.legend text { fill: inherit; }
-)#";
-
-static const char* moreWidgetSVG = R"#(
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <g id="listitem-icon" class="image-container" margin="2 5">
-    <use class="listitem-icon icon" width="36" height="36" xlink:href=""/>
-  </g>
-
-  <g id="listitem-text-2" layout="box" box-anchor="fill">
-    <text class="title-text" box-anchor="hfill" margin="0 10"></text>
-    <text class="note-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
-  </g>
-
-  <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
-    <use class="panel-icon icon" width="36" height="36" xlink:href="" />
-    <text class="panel-title" box-anchor="hfill" margin="0 9"></text>
-  </g>
-</svg>
-)#";
-
-ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
-static std::thread::id mainThreadId;
-
-void MapsApp::runOnMainThread(std::function<void()> fn)
-{
-  if(std::this_thread::get_id() == mainThreadId)
-    fn();
-  else {
-    taskQueue.push_back(std::move(fn));
-    glfwPostEmptyEvent();
-  }
-}
-
-void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
-void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
-
-void glfwSDLEvent(SDL_Event* event)
-{
-  event->common.timestamp = SDL_GetTicks();
-  if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
-    SvgGui::debugLayout = true;
-  else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)
-    SvgGui::debugDirty = !SvgGui::debugDirty;
-  else if(std::this_thread::get_id() != mainThreadId)
-    MapsApp::runOnMainThread([_event = *event](){ glfwSDLEvent((SDL_Event*)&_event); });
-  else
-    MapsApp::gui->sdlEvent(event);
-}
-
 SvgNode* MapsApp::uiIcon(const char* id)
 {
   SvgNode* res = SvgGui::useFile(":/ui-icons.svg")->namedNode(id);
@@ -1377,82 +1284,6 @@ bool MapsApp::openURL(const char* url)
 #endif
 }
 
-#if PLATFORM_DESKTOP
-void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn_t callback)
-{
-  nfdchar_t* outPath;
-  nfdresult_t result = NFD_OpenDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL);
-  if(result == NFD_OKAY)
-    callback(outPath);
-}
-#endif
-
-void MapsApp::initResources()
-{
-  Painter::loadFont("sans", FSPath(baseDir, "scenes/fonts/roboto-regular.ttf").c_str());
-  if(Painter::loadFont("fallback", FSPath(baseDir, "scenes/fonts/DroidSansFallback.ttf").c_str()))
-    Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback
-
-  // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
-  SvgParser::openStream = [](const char* name) -> std::istream* {
-    if(name[0] == ':' && name[1] == '/') {
-      const char* res = getResource(name + 2);
-      if(res)
-        return new std::istringstream(res);
-      name += 2;  //return new std::ifstream(PLATFORM_STR(FSPath(basepath, name+2).c_str()), std::ios_base::in | std::ios_base::binary);
-    }
-    return new std::ifstream(PLATFORM_STR(name), std::ios_base::in | std::ios_base::binary);
-  };
-
-  //loadIconRes();
-  // we could just use SvgGui::useFile directly; presumably, ui-icons will eventually be embedded in exe
-  uiIconStr = readFile("/home/mwhite/maps/tangram-es/app/res/ui-icons.svg");
-  addStringResources({{"ui-icons.svg", uiIconStr.c_str()}});
-
-  SvgCssStylesheet* styleSheet = new SvgCssStylesheet;
-  styleSheet->parse_stylesheet(defaultColorsCSS);
-  styleSheet->parse_stylesheet(defaultStyleCSS);
-  styleSheet->parse_stylesheet(moreCSS);
-  styleSheet->sort_rules();
-  SvgDocument* widgetDoc = SvgParser().parseString(defaultWidgetSVG);
-
-  std::unique_ptr<SvgDocument> moreWidgets(SvgParser().parseString(moreWidgetSVG));
-  for(SvgNode* node : moreWidgets->children())
-    widgetDoc->addChild(node);
-  moreWidgets->children().clear();
-
-  widgetDoc->removeChild(widgetDoc->selectFirst("defs"));
-  SvgDefs* defs = new SvgDefs;
-  defs->addChild(uiIcon("chevron-down")->clone());
-  defs->addChild(uiIcon("chevron-left")->clone());
-  defs->addChild(uiIcon("chevron-right")->clone());
-  widgetDoc->addChild(defs, widgetDoc->firstChild());
-
-  setGuiResources(widgetDoc, styleSheet);
-  gui = new SvgGui();
-  gui->fullRedraw = USE_NVG_GL;  // see below
-  // scaling
-  gui->paintScale = 2.0;  //210.0/150.0;
-  gui->inputScale = 1/gui->paintScale;
-  nvgAtlasTextThreshold(Painter::sharedVg, 24 * gui->paintScale);  // 24px font is default for dialog titles
-
-  // preset colors for tracks and bookmarks
-  for(const auto& colorstr : config["colors"])
-    markerColors.push_back(parseColor(colorstr.Scalar()));
-
-  // DB setup
-  FSPath dbPath(baseDir, "places.sqlite");
-  if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
-    logMsg("Error creating %s", dbPath.c_str());
-    sqlite3_close(bkmkDB);
-    bkmkDB = NULL;
-  }
-  else {
-    if(sqlite3_create_function(bkmkDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
-      LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
-  }
-}
-
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)
 void MapsApp::saveConfig()
@@ -1475,6 +1306,9 @@ void MapsApp::saveConfig()
   fs.write(emitter.c_str(), emitter.size());
 }
 
+#define USE_NVG_GL 1
+#include "nanovg-2/src/nanovg_vtex.h"
+
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
   runApplication = true;
@@ -1483,7 +1317,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 
   int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
   //int nvglFBFlags = NVG_IMAGE_SRGB;
-#if USE_NVG_GL
+#if USE_NVG_GL  //ndef NO_PAINTER_GL
   NVGcontext* nvgContext = nvglCreate(nvgFlags);
   //NVGLUframebuffer* nvglFB = nvgluCreateFramebuffer(nvgContext, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
   //nvgluSetFramebufferSRGB(1);  // no-op for GLES - sRGB enabled iff FB is sRGB
@@ -1498,10 +1332,33 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   painter.reset(new Painter(Painter::sharedVg));
   SvgPainter boundsPaint(painter.get());
   SvgDocument::sharedBoundsCalc = &boundsPaint;
-  initResources();
+  initResources(baseDir.c_str());
+
+  gui = new SvgGui();
+  gui->fullRedraw = USE_NVG_GL;  // see below
+  // scaling
+  gui->paintScale = 2.0;  //210.0/150.0;
+  gui->inputScale = 1/gui->paintScale;
+  nvgAtlasTextThreshold(Painter::sharedVg, 24 * gui->paintScale);  // 24px font is default for dialog titles
+
+  // preset colors for tracks and bookmarks
+  for(const auto& colorstr : config["colors"])
+    markerColors.push_back(parseColor(colorstr.Scalar()));
+
+  // DB setup
+  FSPath dbPath(baseDir, "places.sqlite");
+  if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+    logMsg("Error creating %s", dbPath.c_str());
+    sqlite3_close(bkmkDB);
+    bkmkDB = NULL;
+  }
+  else {
+    if(sqlite3_create_function(bkmkDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
+      LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
+  }
 
   platform = _platform;
-  map.reset(new Tangram::Map(std::unique_ptr<Platform>(_platform)));
+  map = new Tangram::Map(std::unique_ptr<Platform>(_platform));
 
   // make sure cache folder exists
   mkdir(FSPath(baseDir, "cache").c_str(), 0777);
@@ -1576,6 +1433,7 @@ MapsApp::~MapsApp()
   nvgswuDeleteBlitter(swBlitter);
   nvgswDelete(Painter::sharedVg);
 #endif
+  delete map;
 }
 
 bool MapsApp::drawFrame(int fbWidth, int fbHeight)
@@ -1645,210 +1503,4 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
       int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
 #endif
   return true;
-}
-
-int main(int argc, char* argv[])
-{
-#if PLATFORM_WIN
-  SetProcessDPIAware();
-  winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
-#endif
-
-  // config
-  MapsApp::baseDir = "./";  //"/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
-  FSPath configPath(MapsApp::baseDir, "config.yaml");
-  MapsApp::configFile = configPath.c_str();
-  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
-      : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
-
-  // command line args
-  const char* sceneFile = NULL;  // -f scenes/scene-omt.yaml
-  for(int argi = 1; argi < argc-1; argi += 2) {
-    YAML::Node node;
-    if(strcmp(argv[argi], "-f") == 0)
-      sceneFile = argv[argi+1];
-    else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
-      node = argv[argi+1];
-    else
-      LOGE("Unknown command line argument: %s", argv[argi]);
-  }
-
-  if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
-#if USE_NVG_GL
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
-#endif
-  glfwWindowHint(GLFW_SAMPLES, MapsApp::config["msaa_samples"].as<int>(2));
-  glfwWindowHint(GLFW_STENCIL_BITS, 8);
-
-  GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "Maps (DEBUG)", NULL, NULL);
-  if(!glfwWin) { PLATFORM_LOG("glfwCreateWindow failed.\n"); return -1; }
-  glfwSDLInit(glfwWin);  // setup event callbacks
-
-  glfwMakeContextCurrent(glfwWin);
-  glfwSwapInterval(0);  //1); // Enable vsync
-  glfwSetTime(0);
-  //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-  const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-  SvgLength::defaultDpi = std::max(mode->width, mode->height)/11.2;
-
-  // library for native file dialogs - https://github.com/btzy/nativefiledialog-extended
-  // alternatives:
-  // - https://github.com/samhocevar/portable-file-dialogs (no GTK)
-  // - https://sourceforge.net/projects/tinyfiledialogs (no GTK)
-  // - https://github.com/Geequlim/NativeDialogs - last commit 2018
-  NFD_Init();
-
-
-  MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
-
-
-  app->createGUI((SDL_Window*)glfwWin);
-
-  // fake location updates to test track recording
-  auto locFn = [&](){
-    real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
-    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0});
-  };
-
-  Timer* locTimer = NULL;
-  app->win->addHandler([&](SvgGui*, SDL_Event* event){
-    if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
-      MapsApp::runApplication = false;
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_INSERT) {
-      if(locTimer) {
-        app->gui->removeTimer(locTimer);
-        locTimer = NULL;
-      }
-      else
-        locTimer = app->gui->setTimer(2000, app->win.get(), [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
-    }
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
-      app->pluginManager->reload(MapsApp::baseDir + "plugins");
-      app->loadSceneFile();  // reload scene
-      app->mapsSources->sceneVarsLoaded = false;
-    }
-    return false;
-  });
-
-  app->mapsOffline->resumeDownloads();
-
-  if(sceneFile) {
-    Url baseUrl("file:///");
-    char pathBuffer[PATH_MAX] = {0};
-    if (getcwd(pathBuffer, PATH_MAX) != nullptr) {
-        baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
-    }
-    app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();
-    app->loadSceneFile();
-  }
-  else
-    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
-
-  // Alamo square
-  app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, 0, 0, 0, 0});
-
-  while(MapsApp::runApplication) {
-    app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
-
-    int fbWidth = 0, fbHeight = 0;
-    glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);  //SDL_GL_GetDrawableSize((SDL_Window*)glfwWin, &fbWidth, &fbHeight);
-
-    if(app->drawFrame(fbWidth, fbHeight))
-      glfwSwapBuffers(glfwWin);
-
-    if(SvgGui::debugLayout) {
-      XmlStreamWriter xmlwriter;
-      SvgWriter::DEBUG_CSS_STYLE = true;
-      SvgWriter(xmlwriter).serialize(app->win->modalOrSelf()->documentNode());
-      SvgWriter::DEBUG_CSS_STYLE = false;
-      xmlwriter.saveFile("debug_layout.svg");
-      PLATFORM_LOG("Post-layout SVG written to debug_layout.svg\n");
-      SvgGui::debugLayout = false;
-    }
-  }
-
-  app->onSuspend();
-  delete app;
-
-  NFD_Quit();
-  glfwTerminate();
-  return 0;
-}
-#endif
-
-// rasterizing SVG markers (previous nanosvg impl removed 2023-08-13)
-
-namespace Tangram {
-
-bool userLoadSvg(char* svg, Texture* texture)
-{
-  std::unique_ptr<SvgDocument> doc(SvgParser().parseString(svg));
-  if(!doc) return false;
-
-  Painter boundsPaint(NULL);
-  SvgPainter boundsCalc(&boundsPaint);
-  doc->boundsCalculator = &boundsCalc;
-
-  if(doc->hasClass("reflow-icons")) {
-    real pad = doc->hasClass("reflow-icons-pad") ? 2 : 0;
-    size_t nicons = doc->children().size();
-    int nside = int(std::sqrt(nicons) + 0.5);
-    int ii = 0;
-    real rowheight = 0;
-    SvgDocument* prev = NULL;
-    for(SvgNode* child : doc->children()) {
-      if(child->type() != SvgNode::DOC) continue;
-      auto childdoc = static_cast<SvgDocument*>(child);
-      if(prev) {
-        childdoc->m_x = ii%nside ? prev->m_x + prev->width().px() + pad : 0;
-        childdoc->m_y = ii%nside ? prev->m_y : prev->m_y + rowheight;
-        //childdoc->invalidate(false); ... shouldn't be necessary
-      }
-      real h = childdoc->height().px() + pad;
-      rowheight = ii%nside ? std::max(rowheight, h) : h;
-      prev = childdoc;
-      ++ii;
-    }
-    Rect b = doc->bounds();
-    doc->setWidth(b.width());
-    doc->setHeight(b.height());
-  }
-
-  int w = int(doc->width().px() + 0.5), h = int(doc->height().px() + 0.5);
-  Image img(w, h);
-  // this fn will be run on a thread if loading scene async, so we cannot use shared nvg context
-  NVGcontext* drawCtx = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_SRGB | NVGSW_PATHS_XC);
-  {
-    Painter painter(&img, drawCtx);
-    painter.setBackgroundColor(::Color::INVALID_COLOR);
-    painter.beginFrame();
-    painter.translate(0, h);
-    painter.scale(1, -1);
-    SvgPainter(&painter).drawNode(doc.get());  //, dirty);
-    painter.endFrame();
-  }
-  nvgswDelete(drawCtx);
-
-  auto atlas = std::make_unique<SpriteAtlas>();
-  bool hasSprites = false;
-  for(auto pair : doc->m_namedNodes) {
-    if(pair.second->type() != SvgNode::DOC) continue;
-    hasSprites = true;
-    Rect b = pair.second->bounds();
-    glm::vec2 pos(b.left, b.top);
-    glm::vec2 size(b.width(), b.height());
-    atlas->addSpriteNode(pair.first.c_str(), pos, size);
-  }
-  if(hasSprites)
-    texture->setSpriteAtlas(std::move(atlas));
-  texture->setPixelData(w, h, 4, img.bytes(), img.dataLen());
-  return true;
-}
-
 }

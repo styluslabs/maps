@@ -11,7 +11,6 @@
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 #include "mapwidgets.h"
-#include "nfd.hpp"  // file dialogs
 
 #include "offlinemaps.h"
 

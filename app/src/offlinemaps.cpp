@@ -14,7 +14,6 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
-#include "nfd.h"
 
 #include "mapsources.h"
 #include "mapwidgets.h"

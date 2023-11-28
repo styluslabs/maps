@@ -4,7 +4,9 @@
 #include <EGL/eglext.h>
 
 #include "mapsapp.h"
-#include "touchhandler.h"
+//#include "touchhandler.h"
+#include "offlinemaps.h"
+#include "mapsources.h"
 #include "AndroidPlatform.h"
 #include "JniHelpers.h"
 #include "JniThreadBinding.h"
@@ -306,7 +308,8 @@ static jmethodID getClipboardMID = nullptr;
 static jmethodID setClipboardMID = nullptr;
 static jmethodID openFileMID = nullptr;
 
-void PLATFORM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
+// since Android event loop waits on MapsApp::taskQueue, no need for PLATFORM_WakeEventLoop
+void PLATFORM_WakeEventLoop() {}
 void TANGRAM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
 
 struct SDL_Window
@@ -381,15 +384,20 @@ void SDL_GetWindowSize(SDL_Window* win, int* w, int* h) //{ SDL_GL_GetDrawableSi
 }
 void SDL_GetWindowPosition(SDL_Window* win, int* x, int* y) { *x = 0; *y = 0; }
 void SDL_DestroyWindow(SDL_Window* win) {}
-SDL_Window* SDL_GetWindowFromID(Uint32 id) { return (SDL_Window*)mainWindow; }
+SDL_Window* SDL_GetWindowFromID(Uint32 id) { return MapsApp::gui->windows.front()->sdlWindow; }
 
-int SDL_PushEvent(SDL_Event* event) { MapsApp::gui->sdlEvent(event); return 1; }
+int SDL_PushEvent(SDL_Event* event)
+{
+  SDL_Event _event = *event;
+  MapsApp::runOnMainThread([_event]() mutable { MapsApp::gui->sdlEvent(&_event); });
+  return 1;
+}
 
 int SDL_PeepEvents(SDL_Event* events, int numevents, SDL_eventaction action, Uint32 minType, Uint32 maxType)
 {
   if(action != SDL_ADDEVENT) return 0;
   for(int ii = 0; ii < numevents; ++ii)
-    MapsApp::gui->sdlEvent(&events[ii]);
+    MapsApp::runOnMainThread([_event = events[ii]]() mutable { MapsApp::gui->sdlEvent(&_event); });
   return numevents;
 }
 
