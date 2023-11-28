@@ -1,5 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 
 #include "mapsapp.h"
 #include "touchhandler.h"
@@ -292,11 +294,169 @@ static SDL_Scancode Android_Keycodes[] = {
     SDL_SCANCODE_PASTE, /* AKEYCODE_PASTE */
 };
 
+
 static MapsApp* app = NULL;
+
+static std::thread mainThread;
 
 static jobject mapsActivityRef = nullptr;
 static jmethodID showTextInputMID = nullptr;
 static jmethodID hideTextInputMID = nullptr;
+static jmethodID getClipboardMID = nullptr;
+static jmethodID setClipboardMID = nullptr;
+
+void PLATFORM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
+void TANGRAM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
+
+struct SDL_Window
+{
+  EGLDisplay eglDisplay;
+  EGLSurface eglSurface;
+};
+
+Uint32 SDL_GetTicks()
+{
+  static Timestamp t0 = mSecSinceEpoch();
+  return mSecSinceEpoch() - t0;
+}
+
+char* SDL_GetClipboardText()
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+
+  auto jtext = (jstring)(jniEnv->CallObjectMethod(mapsActivityRef, getClipboardMID));
+  const char* text = jniEnv->GetStringUTFChars(jtext, 0);
+  char* out = NULL;
+  if(text && text[0]) {
+    out = (char*)malloc(strlen(text)+1);  // caller frees w/ SDL_free()
+    strcpy(out, text);
+  }
+  jniEnv->ReleaseStringUTFChars(jtext, text);
+  return out;
+}
+
+SDL_bool SDL_HasClipboardText()
+{
+  char* text = SDL_GetClipboardText();
+  if(text) SDL_free(text);
+  return text != NULL ? SDL_TRUE : SDL_FALSE;
+}
+
+int SDL_SetClipboardText(const char* text)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jstring jtext = jniEnv->NewStringUTF(text);
+  jniEnv->CallVoidMethod(mapsActivityRef, setClipboardMID, jtext);
+  return 0;
+}
+
+void SDL_free(void* mem) { free(mem); }
+
+SDL_Keymod SDL_GetModState()
+{
+  return (SDL_Keymod)(0);
+}
+
+void SDL_SetTextInputRect(SDL_Rect* rect)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, showTextInputMID, rect->x, rect->y, rect->w, rect->h);
+}
+
+SDL_bool SDL_IsTextInputActive() { return SDL_FALSE; }
+void SDL_StartTextInput() {}
+void SDL_StopTextInput()
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, hideTextInputMID);
+}
+
+void SDL_RaiseWindow(SDL_Window* window) {}
+void SDL_SetWindowTitle(SDL_Window* win, const char* title) {}
+void SDL_GetWindowSize(SDL_Window* win, int* w, int* h) { SDL_GL_GetDrawableSize(win, w, h); }
+void SDL_GetWindowPosition(SDL_Window* win, int* x, int* y) { *x = 0; *y = 0; }
+void SDL_DestroyWindow(SDL_Window* win) {}
+SDL_Window* SDL_GetWindowFromID(Uint32 id) { return (SDL_Window*)mainWindow; }
+
+int SDL_PushEvent(SDL_Event* event) { MapsApp::gui->sdlEvent(event); return 1; }
+
+int SDL_PeepEvents(SDL_Event* events, int numevents, SDL_eventaction action, Uint32 minType, Uint32 maxType)
+{
+  if(action != SDL_ADDEVENT) return 0;
+  for(int ii = 0; ii < numevents; ++ii)
+    MapsApp::gui->sdlEvent(&events[ii]);
+  return numevents;
+}
+
+void SDL_GL_GetDrawableSize(SDL_Window* win, int* w, int* h)
+{
+  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
+  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
+}
+
+void SDL_GL_SwapWindow(SDL_Window* win) { eglSwapBuffers(win->eglDisplay, win->eglSurface); }
+
+
+bool chooseConfig(EGLDisplay display, int depth, int samples, EGLConfig* config)
+{
+  constexpr int rgb = 8, alpha = 0, stencil = 8;  // in other situations we might vary these
+  const EGLint attribs[] = {
+    EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,  //EGL_OPENGL_ES2_BIT,
+    EGL_BLUE_SIZE, rgb,
+    EGL_GREEN_SIZE, rgb,
+    EGL_RED_SIZE, rgb,
+    EGL_ALPHA_SIZE, alpha,
+    EGL_DEPTH_SIZE, depth,
+    EGL_STENCIL_SIZE, stencil,
+    EGL_SAMPLES, samples,
+    EGL_NONE // The list is terminated with EGL_NONE
+  };
+  EGLint numConfigs = 0;
+  eglChooseConfig(display, attribs, config, 1, &numConfigs);
+  return numConfigs;
+}
+
+// http://directx.com/2014/06/egl-understanding-eglchooseconfig-then-ignoring-it/
+//struct Config {
+//  EGLConfig cfg; int rgb; int a; int depth; int samps;
+//  bool operator<(const Config& rhs) {
+//    return std::tie (rhs.rgb, depth, samps) < std::tie (rgb, rhs.depth, rhs.samps);
+//  }
+//};
+
+int eglMain(ANativeWindow* nativeWin)
+{
+  EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  if(display == EGL_NO_DISPLAY) { LOGE("eglGetDisplay() error %d", eglGetError()); return -1; }
+
+  auto init_res = eglInitialize(display, 0, 0);
+  if(init_res) { LOGE("eglInitialize() error %d", eglGetError()); return -1; }
+
+  EGLConfig config;
+  bool ok = chooseConfig(display, 24, 4, &config) || chooseConfig(display, 24, 2, &config)
+      || chooseConfig(display, 24, 0, &config) || chooseConfig(display, 16, 0, &config);
+  if(!ok) { LOGE("eglChooseConfig failed"); return -1; }
+
+  const EGLint eglAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+  EGLContext context = eglCreateContext(display, config, nullptr, eglAttribs);
+  if(!context) { LOGE("eglCreateContext() error %d", eglGetError()); return -1; }
+
+  //auto native_window = ANativeWindow_fromSurface(env, jsurface);
+  EGLSurface surface = eglCreateWindowSurface(display, config, nativeWin, NULL);
+  if (!surface) { LOGE("eglCreateWindowSurface() error %d", eglGetError()); return -1; }
+
+  auto curr_res = eglMakeCurrent(display, surface, surface, context);
+  if (curr_res == EGL_FALSE) { LOGE("eglMakeCurrent() error %d", eglGetError()); return -1; }
+
+  SDL_Window sdlWindow = {display, surface};
+  int res = MapsApp::mainLoop(&sdlWindow, MapsApp::platform);
+
+  eglDestroySurface(display, surface);
+  eglDestroyContext(display, context);
+  ANativeWindow_release(nativeWin);
+  return 0;
+}
 
 #define TANGRAM_JNI_VERSION JNI_VERSION_1_6
 
@@ -306,12 +466,14 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   JNIEnv* jniEnv = nullptr;
   if (javaVM->GetEnv(reinterpret_cast<void**>(&jniEnv), TANGRAM_JNI_VERSION) != JNI_OK)
     return -1;
-  Tangram::JniHelpers::jniOnLoad(javaVM, NULL);  // pass jniEnv to skip stuff used for full Android library
+  Tangram::JniHelpers::jniOnLoad(javaVM, NULL);  // pass NULL jniEnv to skip stuff used for full Android library
   Tangram::AndroidPlatform::jniOnLoad(javaVM, jniEnv, ctrlClassName);
 
   jclass tangramClass = jniEnv->FindClass(ctrlClassName);
   showTextInputMID = jniEnv->GetMethodID(tangramClass, "showTextInput", "(IIII)V");
   hideTextInputMID = jniEnv->GetMethodID(tangramClass, "hideTextInput", "()V");
+  setClipboardMID = jniEnv->GetMethodID(cls, "getClipboard", "()Ljava/lang/String;");
+  setClipboardMID = jniEnv->GetMethodID(cls, "setClipboard", "(Ljava/lang/String;)V");
 
   return TANGRAM_JNI_VERSION;
 }
@@ -320,65 +482,65 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
 
 JNI_FN(init)(JNIEnv* env, jobject obj, jobject mapsActivity, jobject assetManager, jstring extFileDir)
 {
-  // Setup ImGui
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  ImGui_ImplOpenGL3_Init("#version 100");  //GLES2
-  ImGui_ImplGeneric_Init();
+  MapsApp::baseDir = JniHelpers::stringFromJavaString(env, extFileDir) + "/";
+  FSPath configPath(MapsApp::baseDir, "config.yaml");
+  MapsApp::configFile = configPath.c_str();
+  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
+      : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
 
-  MapsApp::baseDir = JniHelpers::stringFromJavaString(env, extFileDir) + "/";  //"/sdcard/Android/data/com.styluslabs.maps/files/";
-  MapsApp::apiKey = NEXTZEN_API_KEY;
-  auto p = std::make_unique<AndroidPlatform>(env, mapsActivity, assetManager);
-  app = new MapsApp(std::move(p));
-  app->sceneFile = "asset:///scene.yaml";
-  app->loadSceneFile();
+  MapsApp::platform = new AndroidPlatform(env, mapsActivity, assetManager);
 
   mapsActivityRef = env->NewWeakGlobalRef(mapsActivity);
+
+  //app = MapsApp::createApp();
+  //if(!app) return;
+  //
+  //MapsApp::win->sdlWindow = (SDL_Window*)glfwWin;
+  //MapsApp::gui->showWindow(MapsApp::win, NULL);
+  //
+  //MapsApp::baseDir = JniHelpers::stringFromJavaString(env, extFileDir) + "/";  //"/sdcard/Android/data/com.styluslabs.maps/files/";
+  //MapsApp::apiKey = NEXTZEN_API_KEY;
+  //auto p = std::make_unique<AndroidPlatform>(env, mapsActivity, assetManager);
+  //app = new MapsApp(std::move(p));
+  //app->sceneFile = "asset:///scene.yaml";
+  //app->loadSceneFile();
+
   //ImGui::GetIO().ImeSetInputScreenPosFn = [](int x, int y){
   //  JniThreadBinding jniEnv(JniHelpers::getJVM());
   //  jniEnv->CallVoidMethod(mapsActivityRef, showTextInputMID, x, y, 20, 20);
   //};
 }
 
+JNI_FN(surfaceCreated)(JNIEnv* env, jobject jsurface)
+{
+  ANativeWindow* nativeWin = ANativeWindow_fromSurface(env, jsurface);
+  mainThread = std::thread(eglMain, nativeWin);
+}
+
+JNI_FN(surfaceDestroyed)(JNIEnv* env)
+{
+  MapsApp::runOnMainThread([=](){ MapsApp::runApplication = false; });
+  mainThread.join();
+}
+
 JNI_FN(resize)(JNIEnv* env, jobject obj, jint w, jint h)
 {
-  ImGui_ImplGeneric_Resize(w, h, w, h);
-  app->onResize(w, h, w, h);
+  MapsApp::runOnMainThread([=](){ app->onResize(w, h, w, h); });
 }
 
-JNI_FN(setupGL)(JNIEnv* env, jobject obj)
-{
-  app->map->setupGL();
-}
-
-JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
-{
-  static bool prevWantTextInput = false;
-  auto t0 = std::chrono::high_resolution_clock::now();
-  double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
-  ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplGeneric_NewFrame(currTime);
-
-  app->drawFrame(currTime);
-
-  if(app->show_gui)
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-  bool wantTextInput = ImGui::GetIO().WantTextInput;
-  if(wantTextInput && !prevWantTextInput) {
-    ImVec2 pos = ImGui::GetIO().MousePos;
-    env->CallVoidMethod(mapsActivityRef, showTextInputMID, int(pos.x), int(pos.y), 20, 20);
-  }
-  else if(!wantTextInput && prevWantTextInput) {
-    //JniThreadBinding jniEnv(JniHelpers::getJVM());
-    env->CallVoidMethod(mapsActivityRef, hideTextInputMID);
-  }
-  prevWantTextInput = wantTextInput;
-}
+//JNI_FN(setupGL)(JNIEnv* env, jobject obj)
+//{
+//  app->map->setupGL();
+//}
+//
+//JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
+//{
+//  app->drawFrame(currTime);
+//}
 
 JNI_FN(onPause)()
 {
-  app->onSuspend();
+  MapsApp::runOnMainThread([=](){ app->onSuspend(); });
 }
 
 JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)
@@ -395,7 +557,7 @@ JNI_FN(touchEvent)(JNIEnv* env, jobject obj, jint ptrId, jint action, jint t, jf
   event.tfinger.dx = 0;  //button;
   event.tfinger.dy = 0;  //device->buttons;
   event.tfinger.pressure = p;
-  MapsApp::gui->sdlEvent(&event);
+  MapsApp::runOnMainThread([=](){ MapsApp::gui->sdlEvent(&event); });
 }
 
 JNI_FN(charInput)(JNIEnv* env, jobject obj, jint cp, jint cursorPos)
@@ -424,7 +586,7 @@ JNI_FN(charInput)(JNIEnv* env, jobject obj, jint cp, jint cursorPos)
   }
   out[bytesToWrite] = '\0';
 
-  MapsApp::gui->sdlEvent(&event);
+  MapsApp::runOnMainThread([=](){ MapsApp::gui->sdlEvent(&event); });
 }
 
 JNI_FN(keyEvent)(JNIEnv* env, jobject obj, jint key, jint action)
@@ -439,7 +601,7 @@ JNI_FN(keyEvent)(JNIEnv* env, jobject obj, jint key, jint action)
   //    | (mods & GLFW_MOD_ALT ? KMOD_ALT : 0) | (mods & GLFW_MOD_SUPER ? KMOD_GUI : 0)
   //    | (mods & GLFW_MOD_CAPS_LOCK ? KMOD_CAPS : 0) | (mods & GLFW_MOD_NUM_LOCK ? KMOD_NUM : 0);
   event.key.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
-  MapsApp::gui->sdlEvent(&event);
+  MapsApp::runOnMainThread([=](){ MapsApp::gui->sdlEvent(&event); });
 }
 
 JNI_FN(onUrlComplete)(JNIEnv* env, jobject obj, jlong handle, jbyteArray data, jstring err)
@@ -450,15 +612,17 @@ JNI_FN(onUrlComplete)(JNIEnv* env, jobject obj, jlong handle, jbyteArray data, j
 JNI_FN(updateLocation)(long time, double lat, double lng, float poserr,
     double alt, float alterr, float dir, float direrr, float spd, float spderr)
 {
-  app->updateLocation(Location{time/1000.0, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr});
+  MapsApp::runOnMainThread([=](){
+    app->updateLocation(Location{time/1000.0, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr});
+  });
 }
 
 JNI_FN(updateOrientation)(jfloat azimuth, jfloat pitch, jfloat roll)
 {
-  app->updateOrientation(azimuth, pitch, roll);
+  MapsApp::runOnMainThread([=](){ app->updateOrientation(azimuth, pitch, roll); });
 }
 
 JNI_FN(updateGpsStatus)(int satsVisible, int satsUsed)
 {
-  app->updateGpsStatus(satsVisible, satsUsed);
+  MapsApp::runOnMainThread([=](){ app->updateGpsStatus(satsVisible, satsUsed); });
 }

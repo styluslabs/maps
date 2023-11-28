@@ -383,22 +383,23 @@ void MapsApp::tapEvent(float x, float y)
 #endif
 
   map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
-    LOGD("Picked label: %s", result ? result->touchItem.properties->getAsString("name").c_str() : "none");
+    auto& props = result->touchItem.properties;
+    LOGD("Picked label: %s", result ? props->getAsString("name").c_str() : "none");
     if (!result) {
       clearPickResult();
       return;
     }
-    std::string itemId = result->touchItem.properties->getAsString("id");
-    std::string osmType = result->touchItem.properties->getAsString("osm_type");
+    std::string itemId = props->getAsString("id");
+    std::string osmType = props->getAsString("osm_type");
     if(itemId.empty())
-      itemId = result->touchItem.properties->getAsString("osm_id");
+      itemId = props->getAsString("osm_id");
     if(osmType.empty())
       osmType = "node";
-    std::string namestr = result->touchItem.properties->getAsString("name");
+    std::string namestr = props->getAsString("name");
     // clear panel history unless editing track/route
     if(!mapsTracks->activeTrack)
       showPanel(infoPanel);    //mapsSearch->clearSearch();
-    setPickResult(result->coordinates, namestr, result->touchItem.properties->toJson());
+    setPickResult(result->coordinates, namestr, props->toJson());
     tapLocation = {NAN, NAN};
   });
 
@@ -515,12 +516,7 @@ MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(
   map->setCameraPosition(pos);
 }
 
-MapsApp::~MapsApp()
-{
-#if PLATFORM_DESKTOP  // on mobile, suspend will preceed destroy
-  onSuspend();
-#endif
-}
+MapsApp::~MapsApp() {}
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)
@@ -1402,10 +1398,8 @@ static const char* moreWidgetSVG = R"#(
 static ThreadSafeQueue< std::function<void()> > taskQueue;
 static std::thread::id mainThreadId;
 
-void PLATFORM_WakeEventLoop()
-{
-  glfwPostEmptyEvent();
-}
+void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
+void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
 
 void MapsApp::runOnMainThread(std::function<void()> fn)
 {
@@ -1463,90 +1457,10 @@ bool MapsApp::openURL(const char* url)
 #endif
 }
 
-int main(int argc, char* argv[])
+void MapsApp::initResources()
 {
-  using Tangram::DebugFlags;
-
-  bool runApplication = true;
-#if PLATFORM_WIN
-  SetProcessDPIAware();
-  winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
-#endif
-
-  // config
-  mainThreadId = std::this_thread::get_id();
-  MapsApp::baseDir = "./";  //"/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
-  FSPath configPath(MapsApp::baseDir, "config.yaml");
-  MapsApp::configFile = configPath.c_str();
-  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
-      : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
-
-  // command line args
-  const char* sceneFile = NULL;  // -f scenes/scene-omt.yaml
-  for(int argi = 1; argi < argc-1; argi += 2) {
-    YAML::Node node;
-    if(strcmp(argv[argi], "-f") == 0)
-      sceneFile = argv[argi+1];
-    else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
-      node = argv[argi+1];
-    else
-      LOGE("Unknown command line argument: %s", argv[argi]);
-  }
-
-  Url baseUrl("file:///");
-  char pathBuffer[PATH_MAX] = {0};
-  if (getcwd(pathBuffer, PATH_MAX) != nullptr) {
-      baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
-  }
-  LOG("Base URL: %s", baseUrl.string().c_str());
-  //Url sceneUrl = baseUrl.resolve(Url(sceneFile));
-
-  if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
-#if USE_NVG_GL
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
-#endif
-  glfwWindowHint(GLFW_SAMPLES, MapsApp::config["msaa_samples"].as<int>(2));
-  glfwWindowHint(GLFW_STENCIL_BITS, 8);
-
-  GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "Maps (DEBUG)", NULL, NULL);
-  if(!glfwWin) { PLATFORM_LOG("glfwCreateWindow failed.\n"); return -1; }
-  glfwSDLInit(glfwWin);  // setup event callbacks
-
-  glfwMakeContextCurrent(glfwWin);
-  glfwSwapInterval(1); // Enable vsync
-  //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-  {
-    //float xscale, yscale; glfwGetWindowContentScale(glfwWin, &xscale, &yscale);
-    const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    SvgLength::defaultDpi = std::max(mode->width, mode->height)/11.2;
-  }
-
-  int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
-  //int nvglFBFlags = NVG_IMAGE_SRGB;
-#if USE_NVG_GL
-  NVGcontext* nvgContext = nvglCreate(nvgFlags);  // | NVG_DEBUG);
-#else
-  NVGcontext* nvgContext = nvgswCreate(nvgFlags);  // | NVG_DEBUG);
-#endif
-  if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return -1; }
-
-  glfwSwapInterval(0);
-  glfwSetTime(0);
-
-  // library for native file dialogs - https://github.com/btzy/nativefiledialog-extended
-  // alternatives:
-  // - https://github.com/samhocevar/portable-file-dialogs (no GTK)
-  // - https://sourceforge.net/projects/tinyfiledialogs (no GTK)
-  // - https://github.com/Geequlim/NativeDialogs - last commit 2018
-  NFD_Init();
-
-  Painter::sharedVg = nvgContext;
-  Painter::loadFont("sans", "/home/mwhite/maps/tangram-es/scenes/fonts/roboto-regular.ttf");
-  if(Painter::loadFont("fallback", "/home/mwhite/maps/tangram-es/scenes/fonts/DroidSansFallback.ttf"))
+  Painter::loadFont("sans", FSPath(baseDir, "scenes/fonts/roboto-regular.ttf").c_str());
+  if(Painter::loadFont("fallback", FSPath(baseDir, "scenes/fonts/DroidSansFallback.ttf").c_str()))
     Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback
 
   // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
@@ -1579,52 +1493,65 @@ int main(int argc, char* argv[])
 
   widgetDoc->removeChild(widgetDoc->selectFirst("defs"));
   SvgDefs* defs = new SvgDefs;
-  defs->addChild(MapsApp::uiIcon("chevron-down")->clone());
-  defs->addChild(MapsApp::uiIcon("chevron-left")->clone());
-  defs->addChild(MapsApp::uiIcon("chevron-right")->clone());
+  defs->addChild(uiIcon("chevron-down")->clone());
+  defs->addChild(uiIcon("chevron-left")->clone());
+  defs->addChild(uiIcon("chevron-right")->clone());
   widgetDoc->addChild(defs, widgetDoc->firstChild());
 
   setGuiResources(widgetDoc, styleSheet);
-  SvgGui* gui = new SvgGui();
-  MapsApp::gui = gui;  // needed by glfwSDLEvent()
+  gui = new SvgGui();
   gui->fullRedraw = USE_NVG_GL;  // see below
   // scaling
   gui->paintScale = 2.0;  //210.0/150.0;
   gui->inputScale = 1/gui->paintScale;
-  nvgAtlasTextThreshold(nvgContext, 24 * gui->paintScale);  // 24px font is default for dialog titles
+  nvgAtlasTextThreshold(Painter::sharedVg, 24 * gui->paintScale);  // 24px font is default for dialog titles
 
-  Painter* painter = new Painter(Painter::sharedVg);
+  // preset colors for tracks and bookmarks
+  for(const auto& colorstr : config["colors"])
+    markerColors.push_back(parseColor(colorstr.Scalar()));
+
+  // DB setup
+  FSPath dbPath(baseDir, "places.sqlite");
+  if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+    logMsg("Error creating %s", dbPath.c_str());
+    sqlite3_close(bkmkDB);
+    bkmkDB = NULL;
+  }
+  else {
+    if(sqlite3_create_function(bkmkDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
+      LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
+  }
+}
+
+int MapsApp::mainLoop(SDL_Window* sdlWindow, Platform* _platform)
+{
+  mainThreadId = std::this_thread::get_id();
+
+  bool runApplication = true;
+
+  int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
+  //int nvglFBFlags = NVG_IMAGE_SRGB;
+#if USE_NVG_GL
+  NVGcontext* nvgContext = nvglCreate(nvgFlags);
   //NVGLUframebuffer* nvglFB = nvgluCreateFramebuffer(nvgContext, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
   //nvgluSetFramebufferSRGB(1);  // no-op for GLES - sRGB enabled iff FB is sRGB
-#if !USE_NVG_GL
+#else
+  NVGcontext* nvgContext = nvgswCreate(nvgFlags);
   NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
   uint32_t* swFB = NULL;
 #endif
+  if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return -1; }
 
+  Painter::sharedVg = nvgContext;
+  Painter* painter = new Painter(Painter::sharedVg);
   SvgPainter boundsPaint(painter);
   SvgDocument::sharedBoundsCalc = &boundsPaint;
+  initResources();
 
-  Tangram::Map* tangramMap = new Tangram::Map(std::make_unique<Tangram::LinuxPlatform>());
-  MapsApp::platform = &tangramMap->getPlatform();
+  platform = _platform;
+  Tangram::Map* tangramMap = new Tangram::Map(std::unique_ptr<Platform>(_platform));
   MapsApp* app = new MapsApp(tangramMap);
   app->map->setupGL();
-
-  // DB setup
-  std::string dbPath = MapsApp::baseDir + "places.sqlite";
-  if(sqlite3_open_v2(dbPath.c_str(), &MapsApp::bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
-    logMsg("Error creating %s", dbPath.c_str());
-    sqlite3_close(MapsApp::bkmkDB);
-    MapsApp::bkmkDB = NULL;
-  }
-  else {
-    if(sqlite3_create_function(MapsApp::bkmkDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
-      LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
-  }
-
-  // GUI setup
-  // preset colors for tracks and bookmarks
-  for(const auto& colorstr : app->config["colors"])
-    MapsApp::markerColors.push_back(parseColor(colorstr.Scalar()));
 
   // fake location updates to test track recording
   auto locFn = [&](){
@@ -1636,7 +1563,7 @@ int main(int argc, char* argv[])
 
   Timer* locTimer = NULL;
   Window* win = app->createGUI();
-  win->sdlWindow = (SDL_Window*)glfwWin;
+  win->sdlWindow = sdlWindow;
   win->addHandler([&](SvgGui*, SDL_Event* event){
     if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
       runApplication = false;
@@ -1647,7 +1574,6 @@ int main(int argc, char* argv[])
       }
       else
         locTimer = gui->setTimer(2000, win, [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
-
     }
     else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
       app->pluginManager->reload(MapsApp::baseDir + "plugins");
@@ -1667,18 +1593,26 @@ int main(int argc, char* argv[])
   else
     app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
 
+#if PLATFORM_DESKTOP
   // Alamo square
   app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, 0, 0, 0, 0});
+#endif
 
   while(runApplication) {
+#if PLATFORM_DESKTOP
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
+#elif PLATFORM_ANDROID
+    taskQueue.wait();
+#else
+#error "TODO"
+#endif
 
     std::function<void()> queuedFn;
     while(taskQueue.pop_front(queuedFn))
       queuedFn();
 
     int fbWidth = 0, fbHeight = 0;
-    glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
+    SDL_GL_GetDrawableSize(sdlWindow, &fbWidth, &fbHeight);  //glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
     painter->deviceRect = Rect::wh(fbWidth, fbHeight);
 
     // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
@@ -1699,7 +1633,7 @@ int main(int argc, char* argv[])
     }
 
     // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
-    if(MapsApp::platform->notifyRender()) {
+    if(platform->notifyRender()) {
       auto t0 = std::chrono::high_resolution_clock::now();
       double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
       app->mapUpdate(currTime);
@@ -1748,26 +1682,95 @@ int main(int argc, char* argv[])
     nvgswuBlit(swBlitter, swFB, fbWidth, fbHeight,
         int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
 #endif
-    glfwSwapBuffers(glfwWin);
+    SDL_GL_SwapWindow(sdlWindow);   //glfwSwapBuffers(glfwWin);
   }
 
-  while(sqlite3_stmt* stmt = sqlite3_next_stmt(MapsApp::bkmkDB, NULL))
+#if PLATFORM_DESKTOP
+  app->onSuspend();
+#endif
+  while(sqlite3_stmt* stmt = sqlite3_next_stmt(bkmkDB, NULL))
     LOGW("SQLite statement was not finalized: %s", sqlite3_sql(stmt));  //sqlite3_finalize(stmt);
-  sqlite3_close(MapsApp::bkmkDB);
+  sqlite3_close(bkmkDB);
   gui->closeWindow(win);
   delete gui;
   delete painter;
+  delete app->map;
   delete app;
-  delete tangramMap;
 #if USE_NVG_GL
   nvglDelete(nvgContext);
 #else
   nvgswuDeleteBlitter(swBlitter);
   nvgswDelete(nvgContext);
 #endif
+  return 0;
+}
+
+int main(int argc, char* argv[])
+{
+#if PLATFORM_WIN
+  SetProcessDPIAware();
+  winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
+#endif
+
+  // config
+  MapsApp::baseDir = "./";  //"/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
+  FSPath configPath(MapsApp::baseDir, "config.yaml");
+  MapsApp::configFile = configPath.c_str();
+  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
+      : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
+
+  // command line args
+  const char* sceneFile = NULL;  // -f scenes/scene-omt.yaml
+  for(int argi = 1; argi < argc-1; argi += 2) {
+    YAML::Node node;
+    if(strcmp(argv[argi], "-f") == 0)
+      sceneFile = argv[argi+1];
+    else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
+      node = argv[argi+1];
+    else
+      LOGE("Unknown command line argument: %s", argv[argi]);
+  }
+
+  Url baseUrl("file:///");
+  char pathBuffer[PATH_MAX] = {0};
+  if (getcwd(pathBuffer, PATH_MAX) != nullptr) {
+      baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
+  }
+
+  if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
+#if USE_NVG_GL
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
+#endif
+  glfwWindowHint(GLFW_SAMPLES, MapsApp::config["msaa_samples"].as<int>(2));
+  glfwWindowHint(GLFW_STENCIL_BITS, 8);
+
+  GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "Maps (DEBUG)", NULL, NULL);
+  if(!glfwWin) { PLATFORM_LOG("glfwCreateWindow failed.\n"); return -1; }
+  glfwSDLInit(glfwWin);  // setup event callbacks
+
+  glfwMakeContextCurrent(glfwWin);
+  glfwSwapInterval(0);  //1); // Enable vsync
+  glfwSetTime(0);
+  //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+  const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+  SvgLength::defaultDpi = std::max(mode->width, mode->height)/11.2;
+
+  // library for native file dialogs - https://github.com/btzy/nativefiledialog-extended
+  // alternatives:
+  // - https://github.com/samhocevar/portable-file-dialogs (no GTK)
+  // - https://sourceforge.net/projects/tinyfiledialogs (no GTK)
+  // - https://github.com/Geequlim/NativeDialogs - last commit 2018
+  NFD_Init();
+
+  int res = MapsApp::mainLoop((SDL_Window*)glfwWin, new Tangram::LinuxPlatform());
+
   NFD_Quit();
   glfwTerminate();
-  return 0;
+  return res;
 }
 #endif
 

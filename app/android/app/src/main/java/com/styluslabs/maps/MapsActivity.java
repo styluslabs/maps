@@ -41,7 +41,7 @@ import com.mapzen.tangram.networking.DefaultHttpHandler;
 
 public class MapsActivity extends Activity implements GpsStatus.Listener, LocationListener, SensorEventListener
 {
-  MapsView mGLSurfaceView;
+  MapsView mMapsView;
   private ViewGroup mLayout;
   private View mTextEdit;
   private LocationManager locationManager;
@@ -59,14 +59,19 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
-    mGLSurfaceView = new MapsView(getApplication());
+    mMapsView = new MapsView(getApplication());
     mLayout = new RelativeLayout(this);
-    mLayout.addView(mGLSurfaceView);
+    mLayout.addView(mMapsView);
     setContentView(mLayout);
-    //setContentView(mGLSurfaceView);
-    mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
+    //setContentView(mMapsView);
+    //mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
 
-    MapsLib.init(this, getAssets(), getExternalFilesDir(null).getAbsolutePath());
+    String extfiles = getExternalFilesDir(null).getAbsolutePath();
+    File file = new File(extfiles, "config.default.yaml");
+    if(!file.exists())
+      extractAssets("", "");
+
+    MapsLib.init(this, getAssets(), extfiles);
 
     httpHandler = new DefaultHttpHandler();
 
@@ -106,7 +111,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onPause()
   {
     super.onPause();
-    mGLSurfaceView.onPause();
+    //mMapsView.onPause();
 
     if(canGetLocation()) {
       locationManager.removeUpdates(this);
@@ -120,7 +125,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onResume()
   {
     super.onResume();
-    mGLSurfaceView.onResume();
+    //mMapsView.onResume();
 
     // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
     // - see https://developer.android.com/training/location/request-updates
@@ -197,13 +202,13 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   @Keep
   public void requestRender()
   {
-    mGLSurfaceView.requestRender();
+    //mGLSurfaceView.requestRender();
   }
 
   @Keep
   public void setRenderMode(int cont)
   {
-    mGLSurfaceView.setRenderMode(cont != 0 ? MapsView.RENDERMODE_CONTINUOUSLY : MapsView.RENDERMODE_WHEN_DIRTY);
+    //mGLSurfaceView.setRenderMode(cont != 0 ? MapsView.RENDERMODE_CONTINUOUSLY : MapsView.RENDERMODE_WHEN_DIRTY);
   }
 
   @Keep
@@ -263,8 +268,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
-  // assetpath = "" reads from assets/  outpath = "" writes to
-  @Keep
+  // assetpath = "" reads from assets/  outpath = "" writes to external files path
   public boolean extractAssets(String assetpath, String outpath)
   {
     try {
@@ -279,9 +283,9 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         // check for directory
         if(!extractAssets(srcpath, dstpath)) {
           File dstfile = new File(dstpath);
+          if(dstfile.exists()) continue;  // don't overwrite existing file
           // ensure that path exists
-          if(!dstfile.exists())
-            dstfile.getParentFile().mkdirs();
+          dstfile.getParentFile().mkdirs();
           FileOutputStream out = new FileOutputStream(dstfile);
           // this returns InputStream object
           InputStream in = assetManager.open(srcpath);
@@ -300,6 +304,24 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       // oh well, no tips
       return false;
     }
+  }
+
+  public String getClipboard()
+  {
+    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+    if(!clipboard.hasPrimaryClip()) return null;
+    ClipData.Item text = clipboard.getPrimaryClip().getItemAt(0)
+    String text = item.getText();
+    if(text) return text;
+    Uri uri = item.getUri();
+    return uri ? resolveUri(Uri) : null;
+  }
+
+  public void setClipboard(String text)
+  {
+    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+    ClipData clip = ClipData.newPlainText("simple text", text);
+    clipboard.setPrimaryClip(clip);
   }
 
   // issue is that Views can only be touched from thread that created them, but these methods are called from

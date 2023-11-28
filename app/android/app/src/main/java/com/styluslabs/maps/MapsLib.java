@@ -1,6 +1,7 @@
 package com.styluslabs.maps;
 
 import android.content.res.AssetManager;
+import android.view.Surface;
 
 public class MapsLib
 {
@@ -11,8 +12,10 @@ public class MapsLib
 
   public static native void init(MapsActivity mapsActivity, AssetManager assetManager, String extFileDir);
   public static native void resize(int width, int height);
-  public static native void setupGL();
-  public static native void drawFrame();
+  //public static native void setupGL();
+  //public static native void drawFrame();
+  public static native void surfaceCreated(Surface surface);
+  public static native void surfaceDestroyed();
   public static native void onPause();
   public static native void touchEvent(int ptrId, int action, int t, float x, float y, float p);
   public static native void keyEvent(int keycode, int action);

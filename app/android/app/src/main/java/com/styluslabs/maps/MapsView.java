@@ -1,12 +1,13 @@
 package com.styluslabs.maps;
 
 import android.content.Context;
-//import android.graphics.PixelFormat;
-import android.opengl.GLSurfaceView;
-//import android.util.AttributeSet;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.SurfaceView;
+
+/*
+import android.opengl.GLSurfaceView;
 
 import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLConfig;
@@ -16,6 +17,20 @@ import javax.microedition.khronos.opengles.GL10;
 
 class MapsView extends GLSurfaceView
 {
+  private static class Renderer implements GLSurfaceView.Renderer {
+    public void onDrawFrame(GL10 gl) {
+      MapsLib.drawFrame();
+    }
+
+    public void onSurfaceChanged(GL10 gl, int width, int height) {
+      MapsLib.resize(width, height);
+    }
+
+    public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+      MapsLib.setupGL();
+    }
+  }
+
   public MapsView(Context context)
   {
     super(context);
@@ -26,6 +41,20 @@ class MapsView extends GLSurfaceView
     setPreserveEGLContextOnPause(true);
     setRenderer(new Renderer());
   }
+*/
+
+class MapsView extends SurfaceView implements SurfaceHolder.Callback
+{
+  public MapsView(Context context)
+  {
+    super(context);
+    getHolder().addCallback(this);
+  }
+
+  // SurfaceHolder.Callback
+  public void surfaceCreated(SurfaceHolder holder) { MapsLib.surfaceCreated(holder.getSurface()); }
+  public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) { MapsLib.resize(w, h); }
+  public void surfaceDestroyed(SurfaceHolder holder) { MapsLib.surfaceDestroyed(); }
 
   private void sendTouchEvent(MotionEvent event, int action, int i, float x, float y, float p)
   {
@@ -79,19 +108,5 @@ class MapsView extends GLSurfaceView
     }
 
     return true;
-  }
-
-  private static class Renderer implements GLSurfaceView.Renderer {
-    public void onDrawFrame(GL10 gl) {
-      MapsLib.drawFrame();
-    }
-
-    public void onSurfaceChanged(GL10 gl, int width, int height) {
-      MapsLib.resize(width, height);
-    }
-
-    public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-      MapsLib.setupGL();
-    }
   }
 }

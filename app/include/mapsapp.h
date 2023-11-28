@@ -129,7 +129,9 @@ public:
 
   static Platform* platform;
   static std::string baseDir;
+  //static Painter* painter;
   static SvgGui* gui;
+  //static Window* win;
   static YAML::Node config;
   static std::string configFile;
   static sqlite3* bkmkDB;
