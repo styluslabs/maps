@@ -304,6 +304,7 @@ static jmethodID showTextInputMID = nullptr;
 static jmethodID hideTextInputMID = nullptr;
 static jmethodID getClipboardMID = nullptr;
 static jmethodID setClipboardMID = nullptr;
+static jmethodID openFileMID = nullptr;
 
 void PLATFORM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
 void TANGRAM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
@@ -373,7 +374,11 @@ void SDL_StopTextInput()
 
 void SDL_RaiseWindow(SDL_Window* window) {}
 void SDL_SetWindowTitle(SDL_Window* win, const char* title) {}
-void SDL_GetWindowSize(SDL_Window* win, int* w, int* h) { SDL_GL_GetDrawableSize(win, w, h); }
+void SDL_GetWindowSize(SDL_Window* win, int* w, int* h) //{ SDL_GL_GetDrawableSize(win, w, h); }
+{
+  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
+  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
+}
 void SDL_GetWindowPosition(SDL_Window* win, int* x, int* y) { *x = 0; *y = 0; }
 void SDL_DestroyWindow(SDL_Window* win) {}
 SDL_Window* SDL_GetWindowFromID(Uint32 id) { return (SDL_Window*)mainWindow; }
@@ -388,14 +393,26 @@ int SDL_PeepEvents(SDL_Event* events, int numevents, SDL_eventaction action, Uin
   return numevents;
 }
 
-void SDL_GL_GetDrawableSize(SDL_Window* win, int* w, int* h)
+//void SDL_GL_GetDrawableSize(SDL_Window* win, int* w, int* h)
+//{
+//  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
+//  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
+//}
+//
+//void SDL_GL_SwapWindow(SDL_Window* win) { eglSwapBuffers(win->eglDisplay, win->eglSurface); }
+
+// open file dialog
+static MapsApp::OpenFileFn_t openFileCallback;
+
+// filters ignored for now
+void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, OpenFileFn_t callback)
 {
-  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
-  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
+  openFileCallback = callback;
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, openFileMID);
 }
 
-void SDL_GL_SwapWindow(SDL_Window* win) { eglSwapBuffers(win->eglDisplay, win->eglSurface); }
-
+// EGL setup and main loop
 
 bool chooseConfig(EGLDisplay display, int depth, int samples, EGLConfig* config)
 {
@@ -449,8 +466,27 @@ int eglMain(ANativeWindow* nativeWin)
   auto curr_res = eglMakeCurrent(display, surface, surface, context);
   if (curr_res == EGL_FALSE) { LOGE("eglMakeCurrent() error %d", eglGetError()); return -1; }
 
-  SDL_Window sdlWindow = {display, surface};
-  int res = MapsApp::mainLoop(&sdlWindow, MapsApp::platform);
+  app = new MapsApp(MapsApp::platform);
+
+  SDL_Window sdlWin = {display, surface};
+  app->createGUI(&sdlWin);
+  app->mapsOffline->resumeDownloads();
+  app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
+
+  //SDL_Window sdlWindow = {display, surface};
+  //int res = MapsApp::mainLoop(&sdlWindow, MapsApp::platform);
+  while(MapsApp::runApplication) {
+    MapsApp::taskQueue.wait();
+
+    int fbWidth = 0, fbHeight = 0;
+    eglQuerySurface(display, surface, EGL_WIDTH, &fbWidth);
+    eglQuerySurface(display, surface, EGL_HEIGHT, &fbHeight);
+    if(app->drawFrame(fbWidth, fbHeight))
+      eglSwapBuffers(display, surface);
+  }
+
+  delete app;
+  app = NULL;
 
   eglDestroySurface(display, surface);
   eglDestroyContext(display, context);
@@ -472,8 +508,9 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   jclass tangramClass = jniEnv->FindClass(ctrlClassName);
   showTextInputMID = jniEnv->GetMethodID(tangramClass, "showTextInput", "(IIII)V");
   hideTextInputMID = jniEnv->GetMethodID(tangramClass, "hideTextInput", "()V");
-  setClipboardMID = jniEnv->GetMethodID(cls, "getClipboard", "()Ljava/lang/String;");
+  getClipboardMID = jniEnv->GetMethodID(cls, "getClipboard", "()Ljava/lang/String;");
   setClipboardMID = jniEnv->GetMethodID(cls, "setClipboard", "(Ljava/lang/String;)V");
+  openFileMID = jniEnv->GetMethodID(cls, "openFile", "()V");
 
   return TANGRAM_JNI_VERSION;
 }
@@ -625,4 +662,19 @@ JNI_FN(updateOrientation)(jfloat azimuth, jfloat pitch, jfloat roll)
 JNI_FN(updateGpsStatus)(int satsVisible, int satsUsed)
 {
   MapsApp::runOnMainThread([=](){ app->updateGpsStatus(satsVisible, satsUsed); });
+}
+
+JNI_FN(openFileDesc)(JNIEnv* env, jstring jfilename, jint jfd)
+{
+  char buff[256];
+  int len = readlink(fstring("/proc/self/fd/%d", jfd).c_str(), buff, 256);
+  if(len > 0 && len < 256) {
+    buff[len] = '\0';
+    //PLATFORM_LOG("readlink returned: %s\n", buff);
+    //const char* filename = env->GetStringUTFChars(jfilename, 0);
+    if(openFileCallback)
+      openFileCallback(buff);
+    //env->ReleaseStringUTFChars(jfilename, filename);
+  }
+  openFileCallback = {};  // clear
 }

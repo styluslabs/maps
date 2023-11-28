@@ -6,6 +6,7 @@
 //using namespace Tangram;
 #include "mapscomponent.h"
 #include "ulib/painter.h"  // for Color
+#include "ulib/threadutil.h"
 
 class TouchHandler;
 class MapsTracks;
@@ -24,6 +25,7 @@ class Toolbar;
 class MapsWidget;
 class SvgNode;
 struct sqlite3;
+struct SDL_Window;
 
 namespace YAML { class Node; }
 //namespace rapidjson { class Document; }
@@ -33,7 +35,7 @@ namespace YAML { class Node; }
 class MapsApp
 {
 public:
-  MapsApp(Map* _map);
+  MapsApp(Platform* _platform);
   ~MapsApp();  // impl must be outside header to allow unique_ptr members w/ incomplete types
 
   void mapUpdate(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
@@ -89,10 +91,12 @@ public:
   std::unique_ptr<MapsSearch> mapsSearch;
   std::unique_ptr<PluginManager> pluginManager;
 
-  Map* map = NULL;
+  std::unique_ptr<Map> map;
+  std::unique_ptr<Painter> painter;
+  std::unique_ptr<Window> win;
 
   // GUI
-  Window* createGUI();
+  void createGUI(SDL_Window* sdlWin);
   void showPanel(Widget* panel, bool isSubPanel = false);
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
   Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel, bool menuitem = false);
@@ -126,17 +130,20 @@ public:
   static void runOnMainThread(std::function<void()> fn);
   static void messageBox(std::string title, std::string message,
       std::vector<std::string> buttons = {"OK"}, std::function<void(std::string)> callback = {});
+  typedef std::function<void(const char*)> OpenFileFn_t;
+  struct FileDialogFilter_t { const char* name; const char* spec; };
+  static void openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn_t callback);
 
   static Platform* platform;
   static std::string baseDir;
-  //static Painter* painter;
   static SvgGui* gui;
-  //static Window* win;
   static YAML::Node config;
   static std::string configFile;
   static sqlite3* bkmkDB;
   static bool metricUnits;
   static std::vector<Color> markerColors;
+  static ThreadSafeQueue< std::function<void()> > taskQueue;
+  static bool runApplication;
 
 private:
   void saveConfig();

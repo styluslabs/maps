@@ -306,6 +306,39 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
+  private static final int ID_OPEN_DOCUMENT = 2;
+
+  public void openFile()  //Uri pickerInitialUri)
+  {
+    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+    intent.addCategory(Intent.CATEGORY_OPENABLE);
+    intent.setType("application/pdf");
+    //intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, pickerInitialUri);
+    startActivityForResult(intent, ID_OPEN_DOCUMENT);
+  }
+
+  @Override
+  public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
+    if(requestCode == ID_OPEN_DOCUMENT) {
+      if(resultCode == Activity.RESULT_OK && resultData) {
+        if(resultData.getData().toString().startsWith("content://")) {
+          try {
+            // openFileDescriptor only works for mode="r", but /proc/self/fd/<fd> gives us symlink to actual
+            //  file which we can open for writing
+            // an alternative would be to use android.system.Os.readlink here instead of in androidhelper.cpp
+            ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(intent.getData(), "r");
+            MapsLib.openFileDesc(intent.getData().getPath(), pfd.getFd());
+            pfd.close();
+          } catch(Exception e) {
+            Log.v("onActivityResult", "Error opening document: " + intent.getData().toString(), e);
+          }
+        }
+        //else
+        //  jniOpenFile(intent.getData().getPath());
+      }
+    }
+  }
+
   public String getClipboard()
   {
     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);

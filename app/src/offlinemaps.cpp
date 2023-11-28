@@ -577,13 +577,8 @@ Widget* MapsOffline::createPanel()
   Widget* downloadPanel = createInlineDialog({titleEdit, maxZoomRow}, "Download", downloadFn);  //createColumn();
 
   Button* openBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Install Offline Map");
-  openBtn->onClicked = [=](){
-    nfdchar_t* outPath;
-    nfdfilteritem_t filterItem[1] = { { "MBTiles files", "mbtiles" } };
-    nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
-    if(result != NFD_OKAY)
-      return;
 
+  auto openMapFn = [this](const char* outPath){
     std::string srcpath(outPath);
     std::vector<std::string> layerKeys;
     std::vector<std::string> layerTitles;
@@ -603,6 +598,8 @@ Widget* MapsOffline::createPanel()
     };
     showModalCentered(selectDestDialog.get(), MapsApp::gui);
   };
+
+  openBtn->onClicked = [=](){ MapsApp::openFileDialog({{"MBTiles files", "mbtiles"}}, openMapFn); };
 
   Button* saveBtn = createToolbutton(MapsApp::uiIcon("download"), "Save Offline Map");
   saveBtn->onClicked = [=](){

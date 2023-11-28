@@ -459,87 +459,6 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   map->loadScene(std::move(options), async);
 }
 
-MapsApp::MapsApp(Tangram::Map* _map) : map(_map), touchHandler(new TouchHandler(this))
-{
-  // make sure cache folder exists
-  mkdir(FSPath(baseDir, "cache").c_str(), 0777);
-
-  // Setup UI panels
-  mapsSources = std::make_unique<MapsSources>(this);
-  mapsOffline = std::make_unique<MapsOffline>(this);
-  pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
-  // no longer recreated when scene loaded
-  mapsTracks = std::make_unique<MapsTracks>(this);
-  mapsSearch = std::make_unique<MapsSearch>(this);
-  mapsBookmarks = std::make_unique<MapsBookmarks>(this);
-
-  // Scene::onReady() remains false until after first call to Map::update()!
-  //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {
-  //  runOnMainThread([=](){
-  //    // if other panels need scene loaded event, we could send to a common widget (MapsWidget?)
-  //    mapsSources->onSceneLoaded();  //sourcePanel->sdlUserEvent(gui, SCENE_LOADED);
-  //  });
-  //});
-
-  // cache management
-  storageTotal = config["storage"]["total"].as<int64_t>(0);
-  storageOffline = config["storage"]["offline"].as<int64_t>(0);
-  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>(500) * 1000000;
-  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>(250) * 1000000;
-  // easier to track total storage and offline map storage instead cached storage directly, since offline
-  //   map download/deletion can convert some tiles between cached and offline
-  platform->onNotifyStorage = [=](int64_t dtotal, int64_t doffline){
-    storageTotal += dtotal;
-    storageOffline += doffline;
-    // write out changes to offline storage total immediately since errors here can persist; errors w/ total
-    //  storage will be fixed by shrinkCache
-    if(doffline)
-      saveConfig();
-    if(storageTotal - storageOffline > storageShrinkMax && !mapsOffline->numOfflinePending()) {
-      int64_t tot = mapsSources->shrinkCache(storageShrinkMin);
-      storageTotal = tot + storageOffline;  // update storage usage
-    }
-  };
-
-  map->setPixelScale(pixel_scale);
-  map->setPickRadius(1.0f);
-
-  metricUnits = config["metric_units"].as<bool>(true);
-
-  // default position: Alamo Square, SF - overriden by scene camera position if async load
-  CameraPosition pos;
-  pos.longitude = config["view"]["lng"].as<double>(-122.434668);
-  pos.latitude = config["view"]["lat"].as<double>(37.776444);
-  pos.zoom = config["view"]["zoom"].as<float>(15);
-  pos.rotation = config["view"]["rotation"].as<float>(0);
-  pos.tilt = config["view"]["tilt"].as<float>(0);
-  map->setCameraPosition(pos);
-}
-
-MapsApp::~MapsApp() {}
-
-// note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
-//  update config as soon as change is made (vs. us having to broadcast a signal on pause)
-void MapsApp::saveConfig()
-{
-  config["storage"]["offline"] = storageOffline;
-  config["storage"]["total"] = storageTotal;
-
-  CameraPosition pos = map->getCameraPosition();
-  config["view"]["lng"] = pos.longitude;
-  config["view"]["lat"] = pos.latitude;
-  config["view"]["zoom"] = pos.zoom;
-  config["view"]["rotation"] = pos.rotation;
-  config["view"]["tilt"] = pos.tilt;
-
-  //std::string s = YAML::Dump(config);
-  YAML::Emitter emitter;
-  //emitter.SetStringFormat(YAML::DoubleQuoted);
-  emitter << config;
-  FileStream fs(configFile.c_str(), "wb");
-  fs.write(emitter.c_str(), emitter.size());
-}
-
 void MapsApp::sendMapEvent(MapEvent_t event)
 {
   mapsTracks->onMapEvent(event);
@@ -943,7 +862,7 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
   p->drawText(0, 0, str.c_str());
 }
 
-Window* MapsApp::createGUI()
+void MapsApp::createGUI(SDL_Window* sdlWin)
 {
 #if PLATFORM_MOBILE
   static const char* mainWindowSVG = R"#(
@@ -1002,7 +921,8 @@ Window* MapsApp::createGUI()
   Tooltips::inst = &tooltipsInst;
 
   SvgDocument* winnode = createWindowNode(mainWindowSVG);
-  Window* win = new Window(winnode);
+  win.reset(new Window(winnode));
+  win->sdlWindow = sdlWin;
 
 #if PLATFORM_MOBILE
   panelSplitter = new Splitter(winnode->selectFirst("#panel-splitter"),
@@ -1109,7 +1029,7 @@ Window* MapsApp::createGUI()
   floatToolbar->setMargins(0, 10, 10, 0);
   mapsPanel->addWidget(floatToolbar);
 
-  ScaleBarWidget* scaleBar = new ScaleBarWidget(map);
+  ScaleBarWidget* scaleBar = new ScaleBarWidget(map.get());
   scaleBar->node->setAttribute("box-anchor", "bottom left");
   scaleBar->setMargins(0, 0, 10, 10);
   mapsPanel->addWidget(scaleBar);
@@ -1127,7 +1047,7 @@ Window* MapsApp::createGUI()
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();
 
-  return win;
+  gui->showWindow(win.get(), NULL);
 }
 
 void MapsApp::showPanelContainer(bool show)
@@ -1345,9 +1265,9 @@ void MapsApp::messageBox(std::string title, std::string message,
 
 #include "../linux/src/linuxPlatform.h"
 
-#include "sqlite3/sqlite3.h"
 
 SvgGui* MapsApp::gui = NULL;
+bool MapsApp::runApplication = true;
 
 // String resources:
 typedef std::unordered_map<std::string, const char*> ResourceMap;
@@ -1395,11 +1315,8 @@ static const char* moreWidgetSVG = R"#(
 </svg>
 )#";
 
-static ThreadSafeQueue< std::function<void()> > taskQueue;
+ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 static std::thread::id mainThreadId;
-
-void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
-void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
 
 void MapsApp::runOnMainThread(std::function<void()> fn)
 {
@@ -1410,6 +1327,9 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
     glfwPostEmptyEvent();
   }
 }
+
+void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
+void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
 
 void glfwSDLEvent(SDL_Event* event)
 {
@@ -1456,6 +1376,16 @@ bool MapsApp::openURL(const char* url)
   return true;
 #endif
 }
+
+#if PLATFORM_DESKTOP
+void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn_t callback)
+{
+  nfdchar_t* outPath;
+  nfdresult_t result = NFD_OpenDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL);
+  if(result == NFD_OKAY)
+    callback(outPath);
+}
+#endif
 
 void MapsApp::initResources()
 {
@@ -1523,11 +1453,33 @@ void MapsApp::initResources()
   }
 }
 
-int MapsApp::mainLoop(SDL_Window* sdlWindow, Platform* _platform)
+// note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
+//  update config as soon as change is made (vs. us having to broadcast a signal on pause)
+void MapsApp::saveConfig()
 {
-  mainThreadId = std::this_thread::get_id();
+  config["storage"]["offline"] = storageOffline;
+  config["storage"]["total"] = storageTotal;
 
-  bool runApplication = true;
+  CameraPosition pos = map->getCameraPosition();
+  config["view"]["lng"] = pos.longitude;
+  config["view"]["lat"] = pos.latitude;
+  config["view"]["zoom"] = pos.zoom;
+  config["view"]["rotation"] = pos.rotation;
+  config["view"]["tilt"] = pos.tilt;
+
+  //std::string s = YAML::Dump(config);
+  YAML::Emitter emitter;
+  //emitter.SetStringFormat(YAML::DoubleQuoted);
+  emitter << config;
+  FileStream fs(configFile.c_str(), "wb");
+  fs.write(emitter.c_str(), emitter.size());
+}
+
+MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
+{
+  runApplication = true;
+  mainThreadId = std::this_thread::get_id();
+  metricUnits = config["metric_units"].as<bool>(true);
 
   int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
   //int nvglFBFlags = NVG_IMAGE_SRGB;
@@ -1540,169 +1492,159 @@ int MapsApp::mainLoop(SDL_Window* sdlWindow, Platform* _platform)
   NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
   uint32_t* swFB = NULL;
 #endif
-  if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return -1; }
+  if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return; }
 
   Painter::sharedVg = nvgContext;
-  Painter* painter = new Painter(Painter::sharedVg);
-  SvgPainter boundsPaint(painter);
+  painter.reset(new Painter(Painter::sharedVg));
+  SvgPainter boundsPaint(painter.get());
   SvgDocument::sharedBoundsCalc = &boundsPaint;
   initResources();
 
   platform = _platform;
-  Tangram::Map* tangramMap = new Tangram::Map(std::unique_ptr<Platform>(_platform));
-  MapsApp* app = new MapsApp(tangramMap);
-  app->map->setupGL();
+  map.reset(new Tangram::Map(std::unique_ptr<Platform>(_platform)));
 
-  // fake location updates to test track recording
-  auto locFn = [&](){
-    real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
-    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0});
+  // make sure cache folder exists
+  mkdir(FSPath(baseDir, "cache").c_str(), 0777);
+
+  // Setup UI panels
+  mapsSources = std::make_unique<MapsSources>(this);
+  mapsOffline = std::make_unique<MapsOffline>(this);
+  pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
+  // no longer recreated when scene loaded
+  mapsTracks = std::make_unique<MapsTracks>(this);
+  mapsSearch = std::make_unique<MapsSearch>(this);
+  mapsBookmarks = std::make_unique<MapsBookmarks>(this);
+
+  // Scene::onReady() remains false until after first call to Map::update()!
+  //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {
+  //  runOnMainThread([=](){
+  //    // if other panels need scene loaded event, we could send to a common widget (MapsWidget?)
+  //    mapsSources->onSceneLoaded();  //sourcePanel->sdlUserEvent(gui, SCENE_LOADED);
+  //  });
+  //});
+
+  // cache management
+  storageTotal = config["storage"]["total"].as<int64_t>(0);
+  storageOffline = config["storage"]["offline"].as<int64_t>(0);
+  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>(500) * 1000000;
+  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>(250) * 1000000;
+  // easier to track total storage and offline map storage instead cached storage directly, since offline
+  //   map download/deletion can convert some tiles between cached and offline
+  platform->onNotifyStorage = [=](int64_t dtotal, int64_t doffline){
+    storageTotal += dtotal;
+    storageOffline += doffline;
+    // write out changes to offline storage total immediately since errors here can persist; errors w/ total
+    //  storage will be fixed by shrinkCache
+    if(doffline)
+      saveConfig();
+    if(storageTotal - storageOffline > storageShrinkMax && !mapsOffline->numOfflinePending()) {
+      int64_t tot = mapsSources->shrinkCache(storageShrinkMin);
+      storageTotal = tot + storageOffline;  // update storage usage
+    }
   };
 
-  Timer* locTimer = NULL;
-  Window* win = app->createGUI();
-  win->sdlWindow = sdlWindow;
-  win->addHandler([&](SvgGui*, SDL_Event* event){
-    if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
-      runApplication = false;
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_INSERT) {
-      if(locTimer) {
-        gui->removeTimer(locTimer);
-        locTimer = NULL;
-      }
-      else
-        locTimer = gui->setTimer(2000, win, [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
-    }
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
-      app->pluginManager->reload(MapsApp::baseDir + "plugins");
-      app->loadSceneFile();  // reload scene
-      app->mapsSources->sceneVarsLoaded = false;
-    }
-    return false;
-  });
-  gui->showWindow(win, NULL);
+  map->setPixelScale(pixel_scale);
+  map->setPickRadius(1.0f);
 
-  app->mapsOffline->resumeDownloads();
+  // default position: Alamo Square, SF - overriden by scene camera position if async load
+  CameraPosition pos;
+  pos.longitude = config["view"]["lng"].as<double>(-122.434668);
+  pos.latitude = config["view"]["lat"].as<double>(37.776444);
+  pos.zoom = config["view"]["zoom"].as<float>(15);
+  pos.rotation = config["view"]["rotation"].as<float>(0);
+  pos.tilt = config["view"]["tilt"].as<float>(0);
+  map->setCameraPosition(pos);
 
-  if(sceneFile) {
-    app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();  //"import:\n  - " +
-    app->loadSceneFile();
-  }
-  else
-    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
+  map->setupGL();
+}
 
-#if PLATFORM_DESKTOP
-  // Alamo square
-  app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, 0, 0, 0, 0});
-#endif
-
-  while(runApplication) {
-#if PLATFORM_DESKTOP
-    app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
-#elif PLATFORM_ANDROID
-    taskQueue.wait();
-#else
-#error "TODO"
-#endif
-
-    std::function<void()> queuedFn;
-    while(taskQueue.pop_front(queuedFn))
-      queuedFn();
-
-    int fbWidth = 0, fbHeight = 0;
-    SDL_GL_GetDrawableSize(sdlWindow, &fbWidth, &fbHeight);  //glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);
-    painter->deviceRect = Rect::wh(fbWidth, fbHeight);
-
-    // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
-    //  we expect the vast majority of all frames drawn by app to be map changes (panning, zooming), the total
-    //  benefit from partial update would be relatively small.  Furthermore, smooth map interaction is even more
-    //  important than smooth UI interaction, so if map can't redraw at 60fps, we should focus on fixing that.
-
-    // Just call Painter:endFrame() again to draw UI over map if UI isn't dirty
-    Rect dirty = gui->layoutAndDraw(painter);
-    if(SvgGui::debugLayout) {
-      XmlStreamWriter xmlwriter;
-      SvgWriter::DEBUG_CSS_STYLE = true;
-      SvgWriter(xmlwriter).serialize(win->modalOrSelf()->documentNode());
-      SvgWriter::DEBUG_CSS_STYLE = false;
-      xmlwriter.saveFile("debug_layout.svg");
-      PLATFORM_LOG("Post-layout SVG written to debug_layout.svg\n");
-      SvgGui::debugLayout = false;
-    }
-
-    // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
-    if(platform->notifyRender()) {
-      auto t0 = std::chrono::high_resolution_clock::now();
-      double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
-      app->mapUpdate(currTime);
-      //app->mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
-      app->map->render();
-      // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
-      if(!std::isnan(app->tapLocation.longitude)) {
-        if(!app->panelHistory.empty() && app->panelHistory.back() == app->infoPanel)
-          app->popPanel();
-        app->mapsTracks->tapEvent(app->tapLocation);
-        app->tapLocation = {NAN, NAN};
-      }
-    }
-    else if(dirty.isValid())
-      app->map->render();  // only have to rerender map, not update
-    else
-      continue;  // neither map nor UI is dirty
-
-#if USE_NVG_GL
-    //if(dirty != painter->deviceRect)
-    //  nvgluSetScissor(int(dirty.left), fbHeight - int(dirty.bottom), int(dirty.width()), int(dirty.height()));
-    Painter::vgInUse = true;  // to avoid error in case of repeated endFrame
-    painter->endFrame();  // render UI over map
-    //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
-#else
-    if(dirty.isValid()) {
-      bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
-      if(!swFB || sizeChanged)
-        swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
-      nvgswSetFramebuffer(painter->vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
-
-      // clear dirty rect to transparent pixels
-      if(SvgGui::debugDirty)
-        memset(swFB, 0, fbWidth*fbHeight*4);
-      else {
-        for(int yy = dirty.top; yy < dirty.bottom; ++yy)
-          memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
-      }
-      painter->endFrame();
-    }
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_CULL_FACE);
-    nvgswuBlit(swBlitter, swFB, fbWidth, fbHeight,
-        int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
-#endif
-    SDL_GL_SwapWindow(sdlWindow);   //glfwSwapBuffers(glfwWin);
-  }
-
-#if PLATFORM_DESKTOP
-  app->onSuspend();
-#endif
+MapsApp::~MapsApp()
+{
   while(sqlite3_stmt* stmt = sqlite3_next_stmt(bkmkDB, NULL))
     LOGW("SQLite statement was not finalized: %s", sqlite3_sql(stmt));  //sqlite3_finalize(stmt);
   sqlite3_close(bkmkDB);
-  gui->closeWindow(win);
+
+  gui->closeWindow(win.get());
+  win.reset();
   delete gui;
-  delete painter;
-  delete app->map;
-  delete app;
+  gui = NULL;
+  // must delete Painter before nanovg
+  painter.reset();
 #if USE_NVG_GL
-  nvglDelete(nvgContext);
+  nvglDelete(Painter::sharedVg);
 #else
   nvgswuDeleteBlitter(swBlitter);
-  nvgswDelete(nvgContext);
+  nvgswDelete(Painter::sharedVg);
 #endif
-  return 0;
+}
+
+bool MapsApp::drawFrame(int fbWidth, int fbHeight)
+{
+  std::function<void()> queuedFn;
+  while(taskQueue.pop_front(queuedFn))
+    queuedFn();
+
+  if(!runApplication) return false;
+
+  // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
+  //  we expect the vast majority of all frames drawn by app to be map changes (panning, zooming), the total
+  //  benefit from partial update would be relatively small.  Furthermore, smooth map interaction is even more
+  //  important than smooth UI interaction, so if map can't redraw at 60fps, we should focus on fixing that.
+  // ... but as a simple optimization, we call Painter:endFrame() again to draw UI over map if UI isn't dirty
+  painter->deviceRect = Rect::wh(fbWidth, fbHeight);
+  Rect dirty = gui->layoutAndDraw(painter.get());
+
+  // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
+  if(platform->notifyRender()) {
+    auto t0 = std::chrono::high_resolution_clock::now();
+    double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
+    mapUpdate(currTime);
+    //mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
+    map->render();
+    // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
+    if(!std::isnan(tapLocation.longitude)) {
+      if(!panelHistory.empty() && panelHistory.back() == infoPanel)
+        popPanel();
+      mapsTracks->tapEvent(tapLocation);
+      tapLocation = {NAN, NAN};
+    }
+  }
+  else if(dirty.isValid())
+    map->render();  // only have to rerender map, not update
+  else
+    return false;  // neither map nor UI is dirty
+
+#if USE_NVG_GL
+  //if(dirty != painter->deviceRect)
+  //  nvgluSetScissor(int(dirty.left), fbHeight - int(dirty.bottom), int(dirty.width()), int(dirty.height()));
+  Painter::vgInUse = true;  // to avoid error in case of repeated endFrame
+  painter->endFrame();  // render UI over map
+  //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
+#else
+  if(dirty.isValid()) {
+    bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
+    if(!swFB || sizeChanged)
+      swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
+    nvgswSetFramebuffer(painter->vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
+
+    // clear dirty rect to transparent pixels
+    if(SvgGui::debugDirty)
+      memset(swFB, 0, fbWidth*fbHeight*4);
+    else {
+      for(int yy = dirty.top; yy < dirty.bottom; ++yy)
+        memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
+    }
+    painter->endFrame();
+  }
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_STENCIL_TEST);
+  glDisable(GL_CULL_FACE);
+  nvgswuBlit(swBlitter, swFB, fbWidth, fbHeight,
+      int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
+#endif
+  return true;
 }
 
 int main(int argc, char* argv[])
@@ -1729,12 +1671,6 @@ int main(int argc, char* argv[])
       node = argv[argi+1];
     else
       LOGE("Unknown command line argument: %s", argv[argi]);
-  }
-
-  Url baseUrl("file:///");
-  char pathBuffer[PATH_MAX] = {0};
-  if (getcwd(pathBuffer, PATH_MAX) != nullptr) {
-      baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
   }
 
   if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
@@ -1766,11 +1702,83 @@ int main(int argc, char* argv[])
   // - https://github.com/Geequlim/NativeDialogs - last commit 2018
   NFD_Init();
 
-  int res = MapsApp::mainLoop((SDL_Window*)glfwWin, new Tangram::LinuxPlatform());
+
+  MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
+
+
+  app->createGUI((SDL_Window*)glfwWin);
+
+  // fake location updates to test track recording
+  auto locFn = [&](){
+    real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
+    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0});
+  };
+
+  Timer* locTimer = NULL;
+  app->win->addHandler([&](SvgGui*, SDL_Event* event){
+    if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
+      MapsApp::runApplication = false;
+    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_INSERT) {
+      if(locTimer) {
+        app->gui->removeTimer(locTimer);
+        locTimer = NULL;
+      }
+      else
+        locTimer = app->gui->setTimer(2000, app->win.get(), [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
+    }
+    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
+      app->pluginManager->reload(MapsApp::baseDir + "plugins");
+      app->loadSceneFile();  // reload scene
+      app->mapsSources->sceneVarsLoaded = false;
+    }
+    return false;
+  });
+
+  app->mapsOffline->resumeDownloads();
+
+  if(sceneFile) {
+    Url baseUrl("file:///");
+    char pathBuffer[PATH_MAX] = {0};
+    if (getcwd(pathBuffer, PATH_MAX) != nullptr) {
+        baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
+    }
+    app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();
+    app->loadSceneFile();
+  }
+  else
+    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
+
+  // Alamo square
+  app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, 0, 0, 0, 0});
+
+  while(MapsApp::runApplication) {
+    app->needsRender() ? glfwPollEvents() : glfwWaitEvents();
+
+    int fbWidth = 0, fbHeight = 0;
+    glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);  //SDL_GL_GetDrawableSize((SDL_Window*)glfwWin, &fbWidth, &fbHeight);
+
+    if(app->drawFrame(fbWidth, fbHeight))
+      glfwSwapBuffers(glfwWin);
+
+    if(SvgGui::debugLayout) {
+      XmlStreamWriter xmlwriter;
+      SvgWriter::DEBUG_CSS_STYLE = true;
+      SvgWriter(xmlwriter).serialize(app->win->modalOrSelf()->documentNode());
+      SvgWriter::DEBUG_CSS_STYLE = false;
+      xmlwriter.saveFile("debug_layout.svg");
+      PLATFORM_LOG("Post-layout SVG written to debug_layout.svg\n");
+      SvgGui::debugLayout = false;
+    }
+  }
+
+  app->onSuspend();
+  delete app;
 
   NFD_Quit();
   glfwTerminate();
-  return res;
+  return 0;
 }
 #endif
 

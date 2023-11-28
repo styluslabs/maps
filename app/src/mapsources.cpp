@@ -634,15 +634,11 @@ Button* MapsSources::createPanel()
   importTb->setVisible(false);
   importCancel->onClicked = [=](){ importTb->setVisible(false); };
 
-  importFileBtn->onClicked = [=](){
-    nfdchar_t* outPath;
-    nfdfilteritem_t filterItem[1] = { { "YAML files", "yaml,yml" } };
-    nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
-    if(result != NFD_OKAY)
-      return;
+  auto importFileFn = [=](const char* outPath){
     importSources(std::string("file://") + outPath);
     importTb->setVisible(false);
   };
+  importFileBtn->onClicked = [=](){ MapsApp::openFileDialog({{"YAML files", "yaml,yml"}}, importFileFn); };
 
   // JSON (YAML flow), tile URL, or path/URL to file
   importAccept->onClicked = [=](){

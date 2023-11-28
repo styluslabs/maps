@@ -24,4 +24,5 @@ public class MapsLib
   public static native void updateLocation(long time, double lat, double lng, float poserr, double alt, float alterr, float dir, float direrr, float spd, float spderr);
   public static native void updateOrientation(float azimuth, float pitch, float roll);
   public static native void updateGpsStatus(int satsVisible, int satsUsed);
+  public static native void openFileDesc(String filename, int fd);
 }

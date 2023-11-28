@@ -1982,12 +1982,7 @@ Button* MapsTracks::createPanel()
   };
 
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
-  loadTrackBtn->onClicked = [=](){
-    nfdchar_t* outPath;
-    nfdfilteritem_t filterItem[1] = { { "GPX files", "gpx" } };
-    nfdresult_t result = NFD_OpenDialog(&outPath, filterItem, 1, NULL);
-    if(result != NFD_OKAY)
-      return;
+  auto loadTrackFn = [=](const char* outPath){
     tracks.emplace_back("", "", outPath);
     loadGPX(&tracks.back());
     if(tracks.back().waypoints.empty() && !tracks.back().activeWay()) {
@@ -1998,6 +1993,7 @@ Button* MapsTracks::createPanel()
     updateDB(&tracks.back());
     populateStats(&tracks.back());
   };
+  loadTrackBtn->onClicked = [=](){ MapsApp::openFileDialog({{"GPX files", "gpx"}}, loadTrackFn); };
 
   Button* recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record Track");
   recordTrackBtn->onClicked = [=](){
