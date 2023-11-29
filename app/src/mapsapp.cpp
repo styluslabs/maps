@@ -1306,40 +1306,23 @@ void MapsApp::saveConfig()
   fs.write(emitter.c_str(), emitter.size());
 }
 
-#define USE_NVG_GL 1
-#include "nanovg-2/src/nanovg_vtex.h"
-
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
   runApplication = true;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
 
-  int nvgFlags = NVG_AUTOW_DEFAULT;  // | (Painter::sRGB ? NVG_SRGB : 0);
-  //int nvglFBFlags = NVG_IMAGE_SRGB;
-#if USE_NVG_GL  //ndef NO_PAINTER_GL
-  NVGcontext* nvgContext = nvglCreate(nvgFlags);
-  //NVGLUframebuffer* nvglFB = nvgluCreateFramebuffer(nvgContext, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
-  //nvgluSetFramebufferSRGB(1);  // no-op for GLES - sRGB enabled iff FB is sRGB
-#else
-  NVGcontext* nvgContext = nvgswCreate(nvgFlags);
-  NVGSWUblitter* swBlitter = nvgswuCreateBlitter();
-  uint32_t* swFB = NULL;
-#endif
-  if(!nvgContext) { PLATFORM_LOG("Error creating nanovg context.\n"); return; }
-
-  Painter::sharedVg = nvgContext;
-  painter.reset(new Painter(Painter::sharedVg));
-  SvgPainter boundsPaint(painter.get());
-  SvgDocument::sharedBoundsCalc = &boundsPaint;
+  // Create fontstash or let Painter do it?
+  painter.reset(new Painter(Painter::PAINT_GL));
+  SvgDocument::sharedBoundsCalc = new SvgPainter(painter.get());
   initResources(baseDir.c_str());
 
   gui = new SvgGui();
-  gui->fullRedraw = USE_NVG_GL;  // see below
+  gui->fullRedraw = painter->usesGPU();  // see below
   // scaling
   gui->paintScale = 2.0;  //210.0/150.0;
   gui->inputScale = 1/gui->paintScale;
-  nvgAtlasTextThreshold(Painter::sharedVg, 24 * gui->paintScale);  // 24px font is default for dialog titles
+  painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
 
   // preset colors for tracks and bookmarks
   for(const auto& colorstr : config["colors"])
@@ -1425,14 +1408,8 @@ MapsApp::~MapsApp()
   win.reset();
   delete gui;
   gui = NULL;
-  // must delete Painter before nanovg
-  painter.reset();
-#if USE_NVG_GL
-  nvglDelete(Painter::sharedVg);
-#else
-  nvgswuDeleteBlitter(swBlitter);
-  nvgswDelete(Painter::sharedVg);
-#endif
+
+  delete SvgDocument::sharedBoundsCalc;
   delete map;
 }
 
@@ -1472,35 +1449,22 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   else
     return false;  // neither map nor UI is dirty
 
-#if USE_NVG_GL
-  //if(dirty != painter->deviceRect)
-  //  nvgluSetScissor(int(dirty.left), fbHeight - int(dirty.bottom), int(dirty.width()), int(dirty.height()));
-  Painter::vgInUse = true;  // to avoid error in case of repeated endFrame
   painter->endFrame();  // render UI over map
-  //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
-#else
+#if 0  // nanovg_sw renderer
   if(dirty.isValid()) {
-    bool sizeChanged = swFB && (fbWidth != swBlitter->width || fbHeight != swBlitter->height);
-    if(!swFB || sizeChanged)
-      swFB = (uint32_t*)realloc(swFB, fbWidth*fbHeight*4);
-    nvgswSetFramebuffer(painter->vg, swFB, fbWidth, fbHeight, 0, 8, 16, 24);
-
     // clear dirty rect to transparent pixels
-    if(SvgGui::debugDirty)
-      memset(swFB, 0, fbWidth*fbHeight*4);
-    else {
-      for(int yy = dirty.top; yy < dirty.bottom; ++yy)
-        memset(&swFB[int(dirty.left) + yy*fbWidth], 0, 4*size_t(dirty.width()));
-    }
-    painter->endFrame();
+    painter->setCompOp(Painter::CompOp_Src);
+    painter->fillRect(dirty, Color::TRANSPARENT_COLOR);
+    painter->setCompOp(Painter::CompOp_SrcOver);
   }
+  painter->endFrame();
+
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_STENCIL_TEST);
   glDisable(GL_CULL_FACE);
-  nvgswuBlit(swBlitter, swFB, fbWidth, fbHeight,
-      int(dirty.left), int(dirty.top), int(dirty.width()), int(dirty.height()));
+  painter->blitImageToScreen(dirty);
 #endif
   return true;
 }

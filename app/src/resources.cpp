@@ -118,7 +118,7 @@ bool userLoadSvg(char* svg, Texture* texture)
   std::unique_ptr<SvgDocument> doc(SvgParser().parseString(svg));
   if(!doc) return false;
 
-  Painter boundsPaint(NULL);
+  Painter boundsPaint(Painter::PAINT_NULL);
   SvgPainter boundsCalc(&boundsPaint);
   doc->boundsCalculator = &boundsCalc;
 
@@ -149,18 +149,13 @@ bool userLoadSvg(char* svg, Texture* texture)
 
   int w = int(doc->width().px() + 0.5), h = int(doc->height().px() + 0.5);
   Image img(w, h);
-  // this fn will be run on a thread if loading scene async, so we cannot use shared nvg context
-  NVGcontext* drawCtx = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_SRGB | NVGSW_PATHS_XC);
-  {
-    Painter painter(&img, drawCtx);
-    painter.setBackgroundColor(::Color::INVALID_COLOR);
-    painter.beginFrame();
-    painter.translate(0, h);
-    painter.scale(1, -1);
-    SvgPainter(&painter).drawNode(doc.get());  //, dirty);
-    painter.endFrame();
-  }
-  nvgswDelete(drawCtx);
+  Painter painter(Painter::PAINT_SW | Painter::NO_TEXT, &img);
+  painter.setBackgroundColor(::Color::INVALID_COLOR);  // skip BG since image already inited to zeros
+  painter.beginFrame();
+  painter.translate(0, h);
+  painter.scale(1, -1);
+  SvgPainter(&painter).drawNode(doc.get());  //, dirty);
+  painter.endFrame();
 
   auto atlas = std::make_unique<SpriteAtlas>();
   bool hasSprites = false;

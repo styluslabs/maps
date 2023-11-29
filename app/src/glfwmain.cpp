@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
 #endif
 
   // config
-  MapsApp::baseDir = "./";  //"/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
+  MapsApp::baseDir = canonicalPath("./");  //"/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
   FSPath configPath(MapsApp::baseDir, "config.yaml");
   MapsApp::configFile = configPath.c_str();
   MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
@@ -95,10 +95,7 @@ int main(int argc, char* argv[])
   // - https://github.com/Geequlim/NativeDialogs - last commit 2018
   NFD_Init();
 
-
   MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
-
-
   app->createGUI((SDL_Window*)glfwWin);
 
   // fake location updates to test track recording

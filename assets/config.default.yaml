@@ -4,8 +4,8 @@ sources:
   last_source: stylus-osm
   elevation: ["elevation"]
   common_imports:
-    - markers.yaml
-    - secrets.yaml
+    - scenes/markers.yaml
+    - scenes/secrets.yaml
 
 storage:
   # cache size thresholds
