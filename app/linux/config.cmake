@@ -17,6 +17,7 @@ endif()
 
 # -Wshadow ... too many in Tangram to deal with right now
 add_compile_options(-Werror=return-type)
+#add_compile_options(-Werror=incompatible-pointer-types) -- only for C
 
 check_unsupported_compiler_version()
 

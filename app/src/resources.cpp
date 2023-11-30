@@ -21,6 +21,8 @@
 #include "nanovg-2/src/nanovg_sw.h"
 #include "nanovg-2/src/nanovg_sw_utils.h"
 
+#include "fontstash.h"
+
 #include "ugui/theme.cpp"
 
 
@@ -64,11 +66,26 @@ static const char* moreWidgetSVG = R"#(
 </svg>
 )#";
 
+void fonsDeleter(FONScontext* fons) { fonsDeleteInternal(fons); };
+static std::unique_ptr<FONScontext, decltype(&fonsDeleter)> fontStash(NULL, fonsDeleter);
+
+static std::unique_ptr<Painter> boundsPainter;
+static std::unique_ptr<SvgPainter> boundsSvgPainter;
+
 void initResources(const char* baseDir)
 {
+  FONSparams fonsParams;
+  fonsParams.flags = FONS_ZERO_TOPLEFT | FONS_DELAY_LOAD;
+  fontStash.reset(fonsCreateInternal(&fonsParams));
+  Painter::fontStash = fontStash.get();
+
   Painter::loadFont("sans", FSPath(baseDir, "scenes/fonts/roboto-regular.ttf").c_str());
   if(Painter::loadFont("fallback", FSPath(baseDir, "scenes/fonts/DroidSansFallback.ttf").c_str()))
     Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback
+
+  boundsPainter.reset(new Painter(Painter::PAINT_NULL));
+  boundsSvgPainter.reset(new SvgPainter(boundsPainter.get()));
+  SvgDocument::sharedBoundsCalc = boundsSvgPainter.get();
 
   // hook to support loading from resources; can we move this somewhere to deduplicate w/ other projects?
   SvgParser::openStream = [](const char* name) -> std::istream* {

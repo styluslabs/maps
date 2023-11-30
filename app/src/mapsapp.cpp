@@ -1308,14 +1308,13 @@ void MapsApp::saveConfig()
 
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
+  platform = _platform;
   runApplication = true;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
 
-  // Create fontstash or let Painter do it?
-  painter.reset(new Painter(Painter::PAINT_GL));
-  SvgDocument::sharedBoundsCalc = new SvgPainter(painter.get());
   initResources(baseDir.c_str());
+  painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES));
 
   gui = new SvgGui();
   gui->fullRedraw = painter->usesGPU();  // see below
@@ -1340,28 +1339,9 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
       LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
   }
 
-  platform = _platform;
-  map = new Tangram::Map(std::unique_ptr<Platform>(_platform));
-
   // make sure cache folder exists
   mkdir(FSPath(baseDir, "cache").c_str(), 0777);
-
-  // Setup UI panels
-  mapsSources = std::make_unique<MapsSources>(this);
-  mapsOffline = std::make_unique<MapsOffline>(this);
-  pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
-  // no longer recreated when scene loaded
-  mapsTracks = std::make_unique<MapsTracks>(this);
-  mapsSearch = std::make_unique<MapsSearch>(this);
-  mapsBookmarks = std::make_unique<MapsBookmarks>(this);
-
-  // Scene::onReady() remains false until after first call to Map::update()!
-  //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {
-  //  runOnMainThread([=](){
-  //    // if other panels need scene loaded event, we could send to a common widget (MapsWidget?)
-  //    mapsSources->onSceneLoaded();  //sourcePanel->sdlUserEvent(gui, SCENE_LOADED);
-  //  });
-  //});
+  mkdir(FSPath(baseDir, "tracks").c_str(), 0777);
 
   // cache management
   storageTotal = config["storage"]["total"].as<int64_t>(0);
@@ -1383,8 +1363,21 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     }
   };
 
+  map = new Tangram::Map(std::unique_ptr<Platform>(_platform));
+  // Scene::onReady() remains false until after first call to Map::update()!
+  //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
   map->setPixelScale(pixel_scale);
   map->setPickRadius(1.0f);
+  map->setupGL();
+
+  // Setup UI panels
+  mapsSources = std::make_unique<MapsSources>(this);
+  mapsOffline = std::make_unique<MapsOffline>(this);
+  pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
+  // no longer recreated when scene loaded
+  mapsTracks = std::make_unique<MapsTracks>(this);
+  mapsSearch = std::make_unique<MapsSearch>(this);
+  mapsBookmarks = std::make_unique<MapsBookmarks>(this);
 
   // default position: Alamo Square, SF - overriden by scene camera position if async load
   CameraPosition pos;
@@ -1394,8 +1387,6 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   pos.rotation = config["view"]["rotation"].as<float>(0);
   pos.tilt = config["view"]["tilt"].as<float>(0);
   map->setCameraPosition(pos);
-
-  map->setupGL();
 }
 
 MapsApp::~MapsApp()
@@ -1403,13 +1394,10 @@ MapsApp::~MapsApp()
   while(sqlite3_stmt* stmt = sqlite3_next_stmt(bkmkDB, NULL))
     LOGW("SQLite statement was not finalized: %s", sqlite3_sql(stmt));  //sqlite3_finalize(stmt);
   sqlite3_close(bkmkDB);
+  bkmkDB = NULL;
 
   gui->closeWindow(win.get());
-  win.reset();
-  delete gui;
-  gui = NULL;
-
-  delete SvgDocument::sharedBoundsCalc;
+  delete gui;  gui = NULL;
   delete map;
 }
 
