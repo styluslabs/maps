@@ -7,6 +7,9 @@
 #include "ugui/widgets.h"
 
 // put single header library implementations here instead of in mapsapp.cpp which is rebuilt more often
+#define FONTSTASH_IMPLEMENTATION
+#include "fontstash.h"
+
 #define NVG_LOG PLATFORM_LOG
 #include "platform_gl.h"
 #ifndef NO_PAINTER_GL
@@ -20,8 +23,6 @@
 #define NVGSW_QUIET_FRAME  // suppress axis-aligned scissor warning
 #include "nanovg-2/src/nanovg_sw.h"
 #include "nanovg-2/src/nanovg_sw_utils.h"
-
-#include "fontstash.h"
 
 #include "ugui/theme.cpp"
 
@@ -75,7 +76,9 @@ static std::unique_ptr<SvgPainter> boundsSvgPainter;
 void initResources(const char* baseDir)
 {
   FONSparams fonsParams;
-  fonsParams.flags = FONS_ZERO_TOPLEFT | FONS_DELAY_LOAD;
+  fonsParams.sdfPadding = 4;
+  fonsParams.sdfPixelDist = 32.0f;
+  fonsParams.flags = FONS_ZERO_TOPLEFT | FONS_DELAY_LOAD | FONS_SUMMED;
   fontStash.reset(fonsCreateInternal(&fonsParams));
   Painter::fontStash = fontStash.get();
 

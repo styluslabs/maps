@@ -43,7 +43,7 @@ target_include_directories(maps-app
   core/deps
   core/deps/glm
   core/deps/yaml-cpp/include
-  core/deps/SQLiteCpp
+  core/deps/sqlite3
   core/deps/isect2d/include
   core/deps/stb
   app/styluslabs

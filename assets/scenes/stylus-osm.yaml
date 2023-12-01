@@ -177,12 +177,12 @@ sources:
 fonts:
     Open Sans:
         - weight: 400
-          url: fonts/OpenSans-Regular.woff
+          url: fonts/OpenSans-Regular.ttf
         - weight: 400
           style: italic
-          url: fonts/OpenSans-Italic.woff
+          url: fonts/OpenSans-Italic.ttf
         - weight: 600
-          url: fonts/OpenSans-Semibold.woff
+          url: fonts/OpenSans-SemiBold.ttf
 
 
 scene:

@@ -23,7 +23,7 @@ target_compile_definitions(droidmaps PRIVATE IMGUI_IMPL_OPENGL_ES2)
 
 if(TANGRAM_MBTILES_DATASOURCE)
   target_sources(droidmaps PRIVATE platforms/android/tangram/src/main/cpp/sqlite3ndk.cpp)
-  target_include_directories(droidmaps PRIVATE core/deps/SQLiteCpp/sqlite3) # sqlite3ndk.cpp needs sqlite3.h
+  target_include_directories(droidmaps PRIVATE core/deps/sqlite3) # sqlite3ndk.cpp needs sqlite3.h
   target_compile_definitions(droidmaps PRIVATE TANGRAM_MBTILES_DATASOURCE=1)
 endif()
 
