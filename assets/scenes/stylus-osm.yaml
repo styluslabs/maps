@@ -633,6 +633,7 @@ layers:
                     anchor: center
                     text_source: function() { return feature.ref.split(";")[0]; }
                     font:
+                        family: Open Sans
                         size: 10px
                         fill: black
 
