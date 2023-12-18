@@ -6,7 +6,6 @@
 #include "rapidjson/document.h"
 #include <sys/stat.h>
 #include <fstream>
-#include "nfd.h"
 #include "sqlitepp.h"
 
 #include "touchhandler.h"
@@ -50,6 +49,11 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
     taskQueue.push_back(std::move(fn));
     PLATFORM_WakeEventLoop();
   }
+}
+
+void MapsApp::sdlEvent(SDL_Event* event)
+{
+  runOnMainThread([_event = *event]() mutable { gui->sdlEvent(&_event); });
 }
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
@@ -1258,21 +1262,22 @@ SvgNode* MapsApp::uiIcon(const char* id)
   return res;
 }
 
+#if PLATFORM_DESKTOP
 bool MapsApp::openURL(const char* url)
 {
 #if PLATFORM_WIN
   HINSTANCE result = ShellExecute(0, 0, PLATFORM_STR(url), 0, 0, SW_SHOWNORMAL);
   // ShellExecute returns a value greater than 32 if successful
   return (int)result > 32;
-#elif PLATFORM_ANDROID
-  AndroidHelper::openUrl(url);
-  return true;
-#elif PLATFORM_IOS
-  if(!strchr(url, ':'))
-    iosOpenUrl((std::string("http://") + url).c_str());
-  else
-    iosOpenUrl(url);
-  return true;
+//#elif PLATFORM_ANDROID
+//  AndroidHelper::openUrl(url);
+//  return true;
+//#elif PLATFORM_IOS
+//  if(!strchr(url, ':'))
+//    iosOpenUrl((std::string("http://") + url).c_str());
+//  else
+//    iosOpenUrl(url);
+//  return true;
 #elif PLATFORM_OSX
   return strchr(url, ':') ? macosOpenUrl(url) : macosOpenUrl((std::string("http://") + url).c_str());
 #elif IS_DEBUG
@@ -1283,6 +1288,7 @@ bool MapsApp::openURL(const char* url)
   return true;
 #endif
 }
+#endif
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)

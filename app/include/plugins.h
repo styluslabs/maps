@@ -24,8 +24,8 @@ public:
   void createFns(duk_context* ctx);
   std::string evalJS(const char* s);
   void cancelRequests(UrlReqType type);
-  void notifyRequest(UrlRequestHandle handle);
-  UrlReqType clearRequest(UrlRequestHandle handle);
+  void notifyRequest(UrlRequestHandle handle, int serial);
+  UrlReqType clearRequest(int serial);
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
   void jsPlaceInfo(int fnIdx, std::string id);
   void jsRoute(int fnIdx, std::string routeMode, const std::vector<LngLat>& waypts);
@@ -57,7 +57,7 @@ public:
   std::vector<PluginFn> routeFns;
   std::vector<PluginFn> placeFns;
   std::vector<PluginFn> commandFns;
-  struct UrlRequest { UrlReqType type; UrlRequestHandle handle; };
+  struct UrlRequest { UrlReqType type; UrlRequestHandle handle; int serial; };
   std::list<UrlRequest> pendingRequests;
 
   static PluginManager* inst;

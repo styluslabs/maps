@@ -39,6 +39,8 @@ add_executable(tangram
   platforms/common/platform_gl.cpp
   platforms/common/urlClient.cpp
   platforms/common/linuxSystemFontHelper.cpp
+  app/src/glfwmain.cpp
+  app/styluslabs/ugui/example/glfwSDL.c
 )
 
 target_include_directories(tangram
@@ -80,3 +82,7 @@ target_compile_options(tangram
 target_compile_definitions(tangram PRIVATE GLM_FORCE_CTOR_INIT)
 
 #add_resources(tangram "${PROJECT_SOURCE_DIR}/scenes" "res")
+
+# native file dialogs library
+add_subdirectory(app/deps/nfd)
+target_link_libraries(maps-app PRIVATE nfd)

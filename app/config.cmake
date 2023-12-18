@@ -11,7 +11,6 @@ add_library(maps-app
   app/src/util.cpp
   app/src/plugins.cpp
   app/src/mapwidgets.cpp
-  app/src/glfwmain.cpp
   # ugui
   app/styluslabs/ugui/svggui.cpp
   app/styluslabs/ugui/widgets.cpp
@@ -29,7 +28,6 @@ add_library(maps-app
   app/styluslabs/usvg/cssparser.cpp
   app/styluslabs/nanovg-2/src/nanovg.c
   app/styluslabs/pugixml/src/pugixml.cpp
-  app/styluslabs/ugui/example/glfwSDL.c
 )
 
 target_include_directories(maps-app
@@ -56,9 +54,3 @@ target_include_directories(maps-app
 target_compile_definitions(maps-app PRIVATE GLM_FORCE_CTOR_INIT)
 target_compile_definitions(maps-app PRIVATE PUGIXML_NO_XPATH)
 target_compile_definitions(maps-app PRIVATE PUGIXML_NO_EXCEPTIONS)
-#target_compile_definitions(maps-app PRIVATE NO_PAINTER_GL)
-#target_compile_definitions(maps-app PRIVATE FONS_SDF)
-
-# native file dialogs library
-add_subdirectory(app/deps/nfd)
-target_link_libraries(maps-app PRIVATE nfd)

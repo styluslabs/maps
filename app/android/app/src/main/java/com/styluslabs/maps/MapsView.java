@@ -5,6 +5,7 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
+import android.view.SurfaceHolder;
 
 /*
 import android.opengl.GLSurfaceView;
@@ -49,6 +50,11 @@ class MapsView extends SurfaceView implements SurfaceHolder.Callback
   {
     super(context);
     getHolder().addCallback(this);
+
+    //setZOrderMediaOverlay(true);
+    //setFocusable(true);
+    //setFocusableInTouchMode(true);
+    //requestFocus();
   }
 
   // SurfaceHolder.Callback

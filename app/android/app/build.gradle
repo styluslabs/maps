@@ -58,7 +58,7 @@ android {
   }
 
   androidResources {
-    ignoreAssetsPattern '!old_*'
+    ignoreAssetsPattern '!old-*:!tilemaker'
   }
 
   lintOptions {

@@ -147,16 +147,16 @@ void PluginManager::jsRoute(int fnIdx, std::string routeMode, const std::vector<
   inState = NONE;
 }
 
-void PluginManager::notifyRequest(UrlRequestHandle handle)
+void PluginManager::notifyRequest(UrlRequestHandle handle, int serial)
 {
   if(inState != NONE)
-    pendingRequests.push_back({inState, handle});
+    pendingRequests.push_back({inState, handle, serial});
 }
 
-PluginManager::UrlReqType PluginManager::clearRequest(UrlRequestHandle handle)
+PluginManager::UrlReqType PluginManager::clearRequest(int serial)
 {
   for(auto it = pendingRequests.begin(); it != pendingRequests.end(); ++it) {
-    if(it->handle == handle) {
+    if(it->serial == serial) {
       UrlReqType type = it->type;
       pendingRequests.erase(it);
       return type;
@@ -227,24 +227,26 @@ static int httpRequest(duk_context* ctx)
   const char* hdrstr = nargs > 2 ? duk_require_string(ctx, 1) : "";
   const char* payload = nargs > 3 ? duk_require_string(ctx, 2) : "";
   auto url = Url(urlstr);
-  std::string cbvar = fstring("_httpRequest_%d", reqCounter++);
+  std::string cbvar = fstring("_httpRequest_%d", ++reqCounter);
   duk_dup(ctx, nargs-1);
   duk_put_global_string(ctx, cbvar.c_str());
   //duk_push_global_stash(ctx);
   //duk_dup(ctx, 1);  // callback
   //duk_put_prop_string(ctx, -2, cbvar.c_str());
+  // no easy way to get UrlRequestHandle into the callback, so use a separate identifier
+  int reqSerial = reqCounter;
   UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [=](UrlResponse&& response) {
     if(!PluginManager::inst) return;  // app shutting down
     if(response.error)
       LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
     MapsApp::runOnMainThread([=](){
       // set state for any secondary requests
-      PluginManager::inst->inState = PluginManager::inst->clearRequest(hnd);
+      PluginManager::inst->inState = PluginManager::inst->clearRequest(reqSerial);
       invokeHttpReqCallback(ctx, cbvar, response);
       PluginManager::inst->inState = PluginManager::NONE;
     });
   });
-  PluginManager::inst->notifyRequest(hnd);
+  PluginManager::inst->notifyRequest(hnd, reqSerial);
   return 0;
 }
 

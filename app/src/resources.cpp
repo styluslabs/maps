@@ -10,10 +10,21 @@
 #define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
 
-#define NVG_LOG PLATFORM_LOG
+#if PLATFORM_DESKTOP
 #include "platform_gl.h"
-#ifndef NO_PAINTER_GL
 #define NANOVG_GL3_IMPLEMENTATION
+#elif PLATFORM_IOS
+#include <OpenGLES/ES3/gl.h>
+#include <OpenGLES/ES3/glext.h>
+#define NANOVG_GLES3_IMPLEMENTATION
+#elif PLATFORM_ANDROID
+#include <GLES3/gl3.h>
+#include <GLES3/gl3ext.h>
+#define NANOVG_GLES3_IMPLEMENTATION
+#endif
+
+#define NVG_LOG PLATFORM_LOG
+#ifndef NO_PAINTER_GL
 #include "nanovg-2/src/nanovg_vtex.h"
 #include "nanovg-2/src/nanovg_gl_utils.h"
 #endif

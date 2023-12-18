@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -12,6 +15,8 @@ import androidx.annotation.Nullable;
 import android.content.Context;
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
+import android.net.Uri;
 import android.util.Log;
 import android.text.InputType;
 import android.view.WindowManager;
@@ -24,11 +29,16 @@ import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.widget.RelativeLayout;
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.location.Location;
 import android.location.LocationManager;
 import android.location.LocationListener;
+import android.location.GpsStatus;
+import android.location.GpsSatellite;
 import android.hardware.SensorManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -59,17 +69,11 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
-    mMapsView = new MapsView(getApplication());
-    mLayout = new RelativeLayout(this);
-    mLayout.addView(mMapsView);
-    setContentView(mLayout);
-    //setContentView(mMapsView);
-    //mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
 
     String extfiles = getExternalFilesDir(null).getAbsolutePath();
     File file = new File(extfiles, "config.default.yaml");
     if(!file.exists())
-      extractAssets("", "");
+      extractAssets(getAssets(), "", extfiles + "/");
 
     MapsLib.init(this, getAssets(), extfiles);
 
@@ -87,6 +91,13 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       requestPermissions(//this,  //ActivityCompat
           new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERM_REQ_LOCATION);
     }
+
+    mMapsView = new MapsView(getApplication());
+    mLayout = new RelativeLayout(this);
+    mLayout.addView(mMapsView);
+    setContentView(mLayout);
+    //setContentView(mMapsView);
+    //mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
   }
 
   @Override
@@ -269,50 +280,57 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   // assetpath = "" reads from assets/  outpath = "" writes to external files path
-  public boolean extractAssets(String assetpath, String outpath)
+  public boolean extractAssets(AssetManager assetManager, String assetpath, String outpath)
   {
     try {
-      AssetManager assetManager = getAssets();
       String[] files = assetManager.list(assetpath);
-      if(!files) return false;
-      if(outpath.isEmpty())
-        outpath = getExternalFilesDir(null);
+      if(files == null || files.length == 0) return false;
+      //if(outpath.isEmpty()) outpath = getExternalFilesDir(null).toString();
       for(String filename : files) {
-        String srcpath = assetpath + "/" + filename;
-        String dstpath = outpath + "/" + filename;
+        String srcpath = assetpath + filename;
+        String dstpath = outpath + filename;
         // check for directory
-        if(!extractAssets(srcpath, dstpath)) {
+        if(!extractAssets(assetManager, srcpath + "/", dstpath + "/")) {
+          Log.v("extractAssets", "Copying " + srcpath + " to " + dstpath);
           File dstfile = new File(dstpath);
           if(dstfile.exists()) continue;  // don't overwrite existing file
+          // this returns InputStream object
+          InputStream in = assetManager.open(srcpath);
           // ensure that path exists
           dstfile.getParentFile().mkdirs();
           FileOutputStream out = new FileOutputStream(dstfile);
-          // this returns InputStream object
-          InputStream in = assetManager.open(srcpath);
           // copy byte by byte ... doesn't seem to be a more elegant soln!
           byte[] buf = new byte[65536];
           int len;
           while((len = in.read(buf)) > 0)
             out.write(buf, 0, len);
-          in.close();
           out.close();
+          in.close();
         }
       }
       return true;
     }
     catch(IOException e) {
-      // oh well, no tips
+      Log.v("extractAssets", "Error: ", e);
       return false;
     }
   }
 
+  @Keep
+  public void openUrl(String url)
+  {
+    Intent viewUrlIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+    startActivity(viewUrlIntent);
+  }
+
   private static final int ID_OPEN_DOCUMENT = 2;
 
+  @Keep
   public void openFile()  //Uri pickerInitialUri)
   {
     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
-    intent.setType("application/pdf");
+    intent.setType("*/*");
     //intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, pickerInitialUri);
     startActivityForResult(intent, ID_OPEN_DOCUMENT);
   }
@@ -320,17 +338,17 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   @Override
   public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
     if(requestCode == ID_OPEN_DOCUMENT) {
-      if(resultCode == Activity.RESULT_OK && resultData) {
+      if(resultCode == Activity.RESULT_OK && resultData != null) {
         if(resultData.getData().toString().startsWith("content://")) {
           try {
             // openFileDescriptor only works for mode="r", but /proc/self/fd/<fd> gives us symlink to actual
             //  file which we can open for writing
             // an alternative would be to use android.system.Os.readlink here instead of in androidhelper.cpp
-            ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(intent.getData(), "r");
-            MapsLib.openFileDesc(intent.getData().getPath(), pfd.getFd());
+            ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(resultData.getData(), "r");
+            MapsLib.openFileDesc(resultData.getData().getPath(), pfd.getFd());
             pfd.close();
           } catch(Exception e) {
-            Log.v("onActivityResult", "Error opening document: " + intent.getData().toString(), e);
+            Log.v("onActivityResult", "Error opening document: " + resultData.getData().toString(), e);
           }
         }
         //else
@@ -343,11 +361,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
     if(!clipboard.hasPrimaryClip()) return null;
-    ClipData.Item text = clipboard.getPrimaryClip().getItemAt(0)
-    String text = item.getText();
-    if(text) return text;
-    Uri uri = item.getUri();
-    return uri ? resolveUri(Uri) : null;
+    ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+    return item.coerceToText(this).toString();
   }
 
   public void setClipboard(String text)
