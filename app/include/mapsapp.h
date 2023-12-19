@@ -5,7 +5,6 @@
 
 //using namespace Tangram;
 #include "mapscomponent.h"
-#include "ulib/painter.h"  // for Color
 #include "ulib/threadutil.h"
 
 class TouchHandler;
@@ -24,6 +23,8 @@ class Window;
 class Toolbar;
 class MapsWidget;
 class SvgNode;
+class Color;
+class Painter;
 struct sqlite3;
 struct SDL_Window;
 union SDL_Event;

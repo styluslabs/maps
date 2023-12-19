@@ -51,8 +51,12 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
   }
 }
 
+#define SVGGUI_UTIL_IMPLEMENTATION
+#include "ugui/svggui_util.h"  // sdlEventLog for debugging
+
 void MapsApp::sdlEvent(SDL_Event* event)
 {
+  LOGW("%s", sdlEventLog(event).c_str());
   runOnMainThread([_event = *event]() mutable { gui->sdlEvent(&_event); });
 }
 

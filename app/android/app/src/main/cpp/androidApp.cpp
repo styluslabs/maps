@@ -614,12 +614,14 @@ JNI_FN(onPause)(JNIEnv* env, jclass)
 
 JNI_FN(touchEvent)(JNIEnv* env, jclass, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)
 {
-  static const int translateAction[] = {SDL_FINGERDOWN, SDL_FINGERUP, SDL_FINGERMOTION,
-      SDL_FINGERUP /*cancel*/, SDL_FINGERMOTION, SDL_FINGERDOWN, SDL_FINGERUP};
+  // ACTION_DOWN = 0, ACTION_UP = 1, ACTION_MOVE = 2, ACTION_CANCEL = 3,
+  //  ACTION_OUTSIDE = 4, ACTION_POINTER_DOWN = 5, ACTION_POINTER_UP = 6
+  static const int actionToSDL[] =
+      {SDL_FINGERDOWN, SDL_FINGERUP, SDL_FINGERMOTION, SVGGUI_FINGERCANCEL, 0, SDL_FINGERDOWN, SDL_FINGERUP};
 
   SDL_Event event = {0};
-  event.type = translateAction[action];
-  event.tfinger.touchId = SDL_TOUCH_MOUSEID;
+  event.type = actionToSDL[action];
+  event.tfinger.touchId = 0;
   event.tfinger.fingerId = ptrId;
   event.tfinger.x = x;
   event.tfinger.y = y;

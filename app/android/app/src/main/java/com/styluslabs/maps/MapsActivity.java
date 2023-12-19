@@ -70,7 +70,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     super.onCreate(icicle);
 
-    String extfiles = getExternalFilesDir(null).getAbsolutePath();
+    //String extfiles = getExternalFilesDir(null).getAbsolutePath();
+    String extfiles = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
     File file = new File(extfiles, "config.default.yaml");
     if(!file.exists())
       extractAssets(getAssets(), "", extfiles + "/");

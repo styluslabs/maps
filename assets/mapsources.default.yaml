@@ -8,14 +8,14 @@
 stylus-osm:
     type: Vector
     title: Stylus Labs OSM Flat
-    url: stylus-osm.yaml
+    url: scenes/stylus-osm.yaml
 
 
 stylus-osm-dark:
     type: Vector
     title: Stylus Labs OSM Dark
     layer: true
-    url: stylus-osm-dark.yaml
+    url: scenes/stylus-osm-dark.yaml
 
 
 stylus-osm-terrain:
@@ -37,21 +37,6 @@ stylus-satellite:
         - source: stylus-osm-dark
     updates:
         global.show_polygons: false
-
-
-# not updated after 2017?
-mapzen-osm:
-    type: Vector
-    title: Mapzen OSM (2017)
-    url: scene.yaml
-    updates: { sources.osm.cache: mapzen-osm }
-
-
-carto-voyager:
-    type: Vector
-    title: Carto OSM Voyager
-    url: voyager.yaml
-    updates: { sources.carto.cache: carto-streets }
 
 
 opentopomap:
@@ -83,12 +68,6 @@ osmand-raster2x:
     title: OsmAnd OSM 2x
     url: https://tile.osmand.net/hd/{z}/{x}/{y}.png
     #headers: "User-Agent: OsmAnd~"
-
-
-osm-raster-terrain:
-    type: Vector
-    title: OSM Raster + Mapzen Normals
-    url: raster-terrain.yaml
 
 
 ridewithgps-heatmap:
@@ -146,7 +125,7 @@ hillshade:
     type: Vector
     title: Hillshading
     layer: true
-    url: raster-contour.yaml
+    url: scenes/raster-contour.yaml
     updates_vector:
         global.elevation_sources: [elevation]
         global.earth_style: hillshade
@@ -155,17 +134,3 @@ hillshade:
         styles.hillshade.shaders.defines.ELEVATION_INDEX: 1
         sources.raster-0.rasters: [elevation]
         layers.raster-0.draw.group-0.style: hillshade
-
-
-## Multi-maps
-
-custom-1:
-    type: Multi
-    title: RideWith GPS + Mapzen OSM
-    layers:
-        - source: mapzen-osm
-        - source: ridewithgps-heatmap
-    updates:
-        layers.pois.enabled: false
-        #- {key: +layers.pois.enabled, value: false}
-

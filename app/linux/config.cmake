@@ -47,6 +47,13 @@ target_include_directories(tangram
   PRIVATE
   platforms/common
   app/include
+  app/styluslabs
+  core/deps
+  core/deps/stb
+  core/deps/yaml-cpp/include
+  app/styluslabs/nanovg-2/src
+  app/styluslabs/pugixml/src
+  app/styluslabs/SDL/include
   ${FONTCONFIG_INCLUDE_DIRS}
 )
 
@@ -80,9 +87,11 @@ target_compile_options(tangram
 
 # to be consistent w/ core
 target_compile_definitions(tangram PRIVATE GLM_FORCE_CTOR_INIT)
+target_compile_definitions(tangram PRIVATE PUGIXML_NO_XPATH)
+target_compile_definitions(tangram PRIVATE PUGIXML_NO_EXCEPTIONS)
 
 #add_resources(tangram "${PROJECT_SOURCE_DIR}/scenes" "res")
 
 # native file dialogs library
 add_subdirectory(app/deps/nfd)
-target_link_libraries(maps-app PRIVATE nfd)
+target_link_libraries(tangram PRIVATE nfd)
