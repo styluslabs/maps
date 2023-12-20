@@ -302,10 +302,18 @@ static SDL_Scancode Android_Keycodes[] = {
     SDL_SCANCODE_PASTE, /* AKEYCODE_PASTE */
 };
 
+// Getting annotated stack traces:
+// ~/android-sdk/ndk/23.1.7779620/ndk-stack -sym app/build/intermediates/merged_native_libs/release/out/lib/arm64-v8a/ -dump crash-1.txt
+
+struct SDL_Window
+{
+  EGLDisplay eglDisplay;
+  EGLSurface eglSurface;
+};
 
 static MapsApp* app = NULL;
-
 static std::thread mainThread;
+static SDL_Window sdlWin = {0, 0};
 
 static jobject mapsActivityRef = nullptr;
 static jmethodID showTextInputMID = nullptr;
@@ -318,12 +326,6 @@ static jmethodID openUrlMID = nullptr;
 // since Android event loop waits on MapsApp::taskQueue, no need for PLATFORM_WakeEventLoop
 void PLATFORM_WakeEventLoop() {}
 void TANGRAM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
-
-struct SDL_Window
-{
-  EGLDisplay eglDisplay;
-  EGLSurface eglSurface;
-};
 
 Uint32 SDL_GetTicks()
 {
@@ -386,6 +388,7 @@ void SDL_RaiseWindow(SDL_Window* window) {}
 void SDL_SetWindowTitle(SDL_Window* win, const char* title) {}
 void SDL_GetWindowSize(SDL_Window* win, int* w, int* h) //{ SDL_GL_GetDrawableSize(win, w, h); }
 {
+  if(!win || !win->eglDisplay || !win->eglSurface) { *w = 1000; *h = 1000; return; }
   eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
   eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
 }
@@ -406,14 +409,6 @@ int SDL_PeepEvents(SDL_Event* events, int numevents, SDL_eventaction action, Uin
     MapsApp::sdlEvent(&events[ii]);
   return numevents;
 }
-
-//void SDL_GL_GetDrawableSize(SDL_Window* win, int* w, int* h)
-//{
-//  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
-//  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
-//}
-//
-//void SDL_GL_SwapWindow(SDL_Window* win) { eglSwapBuffers(win->eglDisplay, win->eglSurface); }
 
 // open file dialog
 static MapsApp::OpenFileFn_t openFileCallback;
@@ -485,20 +480,21 @@ int eglMain(ANativeWindow* nativeWin)
 
   //auto native_window = ANativeWindow_fromSurface(env, jsurface);
   EGLSurface surface = eglCreateWindowSurface(display, config, nativeWin, NULL);
-  if (!surface) { LOGE("eglCreateWindowSurface() error %X", eglGetError()); return -1; }
+  if(!surface) { LOGE("eglCreateWindowSurface() error %X", eglGetError()); return -1; }
 
   auto curr_res = eglMakeCurrent(display, surface, surface, context);
-  if (curr_res == EGL_FALSE) { LOGE("eglMakeCurrent() error %X", eglGetError()); return -1; }
+  if(curr_res == EGL_FALSE) { LOGE("eglMakeCurrent() error %X", eglGetError()); return -1; }
 
-  app = new MapsApp(MapsApp::platform);
-
-  SDL_Window sdlWin = {display, surface};
-  app->createGUI(&sdlWin);
-  app->mapsOffline->resumeDownloads();
-  app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
-
-  //SDL_Window sdlWindow = {display, surface};
-  //int res = MapsApp::mainLoop(&sdlWindow, MapsApp::platform);
+  sdlWin = {display, surface};
+  if(!app) {
+    app = new MapsApp(MapsApp::platform);
+    app->createGUI(&sdlWin);
+    app->mapsOffline->resumeDownloads();
+    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
+  }
+  app->glNeedsInit = true;
+  MapsApp::runApplication = true;
+  LOGW("Starting event loop");
   while(MapsApp::runApplication) {
     MapsApp::taskQueue.wait();
 
@@ -508,10 +504,9 @@ int eglMain(ANativeWindow* nativeWin)
     if(app->drawFrame(fbWidth, fbHeight))
       eglSwapBuffers(display, surface);
   }
-
-  delete app;
-  app = NULL;
-
+  LOGW("Stopping event loop");
+  sdlWin = {0, 0};
+  //eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
   eglDestroySurface(display, surface);
   eglDestroyContext(display, context);
   ANativeWindow_release(nativeWin);
@@ -544,6 +539,8 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
 
 JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, jstring extFileDir)
 {
+  mapsActivityRef = env->NewWeakGlobalRef(mapsActivity);
+
   MapsApp::baseDir = JniHelpers::stringFromJavaString(env, extFileDir) + "/";
   FSPath configPath(MapsApp::baseDir, "config.yaml");
   MapsApp::configFile = configPath.c_str();
@@ -557,25 +554,16 @@ JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, js
 
   MapsApp::platform = new AndroidPlatform(env, mapsActivity, assetManager);
 
-  mapsActivityRef = env->NewWeakGlobalRef(mapsActivity);
-
-  //app = MapsApp::createApp();
-  //if(!app) return;
-  //
-  //MapsApp::win->sdlWindow = (SDL_Window*)glfwWin;
-  //MapsApp::gui->showWindow(MapsApp::win, NULL);
-  //
-  //MapsApp::baseDir = JniHelpers::stringFromJavaString(env, extFileDir) + "/";  //"/sdcard/Android/data/com.styluslabs.maps/files/";
-  //MapsApp::apiKey = NEXTZEN_API_KEY;
-  //auto p = std::make_unique<AndroidPlatform>(env, mapsActivity, assetManager);
-  //app = new MapsApp(std::move(p));
-  //app->sceneFile = "asset:///scene.yaml";
-  //app->loadSceneFile();
-
   //ImGui::GetIO().ImeSetInputScreenPosFn = [](int x, int y){
   //  JniThreadBinding jniEnv(JniHelpers::getJVM());
   //  jniEnv->CallVoidMethod(mapsActivityRef, showTextInputMID, x, y, 20, 20);
   //};
+}
+
+JNI_FN(destroy)(JNIEnv* env, jclass)
+{
+  delete app;
+  app = NULL;
 }
 
 JNI_FN(surfaceCreated)(JNIEnv* env, jclass, jobject jsurface)
@@ -594,7 +582,13 @@ JNI_FN(surfaceDestroyed)(JNIEnv* env, jclass)
 
 JNI_FN(resize)(JNIEnv* env, jclass, jint w, jint h)
 {
-  MapsApp::runOnMainThread([=](){ app->onResize(w, h, w, h); });
+  SDL_Event event = {0};
+  event.type = SDL_WINDOWEVENT;
+  event.window.event = SDL_WINDOWEVENT_SIZE_CHANGED;
+  event.window.data1 = w;
+  event.window.data2 = h;
+  MapsApp::sdlEvent(&event);
+  //MapsApp::runOnMainThread([=](){ app->onResize(w, h, w, h); });
 }
 
 //JNI_FN(setupGL)(JNIEnv* env, jobject obj)

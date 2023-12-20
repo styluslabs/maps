@@ -314,7 +314,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         textNodes[0]->setAttribute("box-anchor", "left");
         SvgG* wrapper = new SvgG;
         wrapper->addChild(node);
-        TextLabel* textbox = new TextLabel(wrapper);
+        new TextLabel(wrapper);
         //if(!strchr(textbox->text().c_str(), '\n'))
         wrapper->setAttribute("box-anchor", "hfill");
         node = wrapper;
@@ -517,16 +517,16 @@ void MapsApp::mapUpdate(double time)
   pickedMarkerId = 0;  // prevent repeated searched for ignored marker
 }
 
-void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
-{
-  float new_density = (float)fWidth / (float)wWidth;
-  if (new_density != density) {
-    //recreate_context = true;
-    density = new_density;
-  }
-  map->setPixelScale(pixel_scale*density);
-  map->resize(fWidth, fHeight);
-}
+//void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
+//{
+//  float new_density = (float)fWidth / (float)wWidth;
+//  if (new_density != density) {
+//    //recreate_context = true;
+//    density = new_density;
+//  }
+//  map->setPixelScale(pixel_scale*density);
+//  map->resize(fWidth, fHeight);  // this just calls setViewport
+//}
 
 void MapsApp::onSuspend()
 {
@@ -1319,19 +1319,15 @@ void MapsApp::saveConfig()
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
   platform = _platform;
-  runApplication = true;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
 
   initResources(baseDir.c_str());
-  painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES));
 
   gui = new SvgGui();
-  gui->fullRedraw = painter->usesGPU();  // see below
   // scaling
   gui->paintScale = 2.0;  //210.0/150.0;
   gui->inputScale = 1/gui->paintScale;
-  painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
 
   // preset colors for tracks and bookmarks
   for(const auto& colorstr : config["colors"])
@@ -1378,7 +1374,6 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
   map->setPixelScale(pixel_scale);
   map->setPickRadius(1.0f);
-  map->setupGL();
 
   // Setup UI panels
   mapsSources = std::make_unique<MapsSources>(this);
@@ -1419,6 +1414,14 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
 
   if(!runApplication) return false;
 
+  if(glNeedsInit) {
+    glNeedsInit = false;
+    map->setupGL();
+    // Painter created here since GL context required to build shaders
+    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES));
+    gui->fullRedraw = painter->usesGPU();
+    painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
+  }
   // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
   //  we expect the vast majority of all frames drawn by app to be map changes (panning, zooming), the total
   //  benefit from partial update would be relatively small.  Furthermore, smooth map interaction is even more

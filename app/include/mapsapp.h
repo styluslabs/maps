@@ -42,7 +42,7 @@ public:
 
   void mapUpdate(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
-  void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
+  //void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void onSuspend();
   void updateLocation(const Location& _loc);
   void updateOrientation(float azimuth, float pitch, float roll);
@@ -77,6 +77,7 @@ public:
   std::string pickResultName;
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
+  bool glNeedsInit = true;
 
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;

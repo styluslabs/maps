@@ -96,6 +96,7 @@ int main(int argc, char* argv[])
   NFD_Init();
 
   MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
+  app->map->setupGL();
   app->createGUI((SDL_Window*)glfwWin);
 
   // fake location updates to test track recording
