@@ -1,4 +1,4 @@
-# More tile sources:
+  # More tile sources:
 # - https://leaflet-extras.github.io/leaflet-providers/preview/
 # - https://github.com/nnngrach/AnyGIS_maps
 # - Aviation maps: http://wms.chartbundle.com/charts/tms.html
@@ -129,7 +129,7 @@ hillshade:
     updates_vector:
         global.elevation_sources: [elevation]
         global.earth_style: hillshade
-        layers.earth: { data: { source: elevation }, draw: { hillshade: { color: white, order: 0 } } }
+        layers.earth: { data: { source: elevation }, draw: { hillshade: { color: global.earth_color, order: 0 } } }
     updates_raster:
         styles.hillshade.shaders.defines.ELEVATION_INDEX: 1
         sources.raster-0.rasters: [elevation]
