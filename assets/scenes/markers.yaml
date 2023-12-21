@@ -195,7 +195,8 @@ layers:
                 interactive: true
                 collide: false
                 size: 18px
-                color: "#0000FF"
+                color: |
+                    function() { return feature.hasfix ? '#0000FF' : '#909090'; }
                 priority: -1000
                 outline:
                     width: 2px

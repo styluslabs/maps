@@ -77,6 +77,7 @@ public:
   std::string pickResultName;
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
+  bool hasLocation = false;
   bool glNeedsInit = true;
 
   std::vector<SceneUpdate> sceneUpdates;

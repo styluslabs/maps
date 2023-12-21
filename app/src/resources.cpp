@@ -12,7 +12,8 @@
 
 #if PLATFORM_DESKTOP
 #include "platform_gl.h"
-#define NANOVG_GL3_IMPLEMENTATION
+//#define NANOVG_GL3_IMPLEMENTATION
+#define NANOVG_GLES3_IMPLEMENTATION
 #elif PLATFORM_IOS
 #include <OpenGLES/ES3/gl.h>
 #include <OpenGLES/ES3/glext.h>

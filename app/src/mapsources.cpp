@@ -324,6 +324,18 @@ void MapsSources::populateSources()
     item->setChecked(key == currSource);
     Widget* container = item->selectFirst(".child-container");
 
+    if(item->isChecked()) {
+      // scroll as needed to show selected source - onApplyLayout is called on parent after children
+      sourcesContent->onApplyLayout = [this, item](const Rect&, const Rect&){
+        Rect ritem = item->node->bounds();
+        Rect rview = sourcesContent->scrollWidget->node->bounds();
+        if(ritem.bottom > rview.bottom)
+          sourcesContent->scrollWidget->scrollTo({0, ritem.top - rview.top});
+        sourcesContent->onApplyLayout = {};  // only once
+        return false;  // continue w/ applyLayout normally
+      };
+    }
+
     Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
     if(isLayer) {
       Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");

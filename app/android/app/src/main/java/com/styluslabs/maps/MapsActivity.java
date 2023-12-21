@@ -345,6 +345,9 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
             // openFileDescriptor only works for mode="r", but /proc/self/fd/<fd> gives us symlink to actual
             //  file which we can open for writing
             // an alternative would be to use android.system.Os.readlink here instead of in androidhelper.cpp
+
+            //getContentResolver().takePersistableUriPermission(resultData.getData(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
             ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(resultData.getData(), "r");
             MapsLib.openFileDesc(resultData.getData().getPath(), pfd.getFd());
             pfd.close();
@@ -374,12 +377,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   // issue is that Views can only be touched from thread that created them, but these methods are called from
-  //  drawFrame() on GL thread; just doing easiest fix for ImGui (currently ignoring issue of charInput being
-  //  called from UI thread instead of GL thread), to be revisited for actual GUI
-  // - Use SurfaceView and create EGL context ourselves so we can call drawFrame() from UI thread?
-  //  - in requestRender, do (drawReq is atomic):
-  //   if(!drawReq) Handler(Looper.getMainLooper()).post(new Runnable() { drawReq = false; drawFrame(); });
-  //  - see github.com/tsaarni/android-native-egl-example
+  //  drawFrame() on GL thread
   public void showTextInput(int x, int y, int w, int h)
   {
     runOnUiThread(new Runnable() { @Override public void run() { _showTextInput(x,y,w,h); } });
@@ -533,7 +531,7 @@ class DummyEdit extends View implements View.OnKeyListener
     public InputConnection onCreateInputConnection(EditorInfo outAttrs)
     {
         ic = new MapsInputConnection(this, true);
-        outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL;  //TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
         return ic;
     }

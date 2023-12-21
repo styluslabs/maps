@@ -56,7 +56,7 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
 
 void MapsApp::sdlEvent(SDL_Event* event)
 {
-  LOGW("%s", sdlEventLog(event).c_str());
+  //LOGW("%s", sdlEventLog(event).c_str());
   runOnMainThread([_event = *event]() mutable { gui->sdlEvent(&_event); });
 }
 
@@ -505,7 +505,7 @@ void MapsApp::mapUpdate(double time)
   reorientBtn->setVisible(cpos.tilt != 0 || cpos.rotation != 0);
   reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(cpos.rotation));
 
-  if(pickedMarkerId == locMarker) {
+  if(locMarker > 0 && pickedMarkerId == locMarker) {
     if(!mapsTracks->activeTrack)
       showPanel(infoPanel);
     setPickResult(currLocation.lngLat(), "Current location", "");
@@ -538,7 +538,7 @@ void MapsApp::updateLocation(const Location& _loc)
 {
   currLocation = _loc;
   if(currLocation.time <= 0)
-    currLocation.time = mSecSinceEpoch()/1000;
+    currLocation.time = mSecSinceEpoch()/1000.0;
   if(!locMarker) {
     locMarker = map->markerAdd();
     map->markerSetStylingFromPath(locMarker, "layers.loc-marker.draw.marker");
@@ -546,6 +546,7 @@ void MapsApp::updateLocation(const Location& _loc)
   }
   //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, currLocation.lngLat());
+  map->markerSetProperties(locMarker, {{{"hasfix", hasLocation ? 1 : 0}}});
 
   if(currLocPlaceInfo) {
     SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
@@ -570,6 +571,9 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
   gpsStatusBtn->setVisible(!satsUsed);
   if(!satsUsed)
     gpsStatusBtn->setText(fstring("%d/%d", satsUsed, satsVisible).c_str());
+  if(locMarker && (satsUsed > 0) != hasLocation)
+    map->markerSetProperties(locMarker, {{{"hasfix", satsUsed > 0 ? 1 : 0}}});
+  hasLocation = satsUsed > 0;
 }
 
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
@@ -753,7 +757,7 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
         }
       }
       else
-        app->touchHandler->touchEvent(event->tfinger.touchId, actionFromSDLFinger(event->type),
+        app->touchHandler->touchEvent(0, actionFromSDLFinger(event->type),
              event->tfinger.timestamp/1000.0, event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale, 1.0f);
     }
     else if(event->type == SDL_MOUSEWHEEL) {
@@ -763,12 +767,8 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
     }
     else if(event->type == SvgGui::MULTITOUCH) {
       SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
-      auto points = static_cast<std::vector<SDL_Finger>*>(event->user.data2);
-      for(const SDL_Finger& pt : *points) {
-        int action = pt.id == fevent->tfinger.fingerId ? actionFromSDLFinger(fevent->type) : 0;
-        app->touchHandler->touchEvent(event->tfinger.touchId, action,
-            event->user.timestamp/1000.0, pt.x/gui->inputScale, pt.y/gui->inputScale, 1.0f);
-      }
+      app->touchHandler->touchEvent(fevent->tfinger.fingerId, actionFromSDLFinger(fevent->type),
+           fevent->tfinger.timestamp/1000.0, fevent->tfinger.x/gui->inputScale, fevent->tfinger.y/gui->inputScale, 1.0f);
     }
     else
       return false;
@@ -971,13 +971,18 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
   Menubar* mainToolbar = createMenubar();  //createToolbar();
-  mainToolbar->autoClose = true;
   mainToolbar->selectFirst(".child-container")->node->setAttribute("justify-content", "space-between");
   Button* tracksBtn = mapsTracks->createPanel();
   Button* searchBtn = mapsSearch->createPanel();
   Button* sourcesBtn = mapsSources->createPanel();
   Button* bkmkBtn = mapsBookmarks->createPanel();
   Button* pluginBtn = pluginManager->createPanel();
+
+  //mainToolbar->autoClose = true;
+  searchBtn->mMenu->autoClose = true;
+  bkmkBtn->mMenu->autoClose = true;
+  tracksBtn->mMenu->autoClose = true;
+  sourcesBtn->mMenu->autoClose = true;
 
   mainToolbar->addButton(searchBtn);
   mainToolbar->addButton(bkmkBtn);
@@ -1118,7 +1123,7 @@ bool MapsApp::popPanel()
   return true;
 }
 
-// this should be a static method or standalone fn!
+// make this a static method or standalone fn?
 Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 {
   Toolbar* toolbar = createToolbar();
@@ -1135,7 +1140,8 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 
   //Widget* stretch = createStretch();
   if(panelSplitter) {
-    titleLabel->addHandler([this](SvgGui* gui, SDL_Event* event) {
+    // forward press event not captured by toolbuttons to splitter
+    toolbar->addHandler([this](SvgGui* gui, SDL_Event* event) {
       if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
         panelSplitter->sdlEvent(gui, event);
         return true;

@@ -427,7 +427,7 @@ void Menubar::addButton(Button* btn)
         return true;  // I don't think it makes sense to send onPressed when we are clearing pressed state!
       }
     }
-    else if(event->type == SDL_FINGERUP && (!btn->mMenu || autoClose)) {
+    else if(event->type == SDL_FINGERUP && (!btn->mMenu || autoClose || btn->mMenu->autoClose)) {
       gui->closeMenus();
       return false;  // continue to button handler
     }
