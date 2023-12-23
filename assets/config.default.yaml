@@ -7,6 +7,10 @@ sources:
     - scenes/markers.yaml
     - scenes/secrets.yaml
 
+fallback_fonts:
+  - scenes/fonts/roboto-regular.ttf
+  - scenes/fonts/DroidSansFallback.ttf
+
 storage:
   # cache size thresholds
   shrink_at: 600

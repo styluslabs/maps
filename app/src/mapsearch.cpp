@@ -227,6 +227,7 @@ void MapsSearch::clearSearchResults()
   mapResults.clear();
   listResults.clear();
   markers->reset();
+  flyingToResults = false;  // just in case event got dropped
 }
 
 void MapsSearch::clearSearch()
@@ -311,6 +312,8 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 
 void MapsSearch::onMapEvent(MapEvent_t event)
 {
+  if(event == CAMERA_EASE_DONE)
+    flyingToResults = false;
   if(event != MAP_CHANGE || !app->searchActive)
     return;
   Map* map = app->map;
@@ -320,8 +323,8 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   bool zoomedout = map->getZoom() - prevZoom < 0.5f;
   bool mapmoved = lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude;
-  if(searchOnMapMove && (mapmoved || (moreMapResultsAvail && zoomedin))) {
-    updateMapResults(lngLat00, lngLat11);
+  if(searchOnMapMove && !flyingToResults && (mapmoved || (moreMapResultsAvail && zoomedin))) {
+    updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
     prevZoom = map->getZoom();
   }
   else if(!mapResults.empty() && (zoomedin || zoomedout)) {
@@ -339,17 +342,22 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   map->getScene()->hideExtraLabels = true;
 }
 
-void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11)
+void MapsSearch::updateMapResultBounds(LngLat lngLat00, LngLat lngLat11)
 {
   double lng01 = fabs(lngLat11.longitude - lngLat00.longitude);
   double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
   dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
   dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
+}
+
+void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
+{
+  updateMapResultBounds(lngLat00, lngLat11);
   // should we do clearJsSearch() to prevent duplicate results?
   mapResults.clear();
   markers->reset();
   if(providerIdx > 0)
-    app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, MAP_SEARCH);
+    app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, flags);
   else
     offlineMapSearch(searchStr, dotBounds00, dotBounds11);
 }
@@ -382,6 +390,8 @@ void MapsSearch::resultsUpdated()
           || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
         auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32});
         pos.zoom = std::min(pos.zoom, 16.0f);
+        flyingToResults = true;
+        updateMapResultBounds(minLngLat, maxLngLat); // update bounds for new camera position
         map->flyTo(pos, 1.0);
       }
     }
@@ -446,7 +456,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       }
     }
     if(providerIdx == 0 || !unifiedSearch)
-      updateMapResults(lngLat00, lngLat11);
+      updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
   }
 
   if(providerIdx == 0) {
@@ -455,8 +465,11 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   }
   else {  //if(phase != EDITING) {
     bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
-    int flags = LIST_SEARCH | (unifiedSearch ? MAP_SEARCH : 0) | (sortByDist ? SORT_BY_DIST : 0);
-    app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
+    int flags = LIST_SEARCH | (sortByDist ? SORT_BY_DIST : 0);
+    if(unifiedSearch)
+      updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
+    else
+      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
   }
 
   if(!app->searchActive && phase == RETURN) {

@@ -74,12 +74,32 @@ void PluginManager::cancelRequests(UrlReqType type)
   auto it = pendingRequests.begin();
   while(it != pendingRequests.end()) {
     if(type == NONE || it->type == type) {
-      MapsApp::platform->cancelUrlRequest(it->handle);
+      // must erase before calling cancelUrlRequest() because request callback could call clearRequest()
+      UrlRequestHandle handle = it->handle;
       it = pendingRequests.erase(it);
+      MapsApp::platform->cancelUrlRequest(handle);
     }
     else
       ++it;
   }
+}
+
+void PluginManager::notifyRequest(UrlRequestHandle handle, int serial)
+{
+  if(inState != NONE)
+    pendingRequests.push_back({inState, handle, serial});
+}
+
+PluginManager::UrlReqType PluginManager::clearRequest(int serial)
+{
+  for(auto it = pendingRequests.begin(); it != pendingRequests.end(); ++it) {
+    if(it->serial == serial) {
+      UrlReqType type = it->type;
+      pendingRequests.erase(it);
+      return type;
+    }
+  }
+  return NONE;
 }
 
 void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags)
@@ -147,24 +167,6 @@ void PluginManager::jsRoute(int fnIdx, std::string routeMode, const std::vector<
   inState = NONE;
 }
 
-void PluginManager::notifyRequest(UrlRequestHandle handle, int serial)
-{
-  if(inState != NONE)
-    pendingRequests.push_back({inState, handle, serial});
-}
-
-PluginManager::UrlReqType PluginManager::clearRequest(int serial)
-{
-  for(auto it = pendingRequests.begin(); it != pendingRequests.end(); ++it) {
-    if(it->serial == serial) {
-      UrlReqType type = it->type;
-      pendingRequests.erase(it);
-      return type;
-    }
-  }
-  return NONE;
-}
-
 std::string PluginManager::evalJS(const char* s)
 {
   std::string result;
@@ -197,7 +199,7 @@ static int registerFunction(duk_context* ctx)
   return 0;
 }
 
-static void invokeHttpReqCallback(duk_context* ctx, std::string cbvar, const UrlResponse& response)
+static void invokeHttpReqCallback(duk_context* ctx, std::string cbvar, const UrlResponse& response, std::string errstr)
 {
   // get the callback
   //duk_push_global_stash(ctx);
@@ -209,7 +211,7 @@ static void invokeHttpReqCallback(duk_context* ctx, std::string cbvar, const Url
   duk_put_global_string(ctx, cbvar.c_str());  // release for GC
   // parse response JSON and call callback
   duk_push_lstring(ctx, response.content.data(), response.content.size());
-  duk_push_string(ctx, response.error ? response.error : "");
+  duk_push_string(ctx, errstr.c_str());
   //char c0 = response.content.size() > 1 ? response.content[0] : '\0';
   // TODO: use DUK_USE_CPP_EXCEPTIONS to catch parsing errors!
   //if(c0 == '[' || c0 == '{')
@@ -237,12 +239,16 @@ static int httpRequest(duk_context* ctx)
   int reqSerial = reqCounter;
   UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [=](UrlResponse&& response) {
     if(!PluginManager::inst) return;  // app shutting down
+    if(response.error == Platform::cancel_message)
+      return;
     if(response.error)
       LOGE("Error fetching %s: %s\n", url.string().c_str(), response.error);
+    // response.error is not valid after callback returns, so we must make a copy
+    std::string errstr(response.error ? response.error : "");
     MapsApp::runOnMainThread([=](){
       // set state for any secondary requests
       PluginManager::inst->inState = PluginManager::inst->clearRequest(reqSerial);
-      invokeHttpReqCallback(ctx, cbvar, response);
+      invokeHttpReqCallback(ctx, cbvar, response, errstr);
       PluginManager::inst->inState = PluginManager::NONE;
     });
   });

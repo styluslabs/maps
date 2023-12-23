@@ -473,6 +473,9 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
 #if IS_DEBUG
   options.debugStyles = true;
 #endif
+  // fallback fonts
+  for(auto& font : MapsApp::config["fallback_fonts"])
+    options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(font.Scalar())));
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
@@ -1378,6 +1381,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   map = new Tangram::Map(std::unique_ptr<Platform>(_platform));
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
+  map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });  // : CAMERA_EASE_CANCELLED
   map->setPixelScale(pixel_scale);
   map->setPickRadius(1.0f);
 

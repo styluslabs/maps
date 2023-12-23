@@ -12,6 +12,7 @@ global:
     earth_style: polygons
     earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
     elevation_sources: []
+    marker_font: Open Sans
 
     color:
         background: [.97, .955, .94] #'#f0ebeb'

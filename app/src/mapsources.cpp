@@ -93,12 +93,13 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   // we'll probably want to skip curl for reading from filesystem in scene/importer.cpp - see tests/src/mockPlatform.cpp
   // or maybe add a Url getParent() method to Url class
   std::string importstr;
-  for(auto& url : imports)
-    importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
+  // before scene so scene can override things, but we can split into pre_imports and post_imports if needed
   for(auto& imp : MapsApp::config["sources"]["common_imports"]) {
     std::string url = imp.Scalar();
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   }
+  for(auto& url : imports)
+    importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   if(importstr.empty())
     return "global:\n\nsources:\n\nlayers:\n";
   return "import:\n" + importstr;  //+ "\nglobal:\n\nsources:\n\nstyles:\n\nlayers:\n";

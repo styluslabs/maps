@@ -48,7 +48,6 @@ public:
   enum SearchPhase { EDITING, RETURN, NEXTPAGE };
   void searchText(std::string query, SearchPhase phase);
   void onMapEvent(MapEvent_t event);
-  void updateMapResults(LngLat lngLat00, LngLat lngLat11);
   void resultsUpdated();
 
   Button* createPanel();
@@ -67,13 +66,12 @@ private:
   bool mapResultsChanged = false;  // protected by resultsMutex
   bool searchOnMapMove = true;
   bool unifiedSearch = false;
+  bool flyingToResults = false;
 
   void offlineListSearch(std::string queryStr, LngLat, LngLat);
   void offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11);
-
-  void onlineListSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
-  void onlineMapSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11);
-  void onlineSearch(std::string queryStr, LngLat lngLat00, LngLat lngLat11, bool isMapSearch);
+  void updateMapResultBounds(LngLat lngLat00, LngLat lngLat11);
+  void updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags);
   void clearSearchResults();
 
   // GUI

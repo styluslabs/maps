@@ -1,4 +1,5 @@
 global:
+    marker_font: Open Sans
     poi_icons:
         tourism: { "viewpoint": "viewpoint", "camp_site": "campground", "information": "information",
           "museum": "museum", "hotel": "hotel", "motel": "hotel", "hostel": "hotel", "guest_house": "hotel",
@@ -40,12 +41,17 @@ global:
     poi_color_fn: function() { return global.poi_color[global.poi_type[global.poi_sprite_fn()]] || global.poi_color.generic; }
 
     poi_sprite_fn: |
-        function()
-        {
+        function() {
           const t = global.poi_icons;
           return t.tourism[feature.tourism] || t.leisure[feature.leisure] || t.amenity[feature.amenity] ||
               t.historic[feature.historic] || t.shop[feature.shop] || (feature.shop ? "shop" : "");
         }
+
+
+fonts:
+    Open Sans:
+        - weight: 600
+          url: fonts/OpenSans-SemiBold.ttf
 
 
 textures:
@@ -121,7 +127,7 @@ layers:
                     max_lines: 2
                     offset: [0px, -11px]
                     font:
-                        family: Open Sans
+                        family: global.marker_font
                         weight: 600
                         size: 12px
                         fill: black
@@ -146,7 +152,7 @@ layers:
                     max_lines: 2
                     offset: [0px, -11px]
                     font:
-                        family: Open Sans
+                        family: global.marker_font
                         weight: 600
                         size: 12px
                         fill: black
@@ -171,7 +177,7 @@ layers:
                     optional: true
                     max_lines: 2
                     font:
-                        family: Open Sans
+                        family: global.marker_font
                         weight: 600
                         size: 12px
                         fill: black
@@ -221,7 +227,7 @@ layers:
                     max_lines: 2
                     offset: [0px, -11px]
                     font:
-                        family: Open Sans
+                        family: global.marker_font
                         weight: 600
                         size: 12px
                         fill: black

@@ -3,7 +3,7 @@
 // Populate place info from OSM tags from API
 
 //function addPlaceInfo(icon, title, value) { console.log(title + ": " + value); }
-//function jsonHttpRequest(url, hdrs, callback) { fetch(url).then(res => res.json()).then(j => callback(j)); }
+//function httpRequest(url, hdrs, callback) { if(!callback) callback = hdrs; fetch(url).then(res => res.text()).then(j => callback(j)); }
 
 // from https://github.com/osmlab/jsopeninghours
 // - see https://wiki.openstreetmap.org/wiki/Key:opening_hours for more sophisticated (and far more complex) parsers
@@ -134,7 +134,7 @@ function osmPlaceInfoCb(_content, _error)
   }
 
   if(tags["cuisine"]) {
-    const s = tags["cuisine"].replace("_", " ").replace(";", ", ");
+    const s = tags["cuisine"].replace(/_/g, " ").replace(/;/g, ", ");
     addPlaceInfo("food", "Cuisine", s[0].toUpperCase() + s.slice(1));
   }
   //tags["takeaway"] (yes, no, only)

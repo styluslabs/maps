@@ -12,6 +12,7 @@ import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 //import androidx.core.app.ActivityCompat;
+import androidx.activity.EdgeToEdge;
 import android.content.Context;
 import android.app.Activity;
 import android.os.Bundle;
@@ -69,7 +70,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
-
+    EdgeToEdge.enable(this);
     //String extfiles = getExternalFilesDir(null).getAbsolutePath();
     String extfiles = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
     File file = new File(extfiles, "config.default.yaml");
