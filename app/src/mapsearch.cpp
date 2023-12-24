@@ -265,7 +265,6 @@ void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, co
     app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
   };
   markers->createMarker({lng, lat}, onPicked, std::move(props));
-  mapResultsChanged = true;
 }
 
 void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, const char* json)
@@ -312,23 +311,28 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 
 void MapsSearch::onMapEvent(MapEvent_t event)
 {
-  if(event == CAMERA_EASE_DONE)
-    flyingToResults = false;
   if(event != MAP_CHANGE || !app->searchActive)
     return;
   Map* map = app->map;
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
+  if(flyingToResults && !app->mapState.isAnimating()) {  //event == CAMERA_EASE_DONE
+    updateMapResultBounds(lngLat00, lngLat11); // update bounds for new camera position
+    flyingToResults = false;
+    return;
+  }
   bool zoomedin = map->getZoom() - prevZoom > 0.5f;
   bool zoomedout = map->getZoom() - prevZoom < 0.5f;
   bool mapmoved = lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude;
-  if(searchOnMapMove && !flyingToResults && (mapmoved || (moreMapResultsAvail && zoomedin))) {
+  // don't search until animation stops
+  if(searchOnMapMove && !app->mapState.isAnimating() && (mapmoved || (moreMapResultsAvail && zoomedin))) {
     updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
     prevZoom = map->getZoom();
   }
   else if(!mapResults.empty() && (zoomedin || zoomedout)) {
     markers->onZoom();
+    prevZoom = map->getZoom();
   }
   // any map pan or zoom can potentially affect ranking of list results
   if(mapmoved || zoomedin || zoomedout)
@@ -362,16 +366,13 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
     offlineMapSearch(searchStr, dotBounds00, dotBounds11);
 }
 
-void MapsSearch::resultsUpdated()
+void MapsSearch::resultsUpdated(int flags)
 {
   populateResults(listResults);
 
   // zoom out if necessary to show first 5 results
-  if(mapResultsChanged) {
-    mapResultsChanged = false;
+  if(flags & FLY_TO) {
     Map* map = app->map;
-    //createMarkers();
-
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
     int resultIdx = 0;
     for(auto& res : listResults) {
@@ -390,9 +391,8 @@ void MapsSearch::resultsUpdated()
           || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
         auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32});
         pos.zoom = std::min(pos.zoom, 16.0f);
-        flyingToResults = true;
-        updateMapResultBounds(minLngLat, maxLngLat); // update bounds for new camera position
         map->flyTo(pos, 1.0);
+        flyingToResults = true;  // has to be set after flyTo()
       }
     }
   }
@@ -437,7 +437,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     populateAutocomplete(autocomplete);
     if(query.size() > 1 && providerIdx == 0) {  // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
       offlineListSearch("name:" + searchStr, lngLat00, lngLat11);  // restrict live search to name
-      resultsUpdated();
+      resultsUpdated(0);
     }
     return;
   }
@@ -461,11 +461,11 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   if(providerIdx == 0) {
     offlineListSearch(searchStr, lngLat00, lngLat11);
-    resultsUpdated();
+    resultsUpdated(phase == RETURN ? FLY_TO : 0);
   }
   else {  //if(phase != EDITING) {
     bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
-    int flags = LIST_SEARCH | (sortByDist ? SORT_BY_DIST : 0);
+    int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
     if(unifiedSearch)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
     else

@@ -496,9 +496,9 @@ void MapsApp::mapUpdate(double time)
 {
   static double lastFrameTime = 0;
   //platform->notifyRender();
-  Tangram::MapState state = map->update(time - lastFrameTime);
+  mapState = map->update(time - lastFrameTime);
   lastFrameTime = time;
-  if (state.isAnimating()) {
+  if (mapState.isAnimating()) {
     platform->requestRender();
   }
   //LOG("MapState: %d", state.flags);
@@ -885,40 +885,58 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
   p->drawText(0, 0, str.c_str());
 }
 
+void MapsApp::setWindowLayout(int fbWidth)
+{
+  bool narrow = fbWidth/gui->paintScale < 350;
+  if(!currLayout || narrow != currLayout->node->hasClass("window-layout-narrow")) {
+    if(currLayout) currLayout->setVisible(false);
+    currLayout = win->selectFirst(narrow ? ".window-layout-narrow" : ".window-layout-wide");
+    currLayout->setVisible(true);
+
+    panelSplitter = static_cast<Splitter*>(currLayout->selectFirst(".panel-splitter"));  // may be NULL
+    panelSeparator = currLayout->selectFirst(".panel-separator");  // may be NULL
+    panelContainer = currLayout->selectFirst(".panel-container");
+    mainTbContainer = currLayout->selectFirst(".main-tb-container");
+
+    mainToolbar->removeFromParent();
+    mainTbContainer->addWidget(mainToolbar);
+
+    panelContent->removeFromParent();
+    panelContainer->addWidget(panelContent);
+
+    mapsContent->removeFromParent();
+    currLayout->selectFirst(".maps-container")->addWidget(mapsContent);
+  }
+}
+
 void MapsApp::createGUI(SDL_Window* sdlWin)
 {
-#if PLATFORM_MOBILE
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
-      <g class="window-layout" box-anchor="fill" layout="flex" flex-direction="column">
-        <g id="maps-container" box-anchor="fill" layout="box"></g>
-        <rect id="panel-splitter" class="background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
-        <g id="panel-container" display="none" box-anchor="hfill" layout="box">
+      <g class="window-layout-narrow" display="none" box-anchor="fill" layout="flex" flex-direction="column">
+        <g class="maps-container" box-anchor="fill" layout="box"></g>
+        <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
+        <g class="panel-container" display="none" box-anchor="hfill" layout="box">
           <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
-          <rect id="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
-          <g id="panel-content" box-anchor="fill" layout="box"></g>
+          <rect class="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
         </g>
-        <g id="main-tb-container" box-anchor="hfill" layout="box"></g>
+        <g class="main-tb-container" box-anchor="hfill" layout="box"></g>
       </g>
-    </svg>
-  )#";
-#else
-  static const char* mainWindowSVG = R"#(
-    <svg class="window" layout="box">
-      <g id="maps-container" box-anchor="fill" layout="box"></g>
-      <g class="panel-layout" box-anchor="top left" margin="10 0 0 10" layout="flex" flex-direction="column">
-        <g id="main-tb-container" box-anchor="hfill" layout="box">
-          <rect class="background" fill="none" x="0" y="0" width="360" height="1"/>
-        </g>
-        <rect id="panel-separator" class="hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
-        <g id="panel-container" display="none" box-anchor="hfill" layout="box">
-          <rect class="background" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
-          <g id="panel-content" box-anchor="fill" layout="box"></g>
+
+      <g class="window-layout-wide" display="none" box-anchor="fill" layout="box">
+        <g class="maps-container" box-anchor="fill" layout="box"></g>
+        <g class="panel-layout" box-anchor="top left" margin="10 0 0 10" layout="flex" flex-direction="column">
+          <g class="main-tb-container" box-anchor="hfill" layout="box">
+            <rect class="background" fill="none" x="0" y="0" width="360" height="1"/>
+          </g>
+          <rect class="panel-separator" class="hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
+          <g class="panel-container" display="none" box-anchor="hfill" layout="box">
+            <rect class="background" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
+          </g>
         </g>
       </g>
     </svg>
   )#";
-#endif
 
   static const char* gpsStatusSVG = R"#(
     <g class="gps-status-button" layout="box" box-anchor="hfill">
@@ -947,21 +965,14 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win.reset(new Window(winnode));
   win->sdlWindow = sdlWin;
 
-#if PLATFORM_MOBILE
-  panelSplitter = new Splitter(winnode->selectFirst("#panel-splitter"),
-      winnode->selectFirst("#results-split-sizer"), Splitter::BOTTOM, 120);
-#else
-  // adjust map center to account for sidebar
-  Tangram::EdgePadding padding = {0,0,0,0};  //{200, 0, 0, 0};
-  map->setPadding(padding);
-  panelSeparator = win->selectFirst("#panel-separator");
-#endif
-  panelContainer = win->selectFirst("#panel-container");
-  panelContent = win->selectFirst("#panel-content");
+  panelContent = new Widget(loadSVGFragment("<g id='panel-content' box-anchor='fill' layout='box'></g>"));
+  mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
+  new Splitter(winnode->selectFirst(".panel-splitter"),
+          winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 120);
 
-  mapsWidget = new MapsWidget(this);
-  mapsWidget->node->setAttribute("box-anchor", "fill");
-  mapsWidget->isFocusable = true;
+  // adjust map center to account for sidebar
+  //Tangram::EdgePadding padding = {0,0,0,0};  //{200, 0, 0, 0};
+  //map->setPadding(padding);
 
   infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));
   auto infoHeader = createPanelHeader(NULL, "");  //MapsApp::uiIcon("pin"), "");
@@ -973,7 +984,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   });
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
-  Menubar* mainToolbar = createMenubar();  //createToolbar();
+  mainToolbar = createMenubar();  //createToolbar();
   mainToolbar->selectFirst(".child-container")->node->setAttribute("justify-content", "space-between");
   Button* tracksBtn = mapsTracks->createPanel();
   Button* searchBtn = mapsSearch->createPanel();
@@ -1027,8 +1038,11 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mainTbContainer = win->selectFirst("#main-tb-container");
   mainTbContainer->addWidget(mainToolbar);
 
-  Widget* mapsPanel = win->selectFirst("#maps-container");
-  mapsPanel->addWidget(mapsWidget);
+  // map widget and floating btns
+  mapsWidget = new MapsWidget(this);
+  mapsWidget->node->setAttribute("box-anchor", "fill");
+  mapsWidget->isFocusable = true;
+  mapsContent->addWidget(mapsWidget);
 
   // recenter, reorient btns
   Toolbar* floatToolbar = createVertToolbar();
@@ -1055,22 +1069,22 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   floatToolbar->addWidget(recenterBtn);
   floatToolbar->node->setAttribute("box-anchor", "bottom right");
   floatToolbar->setMargins(0, 10, 10, 0);
-  mapsPanel->addWidget(floatToolbar);
+  mapsContent->addWidget(floatToolbar);
 
   ScaleBarWidget* scaleBar = new ScaleBarWidget(map);
   scaleBar->node->setAttribute("box-anchor", "bottom left");
   scaleBar->setMargins(0, 0, 10, 10);
-  mapsPanel->addWidget(scaleBar);
+  mapsContent->addWidget(scaleBar);
 
   crossHair = new CrosshairWidget();
   crossHair->setVisible(false);
-  mapsPanel->addWidget(crossHair);
+  mapsContent->addWidget(crossHair);
 
   legendContainer = createColumn();
   legendContainer->node->setAttribute("box-anchor", "bottom");
   legendContainer->node->addClass("legend");
   legendContainer->setMargins(0, 0, 10, 0);
-  mapsPanel->addWidget(legendContainer);
+  mapsContent->addWidget(legendContainer);
 
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();
@@ -1229,7 +1243,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
   }
 
   panel->setVisible(false);
-  panelContainer->addWidget(panel);
+  panelContent->addWidget(panel);
   return panel;
 }
 
@@ -1381,7 +1395,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   map = new Tangram::Map(std::unique_ptr<Platform>(_platform));
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
-  map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });  // : CAMERA_EASE_CANCELLED
+  //map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });
   map->setPixelScale(pixel_scale);
   map->setPickRadius(1.0f);
 

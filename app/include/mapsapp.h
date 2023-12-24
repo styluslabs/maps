@@ -21,6 +21,7 @@ class Widget;
 class Button;
 class Window;
 class Toolbar;
+class Menubar;
 class MapsWidget;
 class SvgNode;
 class Color;
@@ -71,6 +72,7 @@ public:
   MarkerID pickResultMarker = 0;
   MarkerID pickedMarkerId = 0;
   MarkerID locMarker = 0;
+  Tangram::MapState mapState;
   rapidjson::Document pickResultProps;
   LngLat pickResultCoord = {NAN, NAN};
   LngLat tapLocation = {NAN, NAN};
@@ -101,6 +103,7 @@ public:
 
   // GUI
   void createGUI(SDL_Window* sdlWin);
+  void setWindowLayout(int fbWidth);
   void showPanel(Widget* panel, bool isSubPanel = false);
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
   Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel, bool menuitem = false);
@@ -110,6 +113,7 @@ public:
   void dumpTileContents(float x, float y);
   bool drawFrame(int fbWidth, int fbHeight);
 
+  Widget* currLayout = NULL;
   Splitter* panelSplitter = NULL;
   Widget* panelSeparator = NULL;
   Widget* panelContainer = NULL;
@@ -117,6 +121,8 @@ public:
   Widget* mainTbContainer = NULL;
   Widget* infoPanel = NULL;
   Widget* infoContent = NULL;
+  Menubar* mainToolbar = NULL;
+  Widget* mapsContent = NULL;
   MapsWidget* mapsWidget = NULL;
   Button* reorientBtn = NULL;
   Widget* gpsStatusBtn = NULL;

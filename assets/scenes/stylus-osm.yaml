@@ -38,11 +38,13 @@ global:
         tunnel: '#E3E3E3'
         tunnel_casing: '#A0A0A0'
         motorway: '#FDE293'
+        motorway_tunnel: '#CDB775'
         motorway_link: '#FDE293'  #'#aaa'
         motorway_muted: '#eee'
         path: '#fff'
         transit: '#EB322F'
-        rail: [0.588,0.671,0.698]
+        rail: '#96ABB2'  #[0.588,0.671,0.698]
+        rail_tunnel: '#A9C3CB'
         pier: [0.993,0.993,0.993]
         ferry: '#8db3ce'
         runway_13: '#C7CADC'  #'#FFE4B5'
@@ -232,6 +234,9 @@ styles:
     dashed-bike:
         mix: unlit-lines
         dash: [1.0, 1.0]
+    dashed-rail:
+        mix: unlit-lines
+        dash: [0.15, 7.0]
     #dashed-tunnel:
     #    base: lines
     #    lighting: false
@@ -421,7 +426,7 @@ layers:
             priority: 1
             draw: { lines: { order: 100 } }
         tunnel:
-            filter: { brunnel: tunnel, $zoom: { min: 14 } }
+            filter: { brunnel: tunnel, $zoom: { min: 12 } }
             priority: 1
             draw: { lines: { color: global.color.tunnel, outline: { color: global.color.tunnel_casing } } }
         motorway:
@@ -434,6 +439,10 @@ layers:
                     width: [[5, 1px], [8, 1.5px], [14, 2px], [15, 12]]
                     outline:
                         width: [[14, 0], [15, 2]]
+            tunnel:
+                filter: { brunnel: tunnel, $zoom: { min: 12 } }
+                priority: 1
+                draw: { lines: { color: global.color.motorway_tunnel } }
             link:
                 filter: { ramp: 1 }
                 draw:
@@ -492,18 +501,26 @@ layers:
 
         # unpaved road: dashed w/ outline?  track: same as unpaved road if motor_vehicle: yes, otherwise like path
         rail:
-            filter: { class: rail, $zoom: { min: 10 } }
+            filter:
+                class: rail
+                railway: [rail, light_rail, narrow_gauge, tram, funicular]
+                $zoom: { min: 10 }
             draw:
                 lines:
                     order: 40
                     color: global.color.rail
                     width: [[12, 1px], [14, 1px], [16, 2px]]
+            sleepers:
+                # since dash pattern resets for every line segment it looks very irregular when zoomed out
+                filter: { $zoom: { min: 14 } }
+                draw:
+                    dashed-rail:
+                        order: 40
+                        color: global.color.rail
+                        width: [[12, 4px], [14, 4px], [16, 6px]]
             tunnel:
                 filter: { brunnel: tunnel }
-                draw: { lines: { width: [[16, 0px], [17, 2px]] } }
-            hidden:
-                filter: { not: { railway: [rail, light_rail, narrow_gauge, tram, funicular] } }
-                draw: { lines: { visible: false } }
+                draw: { lines: { color: global.color.rail_tunnel } }
 
         pier:
             filter: { class: pier }
@@ -623,7 +640,7 @@ layers:
                 priority: global.priority_motorway_ref
                 # faster roads get higher priority
                 #priority: function() { return global.priority_motorway_ref - parseInt(feature.maxspeed)/200; }
-                size: function() { return [(feature.ref.split(";")[0].length || 4)*6.5, 14]; }
+                size: function() { return [(feature.ref.split(";")[0].length || 4)*7.5, 14]; }
                 # midpoint generates too many labels (overwhelming label collider)
                 placement: spaced
                 placement_spacing: 30px

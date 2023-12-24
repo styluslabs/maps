@@ -167,16 +167,21 @@ function osmPlaceInfoCb(_content, _error)
     addPlaceInfo("phone", "Phone", "<a href='tel:" + tags["phone"] + "'><text>" + tags["phone"] + "</text></a>");
   }
 
-  if(tags["opening_hours"]) {
+  const hourstag = tags["opening_hours"];
+  if(hourstag) {
     //console.log(tags["opening_hours"]);
-    if(tags["opening_hours"] == "24/7") {
+    if(hourstag == "24/7") {
       addPlaceInfo("clock", "Hours", "Open 24 hours");
-    } else if(tags["opening_hours"] == "sunrise-sunset") {
+    } else if(hourstag == "sunrise-sunset") {
       addPlaceInfo("clock", "Hours", "Open sunrise to sunset");
     } else {
-      const hours = parseOpeningHours(tags["opening_hours"]);
+      var hours = parseOpeningHours(hourstag);
+      // a common error is using , instead of ;, so try working around that
+      if(!hours && hourstag.indexOf(";") < 0 && hourstag.indexOf(",") > 0) {
+        hours = parseOpeningHours(hourstag.replace(/,/g, ";"));
+      }
       if(!hours) {
-        addPlaceInfo("clock", "Hours", tags["opening_hours"]);
+        addPlaceInfo("clock", "Hours", hourstag);
       } else {
         //console.log(hours);
         const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];

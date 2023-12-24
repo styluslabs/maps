@@ -278,7 +278,7 @@ static int addSearchResult(duk_context* ctx)
     ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
   }
   if(flags & MapsSearch::UPDATE_RESULTS)  // flag set for final result
-    ms->resultsUpdated();
+    ms->resultsUpdated(flags);
   return 0;
 }
 
