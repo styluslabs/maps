@@ -487,6 +487,7 @@ int eglMain(ANativeWindow* nativeWin)
   if(!surface) { LOGE("eglCreateWindowSurface() error %X", eglGetError()); return -1; }
 
   auto curr_res = eglMakeCurrent(display, surface, surface, context);
+  //if(eglGetError() == EGL_CONTEXT_LOST) { context = 0; return eglMain(nativeWin); }
   if(curr_res == EGL_FALSE) { LOGE("eglMakeCurrent() error %X", eglGetError()); return -1; }
 
   sdlWin = {display, surface};

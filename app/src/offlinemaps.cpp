@@ -244,7 +244,7 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
 
 void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, int maxZoom)
 {
-  Map* map = app->map;
+  Map* map = app->map.get();
   // don't load tiles outside visible region at any zoom level (as using TileID::getChild() recursively
   //  would do - these could potentially outnumber the number of desired tiles!)
   double heightkm = lngLatDist(lngLat00, LngLat(lngLat00.longitude, lngLat11.latitude));

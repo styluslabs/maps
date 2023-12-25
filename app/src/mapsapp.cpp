@@ -134,6 +134,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   pickResultName = namestr;
   pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
   currLocPlaceInfo = (locMarker > 0 && pickedMarkerId == locMarker);
+  flyToPickResult = true;
   // allow pick result to be used as waypoint
   if(mapsTracks->onPickResult())
     return;
@@ -144,11 +145,6 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(pickResultMarker == 0)
     pickResultMarker = map->markerAdd();
   map->markerSetVisible(pickResultMarker, !currLocPlaceInfo);
-
-  // ensure marker is visible
-  double scrx, scry;
-  if(!map->lngLatToScreenPosition(pos.longitude, pos.latitude, &scrx, &scry))
-    map->flyTo(CameraPosition{pos.longitude, pos.latitude, 16}, 1.0);  // max(map->getZoom(), 14)
 
   // show place info panel
   gui->deleteContents(infoContent);  //, ".listitem");
@@ -390,6 +386,7 @@ void MapsApp::clearPickResult()
     map->markerSetVisible(pickResultMarker, false);
   pickResultCoord = LngLat(NAN, NAN);
   currLocPlaceInfo = false;
+  flyToPickResult = false;
 }
 
 void MapsApp::tapEvent(float x, float y)
@@ -498,10 +495,9 @@ void MapsApp::mapUpdate(double time)
   //platform->notifyRender();
   mapState = map->update(time - lastFrameTime);
   lastFrameTime = time;
-  if (mapState.isAnimating()) {
+  if(mapState.isAnimating())  // !mapState.viewComplete() - TileWorker requests rendering when new tiles ready
     platform->requestRender();
-  }
-  //LOG("MapState: %d", state.flags);
+  //LOG("MapState: %X", mapState.flags);
 
   // update map center
   auto cpos = map->getCameraPosition();
@@ -737,6 +733,7 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
       Rect r = dest * (1/app->gui->inputScale);
       real y = window()->winBounds().height()/app->gui->inputScale - r.bottom;
       app->map->setViewport(r.left, y, r.width(), r.height());
+      app->platform->requestRender();
     }
     if(src != dest)
       node->invalidate(true);
@@ -887,13 +884,13 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
 
 void MapsApp::setWindowLayout(int fbWidth)
 {
-  bool narrow = fbWidth/gui->paintScale < 350;
+  bool narrow = fbWidth/gui->paintScale < 700;
   if(!currLayout || narrow != currLayout->node->hasClass("window-layout-narrow")) {
     if(currLayout) currLayout->setVisible(false);
     currLayout = win->selectFirst(narrow ? ".window-layout-narrow" : ".window-layout-wide");
     currLayout->setVisible(true);
 
-    panelSplitter = static_cast<Splitter*>(currLayout->selectFirst(".panel-splitter"));  // may be NULL
+    panelSplitter->setEnabled(narrow);
     panelSeparator = currLayout->selectFirst(".panel-separator");  // may be NULL
     panelContainer = currLayout->selectFirst(".panel-container");
     mainTbContainer = currLayout->selectFirst(".main-tb-container");
@@ -906,6 +903,19 @@ void MapsApp::setWindowLayout(int fbWidth)
 
     mapsContent->removeFromParent();
     currLayout->selectFirst(".maps-container")->addWidget(mapsContent);
+
+    // adjust menu alignment
+    auto menubtns = mainToolbar->select(".toolbutton");
+    for(Widget* btn : menubtns) {
+      Menu* menu = static_cast<Button*>(btn)->mMenu;
+      if(menu)
+        menu->setAlign(narrow ? (menu->mAlign | Menu::ABOVE) : (menu->mAlign & ~Menu::ABOVE));
+    }
+
+    SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
+    auto minbtns = panelContent->select(".minimize-btn");
+    for(Widget* btn : minbtns)
+      static_cast<Button*>(btn)->setIcon(minicon);
   }
 }
 
@@ -915,7 +925,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     <svg class="window" layout="box">
       <g class="window-layout-narrow" display="none" box-anchor="fill" layout="flex" flex-direction="column">
         <g class="maps-container" box-anchor="fill" layout="box"></g>
-        <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="10"/>
+        <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
         <g class="panel-container" display="none" box-anchor="hfill" layout="box">
           <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
           <rect class="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
@@ -967,7 +977,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   panelContent = new Widget(loadSVGFragment("<g id='panel-content' box-anchor='fill' layout='box'></g>"));
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
-  new Splitter(winnode->selectFirst(".panel-splitter"),
+  panelSplitter = new Splitter(winnode->selectFirst(".panel-splitter"),
           winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 120);
 
   // adjust map center to account for sidebar
@@ -1005,7 +1015,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   //mainToolbar->addButton(pluginBtn);
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
-  Menu* overflowMenu = createMenu(Menu::VERT_RIGHT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
+  Menu* overflowMenu = createMenu(Menu::VERT);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem(pluginBtn);
   Button* metricCb = createCheckBoxMenuItem("Use metric units");
@@ -1033,10 +1043,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   overflowMenu->addSubmenu("Debug", debugMenu);
 
   mainToolbar->addButton(overflowBtn);
-
-  // main toolbar at bottom is better than top for auto-close menus (so menu isn't obstructed by finger)
-  mainTbContainer = win->selectFirst("#main-tb-container");
-  mainTbContainer->addWidget(mainToolbar);
 
   // map widget and floating btns
   mapsWidget = new MapsWidget(this);
@@ -1071,7 +1077,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   floatToolbar->setMargins(0, 10, 10, 0);
   mapsContent->addWidget(floatToolbar);
 
-  ScaleBarWidget* scaleBar = new ScaleBarWidget(map);
+  ScaleBarWidget* scaleBar = new ScaleBarWidget(map.get());
   scaleBar->node->setAttribute("box-anchor", "bottom left");
   scaleBar->setMargins(0, 0, 10, 10);
   mapsContent->addWidget(scaleBar);
@@ -1097,7 +1103,7 @@ void MapsApp::showPanelContainer(bool show)
   panelContainer->setVisible(show);
   if(panelSeparator)
     panelSeparator->setVisible(show);
-  if(panelSplitter) {
+  if(panelSplitter->isEnabled()) {
     panelSplitter->setVisible(show);
     mainTbContainer->setVisible(!show);
   }
@@ -1138,6 +1144,14 @@ bool MapsApp::popPanel()
   else
     showPanelContainer(false);
   return true;
+}
+
+void MapsApp::maximizePanel(bool maximize)
+{
+  if(currLayout->node->hasClass("window-layout-narrow")) {
+    currLayout->selectFirst(".maps-container")->setVisible(!maximize);
+    panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
+  }
 }
 
 // make this a static method or standalone fn?
@@ -1219,7 +1233,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
 {
   // what about just swiping down to minimize instead of a button?
   if(canMinimize) {
-    auto minimizeBtn = createToolbutton(MapsApp::uiIcon(PLATFORM_MOBILE ? "chevron-down" : "chevron-up"));
+    auto minimizeBtn = createToolbutton(MapsApp::uiIcon("chevron-down"));
     minimizeBtn->node->addClass("minimize-btn");
     minimizeBtn->onClicked = [this](){
       // options:
@@ -1392,7 +1406,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     }
   };
 
-  map = new Tangram::Map(std::unique_ptr<Platform>(_platform));
+  map.reset(new Tangram::Map(std::unique_ptr<Platform>(_platform)));
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
   //map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });
@@ -1427,7 +1441,6 @@ MapsApp::~MapsApp()
 
   gui->closeWindow(win.get());
   delete gui;  gui = NULL;
-  delete map;
 }
 
 bool MapsApp::drawFrame(int fbWidth, int fbHeight)
@@ -1446,6 +1459,9 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     gui->fullRedraw = painter->usesGPU();
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
   }
+
+  setWindowLayout(fbWidth);
+
   // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
   //  we expect the vast majority of all frames drawn by app to be map changes (panning, zooming), the total
   //  benefit from partial update would be relatively small.  Furthermore, smooth map interaction is even more
@@ -1453,6 +1469,22 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   // ... but as a simple optimization, we call Painter:endFrame() again to draw UI over map if UI isn't dirty
   painter->deviceRect = Rect::wh(fbWidth, fbHeight);
   Rect dirty = gui->layoutAndDraw(painter.get());
+
+  if(flyToPickResult) {
+    // ensure marker is visible and hasn't been covered by opening panel
+    Point scr;
+    CameraPosition campos = {pickResultCoord.longitude, pickResultCoord.latitude, std::min(map->getZoom(), 16.0f)};
+    if(!map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y)
+         || panelContainer->node->bounds().contains(scr/gui->paintScale)) {
+      // if point is close enough, use simple ease instead of flyTo
+      Point offset = scr - Point(fbWidth, fbHeight)/2;
+      if(std::abs(offset.x) < 2*fbWidth && std::abs(offset.y) < 2*fbHeight)
+        map->setCameraPositionEased(campos, 1.0);
+      else
+        map->flyTo(campos, 1.0);
+    }
+    flyToPickResult = false;
+  }
 
   // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
   if(platform->notifyRender()) {

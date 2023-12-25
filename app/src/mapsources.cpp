@@ -744,7 +744,7 @@ Button* MapsSources::createPanel()
   sourceEditPanel = app->createMapPanel(editHeader, srcEditContent, sourceTb);
 
   // main toolbar button
-  Menu* sourcesMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
+  Menu* sourcesMenu = createMenu(Menu::VERT);
   //sourcesMenu->autoClose = true;
   sourcesMenu->addHandler([this, sourcesMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {

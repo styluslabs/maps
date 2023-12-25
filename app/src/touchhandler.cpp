@@ -23,7 +23,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
 {
   // unfortunately, glfw doesn't provide input event timestamps, so we have to use glfwGetTime() when we
   //  receive event, which results in inaccuracies and undesired fling gestures
-  Map* map = app->map;
+  Map* map = app->map.get();
   size_t prevpoints = touchPoints.size();
   //LOGW("touchEvent: %d for %d, t: %f, x: %f, y: %f; current npts %d", action, ptrId, t, x, y, prevpoints);
   auto it = touchPoints.begin();

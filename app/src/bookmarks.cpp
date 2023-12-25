@@ -286,7 +286,7 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
   MarkerGroup* markerGroup = NULL;
   auto it = bkmkMarkers.find(list_id);
   if(it == bkmkMarkers.end()) {
-    auto mg = std::make_unique<MarkerGroup>(app->map, "layers.bookmark-marker.draw.marker");
+    auto mg = std::make_unique<MarkerGroup>(app->map.get(), "layers.bookmark-marker.draw.marker");
     markerGroup = bkmkMarkers.emplace(list_id, std::move(mg)).first->second.get();
     markerGroup->defaultVis = !createUI;
     markerGroup->commonProps = {{{"color", color}}};
@@ -636,7 +636,7 @@ Button* MapsBookmarks::createPanel()
   for(auto& node : vislists)
     populateBkmks(node.as<int>(-1), false);
 
-  Menu* bkmkMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
+  Menu* bkmkMenu = createMenu(Menu::VERT);
   //bkmkMenu->autoClose = true;
   bkmkMenu->addHandler([this, bkmkMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
@@ -657,66 +657,3 @@ Button* MapsBookmarks::createPanel()
   bkmkBtn->setMenu(bkmkMenu);
   return bkmkBtn;
 }
-
-// saved views?
-// - does this really add much over a bookmark?  esp. if we can't choose a saved view fast than choosing a
-//  bookmark + clearing marker and not important enough to deserve a top level panel
-// - could provide option to save special bookmark type storing CameraPosition in props?
-
-/*void MapsBookmarks::showViewsGUI()
-{
-  static int currViewIdx = 0;
-  static std::string viewTitle;
-
-  if (!ImGui::CollapsingHeader("Saved Views"))  //, ImGuiTreeNodeFlags_DefaultOpen))
-    return;
-
-  Map* map = app->map;
-  // automatically suggest title based on city/state/country in view?
-  bool ent = ImGui::InputText("Title", &viewTitle, ImGuiInputTextFlags_EnterReturnsTrue);
-  if ((ImGui::Button("Save View") || ent) && !viewTitle.empty()) {
-    const char* query = "REPLACE INTO saved_views (title,lng,lat,zoom,rotation,tilt,width,height) VALUES (?,?,?,?,?,?,?,?);";
-
-    LngLat lngLatMin, lngLatMax;
-    app->getMapBounds(lngLatMin, lngLatMax);
-    auto view = map->getCameraPosition();
-
-    DB_exec(bkmkDB, query, NULL, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, viewTitle.c_str(), -1, SQLITE_STATIC);
-      sqlite3_bind_double(stmt, 2, view.longitude);
-      sqlite3_bind_double(stmt, 3, view.latitude);
-      sqlite3_bind_double(stmt, 4, view.zoom);
-      sqlite3_bind_double(stmt, 5, view.rotation);
-      sqlite3_bind_double(stmt, 6, view.tilt);
-      sqlite3_bind_double(stmt, 7, lngLatMax.longitude - lngLatMin.longitude);
-      sqlite3_bind_double(stmt, 8, lngLatMax.latitude - lngLatMin.latitude);
-    });
-  }
-
-  std::vector<std::string> views;
-  DB_exec(bkmkDB, "SELECT title FROM saved_views;", [&](sqlite3_stmt* stmt){
-    views.emplace_back((const char*)(sqlite3_column_text(stmt, 0)));
-  });
-
-  std::vector<const char*> cviews;
-  for(const auto& s : views)
-    cviews.push_back(s.c_str());
-
-  if(ImGui::ListBox("Views", &currViewIdx, cviews.data(), cviews.size())) {
-    const char* query = "SELECT lng,lat,zoom,rotation,tilt FROM saved_views WHERE title = ?;";
-
-    CameraPosition view;
-    DB_exec(bkmkDB, query, [&](sqlite3_stmt* stmt){
-      view.longitude = sqlite3_column_double(stmt, 0);
-      view.latitude = sqlite3_column_double(stmt, 1);
-      view.zoom = sqlite3_column_double(stmt, 2);
-      view.rotation = sqlite3_column_double(stmt, 3);
-      view.tilt = sqlite3_column_double(stmt, 4);
-    }, [&](sqlite3_stmt* stmt){
-      sqlite3_bind_text(stmt, 1, views[currViewIdx].c_str(), -1, SQLITE_STATIC);
-    });
-
-    map->setCameraPositionEased(view, 1.0);
-  }
-}
-*/

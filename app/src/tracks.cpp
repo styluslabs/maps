@@ -1799,7 +1799,7 @@ Button* MapsTracks::createPanel()
   }
 
   // main toolbar button ... quick menu - recent tracks?
-  Menu* tracksMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
+  Menu* tracksMenu = createMenu(Menu::VERT);
   tracksMenu->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       int uiWidth = app->getPanelWidth();
@@ -1810,6 +1810,8 @@ Button* MapsTracks::createPanel()
         item->setChecked(recordedTrack.visible);
         tracksMenu->addItem(item);
       }
+      if(tracksDirty)
+        populateTracks();  // needed to get order
       auto items = tracksContent->getOrder();
       for(size_t ii = 0; ii < recordTrack ? 9 : 10 && ii < items.size(); ++ii) {
         for(size_t jj = 0; jj < tracks.size(); ++jj) {

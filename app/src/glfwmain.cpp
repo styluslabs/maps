@@ -151,7 +151,6 @@ int main(int argc, char* argv[])
 
     int fbWidth = 0, fbHeight = 0;
     glfwGetFramebufferSize(glfwWin, &fbWidth, &fbHeight);  //SDL_GL_GetDrawableSize((SDL_Window*)glfwWin, &fbWidth, &fbHeight);
-    app->setWindowLayout(fbWidth);
 
     if(app->drawFrame(fbWidth, fbHeight))
       glfwSwapBuffers(glfwWin);

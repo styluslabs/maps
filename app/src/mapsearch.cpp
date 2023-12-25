@@ -159,7 +159,7 @@ MapsSearch::MapsSearch(MapsApp* _app) : MapsComponent(_app)
 
 bool MapsSearch::indexMBTiles()
 {
-  Map* map = app->map;
+  Map* map = app->map.get();
   YAML::Node searchDataNode;
   Tangram::YamlPath("global.search_data").get(map->getScene()->config(), searchDataNode);
   auto searchData = parseSearchFields(searchDataNode);
@@ -313,7 +313,7 @@ void MapsSearch::onMapEvent(MapEvent_t event)
 {
   if(event != MAP_CHANGE || !app->searchActive)
     return;
-  Map* map = app->map;
+  Map* map = app->map.get();
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
   if(flyingToResults && !app->mapState.isAnimating()) {  //event == CAMERA_EASE_DONE
@@ -372,7 +372,7 @@ void MapsSearch::resultsUpdated(int flags)
 
   // zoom out if necessary to show first 5 results
   if(flags & FLY_TO) {
-    Map* map = app->map;
+    Map* map = app->map.get();
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
     int resultIdx = 0;
     for(auto& res : listResults) {
@@ -400,7 +400,7 @@ void MapsSearch::resultsUpdated(int flags)
 
 void MapsSearch::searchText(std::string query, SearchPhase phase)
 {
-  Map* map = app->map;
+  Map* map = app->map.get();
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
   query = StringRef(query).trimmed().toString();
@@ -499,7 +499,7 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
       searchText(queryText->text(), EDITING);  // refresh
     };
     container->addWidget(discardBtn);
-
+    item->node->setAttribute("__querytext", history[ii].c_str());
     resultsContent->addWidget(item);
   }
 }
@@ -522,6 +522,7 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
     distText->node->setAttribute("font-size", "12");
     distText->node->setAttribute("margin", "0 8 0 0");
     item->selectFirst(".child-container")->addWidget(distText);
+    item->node->setAttribute("__querytext", res.tags["name"].GetString());
     resultsContent->addWidget(item);
   }
 }
@@ -563,13 +564,36 @@ Button* MapsSearch::createPanel()
   Button* textEditOverlay = new Button(overlayNode);
   textEditOverlay->onClicked = [=](){ searchText("", RETURN); };
 
-  queryText->onChanged = [this](const char* s){ searchText(s, EDITING); };
+  queryText->onChanged = [this](const char* s){
+    selectedResultIdx = -1;  // no need to clear checked item since all contents will be deleted
+    searchText(s, EDITING);
+  };
   queryText->addHandler([this](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
-      if(!queryText->text().empty())
-        searchText(queryText->text(), RETURN);
-      return true;
+    if(event->type == SDL_KEYDOWN) {
+      if(event->key.keysym.sym == SDLK_RETURN) {
+        if(!queryText->text().empty())
+          searchText(queryText->text(), RETURN);
+        return true;
+      }
+      if(event->key.keysym.sym == SDLK_DOWN || event->key.keysym.sym == SDLK_UP) {
+        bool down = event->key.keysym.sym == SDLK_DOWN;
+        int step = event->key.keysym.sym == SDLK_DOWN ? 1 : resultNodes.size() - 1;
+        auto& resultNodes = resultsContent->containerNode()->children();
+        SvgNode* oldnode = *std::advance(resultNodes.begin(), selectedResultIdx);
+        static_cast<Button*>(oldnode->ext())->setChecked(false);
+        if(selectedResultIdx < 0)
+          selectedResultIdx = down ? 0 : resultNodes.size() - 1;
+        selectedResultIdx = (selectedResultIdx + step)%resultNodes.size();
+        SvgNode* node = *std::advance(resultNodes.begin(), selectedResultIdx);
+        static_cast<Button*>(node->ext())->setChecked(true);
+        queryText->setText(node->getStringAttr("__querytext", ""));
+
+        return true;
+      }
+
     }
+    else if(event->type == SvgGui::FOCUS_GAINED || event->type == SvgGui::FOCUS_LOST)
+      app->maximizePanel(event->type == SvgGui::FOCUS_GAINED);
     return false;
   });
 
@@ -577,6 +601,7 @@ Button* MapsSearch::createPanel()
   cancelBtn = new Button(searchBoxNode->selectFirst(".cancel-btn"));
   cancelBtn->onClicked = [this](){
     clearSearch();
+    app->gui->setFocused(queryText);  // cancelBtn won't be visible if text input disabled
     searchText("", EDITING);  // show history
   };
 
@@ -664,10 +689,11 @@ Button* MapsSearch::createPanel()
       searchText("", NEXTPAGE);
   };
 
-  markers.reset(new MarkerGroup(app->map, "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
+  markers.reset(new MarkerGroup(app->map.get(),
+      "layers.search-marker.draw.marker", "layers.search-dot.draw.marker"));
 
   // main toolbar button
-  Menu* searchMenu = createMenu(Menu::VERT_LEFT | (PLATFORM_MOBILE ? Menu::ABOVE : 0));
+  Menu* searchMenu = createMenu(Menu::VERT);
   //searchMenu->autoClose = true;
   searchMenu->addHandler([this, searchMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {

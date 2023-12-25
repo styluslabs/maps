@@ -82,12 +82,17 @@ public:
   bool hasLocation = false;
   bool glNeedsInit = true;
 
+  float density = 1.0;
+  float pixel_scale = 2.0;
+
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;
   std::string sceneYaml;
 
-  float density = 1.0;
-  float pixel_scale = 2.0;
+  // we want Map to be destroyed after all components
+  std::unique_ptr<Map> map;
+  std::unique_ptr<Painter> painter;
+  std::unique_ptr<Window> win;
 
   std::unique_ptr<TouchHandler> touchHandler;
   std::unique_ptr<MapsTracks> mapsTracks;
@@ -97,18 +102,15 @@ public:
   std::unique_ptr<MapsSearch> mapsSearch;
   std::unique_ptr<PluginManager> pluginManager;
 
-  Map* map;
-  std::unique_ptr<Painter> painter;
-  std::unique_ptr<Window> win;
-
   // GUI
   void createGUI(SDL_Window* sdlWin);
   void setWindowLayout(int fbWidth);
   void showPanel(Widget* panel, bool isSubPanel = false);
+  void maximizePanel(bool maximize);
+  bool popPanel();
   Toolbar* createPanelHeader(const SvgNode* icon, const char* title);
   Button* createPanelButton(const SvgNode* icon, const char* title, Widget* panel, bool menuitem = false);
   Widget* createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent = NULL, bool canMinimize = true);
-  bool popPanel();
   void addPlaceInfo(const char* icon, const char* title, const char* value);
   void dumpTileContents(float x, float y);
   bool drawFrame(int fbWidth, int fbHeight);
@@ -165,4 +167,5 @@ private:
   void clearPickResult();
 
   bool currLocPlaceInfo = false;  // special case of showing place info for current location
+  bool flyToPickResult = false;
 };
