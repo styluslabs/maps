@@ -66,6 +66,7 @@ private:
   bool searchOnMapMove = true;
   bool unifiedSearch = false;
   bool flyingToResults = false;
+  int selectedResultIdx = -1;
 
   void offlineListSearch(std::string queryStr, LngLat, LngLat);
   void offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11);

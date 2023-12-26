@@ -587,3 +587,19 @@ void showModalCentered(Window* modal, SvgGui* gui)
   modal->setWinBounds(Rect::centerwh(pbbox.center(), std::min(pbbox.width() - 20, real(500)), pbbox.height() - 60));
   gui->showModal(modal, win);
 }
+
+void sendKeyPress(SvgGui* gui, Widget* widget, int sdlkey, int mods)
+{
+  SDL_Event event = {0};
+  event.key.type = SDL_KEYDOWN;
+  event.key.state = SDL_PRESSED;
+  event.key.repeat = 0;
+  event.key.keysym.scancode = (SDL_Scancode)0;
+  event.key.keysym.sym = sdlkey;
+  event.key.keysym.mod = mods;
+  event.key.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
+  widget->sdlEvent(gui, &event);
+  event.key.type = SDL_KEYUP;
+  event.key.state = SDL_RELEASED;
+  widget->sdlEvent(gui, &event);
+}

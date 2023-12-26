@@ -463,13 +463,18 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     offlineListSearch(searchStr, lngLat00, lngLat11);
     resultsUpdated(phase == RETURN ? FLY_TO : 0);
   }
-  else {  //if(phase != EDITING) {
+  else {
     bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
     if(unifiedSearch)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
     else
       app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
+  }
+
+  if(phase == RETURN) {
+    app->gui->setFocused(resultsContent);
+    app->maximizePanel(false);
   }
 
   if(!app->searchActive && phase == RETURN) {
@@ -571,29 +576,38 @@ Button* MapsSearch::createPanel()
   queryText->addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SDL_KEYDOWN) {
       if(event->key.keysym.sym == SDLK_RETURN) {
-        if(!queryText->text().empty())
+        auto& resultNodes = resultsContent->containerNode()->children();
+        if(selectedResultIdx >= 0 && selectedResultIdx < resultNodes.size()) {
+          auto it = resultNodes.begin();
+          std::advance(it, selectedResultIdx);
+          static_cast<Button*>((*it)->ext())->onClicked();
+        }
+        else if(!queryText->text().empty())
           searchText(queryText->text(), RETURN);
         return true;
       }
       if(event->key.keysym.sym == SDLK_DOWN || event->key.keysym.sym == SDLK_UP) {
-        bool down = event->key.keysym.sym == SDLK_DOWN;
-        int step = event->key.keysym.sym == SDLK_DOWN ? 1 : resultNodes.size() - 1;
         auto& resultNodes = resultsContent->containerNode()->children();
-        SvgNode* oldnode = *std::advance(resultNodes.begin(), selectedResultIdx);
-        static_cast<Button*>(oldnode->ext())->setChecked(false);
-        if(selectedResultIdx < 0)
-          selectedResultIdx = down ? 0 : resultNodes.size() - 1;
-        selectedResultIdx = (selectedResultIdx + step)%resultNodes.size();
-        SvgNode* node = *std::advance(resultNodes.begin(), selectedResultIdx);
-        static_cast<Button*>(node->ext())->setChecked(true);
-        queryText->setText(node->getStringAttr("__querytext", ""));
-
+        int n = resultNodes.size();
+        if(selectedResultIdx < 0 || selectedResultIdx >= n)
+          selectedResultIdx = event->key.keysym.sym == SDLK_DOWN ? 0 : n - 1;
+        else {
+          auto it = resultNodes.begin();
+          std::advance(it, selectedResultIdx);
+          static_cast<Button*>((*it)->ext())->setChecked(false);
+          int step = event->key.keysym.sym == SDLK_DOWN ? 1 : n - 1;
+          selectedResultIdx = (selectedResultIdx + step)%n;
+        }
+        auto it = resultNodes.begin();
+        std::advance(it, selectedResultIdx);
+        static_cast<Button*>((*it)->ext())->setChecked(true);
+        queryText->setText((*it)->getStringAttr("__querytext", ""));
+        sendKeyPress(gui, queryText, SDLK_END);  // move cursor to end of text
         return true;
       }
-
     }
-    else if(event->type == SvgGui::FOCUS_GAINED || event->type == SvgGui::FOCUS_LOST)
-      app->maximizePanel(event->type == SvgGui::FOCUS_GAINED);
+    else if(event->type == SvgGui::FOCUS_GAINED)  // || event->type == SvgGui::FOCUS_LOST)
+      app->maximizePanel(true);  //event->type == SvgGui::FOCUS_GAINED);
     return false;
   });
 
@@ -679,6 +693,8 @@ Button* MapsSearch::createPanel()
     }
     else if(event->type == MapsApp::PANEL_CLOSED)
       clearSearch();
+    else if(event->type == SvgGui::INVISIBLE)
+      app->maximizePanel(false);
     return false;
   });
 

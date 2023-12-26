@@ -979,6 +979,11 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
   panelSplitter = new Splitter(winnode->selectFirst(".panel-splitter"),
           winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 120);
+  panelSplitter->setSplitSize(config["ui"]["split_size"].as<int>(350));
+  panelSplitter->onSplitChanged = [this](real size){
+    if(size == panelSplitter->minSize)
+      showPanelContainer(false);  // minimize panel
+  };
 
   // adjust map center to account for sidebar
   //Tangram::EdgePadding padding = {0,0,0,0};  //{200, 0, 0, 0};
@@ -1169,17 +1174,14 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   //static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
   toolbar->addWidget(titleWidget);
 
-  //Widget* stretch = createStretch();
-  if(panelSplitter) {
-    // forward press event not captured by toolbuttons to splitter
-    toolbar->addHandler([this](SvgGui* gui, SDL_Event* event) {
-      if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
-        panelSplitter->sdlEvent(gui, event);
-        return true;
-      }
-      return false;
-    });
-  }
+  // forward press event not captured by toolbuttons to splitter
+  toolbar->addHandler([this](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
+      panelSplitter->sdlEvent(gui, event);
+      return true;
+    }
+    return false;
+  });
 
   //toolbar->addWidget(stretch);
   return toolbar;
@@ -1344,6 +1346,8 @@ void MapsApp::saveConfig()
   config["view"]["zoom"] = pos.zoom;
   config["view"]["rotation"] = pos.rotation;
   config["view"]["tilt"] = pos.tilt;
+
+  config["ui"]["split_size"] = int(panelSplitter->currSize);
 
   //std::string s = YAML::Dump(config);
   YAML::Emitter emitter;
