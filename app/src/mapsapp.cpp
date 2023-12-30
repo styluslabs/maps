@@ -318,10 +318,11 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     }
     else if(node->type() == SvgNode::TEXT) {
       SvgText* textnode = static_cast<SvgText*>(node);
+      int textw = getPanelWidth() - (icon[0] ? 20 : 70);
       if(textnode->hasClass("wrap-text"))
-        textnode->setText(SvgPainter::breakText(textnode, icon[0] ? 250 : 300).c_str());
+        textnode->setText(SvgPainter::breakText(textnode, textw).c_str());
       else if(textnode->hasClass("elide-text"))
-        SvgPainter::elideText(textnode, icon[0] ? 250 : 300);
+        SvgPainter::elideText(textnode, textw);
     }
     content->containerNode()->addChild(node);
     return;
@@ -821,8 +822,9 @@ class ScaleBarWidget : public Widget
 {
 public:
   ScaleBarWidget(Map* _map) : Widget(new SvgCustomNode), map(_map) {}
-  void draw(SvgPainter* svgp) const override;
+  void draw(SvgPainter* svgp) const override {}
   Rect bounds(SvgPainter* svgp) const override;
+  void directDraw(Painter* p) const;
 
   Map* map;
 };
@@ -832,10 +834,12 @@ Rect ScaleBarWidget::bounds(SvgPainter* svgp) const
   return svgp->p->getTransform().mapRect(Rect::wh(100, 20));
 }
 
-void ScaleBarWidget::draw(SvgPainter* svgp) const
+void ScaleBarWidget::directDraw(Painter* p) const
 {
-  Painter* p = svgp->p;
+  //Painter* p = svgp->p;
   Rect bbox = node->bounds();
+  p->translate(bbox.origin());
+  p->scale(MapsApp::gui->paintScale);
   //real w = bbox.width(), h = bbox.height();  p->translate(w/2, h/2);
 
   real y = bbox.center().y;
@@ -880,6 +884,11 @@ void ScaleBarWidget::draw(SvgPainter* svgp) const
   p->setFillBrush(Color::BLACK);
   p->setStroke(Color::NONE);
   p->drawText(0, 0, str.c_str());
+}
+
+int MapsApp::getPanelWidth() const
+{
+  return int(panelContainer->node->bounds().width() + 0.5);
 }
 
 void MapsApp::setWindowLayout(int fbWidth)
@@ -978,7 +987,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   panelContent = new Widget(loadSVGFragment("<g id='panel-content' box-anchor='fill' layout='box'></g>"));
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
   panelSplitter = new Splitter(winnode->selectFirst(".panel-splitter"),
-          winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 120);
+          winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 200);
   panelSplitter->setSplitSize(config["ui"]["split_size"].as<int>(350));
   panelSplitter->onSplitChanged = [this](real size){
     if(size == panelSplitter->minSize)
@@ -1082,7 +1091,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   floatToolbar->setMargins(0, 10, 10, 0);
   mapsContent->addWidget(floatToolbar);
 
-  ScaleBarWidget* scaleBar = new ScaleBarWidget(map.get());
+  scaleBar = new ScaleBarWidget(map.get());
   scaleBar->node->setAttribute("box-anchor", "bottom left");
   scaleBar->setMargins(0, 0, 10, 10);
   mapsContent->addWidget(scaleBar);
@@ -1460,6 +1469,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->setupGL();
     // Painter created here since GL context required to build shaders
     painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES));
+    scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
     gui->fullRedraw = painter->usesGPU();
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
   }
@@ -1509,6 +1519,9 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->render();  // only have to rerender map, not update
   else
     return false;  // neither map nor UI is dirty
+
+  // scale bar must be updated whenever map changes, but we don't want to redraw entire UI every frame
+  scaleBar->directDraw(scaleBarPainter.get());
 
   painter->endFrame();  // render UI over map
 #if 0  // nanovg_sw renderer

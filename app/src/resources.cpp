@@ -87,13 +87,7 @@ static std::unique_ptr<SvgPainter> boundsSvgPainter;
 
 void initResources(const char* baseDir)
 {
-  FONSparams fonsParams;
-  fonsParams.sdfPadding = 4;
-  fonsParams.sdfPixelDist = 32.0f;
-  fonsParams.flags = FONS_ZERO_TOPLEFT | FONS_DELAY_LOAD | FONS_SUMMED;
-  fontStash.reset(fonsCreateInternal(&fonsParams));
-  Painter::fontStash = fontStash.get();
-
+  Painter::initFontStash(FONS_DELAY_LOAD | FONS_SUMMED);
   Painter::loadFont("sans", FSPath(baseDir, "scenes/fonts/roboto-regular.ttf").c_str());
   if(Painter::loadFont("fallback", FSPath(baseDir, "scenes/fonts/DroidSansFallback.ttf").c_str()))
     Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback

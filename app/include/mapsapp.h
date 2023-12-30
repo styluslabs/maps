@@ -23,6 +23,7 @@ class Window;
 class Toolbar;
 class Menubar;
 class MapsWidget;
+class ScaleBarWidget;
 class SvgNode;
 class Color;
 class Painter;
@@ -41,7 +42,7 @@ public:
   MapsApp(Platform* _platform);
   ~MapsApp();  // impl must be outside header to allow unique_ptr members w/ incomplete types
 
-  void mapUpdate(double time);  //int w, int h, int display_w, int display_h, double current_time, bool focused);
+  void mapUpdate(double time);
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
   //void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void onSuspend();
@@ -59,12 +60,11 @@ public:
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   LngLat getMapCenter();
   void getElevation(LngLat pos, std::function<void(double)> callback);
-  //bool textureFromSVG(const char* texname, char* svg, float scale = 1.0f);
   void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props);  //, int priority = 1);
   void setPickResult(LngLat pos, std::string namestr, std::string propstr);
   YAML::Node readSceneValue(const std::string& yamlPath);
   void placeInfoPluginError(const char* err);
-  int getPanelWidth() const { return 350; }
+  int getPanelWidth() const;
 
   Location currLocation;
   float orientation = 0;
@@ -89,9 +89,10 @@ public:
   std::string sceneFile;
   std::string sceneYaml;
 
-  // we want Map to be destroyed after all components
+  // members constructed in declaration order, destroyed in reverse order, so Map will be destroyed last
   std::unique_ptr<Map> map;
   std::unique_ptr<Painter> painter;
+  std::unique_ptr<Painter> scaleBarPainter;
   std::unique_ptr<Window> win;
 
   std::unique_ptr<TouchHandler> touchHandler;
@@ -130,6 +131,7 @@ public:
   Widget* gpsStatusBtn = NULL;
   Widget* crossHair = NULL;
   Widget* legendContainer = NULL;
+  ScaleBarWidget* scaleBar;
   std::vector<Widget*> panelHistory;
 
   int64_t storageTotal = 0;
