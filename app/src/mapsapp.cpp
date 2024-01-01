@@ -838,8 +838,8 @@ void ScaleBarWidget::directDraw(Painter* p) const
 {
   //Painter* p = svgp->p;
   Rect bbox = node->bounds();
+  p->save();
   p->translate(bbox.origin());
-  p->scale(MapsApp::gui->paintScale);
   //real w = bbox.width(), h = bbox.height();  p->translate(w/2, h/2);
 
   real y = bbox.center().y;
@@ -884,11 +884,13 @@ void ScaleBarWidget::directDraw(Painter* p) const
   p->setFillBrush(Color::BLACK);
   p->setStroke(Color::NONE);
   p->drawText(0, 0, str.c_str());
+  p->restore();
 }
 
 int MapsApp::getPanelWidth() const
 {
-  return int(panelContainer->node->bounds().width() + 0.5);
+  Widget* w = panelContainer->isVisible() ? panelContainer : mainTbContainer;
+  return int(w->node->bounds().width() + 0.5);
 }
 
 void MapsApp::setWindowLayout(int fbWidth)
@@ -1521,7 +1523,13 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     return false;  // neither map nor UI is dirty
 
   // scale bar must be updated whenever map changes, but we don't want to redraw entire UI every frame
+  // - a possible alternative is to draw with Tangram using something similar to DebugTextStyle/DebugStyle
+  scaleBarPainter->deviceRect = Rect::wh(fbWidth, fbHeight);
+  scaleBarPainter->beginFrame();
+  scaleBarPainter->setsRGBAdjAlpha(true);
+  scaleBarPainter->scale(gui->paintScale);  // beginFrame resets Painter state
   scaleBar->directDraw(scaleBarPainter.get());
+  scaleBarPainter->endFrame();
 
   painter->endFrame();  // render UI over map
 #if 0  // nanovg_sw renderer
