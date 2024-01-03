@@ -11,8 +11,6 @@ import java.io.InputStream;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-//import androidx.core.app.ActivityCompat;
-import androidx.activity.EdgeToEdge;
 import android.content.Context;
 import android.app.Activity;
 import android.os.Bundle;
@@ -20,10 +18,12 @@ import android.os.ParcelFileDescriptor;
 import android.net.Uri;
 import android.util.Log;
 import android.text.InputType;
+import android.graphics.Color;
 import android.view.WindowManager;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.KeyEvent;
+import android.view.Window;
 import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.BaseInputConnection;
@@ -70,7 +70,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
-    EdgeToEdge.enable(this);
     //String extfiles = getExternalFilesDir(null).getAbsolutePath();
     String extfiles = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
     File file = new File(extfiles, "config.default.yaml");
@@ -98,6 +97,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     mLayout = new RelativeLayout(this);
     mLayout.addView(mMapsView);
     setContentView(mLayout);
+    setEdgeToEdge();
     //setContentView(mMapsView);
     //mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
   }
@@ -112,6 +112,19 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       }
       break;
     }
+  }
+
+  // ref: SDLActivity.java
+  protected void setEdgeToEdge()
+  {
+    Window window = getWindow();
+    window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+    window.getDecorView().setSystemUiVisibility(
+        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+    //View.SYSTEM_UI_FLAG_FULLSCREEN | View.INVISIBLE |
+    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+    //WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+    window.setStatusBarColor(Color.TRANSPARENT);
   }
 
   protected boolean canGetLocation()
@@ -255,10 +268,12 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         if (httpRequestHandles.remove(requestHandle) == null) { return; }
         String msg = (e == null) ? "" : e.getMessage();
         MapsLib.onUrlComplete(requestHandle, null, msg);
+        //Log.v("Tangram", "Got failure " + msg + " for " + url);
       }
 
       @Override
       public void onResponse(final int code, @Nullable final byte[] rawDataBytes) {
+        //Log.v("Tangram", "Got response " + code + " for " + url);
         if (httpRequestHandles.remove(requestHandle) == null) { return; }
         if (code >= 200 && code < 300) {
           MapsLib.onUrlComplete(requestHandle, rawDataBytes, null);
@@ -275,6 +290,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       }
     };
 
+    //Log.v("Tangram", "Starting request for " + url);
     Object request = httpHandler.startRequest(url, headers, payload, callback);
     if (request != null) {
       httpRequestHandles.put(requestHandle, request);
@@ -285,6 +301,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public boolean extractAssets(AssetManager assetManager, String assetpath, String outpath)
   {
     try {
+      if(assetpath == "webkit/" || assetpath == "images/") return true;
       String[] files = assetManager.list(assetpath);
       if(files == null || files.length == 0) return false;
       //if(outpath.isEmpty()) outpath = getExternalFilesDir(null).toString();

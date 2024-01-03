@@ -446,8 +446,8 @@ void MapsApp::onMouseWheel(double x, double y, double scrollx, double scrolly, b
   constexpr double scroll_span_multiplier = 0.05; // scaling for zoom and rotation
   constexpr double scroll_distance_multiplier = 5.0; // scaling for shove
 
-  x *= density;
-  y *= density;
+  //x *= density;
+  //y *= density;
   if (shoving) {
     map->handleShoveGesture(scroll_distance_multiplier * scrolly);
   } else if (rotating) {
@@ -472,8 +472,9 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.debugStyles = true;
 #endif
   // fallback fonts
+  FSPath basePath(baseDir);
   for(auto& font : MapsApp::config["fallback_fonts"])
-    options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(font.Scalar())));
+    options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(basePath.child(font.Scalar()).path)));
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
@@ -919,8 +920,11 @@ void MapsApp::setWindowLayout(int fbWidth)
     auto menubtns = mainToolbar->select(".toolbutton");
     for(Widget* btn : menubtns) {
       Menu* menu = static_cast<Button*>(btn)->mMenu;
-      if(menu)
+      if(menu) {
         menu->setAlign(narrow ? (menu->mAlign | Menu::ABOVE) : (menu->mAlign & ~Menu::ABOVE));
+        // first menu item always closest to opening button (anchor point)
+        menu->selectFirst(".child-container")->node->setAttribute("flex-direction", narrow ? "column-reverse" : "column");
+      }
     }
 
     SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
@@ -992,8 +996,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
           winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 200);
   panelSplitter->setSplitSize(config["ui"]["split_size"].as<int>(350));
   panelSplitter->onSplitChanged = [this](real size){
-    if(size == panelSplitter->minSize)
+    if(size == panelSplitter->minSize) {
       showPanelContainer(false);  // minimize panel
+      panelSplitter->setSplitSize(std::max(panelSplitter->initialSize, panelSplitter->minSize + 40));
+    }
   };
 
   // adjust map center to account for sidebar
@@ -1368,6 +1374,16 @@ void MapsApp::saveConfig()
   fs.write(emitter.c_str(), emitter.size());
 }
 
+void MapsApp::setDpi(float dpi)
+{
+  float ui_scale = config["ui"]["ui_scale"].as<float>(1.0f);
+  gui->paintScale = ui_scale*dpi/150.0;
+  gui->inputScale = 1/gui->paintScale;
+  SvgLength::defaultDpi = ui_scale*dpi;
+
+  map->setPixelScale(config["ui"]["map_scale"].as<float>(1.0f) * dpi/150.0f);
+}
+
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
   platform = _platform;
@@ -1377,10 +1393,6 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   initResources(baseDir.c_str());
 
   gui = new SvgGui();
-  // scaling
-  gui->paintScale = 2.0;  //210.0/150.0;
-  gui->inputScale = 1/gui->paintScale;
-
   // preset colors for tracks and bookmarks
   for(const auto& colorstr : config["colors"])
     markerColors.push_back(parseColor(colorstr.Scalar()));
@@ -1425,7 +1437,6 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
   //map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });
-  map->setPixelScale(pixel_scale);
   map->setPickRadius(1.0f);
 
   // Setup UI panels

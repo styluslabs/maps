@@ -87,7 +87,7 @@ int main(int argc, char* argv[])
   glfwSetTime(0);
   //gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
   const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-  SvgLength::defaultDpi = std::max(mode->width, mode->height)/11.2;
+  float dpi = std::max(mode->width, mode->height)/11.2f;
 
   // library for native file dialogs - https://github.com/btzy/nativefiledialog-extended
   // alternatives:
@@ -97,6 +97,7 @@ int main(int argc, char* argv[])
   NFD_Init();
 
   MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
+  app->setDpi(dpi);
   app->map->setupGL();
   app->createGUI((SDL_Window*)glfwWin);
 

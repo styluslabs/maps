@@ -97,6 +97,13 @@ global:
             return feature.name ? (sym + ' ' + feature.name) : sym;
         }
 
+    show_name_en: true
+    #function() { return global.show_name_en && feature.name_en ? feature.name_en + " " + feature.name : feature.name; }
+    names_one_line: |
+        function() { return global.show_name_en && feature.name_en ? feature.name_en : feature.name; }
+    names_two_lines: |
+        function() { return global.show_name_en && feature.name_en ? feature.name_en + "\n" + feature.name : feature.name; }
+
     # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
     priority_boundary: 0
     priority_continent: 6
@@ -360,7 +367,7 @@ layers:
         draw:
             text:
                 #interactive: true
-                text_source: name
+                text_source: global.names_two_lines
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
                     family: Open Sans
@@ -393,7 +400,7 @@ layers:
         enabled: global.show_polygons
         draw:
             text:
-                text_source: name
+                text_source: global.names_one_line
                 #buffer: 3px
                 font:
                     family: Open Sans
@@ -665,7 +672,8 @@ layers:
                 #interactive: true
                 text_source: |
                     function() {
-                       return feature.name.replace(" Avenue", " Ave.").replace(" Street", " St.").replace(" Boulevard", " Blvd.").replace(" Drive", " Dr.").replace(" Lane", " Ln.").replace(" Road", " Rd.");
+                       const name = global.names_one_line();
+                       return name.replace(" Avenue", " Ave.").replace(" Street", " St.").replace(" Boulevard", " Blvd.").replace(" Drive", " Dr.").replace(" Lane", " Ln.").replace(" Road", " Rd.");
                     }
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
@@ -788,7 +796,7 @@ layers:
         draw:
             text:
                 interactive: true
-                text_source: name
+                text_source: global.names_one_line
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
                     family: Open Sans
@@ -978,6 +986,7 @@ layers:
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 text:
                     interactive: true
+                    text_source: global.names_one_line
                     anchor: [right, left, bottom, top]
                     max_lines: 2
                     font:
@@ -1249,6 +1258,7 @@ layers:
             filter: { class: continent, $geometry: point }
             draw:
                 text:
+                    text_source: global.names_two_lines
                     priority: global.priority_continent
                     font:
                         family: Open Sans
@@ -1319,11 +1329,16 @@ layers:
                 filter:
                     class: [state, province]
                     $zoom: { min: 5, max: 9 }
-                draw: { text: { visible: true, font: { size: [[6, 12px], [8, 16px]] } } }
+                draw:
+                    text:
+                        visible: true
+                        font:
+                            size: [[6, 12px], [8, 16px]]
+                            transform: uppercase
                 # use short name when available at low-zooms
                 short:
                     filter: { $zoom: { max: 7 } }
-                    draw: { text: { text_source: 'name:short' } }
+                    draw: { text: { text_source: 'ref' } }
 
             cities:
                 exclusive: true

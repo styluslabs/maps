@@ -82,9 +82,6 @@ public:
   bool hasLocation = false;
   bool glNeedsInit = true;
 
-  float density = 1.0;
-  float pixel_scale = 2.0;
-
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;
   std::string sceneYaml;
@@ -115,6 +112,7 @@ public:
   void addPlaceInfo(const char* icon, const char* title, const char* value);
   void dumpTileContents(float x, float y);
   bool drawFrame(int fbWidth, int fbHeight);
+  void setDpi(float dpi);
 
   Widget* currLayout = NULL;
   Splitter* panelSplitter = NULL;

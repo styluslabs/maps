@@ -14,7 +14,7 @@ public class MapsLib
   public static native void resize(int width, int height);
   //public static native void setupGL();
   //public static native void drawFrame();
-  public static native void surfaceCreated(Surface surface);
+  public static native void surfaceCreated(Surface surface, float dpi);
   public static native void surfaceDestroyed();
   public static native void onPause();
   public static native void touchEvent(int ptrId, int action, int t, float x, float y, float p);

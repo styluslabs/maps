@@ -41,17 +41,19 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     LOGE("Invalid map source %s", key.c_str());
     return;
   }
-  if(src["type"].Scalar() == "Multi") {
+  if(src["layers"]) {  // multi-layer
     for (const auto& layer : src["layers"]) {
       std::string layerkey = layer["source"].Scalar();
       addLayer(layerkey);  //, sources[layerkey]);
     }
   }
-  else if(src["type"].Scalar() == "Raster") {
+  else if(src["url"]) {  // raster tiles
     layerkeys.push_back(key);
     std::string rasterN = fstring("raster-%d", order);
+    updates.emplace_back("+sources." + rasterN + ".type", "Raster");
     for (const auto& attr : src) {
-      if(attr.first.Scalar() != "title")
+      const std::string& k = attr.first.Scalar();
+      if(k != "title" && k != "archived")
         updates.emplace_back("+sources." + rasterN + "." + attr.first.Scalar(), yamlToStr(attr.second));
     }
     // if cache file is not explicitly specified, use key since it is guaranteed to be unique
@@ -67,23 +69,19 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order > 0 ? rasterN : "raster");
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string(order++));
   }
-  else if(src["type"].Scalar() == "Vector") {  // vector map
-    imports.push_back(src["url"].Scalar());
+  else if(src["scene"]) {  // vector map
+    imports.push_back(src["scene"].Scalar());
     layerkeys.push_back(key);
     ++order;  //order = 9001;  // subsequent rasters should be drawn on top of the vector map
   }
-  else if(src["type"].Scalar() == "Update") {
+  else {  // update only
     layerkeys.push_back(key);
-  }
-  else {
-    LOGE("Invalid map source type %s for %s", src["type"].Scalar().c_str(), key.c_str());
-    return;
   }
 
   for(const auto& update : src["updates"])
     updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
   // raster/vector only updates
-  const char* updkey = sources[layerkeys[0]]["type"].Scalar() == "Raster" ? "updates_raster" : "updates_vector";
+  const char* updkey = sources[layerkeys[0]]["url"] ? "updates_raster" : "updates_vector";
   for(const auto& update : src[updkey])
     updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
 }
@@ -206,7 +204,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     else {
       auto src = mapSources[srcname];
       if(!src) return;
-      if(src["type"].Scalar() == "Multi") {
+      if(src["layers"] && !src["layer"].as<bool>(false)) {
         for(const auto& layer : src["layers"])
           currLayers.push_back(layer["source"].Scalar());
         for(const auto& update : src["updates"])
@@ -242,9 +240,11 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
       if(!currSource.empty())
         static_cast<Button*>(item)->setChecked(key == currSource);
       Button* showbtn = static_cast<Button*>(item->selectFirst(".show-btn"));
-      if(showbtn)
-        showbtn->setChecked(
-            std::find(builder.layerkeys.begin(), builder.layerkeys.end(), key) != builder.layerkeys.end());
+      if(showbtn) {
+        bool shown = std::find(currLayers.begin(), currLayers.end(), key) != currLayers.end()
+            || std::find(builder.layerkeys.begin(), builder.layerkeys.end(), key) != builder.layerkeys.end();
+        showbtn->setChecked(shown);
+      }
     }
   }
 
@@ -260,7 +260,7 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     savekey = fstring("custom-%d", ii);
 
     mapSources[savekey] = YAML::Node(YAML::NodeType::Map);
-    mapSources[savekey]["type"] = "Multi";
+    mapSources[savekey]["layers"] = YAML::Node(YAML::NodeType::Sequence);  //"Multi";
   }
 
   if(!yamlStr.empty()) {
@@ -272,9 +272,9 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   }
   else {
     YAML::Node node = mapSources[savekey];
+    YAML::Node layers = node["layers"];
     node["title"] = titleEdit->text();
-    if(node["type"].Scalar() == "Multi") {
-      YAML::Node layers = node["layers"] = YAML::Node(YAML::NodeType::Sequence);
+    if(layers) {
       for(auto& src : currLayers)
         layers.push_back(YAML::Load("{source: " + src + "}"));
     }
@@ -314,8 +314,8 @@ void MapsSources::populateSources()
   for(const std::string& key : allKeys) {
     auto src = mapSources[key];
     bool archived = src["archived"].as<bool>(false);
-    bool isLayer = src["layer"].as<bool>(false) || src["type"].Scalar() == "Update";
-    if(src["type"].Scalar() != "Multi" || isLayer) {
+    bool isLayer = src["layer"].as<bool>(false);
+    if(!src["layers"] || isLayer) {
       layerKeys.push_back(key);
       layerTitles.push_back(src["title"].Scalar());
     }
@@ -755,9 +755,7 @@ Button* MapsSources::createPanel()
       auto sources = sourcesContent->getOrder();
       for(const std::string& key : sources) {
         auto src = mapSources[key];
-        if(!src) continue;
-        bool isLayer = src["layer"].as<bool>(false) || src["type"].Scalar() == "Update";
-        if(isLayer) continue;
+        if(!src || src["layer"].as<bool>(false)) continue;
         Button* item = sourcesMenu->addItem(mapSources[key]["title"].Scalar().c_str(),
             MapsApp::uiIcon("layers"), [this, key](){ rebuildSource(key); });
         SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);

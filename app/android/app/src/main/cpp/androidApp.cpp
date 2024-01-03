@@ -460,7 +460,7 @@ bool chooseConfig(EGLDisplay display, int depth, int samples, EGLConfig* config)
 //};
 
 // see github.com/tsaarni/android-native-egl-example
-int eglMain(ANativeWindow* nativeWin)
+int eglMain(ANativeWindow* nativeWin, float dpi)
 {
   static EGLContext context = EGL_NO_CONTEXT;
   if(!nativeWin) { LOGE("ANativeWindow_fromSurface returned NULL!"); return -1; }
@@ -497,6 +497,7 @@ int eglMain(ANativeWindow* nativeWin)
     app->mapsOffline->resumeDownloads();
     app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
   }
+  app->setDpi(dpi);
   MapsApp::runApplication = true;
   //LOGW("Starting event loop");
   while(MapsApp::runApplication) {
@@ -549,13 +550,11 @@ JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, js
   FSPath configPath(MapsApp::baseDir, "config.yaml");
   MapsApp::configFile = configPath.c_str();
 
-  LOGW("Opening config file %s", configPath.c_str());
-
   try {
     MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
         : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
   } catch(...) {
-    LOGE("Unable to load config file!");
+    LOGE("Unable to load config file %s", configPath.c_str());
     *(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
   }
 
@@ -573,11 +572,11 @@ JNI_FN(destroy)(JNIEnv* env, jclass)
   app = NULL;
 }
 
-JNI_FN(surfaceCreated)(JNIEnv* env, jclass, jobject jsurface)
+JNI_FN(surfaceCreated)(JNIEnv* env, jclass, jobject jsurface, jfloat dpi)
 {
   ANativeWindow* nativeWin = ANativeWindow_fromSurface(env, jsurface);
   if(!nativeWin || mainThread.joinable()) return;
-  mainThread = std::thread(eglMain, nativeWin);
+  mainThread = std::thread(eglMain, nativeWin, dpi);
 }
 
 JNI_FN(surfaceDestroyed)(JNIEnv* env, jclass)

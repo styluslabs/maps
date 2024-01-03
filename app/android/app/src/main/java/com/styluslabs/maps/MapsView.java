@@ -2,6 +2,7 @@ package com.styluslabs.maps;
 
 import android.content.Context;
 import android.util.Log;
+import android.util.DisplayMetrics;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
@@ -58,7 +59,12 @@ class MapsView extends SurfaceView implements SurfaceHolder.Callback
   }
 
   // SurfaceHolder.Callback
-  public void surfaceCreated(SurfaceHolder holder) { MapsLib.surfaceCreated(holder.getSurface()); }
+  public void surfaceCreated(SurfaceHolder holder)
+  {
+    // average xdpi and ydpi so that reported dpi doesn't change if screen rotated
+    DisplayMetrics dm = getContext().getResources().getDisplayMetrics();
+    MapsLib.surfaceCreated(holder.getSurface(), (dm.xdpi + dm.ydpi)/2);
+  }
   public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) { MapsLib.resize(w, h); }
   public void surfaceDestroyed(SurfaceHolder holder) { MapsLib.surfaceDestroyed(); }
 
