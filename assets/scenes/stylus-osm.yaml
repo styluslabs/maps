@@ -855,13 +855,14 @@ layers:
 
     transit:
         data: { source: osm, layer: transit }
-        filter:
-            $zoom: {min: 12}
-            any:
-                #- class: transit
-                - { route: [train, light_rail, subway, tram, monorail] }
-                - { route: [bus, trolleybus], $zoom: {min: 14} }
         enabled: global.show_transit
+        filter:
+            $zoom: {min: 8}
+            any:
+                - { route: train }
+                - { route: subway, $zoom: {min: 10} }
+                - { route: [light_rail, tram, monorail], $zoom: {min: 12} }
+                - { route: [bus, trolleybus], $zoom: {min: 14} }
         draw:
             lines:
                 width: [[13, 3px], [14, 4px]]

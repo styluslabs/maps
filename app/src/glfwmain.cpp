@@ -14,6 +14,7 @@
 #define GLFW_INCLUDE_GLEXT
 #define GL_GLEXT_PROTOTYPES
 #include "ugui/example/glfwSDL.h"
+#include "ugui/svggui_util.h"  // sdlEventLog for debugging
 
 
 void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
@@ -22,6 +23,7 @@ void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
 void glfwSDLEvent(SDL_Event* event)
 {
   event->common.timestamp = SDL_GetTicks();
+  //LOGW("%s", sdlEventLog(event).c_str());
   if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
     SvgGui::debugLayout = true;
   else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)

@@ -401,7 +401,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   TextBox* noteText = new TextBox(loadSVGFragment(
       R"(<text class="note-text weak" box-anchor="left" margin="0 10" font-size="12"></text>)"));
   noteText->setText(notestr.c_str());
-  noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
+  noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), app->getPanelWidth() - 20).c_str());
 
   // bookmark editing
   auto titleEdit = createTitledTextEdit("Name");

@@ -8,42 +8,6 @@ import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.SurfaceHolder;
 
-/*
-import android.opengl.GLSurfaceView;
-
-import javax.microedition.khronos.egl.EGL10;
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.egl.EGLContext;
-import javax.microedition.khronos.egl.EGLDisplay;
-import javax.microedition.khronos.opengles.GL10;
-
-class MapsView extends GLSurfaceView
-{
-  private static class Renderer implements GLSurfaceView.Renderer {
-    public void onDrawFrame(GL10 gl) {
-      MapsLib.drawFrame();
-    }
-
-    public void onSurfaceChanged(GL10 gl, int width, int height) {
-      MapsLib.resize(width, height);
-    }
-
-    public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-      MapsLib.setupGL();
-    }
-  }
-
-  public MapsView(Context context)
-  {
-    super(context);
-    // Pick an EGLConfig with RGB8 color, 16-bit depth, no stencil,
-    // supporting OpenGL ES 2.0 or later backwards-compatible versions.
-    setEGLConfigChooser(8, 8, 8, 0, 16, 0);
-    setEGLContextClientVersion(3);
-    setPreserveEGLContextOnPause(true);
-    setRenderer(new Renderer());
-  }
-*/
 
 class MapsView extends SurfaceView implements SurfaceHolder.Callback
 {

@@ -101,7 +101,7 @@ function node_function(node)
     end
 
     node:Layer("place", false)
-    node:Attribute("class", place)
+    node:Attribute("place", place)
     node:MinZoom(mz)
     if rank then node:AttributeNumeric("rank", rank) end
     if pop then node:AttributeNumeric("population", pop) end
@@ -215,7 +215,7 @@ poiClassRanks   = { hospital=1, railway=2, bus=3, attraction=4, harbor=5, colleg
 waterClasses    = Set { "river", "riverbank", "stream", "canal", "drain", "ditch", "dock" }
 waterwayClasses = Set { "stream", "river", "canal", "drain", "ditch" }
 
-transitRoutes = { bus = 14, train = 8, tram = 12, trolleybus = 14, share_taxi = 12, subway = 12, light_rail = 12 }
+transitRoutes = { train = 8, subway = 10, tram = 12, share_taxi = 12, light_rail = 12, bus = 14, trolleybus = 14 }
 otherRoutes = { road = 8, ferry = 9, bicycle = 10, hiking = 10, foot = 12, mtb = 10, ski = 12 }  --piste = 12,
 --ignoredRoutes = Set { "power", "railway", "detour", "tracks", "horse", "emergency_access", "snowmobile", "historic", "running", "fitness_trail" }
 

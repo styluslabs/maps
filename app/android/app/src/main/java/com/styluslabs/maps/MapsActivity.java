@@ -534,16 +534,14 @@ class DummyEdit extends View implements View.OnKeyListener
         return false;
     }
 
-    //@Override
-    //public boolean onKeyPreIme (int keyCode, KeyEvent event)
-    //{
-    //    if (event.getAction()==KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
-    //        if (SDLActivity.mTextEdit != null && SDLActivity.mTextEdit.getVisibility() == View.VISIBLE) {
-    //            SDLActivity.onNativeKeyboardFocusLost();
-    //        }
-    //    }
-    //    return super.onKeyPreIme(keyCode, event);
-    //}
+    @Override
+    public boolean onKeyPreIme(int keyCode, KeyEvent event)
+    {
+        if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+            MapsLib.keyEvent(-1, -1);  // keyboard hidden
+        }
+        return super.onKeyPreIme(keyCode, event);
+    }
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs)

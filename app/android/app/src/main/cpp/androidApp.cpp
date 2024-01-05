@@ -664,15 +664,16 @@ JNI_FN(charInput)(JNIEnv* env, jclass, jint cp, jint cursorPos)
 JNI_FN(keyEvent)(JNIEnv* env, jclass, jint key, jint action)
 {
   SDL_Event event = {0};
-  event.key.type = action < 0 ? SDL_KEYUP : SDL_KEYDOWN;
-  event.key.state = action < 0 ? SDL_RELEASED : SDL_PRESSED;
-  event.key.repeat = 0;  //action == GLFW_REPEAT;
-  event.key.keysym.scancode = (SDL_Scancode)key;
-  event.key.keysym.sym = Android_Keycodes[key];  //key < 0 || key > GLFW_KEY_LAST ? SDLK_UNKNOWN : keyMap[key];
-  //event.key.keysym.mod = (mods & GLFW_MOD_SHIFT ? KMOD_SHIFT : 0) | (mods & GLFW_MOD_CONTROL ? KMOD_CTRL : 0)
-  //    | (mods & GLFW_MOD_ALT ? KMOD_ALT : 0) | (mods & GLFW_MOD_SUPER ? KMOD_GUI : 0)
-  //    | (mods & GLFW_MOD_CAPS_LOCK ? KMOD_CAPS : 0) | (mods & GLFW_MOD_NUM_LOCK ? KMOD_NUM : 0);
-  event.key.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
+  if(key == -1)
+    event.type = SVGGUI_KEYBOARD_HIDDEN;
+  else {
+    event.key.type = action < 0 ? SDL_KEYUP : SDL_KEYDOWN;
+    event.key.state = action < 0 ? SDL_RELEASED : SDL_PRESSED;
+    event.key.repeat = 0;  //action == GLFW_REPEAT;
+    event.key.keysym.scancode = (SDL_Scancode)key;
+    event.key.keysym.sym = Android_Keycodes[key];
+    event.key.windowID = 0;
+  }
   MapsApp::sdlEvent(&event);
 }
 

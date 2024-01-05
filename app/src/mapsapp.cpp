@@ -719,15 +719,6 @@ public:
   Rect viewport;
 };
 
-static int actionFromSDLFinger(unsigned int sdltype)
-{
-  if(sdltype == SDL_FINGERMOTION) return 0;
-  else if(sdltype == SDL_FINGERDOWN) return 1;
-  else if(sdltype == SDL_FINGERUP) return -1;
-  else if(sdltype == SVGGUI_FINGERCANCEL) return -1;
-  return 0;
-}
-
 MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
 {
   onApplyLayout = [this](const Rect& src, const Rect& dest){
@@ -746,35 +737,9 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
   addHandler([this](SvgGui* gui, SDL_Event* event){
     // dividing by inputScale is a temporary hack - touchHandler should work in device independent coords (and
     //  why doesn't map's pixel scale apply to coords?)
-    if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP ||
-        (event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK)) {
-      if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
-        gui->setPressed(this);
-      if(event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK) {
-        if(event->type == SDL_FINGERDOWN) {
-          if(SDL_GetModState() & KMOD_ALT)
-            app->dumpTileContents(event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale);
-          else
-            app->longPressEvent(event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale);
-        }
-      }
-      else
-        app->touchHandler->touchEvent(0, actionFromSDLFinger(event->type),
-             event->tfinger.timestamp/1000.0, event->tfinger.x/gui->inputScale, event->tfinger.y/gui->inputScale, 1.0f);
-    }
-    else if(event->type == SDL_MOUSEWHEEL) {
-      Point p = gui->prevFingerPos;
-      uint32_t mods = (PLATFORM_WIN || PLATFORM_LINUX) ? (event->wheel.direction >> 16) : SDL_GetModState();
-      app->onMouseWheel(p.x/gui->inputScale, p.y/gui->inputScale, event->wheel.x/120.0, event->wheel.y/120.0, mods & KMOD_ALT, mods & KMOD_CTRL);
-    }
-    else if(event->type == SvgGui::MULTITOUCH) {
-      SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
-      app->touchHandler->touchEvent(fevent->tfinger.fingerId, actionFromSDLFinger(fevent->type),
-           fevent->tfinger.timestamp/1000.0, fevent->tfinger.x/gui->inputScale, fevent->tfinger.y/gui->inputScale, 1.0f);
-    }
-    else
-      return false;
-    return true;
+    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
+      gui->setPressed(this);
+    return app->touchHandler->sdlEvent(gui, event);
   });
 }
 
@@ -939,6 +904,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout-narrow" display="none" box-anchor="fill" layout="flex" flex-direction="column">
+        <rect class="statusbar-bg toolbar" display="none" box-anchor="hfill" x="0" y="0" width="20" height="40" />
         <g class="maps-container" box-anchor="fill" layout="box"></g>
         <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
         <g class="panel-container" display="none" box-anchor="hfill" layout="box">
@@ -1062,6 +1028,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     };
     debugMenu->addItem(debugCb);
   }
+  // dump contents of tile in middle of screen
+  debugMenu->addItem("Dump tile", [this](){
+    dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
+  });
   overflowMenu->addSubmenu("Debug", debugMenu);
 
   mainToolbar->addButton(overflowBtn);
@@ -1172,6 +1142,7 @@ void MapsApp::maximizePanel(bool maximize)
 {
   if(currLayout->node->hasClass("window-layout-narrow")) {
     currLayout->selectFirst(".maps-container")->setVisible(!maximize);
+    currLayout->selectFirst(".statusbar-bg")->setVisible(maximize);
     panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
   }
 }
@@ -1380,7 +1351,8 @@ void MapsApp::setDpi(float dpi)
   gui->paintScale = ui_scale*dpi/150.0;
   gui->inputScale = 1/gui->paintScale;
   SvgLength::defaultDpi = ui_scale*dpi;
-
+  // Map takes coords in raw pixels (i.e. pixelScale doesn't apply to input coords)
+  touchHandler->xyScale = float(gui->paintScale);
   map->setPixelScale(config["ui"]["map_scale"].as<float>(1.0f) * dpi/150.0f);
 }
 
