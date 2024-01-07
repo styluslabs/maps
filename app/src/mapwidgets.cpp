@@ -537,7 +537,7 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
   static const char* inlineDialogSVG = R"#(
     <g class="col-layout" box-anchor="hfill" layout="flex" flex-direction="column">
       <g class="child-container" box-anchor="hfill" layout="flex" flex-direction="column"></g>
-      <g class="dialog-buttons" margin="2 4" box-anchor="hfill" layout="flex" flex-direction="row"></g>
+      <g class="button-container dialog-buttons" margin="2 4" box-anchor="hfill" layout="flex" flex-direction="row"></g>
     </g>
   )#";
   static std::unique_ptr<SvgNode> proto;
@@ -560,14 +560,14 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
   btns->addWidget(cancelBtn);
   dialog->setVisible(false);
 
-  dialog->addHandler([=](SvgGui* gui, SDL_Event* event){
-    if(event->type == SvgGui::OUTSIDE_MODAL) {
-      gui->closeMenus(dialog->parent(), true);
-      if(onCancel) onCancel();
-      return true;
-    }
-    return false;
-  });
+  //dialog->addHandler([=](SvgGui* gui, SDL_Event* event){
+  //  if(event->type == SvgGui::OUTSIDE_MODAL) {
+  //    gui->closeMenus(dialog->parent(), true);
+  //    if(onCancel) onCancel();
+  //    return true;
+  //  }
+  //  return false;
+  //});
 
   return dialog;
 }
@@ -575,9 +575,10 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
 // show inline dialog modally - also possible to show non-modal just using setVisible()
 void showInlineDialogModal(Widget* dialog)
 {
-  Window* win = dialog->window();
-  if(win && win->gui())
-    win->gui()->showMenu(dialog);
+  //Window* win = dialog->window();
+  //if(win && win->gui())
+  //  win->gui()->showMenu(dialog);
+  dialog->setVisible(true);
 }
 
 void showModalCentered(Window* modal, SvgGui* gui)

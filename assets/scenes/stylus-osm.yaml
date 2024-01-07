@@ -97,6 +97,12 @@ global:
             return feature.name ? (sym + ' ' + feature.name) : sym;
         }
 
+    transit_color_fn: |
+        function() {
+            const c = feature.color;
+            return (!c || c == "white" || c == "#ffffff" || c == "#FFFFFF") ? global.color.transit : c;
+        }
+
     show_name_en: true
     #function() { return global.show_name_en && feature.name_en ? feature.name_en + " " + feature.name : feature.name; }
     names_one_line: |
@@ -261,25 +267,9 @@ styles:
                 alpha: 0.25
                 width: 1px
             interactive: true
-    #terrain:
-    #    mix: hillshade
-    #    shaders:
-    #        defines:
-    #            CONTOUR_COLOR: vec4(0.7,0.7,0.7,1.)
-    #            SHOW_CONTOURS: global.show_trails
-    #            ELEVATION_INDEX: 0
 
 
 layers:
-    #earth:
-    #    data: { source: elevation }
-    #    enabled: global.show_polygons
-    #    draw:
-    #        polygons:
-    #            style: global.earth_style
-    #            color: global.color.earth
-    #            order: 0
-
     landcover:
         data: { source: osm, layer: landuse }
         enabled: global.show_polygons
@@ -647,7 +637,7 @@ layers:
                 priority: global.priority_motorway_ref
                 # faster roads get higher priority
                 #priority: function() { return global.priority_motorway_ref - parseInt(feature.maxspeed)/200; }
-                size: function() { return [(feature.ref.split(";")[0].length || 4)*7.5, 14]; }
+                size: function() { return [(feature.ref.split(";")[0].length || 4)*6.5, 14]; }
                 # midpoint generates too many labels (overwhelming label collider)
                 placement: spaced
                 placement_spacing: 30px
@@ -868,7 +858,7 @@ layers:
                 width: [[13, 3px], [14, 4px]]
                 order: 150
                 #style: transit-lines
-                color: function() { return feature.color || global.color.transit; }
+                color: global.transit_color_fn
             text:
                 interactive: true
                 priority: global.priority_transit_ref
@@ -881,7 +871,7 @@ layers:
                     family: Open Sans
                     fill: white  #'function() { return feature.color == "yellow" ? "#555": "white"; }'
                     stroke:
-                        color: function() { return feature.color || global.color.transit; }
+                        color: global.transit_color_fn
                         width: 3
                     size: 14px
         secondary:

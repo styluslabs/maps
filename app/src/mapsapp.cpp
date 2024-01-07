@@ -24,6 +24,10 @@
 #include "mapwidgets.h"
 #include "resources.h"
 
+#define UTRACE_ENABLE
+#define UTRACE_IMPLEMENTATION
+#include "ulib/utrace.h"
+
 #if !defined(DEBUG) && !defined(NDEBUG)
 #error "One of DEBUG or NDEBUG must be defined!"
 #endif
@@ -280,7 +284,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
 
   auto iconUseNode = static_cast<SvgUse*>(row->containerNode()->selectFirst(".icon"));
   if(icon[0] == '<') {
-    SvgDocument* svgDoc = SvgParser().parseString(value);
+    SvgDocument* svgDoc = SvgParser().parseString(icon);
     if(svgDoc)
       iconUseNode->setTarget(svgDoc, std::shared_ptr<SvgDocument>(svgDoc));
   }
@@ -571,7 +575,7 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
   // only show if no fix yet
   gpsStatusBtn->setVisible(!satsUsed);
   if(!satsUsed)
-    gpsStatusBtn->setText(fstring("%d/%d", satsUsed, satsVisible).c_str());
+    gpsStatusBtn->setText(fstring("%d", satsVisible).c_str());  //"%d/%d", satsUsed
   if(locMarker && (satsUsed > 0) != hasLocation)
     map->markerSetProperties(locMarker, {{{"hasfix", satsUsed > 0 ? 1 : 0}}});
   hasLocation = satsUsed > 0;
@@ -725,6 +729,9 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
     if(dest != viewport) {
       Rect r = dest * (1/app->gui->inputScale);
       real y = window()->winBounds().height()/app->gui->inputScale - r.bottom;
+
+      LOGW("Setting map viewport to LTWH %f %f %f %f", r.left, y, r.width(), r.height());
+
       app->map->setViewport(r.left, y, r.width(), r.height());
       app->platform->requestRender();
     }
@@ -1358,6 +1365,7 @@ void MapsApp::setDpi(float dpi)
 
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
+  TRACE_INIT();
   platform = _platform;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
@@ -1443,6 +1451,9 @@ MapsApp::~MapsApp()
 
 bool MapsApp::drawFrame(int fbWidth, int fbHeight)
 {
+  static uint64_t t0 = TRACE_T();
+  TRACE_END(t0, "wait events");
+
   std::function<void()> queuedFn;
   while(taskQueue.pop_front(queuedFn))
     queuedFn();
@@ -1468,6 +1479,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   // ... but as a simple optimization, we call Painter:endFrame() again to draw UI over map if UI isn't dirty
   painter->deviceRect = Rect::wh(fbWidth, fbHeight);
   Rect dirty = gui->layoutAndDraw(painter.get());
+  TRACE_STEP(t0, "layoutAndDraw");
 
   if(flyToPickResult) {
     // ensure marker is visible and hasn't been covered by opening panel
@@ -1487,9 +1499,10 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
 
   // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
   if(platform->notifyRender()) {
-    auto t0 = std::chrono::high_resolution_clock::now();
-    double currTime = std::chrono::duration<double>(t0.time_since_epoch()).count();
+    auto now = std::chrono::high_resolution_clock::now();
+    double currTime = std::chrono::duration<double>(now.time_since_epoch()).count();
     mapUpdate(currTime);
+    TRACE_STEP(t0, "map update");
     //mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
     map->render();
     // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
@@ -1504,6 +1517,8 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->render();  // only have to rerender map, not update
   else
     return false;  // neither map nor UI is dirty
+
+  TRACE_STEP(t0, "map render");
 
   // scale bar must be updated whenever map changes, but we don't want to redraw entire UI every frame
   // - a possible alternative is to draw with Tangram using something similar to DebugTextStyle/DebugStyle
@@ -1531,5 +1546,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   glDisable(GL_CULL_FACE);
   painter->blitImageToScreen(dirty);
 #endif
+  TRACE_STEP(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
+  TRACE_FLUSH();
   return true;
 }

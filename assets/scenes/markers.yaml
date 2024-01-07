@@ -158,6 +158,18 @@ layers:
                         fill: black
                         stroke: { color: white, width: 2px }
 
+    bookmark-dot:
+        draw:
+            marker:
+                style: points
+                collide: false
+                size: 6px
+                color: function() { return feature.color || '#12B5CB'; }
+                outline:
+                    width: 1px
+                    color: function() { return feature.color || '#12B5CB'; }
+                    alpha: 0.50
+
     search-marker:
         draw:
             marker:

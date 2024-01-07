@@ -278,7 +278,7 @@ void MarkerGroup::updateMarker(int id, Properties&& props)
       it->props = std::move(props);
       for(auto& item : commonProps.items())
         it->props.setValue(item.key, item.value);
-      map->markerSetPoint(it->markerId, it->pos);  // to force marker update
+      //map->markerSetPoint(it->markerId, it->pos);  // to force marker update
       if(it->markerId > 0)
         map->markerSetProperties(it->markerId, Properties(it->props));
       if(it->altMarkerId > 0)
@@ -311,10 +311,12 @@ void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props, in
   for(auto& item : commonProps.items())
     res.props.setValue(item.key, item.value);
   res.props.set("priority", places.size()-1);  //id < 0 ? places.size()-1 : id);
-  double markerRadius = map->getZoom() >= 17 ? 25 : 50;
   bool collided = false;
-  collider.intersect(markerAABB(map, res.pos, markerRadius),
-      [&](auto& a, auto& b) { collided = true; return false; });
+  if(!altStyling.empty()) {
+    double markerRadius = map->getZoom() >= 17 ? 25 : 50;
+    collider.intersect(markerAABB(map, res.pos, markerRadius),
+        [&](auto& a, auto& b) { collided = true; return false; });
+  }
   res.isAltMarker = collided;
   if(collided)
     res.altMarkerId = getMarker(res);
@@ -325,7 +327,7 @@ void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props, in
 void MarkerGroup::onZoom()
 {
   float zoom = map->getZoom();
-  if(!visible || std::abs(zoom - prevZoom) < 0.5f) return;
+  if(!visible || altStyling.empty() || std::abs(zoom - prevZoom) < 0.5f) return;
 
   double markerRadius = zoom >= 17 ? 25 : 50;
   collider.clear();

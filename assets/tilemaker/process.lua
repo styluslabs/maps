@@ -163,8 +163,9 @@ landuseKeys = { school="school", university="school", kindergarten="school", col
 
 -- POI key/value pairs: based on https://github.com/openmaptiles/openmaptiles/blob/master/layers/poi/mapping.yaml
 poiMinZoom = 14
-poiTags         = { aerialway = Set { "station" },
-          amenity = { [12] = Set { "bus_station" }, [poiMinZoom] = Set { "arts_centre", "bank", "bar", "bbq", "bicycle_parking", "bicycle_rental", "biergarten", "bus_station", "cafe", "cinema", "clinic", "college", "community_centre", "concert_hall", "courthouse", "dentist", "doctors", "drinking_water", "embassy", "fast_food", "ferry_terminal", "fire_station", "food_court", "fuel", "grave_yard", "hospital", "ice_cream", "kindergarten", "library", "marketplace", "motorcycle_parking", "nightclub", "nursing_home", "parking", "pharmacy", "place_of_worship", "police", "post_box", "post_office", "prison", "pub", "public_building", "recycling", "restaurant", "school", "shelter", "swimming_pool", "taxi", "telephone", "theatre", "toilets", "townhall", "university", "veterinary", "waste_basket", "water_point" } },
+poiTags = { aerialway = Set { "station" },
+          -- all amenity values with count > 1000 (as of Jan 2024) we wish to exclude
+          amenity = { [12] = Set { "bus_station" }, [poiMinZoom] = Set { "__EXCLUDE", "bus_station", "parking_space", "bench", "shelter", "waste_basket", "bicycle_parking", "recycling", "hunting_stand", "vending_machine", "post_box", "parking_entrance", "telephone", "bbq", "motorcycle_parking", "grit_bin", "clock", "letter_box", "watering_place", "loading_dock", "payment_terminal", "mobile_money_agent", "trolley_bay", "ticket_validator", "lounger", "feeding_place", "vacuum_cleaner", "game_feeding", "smoking_area", "photo_booth", "kneipp_water_cure", "table", "fixme", "office", "chair" } },
           barrier = Set { "bollard", "border_control", "cycle_barrier", "gate", "lift_gate", "sally_port", "stile", "toll_booth" },
           building = Set { "dormitory" },
           highway = { [12] = Set { "bus_stop" }, [poiMinZoom] = Set { "traffic_signals" } },
@@ -172,8 +173,8 @@ poiTags         = { aerialway = Set { "station" },
           landuse = Set { "basin", "brownfield", "cemetery", "reservoir", "winter_sports" },
           leisure = Set { "dog_park", "escape_game", "fitness_centre", "garden", "golf_course", "ice_rink", "hackerspace", "marina", "miniature_golf", "park", "pitch", "playground", "sports_centre", "stadium", "swimming_area", "swimming_pool", "water_park" },
           railway = { [12] = Set { "halt", "station", "tram_stop" }, [poiMinZoom] = Set { "subway_entrance", "train_station_entrance" } },
-          shop = {},  --Set { "accessories", "alcohol", "antiques", "art", "bag", "bakery", "beauty", "bed", "beverages", "bicycle", "books", "boutique", "butcher", "camera", "car", "car_repair", "carpet", "charity", "chemist", "chocolate", "clothes", "coffee", "computer", "confectionery", "convenience", "copyshop", "cosmetics", "deli", "delicatessen", "department_store", "doityourself", "dry_cleaning", "electronics", "erotic", "fabric", "florist", "frozen_food", "furniture", "garden_centre", "general", "gift", "greengrocer", "hairdresser", "hardware", "hearing_aids", "hifi", "ice_cream", "interior_decoration", "jewelry", "kiosk", "lamps", "laundry", "mall", "massage", "mobile_phone", "motorcycle", "music", "musical_instrument", "newsagent", "optician", "outdoor", "perfume", "perfumery", "pet", "photo", "second_hand", "shoes", "sports", "stationery", "supermarket", "tailor", "tattoo", "ticket", "tobacco", "toys", "travel_agency", "video", "video_games", "watches", "weapons", "wholesale", "wine" },
-          sport = {},  --Set { "american_football", "archery", "athletics", "australian_football", "badminton", "baseball", "basketball", "beachvolleyball", "billiards", "bmx", "boules", "bowls", "boxing", "canadian_football", "canoe", "chess", "climbing", "climbing_adventure", "cricket", "cricket_nets", "croquet", "curling", "cycling", "disc_golf", "diving", "dog_racing", "equestrian", "fatsal", "field_hockey", "free_flying", "gaelic_games", "golf", "gymnastics", "handball", "hockey", "horse_racing", "horseshoes", "ice_hockey", "ice_stock", "judo", "karting", "korfball", "long_jump", "model_aerodrome", "motocross", "motor", "multi", "netball", "orienteering", "paddle_tennis", "paintball", "paragliding", "pelota", "racquet", "rc_car", "rowing", "rugby", "rugby_league", "rugby_union", "running", "sailing", "scuba_diving", "shooting", "shooting_range", "skateboard", "skating", "skiing", "soccer", "surfing", "swimming", "table_soccer", "table_tennis", "team_handball", "tennis", "toboggan", "volleyball", "water_ski", "yoga" },
+          shop = {},
+          sport = {},
           tourism = { [12] = Set { "attraction", "viewpoint" }, [poiMinZoom] = Set { "alpine_hut", "aquarium", "artwork", "bed_and_breakfast", "camp_site", "caravan_site", "chalet", "gallery", "guest_house", "hostel", "hotel", "information", "motel", "museum", "picnic_site", "theme_park", "zoo" } },
           waterway = Set { "dock" } }
 
@@ -694,14 +695,15 @@ end
 -- ==========================================================
 -- Common functions
 
-extraPoiTags = Set { "cuisine", "station" }
+extraPoiTags = Set { "cuisine", "station", "religion", "operator" }  -- atm:operator
 function NewWritePOI(obj, area)
   for k,lists in pairs(poiTags) do
     local val = obj:Find(k)
     if val ~= "" then
       if type(next(lists)) ~= "number" then lists = { [poiMinZoom] = lists } end
       for minzoom, list in pairs(lists) do
-        if next(list) == nil or list[val] then
+        local exclude = list["__EXCLUDE"] == true
+        if next(list) == nil or (exclude and not list[val] or list[val]) then
           obj:LayerAsCentroid("poi")
           obj:MinZoom(area > 0 and 12 or minzoom)
           --SetNameAttributesEx(obj, osm_type)

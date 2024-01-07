@@ -61,8 +61,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private Sensor mMagSensor;
   private HttpHandler httpHandler;
   private final Map<Long, Object> httpRequestHandles = Collections.synchronizedMap(new HashMap<Long, Object>());
-
   private float mDeclination = 0;
+  private boolean replaceAssets = true;  // for development
 
   public static final int PERM_REQ_LOCATION = 1;
 
@@ -73,7 +73,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     //String extfiles = getExternalFilesDir(null).getAbsolutePath();
     String extfiles = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
     File file = new File(extfiles, "config.default.yaml");
-    if(!file.exists())
+    if(replaceAssets || !file.exists())
       extractAssets(getAssets(), "", extfiles + "/");
 
     MapsLib.init(this, getAssets(), extfiles);
@@ -312,7 +312,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         if(!extractAssets(assetManager, srcpath + "/", dstpath + "/")) {
           Log.v("extractAssets", "Copying " + srcpath + " to " + dstpath);
           File dstfile = new File(dstpath);
-          if(dstfile.exists()) continue;  // don't overwrite existing file
+          if(!replaceAssets && dstfile.exists()) continue;  // don't overwrite existing file
           // this returns InputStream object
           InputStream in = assetManager.open(srcpath);
           // ensure that path exists
@@ -413,6 +413,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     } else {
       mTextEdit.setLayoutParams(params);
     }
+    // we can pass input type as additional argument in the future
+    mTextEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL);
     mTextEdit.setVisibility(View.VISIBLE);
     mTextEdit.requestFocus();
     InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);

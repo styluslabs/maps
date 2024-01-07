@@ -286,7 +286,8 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
   MarkerGroup* markerGroup = NULL;
   auto it = bkmkMarkers.find(list_id);
   if(it == bkmkMarkers.end()) {
-    auto mg = std::make_unique<MarkerGroup>(app->map.get(), "layers.bookmark-marker.draw.marker");
+    auto mg = std::make_unique<MarkerGroup>(app->map.get(),
+        "layers.bookmark-marker.draw.marker", "layers.bookmark-dot.draw.marker");
     markerGroup = bkmkMarkers.emplace(list_id, std::move(mg)).first->second.get();
     markerGroup->defaultVis = !createUI;
     markerGroup->commonProps = {{{"color", color}}};
@@ -457,7 +458,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
 
   auto setListFn = [=](int list_id, std::string listname){
     SQLiteStmt(app->bkmkDB, "UPDATE bookmarks SET list_id = ? WHERE rowid = ?;").bind(list_id, rowid).exec();
-    chooseListBtn->setText(listname.c_str());
+    chooseListBtn->setTitle(listname.c_str());
   };
 
   //Button* chooseListBtn = new Button(widget->containerNode()->selectFirst(".combobox"));
