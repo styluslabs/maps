@@ -11,13 +11,16 @@ import java.io.InputStream;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import android.content.Context;
 import android.app.Activity;
+import android.content.Context;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.net.Uri;
 import android.util.Log;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.Selection;
 import android.graphics.Color;
 import android.view.WindowManager;
 import android.view.View;
@@ -28,6 +31,9 @@ import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
+import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.Manifest;
 import android.content.Intent;
@@ -413,8 +419,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     } else {
       mTextEdit.setLayoutParams(params);
     }
-    // we can pass input type as additional argument in the future
-    mTextEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL);
     mTextEdit.setVisibility(View.VISIBLE);
     mTextEdit.requestFocus();
     InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
@@ -439,7 +443,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 }
 
 
-class MapsInputConnection extends BaseInputConnection
+/*class MapsInputConnection extends BaseInputConnection
 {
     public MapsInputConnection(View targetView, boolean fullEditor) { super(targetView, fullEditor); }
 
@@ -502,6 +506,123 @@ class MapsInputConnection extends BaseInputConnection
 
         return super.deleteSurroundingText(beforeLength, afterLength);
     }
+}*/
+
+class MapsInputConnection extends BaseInputConnection
+{
+    protected EditText mEditText;
+    protected String mCommittedText = "";
+
+    public MapsInputConnection(View targetView, boolean fullEditor) {
+        super(targetView, fullEditor);
+        mEditText = new EditText(targetView.getContext());
+    }
+
+    @Override
+    public Editable getEditable() {
+        return mEditText.getEditableText();
+    }
+
+    // this must be implemented for SwiftKey keyboard to show suggestions
+    @Override
+    public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
+        Editable editable = getEditable();
+        ExtractedText et = new ExtractedText();
+        et.text = editable.toString();
+        et.partialEndOffset = editable.length();
+        et.selectionStart = Selection.getSelectionStart(editable);
+        et.selectionEnd = Selection.getSelectionEnd(editable);
+        et.flags = ExtractedText.FLAG_SINGLE_LINE;  //mSingleLine ? ExtractedText.FLAG_SINGLE_LINE : 0;
+        return et;
+    }
+
+    @Override
+    public boolean sendKeyEvent(KeyEvent event) {
+        //if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
+        //    if (SDLActivity.onNativeSoftReturnKey()) {
+        //        return true;
+        //    }
+        //}
+        return super.sendKeyEvent(event);
+    }
+
+    @Override
+    public boolean commitText(CharSequence text, int newCursorPosition) {
+        if (!super.commitText(text, newCursorPosition)) { return false; }
+        updateText();
+        return true;
+    }
+
+    @Override
+    public boolean setComposingText(CharSequence text, int newCursorPosition) {
+        if (!super.setComposingText(text, newCursorPosition)) { return false; }
+        updateText();
+        return true;
+    }
+
+    @Override
+    public boolean deleteSurroundingText(int beforeLength, int afterLength) {
+        if (Build.VERSION.SDK_INT <= 29 /* Android 10.0 (Q) */) {
+            // Workaround to capture backspace key. Ref: http://stackoverflow.com/questions>/14560344/android-backspace-in-webview-baseinputconnection
+            // and https://bugzilla.libsdl.org/show_bug.cgi?id=2265
+            if (beforeLength > 0 && afterLength == 0) {
+                while (beforeLength-- > 0) { sendKeycode(KeyEvent.KEYCODE_DEL); }
+                return true;
+           }
+        }
+
+        if (!super.deleteSurroundingText(beforeLength, afterLength)) { return false; }
+        updateText();
+        return true;
+    }
+
+    protected void updateText() {
+        final Editable content = getEditable();
+        if (content == null) { return; }
+
+        String text = content.toString();
+        int compareLength = Math.min(text.length(), mCommittedText.length());
+        int matchLength, offset;
+
+        // Backspace over characters that are no longer in the string
+        for (matchLength = 0; matchLength < compareLength; ) {
+            int codePoint = mCommittedText.codePointAt(matchLength);
+            if (codePoint != text.codePointAt(matchLength)) {
+                break;
+            }
+            matchLength += Character.charCount(codePoint);
+        }
+        for (offset = matchLength; offset < mCommittedText.length(); ) {
+            int codePoint = mCommittedText.codePointAt(offset);
+            sendKeycode(KeyEvent.KEYCODE_DEL);
+            offset += Character.charCount(codePoint);
+        }
+
+        if (matchLength < text.length()) {
+            String pendingText = text.subSequence(matchLength, text.length()).toString();
+            for (offset = 0; offset < pendingText.length(); ) {
+                int codePoint = pendingText.codePointAt(offset);
+                //if (codePoint == '\n') {
+                //    sendKeycode(codePoint);
+                //    return;
+                //    //if (SDLActivity.onNativeSoftReturnKey()) { return; }
+                //}
+                //// Higher code points don't generate simulated scancodes
+                //if (codePoint < 128) {
+                //    sendKeycode(codePoint);  //nativeGenerateScancodeForUnichar((char)codePoint);
+                //}
+                MapsLib.charInput(codePoint, 0);
+                offset += Character.charCount(codePoint);
+            }
+            //SDLInputConnection.nativeCommitText(pendingText, 0);
+        }
+        mCommittedText = text;
+    }
+
+    protected void sendKeycode(int key) {
+      MapsLib.keyEvent(key, 1);
+      MapsLib.keyEvent(key, -1);
+    }
 }
 
 class DummyEdit extends View implements View.OnKeyListener
@@ -549,8 +670,8 @@ class DummyEdit extends View implements View.OnKeyListener
     public InputConnection onCreateInputConnection(EditorInfo outAttrs)
     {
         ic = new MapsInputConnection(this, true);
-        outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_NORMAL;  //TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;  //TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_DONE;
         return ic;
     }
 }

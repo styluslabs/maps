@@ -24,7 +24,7 @@
 #include "mapwidgets.h"
 #include "resources.h"
 
-#define UTRACE_ENABLE
+//#define UTRACE_ENABLE
 #define UTRACE_IMPLEMENTATION
 #include "ulib/utrace.h"
 
@@ -962,6 +962,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   SvgDocument* winnode = createWindowNode(mainWindowSVG);
   win.reset(new Window(winnode));
   win->sdlWindow = sdlWin;
+  win->isFocusable = true;  // top level window should always be focusable
 
   panelContent = new Widget(loadSVGFragment("<g id='panel-content' box-anchor='fill' layout='box'></g>"));
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
@@ -1451,7 +1452,7 @@ MapsApp::~MapsApp()
 
 bool MapsApp::drawFrame(int fbWidth, int fbHeight)
 {
-  static uint64_t t0 = TRACE_T();
+  static uint64_t t0 = 0;
   TRACE_END(t0, "wait events");
 
   std::function<void()> queuedFn;
@@ -1479,7 +1480,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   // ... but as a simple optimization, we call Painter:endFrame() again to draw UI over map if UI isn't dirty
   painter->deviceRect = Rect::wh(fbWidth, fbHeight);
   Rect dirty = gui->layoutAndDraw(painter.get());
-  TRACE_STEP(t0, "layoutAndDraw");
+  TRACE_END(t0, "layoutAndDraw");
 
   if(flyToPickResult) {
     // ensure marker is visible and hasn't been covered by opening panel
@@ -1502,7 +1503,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     auto now = std::chrono::high_resolution_clock::now();
     double currTime = std::chrono::duration<double>(now.time_since_epoch()).count();
     mapUpdate(currTime);
-    TRACE_STEP(t0, "map update");
+    TRACE_END(t0, "map update");
     //mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
     map->render();
     // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
@@ -1518,8 +1519,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   else
     return false;  // neither map nor UI is dirty
 
-  TRACE_STEP(t0, "map render");
-
+  TRACE_END(t0, "map render");
   // scale bar must be updated whenever map changes, but we don't want to redraw entire UI every frame
   // - a possible alternative is to draw with Tangram using something similar to DebugTextStyle/DebugStyle
   scaleBarPainter->deviceRect = Rect::wh(fbWidth, fbHeight);
@@ -1546,7 +1546,8 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   glDisable(GL_CULL_FACE);
   painter->blitImageToScreen(dirty);
 #endif
-  TRACE_STEP(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
+  LOGW("Full render %d x %d", fbWidth, fbHeight);
+  TRACE_END(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
   TRACE_FLUSH();
   return true;
 }
