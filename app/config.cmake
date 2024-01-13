@@ -51,6 +51,6 @@ target_include_directories(maps-app
   platforms/common
 )
 
-target_compile_definitions(maps-app PRIVATE GLM_FORCE_CTOR_INIT)
-target_compile_definitions(maps-app PRIVATE PUGIXML_NO_XPATH)
-target_compile_definitions(maps-app PRIVATE PUGIXML_NO_EXCEPTIONS)
+target_compile_definitions(maps-app PUBLIC GLM_FORCE_CTOR_INIT)
+target_compile_definitions(maps-app PUBLIC PUGIXML_NO_XPATH)
+target_compile_definitions(maps-app PUBLIC PUGIXML_NO_EXCEPTIONS)

@@ -436,7 +436,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
         .exec([&](const char* q){ autocomplete.emplace_back(q); });
     populateAutocomplete(autocomplete);
     if(query.size() > 1 && providerIdx == 0) {  // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
-      offlineListSearch("name:" + searchStr, lngLat00, lngLat11);  // restrict live search to name
+      offlineListSearch("name:(" + searchStr + ")", lngLat00, lngLat11);  // restrict live search to name
       resultsUpdated(0);
     }
     return;

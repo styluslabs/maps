@@ -15,8 +15,8 @@
 using Tangram::AndroidPlatform;
 using Tangram::JniHelpers;
 
-//#include "ugui/svggui.h"
-#include "ugui/svggui_platform.h"
+#include "ugui/svggui.h"
+//#include "ugui/svggui_platform.h"
 #include "ulib/fileutil.h"
 
 static SDL_Keycode Android_Keycodes[] = {
@@ -309,11 +309,12 @@ struct SDL_Window
 {
   EGLDisplay eglDisplay;
   EGLSurface eglSurface;
+  ANativeWindow* nativeWin;
 };
 
 static MapsApp* app = NULL;
 static std::thread mainThread;
-static SDL_Window sdlWin = {0, 0};
+static SDL_Window sdlWin = {0, 0, 0};
 
 static jobject mapsActivityRef = nullptr;
 static jmethodID showTextInputMID = nullptr;
@@ -322,6 +323,7 @@ static jmethodID getClipboardMID = nullptr;
 static jmethodID setClipboardMID = nullptr;
 static jmethodID openFileMID = nullptr;
 static jmethodID openUrlMID = nullptr;
+static jmethodID setImeTextMID = nullptr;
 
 // since Android event loop waits on MapsApp::taskQueue, no need for PLATFORM_WakeEventLoop
 void PLATFORM_WakeEventLoop() {}
@@ -388,9 +390,13 @@ void SDL_RaiseWindow(SDL_Window* window) {}
 void SDL_SetWindowTitle(SDL_Window* win, const char* title) {}
 void SDL_GetWindowSize(SDL_Window* win, int* w, int* h) //{ SDL_GL_GetDrawableSize(win, w, h); }
 {
-  if(!win || !win->eglDisplay || !win->eglSurface) { *w = 1000; *h = 1000; return; }
-  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
-  eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
+  if(!win || !win->nativeWin) { *w = 1000; *h = 1000; return; }
+  // size from EGL is wrong for some period after orientation change and sometimes wrong after resume
+  *w = ANativeWindow_getWidth(win->nativeWin);
+  *h = ANativeWindow_getHeight(win->nativeWin);
+  //if(!win || !win->eglDisplay || !win->eglSurface) { *w = 1000; *h = 1000; return; }
+  //eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_WIDTH, w);
+  //eglQuerySurface(win->eglDisplay, win->eglSurface, EGL_HEIGHT, h);
 }
 void SDL_GetWindowPosition(SDL_Window* win, int* x, int* y) { *x = 0; *y = 0; }
 void SDL_DestroyWindow(SDL_Window* win) {}
@@ -408,6 +414,13 @@ int SDL_PeepEvents(SDL_Event* events, int numevents, SDL_eventaction action, Uin
   for(int ii = 0; ii < numevents; ++ii)
     MapsApp::sdlEvent(&events[ii]);
   return numevents;
+}
+
+void PLATFORM_setImeText(const char* text, int selStart, int selEnd)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jstring jtext = jniEnv->NewStringUTF(text);
+  jniEnv->CallVoidMethod(mapsActivityRef, setImeTextMID, jtext, selStart, selEnd);
 }
 
 // open file dialog
@@ -490,7 +503,7 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
   //if(eglGetError() == EGL_CONTEXT_LOST) { context = 0; return eglMain(nativeWin); }
   if(curr_res == EGL_FALSE) { LOGE("eglMakeCurrent() error %X", eglGetError()); return -1; }
 
-  sdlWin = {display, surface};
+  sdlWin = {display, surface, nativeWin};
   if(!app) {
     app = new MapsApp(MapsApp::platform);
     app->createGUI(&sdlWin);
@@ -504,8 +517,7 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
     MapsApp::taskQueue.wait();
 
     int fbWidth = 0, fbHeight = 0;
-    eglQuerySurface(display, surface, EGL_WIDTH, &fbWidth);
-    eglQuerySurface(display, surface, EGL_HEIGHT, &fbHeight);
+    SDL_GetWindowSize(&sdlWin, &fbWidth, &fbHeight);
     if(app->drawFrame(fbWidth, fbHeight))
       eglSwapBuffers(display, surface);
   }
@@ -536,6 +548,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   setClipboardMID = jniEnv->GetMethodID(cls, "setClipboard", "(Ljava/lang/String;)V");
   openFileMID = jniEnv->GetMethodID(cls, "openFile", "()V");
   openUrlMID = jniEnv->GetMethodID(cls, "openUrl", "(Ljava/lang/String;)V");
+  setImeTextMID = jniEnv->GetMethodID(cls, "setImeText", "(Ljava/lang/String;II)V");
 
   return TANGRAM_JNI_VERSION;
 }
@@ -559,11 +572,6 @@ JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, js
   }
 
   MapsApp::platform = new AndroidPlatform(env, mapsActivity, assetManager);
-
-  //ImGui::GetIO().ImeSetInputScreenPosFn = [](int x, int y){
-  //  JniThreadBinding jniEnv(JniHelpers::getJVM());
-  //  jniEnv->CallVoidMethod(mapsActivityRef, showTextInputMID, x, y, 20, 20);
-  //};
 }
 
 JNI_FN(destroy)(JNIEnv* env, jclass)
@@ -586,26 +594,18 @@ JNI_FN(surfaceDestroyed)(JNIEnv* env, jclass)
     mainThread.join();
 }
 
-JNI_FN(resize)(JNIEnv* env, jclass, jint w, jint h)
+JNI_FN(surfaceChanged)(JNIEnv* env, jclass, jint w, jint h)
 {
-  SDL_Event event = {0};
-  event.type = SDL_WINDOWEVENT;
-  event.window.event = SDL_WINDOWEVENT_SIZE_CHANGED;
-  event.window.data1 = w;
-  event.window.data2 = h;
-  MapsApp::sdlEvent(&event);
-  //MapsApp::runOnMainThread([=](){ app->onResize(w, h, w, h); });
+  MapsApp::runOnMainThread([=]() {
+    SDL_Event event = {0};
+    event.type = SDL_WINDOWEVENT;
+    event.window.event = SDL_WINDOWEVENT_SIZE_CHANGED;
+    event.window.data1 = w;
+    event.window.data2 = h;
+    app->gui->sdlEvent(&event);
+    app->win->redraw();  // even if window size is unchanged, we want to redraw
+  });
 }
-
-//JNI_FN(setupGL)(JNIEnv* env, jobject obj)
-//{
-//  app->map->setupGL();
-//}
-//
-//JNI_FN(drawFrame)(JNIEnv* env, jobject obj)
-//{
-//  app->drawFrame(currTime);
-//}
 
 JNI_FN(onPause)(JNIEnv* env, jclass)
 {
@@ -632,6 +632,20 @@ JNI_FN(touchEvent)(JNIEnv* env, jclass, jint ptrId, jint action, jint t, jfloat 
   MapsApp::sdlEvent(&event);
 }
 
+JNI_FN(imeTextUpdate)(JNIEnv* env, jclass, jstring jtext, jint selStart, jint selEnd)
+{
+  const char* text = env->GetStringUTFChars(jtext, 0);
+  std::string str(text);
+  MapsApp::runOnMainThread([=]() {
+    SDL_Event event = {0};
+    event.type = SvgGui::IME_TEXT_UPDATE;
+    event.user.data1 = (void*)str.c_str();
+    event.user.data2 = (void*)((selEnd << 16) | selStart);
+    app->gui->sdlEvent(&event);
+  });
+  env->ReleaseStringUTFChars(jtext, text);
+}
+
 JNI_FN(charInput)(JNIEnv* env, jclass, jint cp, jint cursorPos)
 {
   static const uint8_t firstByteMark[7] = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
@@ -640,7 +654,7 @@ JNI_FN(charInput)(JNIEnv* env, jclass, jint cp, jint cursorPos)
   const uint32_t byteMark = 0x80;
 
   SDL_Event event = {0};
-  event.text.type = SDL_TEXTINPUT;
+  event.type = SDL_TEXTINPUT;
   event.text.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
 
   // UTF-32 codepoint to UTF-8
@@ -665,7 +679,7 @@ JNI_FN(keyEvent)(JNIEnv* env, jclass, jint key, jint action)
 {
   SDL_Event event = {0};
   if(key == -1)
-    event.type = SVGGUI_KEYBOARD_HIDDEN;
+    event.type = SvgGui::KEYBOARD_HIDDEN;
   else {
     event.key.type = action < 0 ? SDL_KEYUP : SDL_KEYDOWN;
     event.key.state = action < 0 ? SDL_RELEASED : SDL_PRESSED;

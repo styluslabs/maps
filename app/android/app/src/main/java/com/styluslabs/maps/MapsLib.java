@@ -11,9 +11,7 @@ public class MapsLib
   }
 
   public static native void init(MapsActivity mapsActivity, AssetManager assetManager, String extFileDir);
-  public static native void resize(int width, int height);
-  //public static native void setupGL();
-  //public static native void drawFrame();
+  public static native void surfaceChanged(int width, int height);
   public static native void surfaceCreated(Surface surface, float dpi);
   public static native void surfaceDestroyed();
   public static native void onPause();
@@ -25,4 +23,5 @@ public class MapsLib
   public static native void updateOrientation(float azimuth, float pitch, float roll);
   public static native void updateGpsStatus(int satsVisible, int satsUsed);
   public static native void openFileDesc(String filename, int fd);
+  public static native void imeTextUpdate(String text, int selStart, int selEnd);
 }

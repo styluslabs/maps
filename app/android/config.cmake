@@ -10,15 +10,17 @@ add_library(droidmaps SHARED
 target_include_directories(droidmaps PRIVATE
   platforms/android/tangram/src/main/cpp
   platforms/common
-  core/deps/glm
   core/deps
+  core/deps/glm
   core/deps/yaml-cpp/include
+  core/deps/stb
   app/styluslabs
   app/styluslabs/nanovg-2/src
+  app/styluslabs/pugixml/src
   app/styluslabs/SDL/include
 )
 
-target_compile_definitions(droidmaps PRIVATE GLM_FORCE_CTOR_INIT)
+#target_compile_definitions(droidmaps PRIVATE GLM_FORCE_CTOR_INIT)
 
 if(TANGRAM_MBTILES_DATASOURCE)
   target_sources(droidmaps PRIVATE platforms/android/tangram/src/main/cpp/sqlite3ndk.cpp)

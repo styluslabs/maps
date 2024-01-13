@@ -557,7 +557,10 @@ void MapsApp::updateLocation(const Location& _loc)
     SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
     std::string locstr = fstring("%.6f, %.6f", currLocation.lat, currLocation.lng);
     if(currLocation.poserr > 0)
-      locstr += fstring(" (%.0f m)", currLocation.poserr);
+      locstr += fstring(" (\u00B1%.0f m)", currLocation.poserr);
+    // m/s -> kph or mph
+    locstr += metricUnits ? fstring(" %.1f km/h", currLocation.spd*3.6)
+        : fstring(" %.1f mph", currLocation.spd*2.23694);
     if(coordnode)
       coordnode->setText(locstr.c_str());
 
@@ -729,10 +732,7 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
     if(dest != viewport) {
       Rect r = dest * (1/app->gui->inputScale);
       real y = window()->winBounds().height()/app->gui->inputScale - r.bottom;
-
-      LOGW("Setting map viewport to LTWH %f %f %f %f", r.left, y, r.width(), r.height());
-
-      app->map->setViewport(r.left, y, r.width(), r.height());
+      app->map->setViewport(int(r.left + 0.5), int(y + 0.5), int(r.width() + 0.5), int(r.height() + 0.5));
       app->platform->requestRender();
     }
     if(src != dest)
@@ -1546,7 +1546,6 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   glDisable(GL_CULL_FACE);
   painter->blitImageToScreen(dirty);
 #endif
-  LOGW("Full render %d x %d", fbWidth, fbHeight);
   TRACE_END(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
   TRACE_FLUSH();
   return true;

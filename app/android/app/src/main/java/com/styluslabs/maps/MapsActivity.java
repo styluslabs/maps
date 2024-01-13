@@ -60,7 +60,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 {
   MapsView mMapsView;
   private ViewGroup mLayout;
-  private View mTextEdit;
+  private DummyEdit mTextEdit;
   private LocationManager locationManager;
   private SensorManager mSensorManager;
   private Sensor mAccelSensor;
@@ -307,7 +307,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public boolean extractAssets(AssetManager assetManager, String assetpath, String outpath)
   {
     try {
-      if(assetpath == "webkit/" || assetpath == "images/") return true;
+      if(assetpath.equals("webkit/") || assetpath.equals("images/")) return true;
       String[] files = assetManager.list(assetpath);
       if(files == null || files.length == 0) return false;
       //if(outpath.isEmpty()) outpath = getExternalFilesDir(null).toString();
@@ -336,7 +336,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       return true;
     }
     catch(IOException e) {
-      Log.v("extractAssets", "Error: ", e);
+      Log.v("Tangram extractAssets", "Error: ", e);
       return false;
     }
   }
@@ -408,7 +408,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   // ref: SDL SDLActivity.java
-  public void _showTextInput(int x, int y, int w, int h)
+  private void _showTextInput(int x, int y, int w, int h)
   {
     RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + 15);  //HEIGHT_PADDING);
     params.leftMargin = x;
@@ -431,7 +431,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     runOnUiThread(new Runnable() { @Override public void run() { _hideTextInput(); } });
   }
 
-  public void _hideTextInput()
+  private void _hideTextInput()
   {
     if(mTextEdit != null) {
       mTextEdit.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
@@ -440,238 +440,141 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       //mScreenKeyboardShown = false;
     }
   }
+
+  public void setImeText(String text, int selStart, int selEnd)
+  {
+    runOnUiThread(new Runnable() { @Override public void run() {
+      if(mTextEdit != null && mTextEdit.setImeText(text, selStart, selEnd)) {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        imm.restartInput(mTextEdit);  // need to clear composing state of keyboard, etc.
+      }
+    } });
+  }
 }
-
-
-/*class MapsInputConnection extends BaseInputConnection
-{
-    public MapsInputConnection(View targetView, boolean fullEditor) { super(targetView, fullEditor); }
-
-    //@Override
-    //public boolean sendKeyEvent(KeyEvent event)
-    //{
-    //    if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
-    //        String imeHide = SDLActivity.nativeGetHint("SDL_RETURN_KEY_HIDES_IME");
-    //        if ((imeHide != null) && imeHide.equals("1")) {
-    //            Context c = SDL.getContext();
-    //            if (c instanceof SDLActivity) {
-    //                SDLActivity activity = (SDLActivity)c;
-    //                activity.sendCommand(SDLActivity.COMMAND_TEXTEDIT_HIDE, null);
-    //                return true;
-    //            }
-    //        }
-    //    }
-    //    return super.sendKeyEvent(event);
-    //}
-
-    @Override
-    public boolean commitText(CharSequence text, int newCursorPosition)
-    {
-        //for (int i = 0; i < text.length(); i++) {
-        //    char c = text.charAt(i);
-        //    nativeGenerateScancodeForUnichar(c);
-        //}
-
-        for(int c : text.codePoints().toArray()){
-            MapsLib.charInput(c, newCursorPosition);
-        }
-        //MapsLib.textInput(text.toString(), newCursorPosition);
-        return super.commitText(text, newCursorPosition);
-    }
-
-    //@Override
-    //public boolean setComposingText(CharSequence text, int newCursorPosition)
-    //{
-    //    nativeSetComposingText(text.toString(), newCursorPosition);
-    //    return super.setComposingText(text, newCursorPosition);
-    //}
-
-    //public static native void textInput(String text, int newCursorPosition);
-    //public native void nativeGenerateScancodeForUnichar(char c);
-    //public native void nativeSetComposingText(String text, int newCursorPosition);
-
-    @Override
-    public boolean deleteSurroundingText(int beforeLength, int afterLength) {
-        // Workaround to capture backspace key. Ref: http://stackoverflow.com/questions/14560344/
-        if (beforeLength > 0 && afterLength == 0) {
-            boolean ret = true;
-            // backspace(s)
-            while (beforeLength-- > 0) {
-               boolean ret_key = sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
-                              && sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL));
-               ret = ret && ret_key;
-            }
-            return ret;
-        }
-
-        return super.deleteSurroundingText(beforeLength, afterLength);
-    }
-}*/
 
 class MapsInputConnection extends BaseInputConnection
 {
-    protected EditText mEditText;
-    protected String mCommittedText = "";
+  DummyEdit mEditView;
 
-    public MapsInputConnection(View targetView, boolean fullEditor) {
-        super(targetView, fullEditor);
-        mEditText = new EditText(targetView.getContext());
-    }
+  public MapsInputConnection(DummyEdit targetView, boolean fullEditor) {
+    super(targetView, fullEditor);
+    mEditView = targetView;
+  }
 
-    @Override
-    public Editable getEditable() {
-        return mEditText.getEditableText();
-    }
+  @Override
+  public Editable getEditable() {
+    return mEditView.getEditable();
+  }
 
-    // this must be implemented for SwiftKey keyboard to show suggestions
-    @Override
-    public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
-        Editable editable = getEditable();
-        ExtractedText et = new ExtractedText();
-        et.text = editable.toString();
-        et.partialEndOffset = editable.length();
-        et.selectionStart = Selection.getSelectionStart(editable);
-        et.selectionEnd = Selection.getSelectionEnd(editable);
-        et.flags = ExtractedText.FLAG_SINGLE_LINE;  //mSingleLine ? ExtractedText.FLAG_SINGLE_LINE : 0;
-        return et;
-    }
+  // this must be implemented for SwiftKey keyboard to show suggestions
+  @Override
+  public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
+    Editable editable = getEditable();
+    ExtractedText et = new ExtractedText();
+    et.text = editable.toString();
+    et.partialEndOffset = editable.length();
+    et.selectionStart = Selection.getSelectionStart(editable);
+    et.selectionEnd = Selection.getSelectionEnd(editable);
+    et.flags = ExtractedText.FLAG_SINGLE_LINE;  //mSingleLine ? ExtractedText.FLAG_SINGLE_LINE : 0;
+    return et;
+  }
 
-    @Override
-    public boolean sendKeyEvent(KeyEvent event) {
-        //if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
-        //    if (SDLActivity.onNativeSoftReturnKey()) {
-        //        return true;
-        //    }
-        //}
-        return super.sendKeyEvent(event);
-    }
+  //@Override public boolean sendKeyEvent(KeyEvent event) { if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
 
-    @Override
-    public boolean commitText(CharSequence text, int newCursorPosition) {
-        if (!super.commitText(text, newCursorPosition)) { return false; }
-        updateText();
-        return true;
-    }
+  @Override
+  public boolean commitText(CharSequence text, int newCursorPosition) {
+    //Log.v("Tangram", "commitText: " + text);
+    return super.commitText(text, newCursorPosition) && updateText();
+  }
 
-    @Override
-    public boolean setComposingText(CharSequence text, int newCursorPosition) {
-        if (!super.setComposingText(text, newCursorPosition)) { return false; }
-        updateText();
-        return true;
-    }
+  @Override
+  public boolean setComposingText(CharSequence text, int newCursorPosition) {
+    //Log.v("Tangram", "setComposingText: " + text);
+    return super.setComposingText(text, newCursorPosition) && updateText();
+  }
 
-    @Override
-    public boolean deleteSurroundingText(int beforeLength, int afterLength) {
-        if (Build.VERSION.SDK_INT <= 29 /* Android 10.0 (Q) */) {
-            // Workaround to capture backspace key. Ref: http://stackoverflow.com/questions>/14560344/android-backspace-in-webview-baseinputconnection
-            // and https://bugzilla.libsdl.org/show_bug.cgi?id=2265
-            if (beforeLength > 0 && afterLength == 0) {
-                while (beforeLength-- > 0) { sendKeycode(KeyEvent.KEYCODE_DEL); }
-                return true;
-           }
-        }
+  @Override
+  public boolean deleteSurroundingText(int beforeLength, int afterLength) {
+    return super.deleteSurroundingText(beforeLength, afterLength) && updateText();
+  }
 
-        if (!super.deleteSurroundingText(beforeLength, afterLength)) { return false; }
-        updateText();
-        return true;
-    }
+  @Override
+  public boolean setSelection(int start, int end) {
+    return super.setSelection(start, end) && updateText();
+  }
 
-    protected void updateText() {
-        final Editable content = getEditable();
-        if (content == null) { return; }
-
-        String text = content.toString();
-        int compareLength = Math.min(text.length(), mCommittedText.length());
-        int matchLength, offset;
-
-        // Backspace over characters that are no longer in the string
-        for (matchLength = 0; matchLength < compareLength; ) {
-            int codePoint = mCommittedText.codePointAt(matchLength);
-            if (codePoint != text.codePointAt(matchLength)) {
-                break;
-            }
-            matchLength += Character.charCount(codePoint);
-        }
-        for (offset = matchLength; offset < mCommittedText.length(); ) {
-            int codePoint = mCommittedText.codePointAt(offset);
-            sendKeycode(KeyEvent.KEYCODE_DEL);
-            offset += Character.charCount(codePoint);
-        }
-
-        if (matchLength < text.length()) {
-            String pendingText = text.subSequence(matchLength, text.length()).toString();
-            for (offset = 0; offset < pendingText.length(); ) {
-                int codePoint = pendingText.codePointAt(offset);
-                //if (codePoint == '\n') {
-                //    sendKeycode(codePoint);
-                //    return;
-                //    //if (SDLActivity.onNativeSoftReturnKey()) { return; }
-                //}
-                //// Higher code points don't generate simulated scancodes
-                //if (codePoint < 128) {
-                //    sendKeycode(codePoint);  //nativeGenerateScancodeForUnichar((char)codePoint);
-                //}
-                MapsLib.charInput(codePoint, 0);
-                offset += Character.charCount(codePoint);
-            }
-            //SDLInputConnection.nativeCommitText(pendingText, 0);
-        }
-        mCommittedText = text;
-    }
-
-    protected void sendKeycode(int key) {
-      MapsLib.keyEvent(key, 1);
-      MapsLib.keyEvent(key, -1);
-    }
+  protected boolean updateText() {
+    final Editable content = getEditable();
+    if (content == null) { return false; }
+    //Log.v("Tangram", "updateText (Java -> C++): " + content.toString());
+    MapsLib.imeTextUpdate(content.toString(),
+        Selection.getSelectionStart(content), Selection.getSelectionEnd(content));
+    return true;
+  }
 }
 
 class DummyEdit extends View implements View.OnKeyListener
 {
-    InputConnection ic;
+  MapsInputConnection inputConn;
+  EditText mEditText;
 
-    public DummyEdit(Context context)
-    {
-        super(context);
-        setFocusableInTouchMode(true);
-        setFocusable(true);
-        setOnKeyListener(this);
+  public DummyEdit(Context context)
+  {
+    super(context);
+    setFocusableInTouchMode(true);
+    setFocusable(true);
+    setOnKeyListener(this);
+    mEditText = new EditText(context);
+  }
+
+  public Editable getEditable() { return mEditText.getEditableText(); }
+
+  public boolean setImeText(String text, int selStart, int selEnd) {
+    //final Editable content = getEditable();
+    //if(text.equals(content.toString())
+    //    && selStart == Selection.getSelectionStart(content) && selEnd == Selection.getSelectionEnd(content))
+    //  return false;
+    //Log.v("Tangram", "setImeText (C++ -> Java): " + text + " was: " + mEditText.getText());
+    mEditText.setText(text);
+    mEditText.setSelection(selStart, selEnd);
+    return true;
+  }
+
+  @Override
+  public boolean onCheckIsTextEditor() { return true; }
+
+  @Override
+  public boolean onKey(View v, int keyCode, KeyEvent event)
+  {
+    if (event.getAction() == KeyEvent.ACTION_DOWN) {
+      if(!event.isCtrlPressed() && (event.isPrintingKey() || event.getKeyCode() == KeyEvent.KEYCODE_SPACE)) {
+        inputConn.commitText(String.valueOf((char) event.getUnicodeChar()), 1);
+      } else {
+        MapsLib.keyEvent(keyCode, 1);
+      }
+      return true;
+    } else if (event.getAction() == KeyEvent.ACTION_UP) {
+      MapsLib.keyEvent(keyCode, -1);
+      return true;
     }
+    return false;
+  }
 
-    @Override
-    public boolean onCheckIsTextEditor() { return true; }
-
-    @Override
-    public boolean onKey(View v, int keyCode, KeyEvent event)
-    {
-        if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            if(!event.isCtrlPressed() && (event.isPrintingKey() || event.getKeyCode() == KeyEvent.KEYCODE_SPACE)) {
-                ic.commitText(String.valueOf((char) event.getUnicodeChar()), 1);
-            } else {
-                MapsLib.keyEvent(keyCode, 1);
-            }
-            return true;
-        } else if (event.getAction() == KeyEvent.ACTION_UP) {
-            MapsLib.keyEvent(keyCode, -1);
-            return true;
-        }
-        return false;
+  @Override
+  public boolean onKeyPreIme(int keyCode, KeyEvent event)
+  {
+    if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+      MapsLib.keyEvent(-1, -1);  // keyboard hidden
     }
+    return super.onKeyPreIme(keyCode, event);
+  }
 
-    @Override
-    public boolean onKeyPreIme(int keyCode, KeyEvent event)
-    {
-        if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
-            MapsLib.keyEvent(-1, -1);  // keyboard hidden
-        }
-        return super.onKeyPreIme(keyCode, event);
-    }
-
-    @Override
-    public InputConnection onCreateInputConnection(EditorInfo outAttrs)
-    {
-        ic = new MapsInputConnection(this, true);
-        outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;  //TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_DONE;
-        return ic;
-    }
+  @Override
+  public InputConnection onCreateInputConnection(EditorInfo outAttrs)
+  {
+    inputConn = new MapsInputConnection(this, true);
+    outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;  //TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
+    outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_DONE;
+    return inputConn;
+  }
 }

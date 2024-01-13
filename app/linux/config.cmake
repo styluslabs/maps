@@ -86,9 +86,9 @@ target_compile_options(tangram
 )
 
 # to be consistent w/ core
-target_compile_definitions(tangram PRIVATE GLM_FORCE_CTOR_INIT)
-target_compile_definitions(tangram PRIVATE PUGIXML_NO_XPATH)
-target_compile_definitions(tangram PRIVATE PUGIXML_NO_EXCEPTIONS)
+#target_compile_definitions(tangram PRIVATE GLM_FORCE_CTOR_INIT)
+#target_compile_definitions(tangram PRIVATE PUGIXML_NO_XPATH)
+#target_compile_definitions(tangram PRIVATE PUGIXML_NO_EXCEPTIONS)
 
 #add_resources(tangram "${PROJECT_SOURCE_DIR}/scenes" "res")
 

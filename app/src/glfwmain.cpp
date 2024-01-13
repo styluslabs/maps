@@ -20,6 +20,9 @@
 void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
 void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
 
+// only needed for mobile
+void PLATFORM_setImeText(const char* text, int selStart, int selEnd) {}
+
 void glfwSDLEvent(SDL_Event* event)
 {
   event->common.timestamp = SDL_GetTicks();
