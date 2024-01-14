@@ -317,9 +317,11 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
   if(flyingToResults && !app->mapState.isAnimating()) {  //event == CAMERA_EASE_DONE
-    updateMapResultBounds(lngLat00, lngLat11); // update bounds for new camera position
     flyingToResults = false;
-    return;
+    if(unifiedSearch) {  // need to perform map search in new location if not unified!
+      updateMapResultBounds(lngLat00, lngLat11); // update bounds for new camera position
+      return;
+    }
   }
   bool zoomedin = map->getZoom() - prevZoom > 0.5f;
   bool zoomedout = map->getZoom() - prevZoom < 0.5f;

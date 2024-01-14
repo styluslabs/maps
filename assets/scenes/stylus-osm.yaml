@@ -45,7 +45,8 @@ global:
         transit: '#EB322F'
         rail: '#96ABB2'  #[0.588,0.671,0.698]
         rail_tunnel: '#A9C3CB'
-        pier: [0.993,0.993,0.993]
+        pier: '#F2EFE9'  #[0.993,0.993,0.993]
+        breakwater: '#AAAAAA'
         ferry: '#8db3ce'
         runway_13: '#C7CADC'  #'#FFE4B5'
         taxiway: '#BCBCCC'
@@ -113,6 +114,7 @@ global:
     # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
     priority_boundary: 0
     priority_continent: 6
+    priority_district_CN: 9.5
     priority_neighborhood: 15
     priority_park: 21
     priority_forest: 22
@@ -520,11 +522,23 @@ layers:
                 draw: { lines: { color: global.color.rail_tunnel } }
 
         pier:
-            filter: { class: pier }
-            draw:
-                lines:
-                    color: global.color.pier
-                    width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
+            filter: { class: [pier, breakwater, groyne] }
+            enabled: global.show_polygons
+            pier_areas:
+                filter: { $geometry: polygon }  #$zoom: { min: 13 }
+                pier: { filter: { class: pier }, draw: { polygons: { color: global.color.pier } } }
+                draw:
+                    polygons:
+                        order: 9
+                        color: global.color.breakwater
+            pier_lines:
+                filter: { $geometry: line }
+                pier: { filter: { class: pier }, draw: { lines: { color: global.color.pier } } }
+                draw:
+                    lines:
+                        order: 9
+                        color: global.color.pier
+                        width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
 
         ferry:
             filter: { class: ferry }
@@ -1272,6 +1286,7 @@ layers:
                     interactive: true
                     outline: { color: global.color.city_point_halo, width: 1px }
                     text:
+                        text_source: global.names_two_lines
                         priority: global.priority_place_fn
                         #collide: true
                         #optional: false
@@ -1297,6 +1312,7 @@ layers:
                 text:
                     visible: false
                     interactive: true
+                    text_source: global.names_two_lines
                     priority: global.priority_place_fn
                     font:
                         family: Open Sans
@@ -1335,6 +1351,7 @@ layers:
                 exclusive: true
                 filter:
                     class: [city, town, village, suburb, hamlet]
+                    not: { place_CN: [county, district, banner, subdistrict, neighbourhood] }
                     $zoom: { min: 9 } # show city point labels below z11
                 city:
                     filter: { class: city, $zoom: { min: 9, max: 14 } }
@@ -1359,6 +1376,8 @@ layers:
                 exclusive: true
                 filter:
                     - { class: [neighbourhood, quarter], $zoom: { min: 13 } }
+                    - { place_CN: [subdistrict, neighbourhood], $zoom: { min: 13 } }
+                    - { place_CN: [district], $zoom: { min: 11, max: 14 } }
                     #- { class: microhood, $zoom: { min: 15 } }
                 draw:
                     text:
@@ -1371,3 +1390,12 @@ layers:
                             fill: global.color.hood_name
                             stroke: { color: global.color.hood_halo }
                             transform: uppercase
+                district:
+                    filter: { place_CN: [district] }
+                    draw:
+                        text:
+                            priority: global.priority_district_CN
+                            font:
+                                fill: global.color.place_name
+                                size: [[11, 11px], [12, 11px], [13, 13px]]
+

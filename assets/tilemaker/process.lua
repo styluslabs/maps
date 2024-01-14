@@ -101,6 +101,7 @@ function node_function(node)
     end
 
     node:Layer("place", false)
+    node:Attribute("class", place)
     node:Attribute("place", place)
     node:MinZoom(mz)
     if rank then node:AttributeNumeric("rank", rank) end
@@ -213,8 +214,10 @@ poiClassRanks   = { hospital=1, railway=2, bus=3, attraction=4, harbor=5, colleg
           school=7, stadium=8, zoo=9, town_hall=10, campsite=11, cemetery=12,
           park=13, library=14, police=15, post=16, golf=17, shop=18, grocery=19,
           fast_food=20, clothing_store=21, bar=22 }
+
 waterClasses    = Set { "river", "riverbank", "stream", "canal", "drain", "ditch", "dock" }
 waterwayClasses = Set { "stream", "river", "canal", "drain", "ditch" }
+manMadeClasses  = Set { "pier", "breakwater", "groyne" }  -- "storage_tank", "water_tap", "dyke", "lighthouse"
 
 transitRoutes = { train = 8, subway = 10, tram = 12, share_taxi = 12, light_rail = 12, bus = 14, trolleybus = 14 }
 otherRoutes = { road = 8, ferry = 9, bicycle = 10, hiking = 10, foot = 12, mtb = 10, ski = 12 }  --piste = 12,
@@ -387,7 +390,7 @@ function way_function(way)
       way:MinZoom(minzoom)
       SetZOrder(way)
       way:Attribute("class", h)
-      if h~=highway then way:Attribute("highway", highway) end
+      way:Attribute("highway", highway)  -- we want to start using OSM tags instead of class ... if h~=highway then
       SetBrunnelAttributes(way)
       if ramp then way:AttributeNumeric("ramp",1) end
 
@@ -491,11 +494,12 @@ function way_function(way)
     end
   end
 
-  -- Pier
-  if man_made=="pier" then
-    way:Layer("transportation", isClosed)
+  -- Pier, breakwater, etc.
+  if manMadeClasses[man_made] then  --man_made=="pier" then
+    way:Layer("landuse", isClosed)
     SetZOrder(way)
-    way:Attribute("class", "pier")
+    way:Attribute("class", man_made)
+    way:Attribute("man_made", man_made)
     SetMinZoomByArea(way)
   end
 
@@ -503,7 +507,7 @@ function way_function(way)
   if route=="ferry" then
     way:Layer("transportation", false)
     way:Attribute("class", "ferry")
-    --way:Attribute("route", route)
+    way:Attribute("route", route)
     --SetZOrder(way)
     way:MinZoom(9)
     SetBrunnelAttributes(way)
@@ -513,6 +517,7 @@ function way_function(way)
   if piste_diff~="" then
     way:Layer("transportation", isClosed)
     way:Attribute("class", "piste")
+    way:Attribute("route", "piste")
     way:Attribute("difficulty", piste_diff)
     way:MinZoom(10)
     SetNameAttributes(way, 14)
@@ -555,25 +560,13 @@ function way_function(way)
     end
     if way:Find("intermittent")=="yes" then way:AttributeNumeric("intermittent", 1) else way:AttributeNumeric("intermittent", 0) end
     way:Attribute("class", waterway)
+    way:Attribute("waterway", waterway)
     SetNameAttributes(way)
     SetBrunnelAttributes(way)
   elseif waterway == "boatyard"  then way:Layer("landuse", isClosed); way:Attribute("class", "industrial"); way:MinZoom(12)
-  elseif waterway == "dam"       then way:Layer("building",isClosed)
+  elseif waterway == "dam"       then way:Layer("building", isClosed)
   elseif waterway == "fuel"      then way:Layer("landuse", isClosed); way:Attribute("class", "industrial"); way:MinZoom(14)
   end
-  -- Set names on rivers
-  --"water_name":        { "minzoom": 14, "maxzoom": 14 },
-  --"water_name_detail": { "minzoom": 14, "maxzoom": 14, "write_to": "water_name" },
-  --if waterwayClasses[waterway] and not isClosed then
-  --  if waterway == "river" and way:Holds("name") then
-  --    way:Layer("water_name", false)
-  --  else
-  --    way:Layer("water_name_detail", false)
-  --    way:MinZoom(14)
-  --  end
-  --  way:Attribute("class", waterway)
-  --  SetNameAttributes(way)
-  --end
 
   -- Set 'building' and associated
   if building~="" then
@@ -590,22 +583,25 @@ function way_function(way)
   end
 
   -- Set 'water'
-  if natural=="water" or natural=="bay" or leisure=="swimming_pool" or landuse=="reservoir" or landuse=="basin" or waterClasses[waterway] then
+  local waterbody = ""
+  if natural=="water" or natural=="bay" then waterbody = natural
+  elseif leisure=="swimming_pool" then waterbody = leisure
+  elseif landuse=="reservoir" or landuse=="basin" then waterbody = landuse
+  elseif waterClasses[waterway] then waterbody = waterway
+  end
+
+  if waterbody~="" then
     if way:Find("covered")=="yes" or not isClosed then return end
     local class="lake"; if natural=="bay" then class="ocean" elseif waterway~="" then class="river" end
-    if class=="lake" and way:Find("wikidata")=="Q192770" then return end
+    if class=="lake" and way:Find("wikidata")=="Q192770" then return end  -- crazy lake in Finland
     if class=="ocean" and isClosed and (way:AreaIntersecting("ocean")/way:Area() > 0.98) then return end
-    way:Layer("water",true)
+    way:Layer("water", true)
     SetMinZoomByArea(way)
-    way:Attribute("class",class)
+    way:Attribute("class", class)
+    way:Attribute("waterbody", waterbody)
 
     if way:Find("intermittent")=="yes" then way:Attribute("intermittent",1) end
-    -- we only want to show the names of actual lakes not every man-made basin that probably doesn't even have a name other than "basin"
-    -- examples for which we don't want to show a name:
-    --  https://www.openstreetmap.org/way/25958687
-    --  https://www.openstreetmap.org/way/27201902
-    --  https://www.openstreetmap.org/way/25309134
-    --  https://www.openstreetmap.org/way/24579306
+    -- don't show names for minor man-made basins (e.g. ways 25958687, 27201902, 25309134, 24579306)
     if way:Holds("name") and natural=="water" and water ~= "basin" and water ~= "wastewater" then
       --way:LayerAsCentroid("water_name_detail")
       SetNameAttributes(way, 14)
@@ -787,40 +783,6 @@ function SetMinZoomByArea(way)
   elseif area>ZRES12^2 then way:MinZoom(13)
   else                      way:MinZoom(14) end
 end
-
--- Calculate POIs (typically rank 1-4 go to 'poi' z12-14, rank 5+ to 'poi_detail' z14)
--- returns rank, class, subclass
--- Write a way centroid to POI layer
---[[ function WritePOI(obj,class,subclass,rank)
-  local layer = "poi"
-  if rank>4 then layer="poi_detail" end
-  obj:LayerAsCentroid(layer)
-  SetNameAttributes(obj)
-  obj:AttributeNumeric("rank", rank)
-  obj:Attribute("class", class)
-  obj:Attribute("subclass", subclass)
-end
-
-function GetPOIRank(obj)
-  local k,list,v,class,rank
-
-  -- Can we find the tag?
-  for k,list in pairs(poiTags) do
-    if list[obj:Find(k)] then
-      v = obj:Find(k) -- k/v are the OSM tag pair
-      class = poiClasses[v] or k
-      rank  = poiClassRanks[class] or 25
-      return rank, class, v
-    end
-  end
-
-  -- Catch-all for shops
-  local shop = obj:Find("shop")
-  if shop~="" then return poiClassRanks['shop'], "shop", shop end
-
-  -- Nothing found
-  return nil,nil,nil
-end]]
 
 function SetBuildingHeightAttributes(way)
   local height = tonumber(way:Find("height"), 10)

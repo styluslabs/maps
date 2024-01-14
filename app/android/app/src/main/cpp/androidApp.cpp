@@ -609,7 +609,33 @@ JNI_FN(surfaceChanged)(JNIEnv* env, jclass, jint w, jint h)
 
 JNI_FN(onPause)(JNIEnv* env, jclass)
 {
-  MapsApp::runOnMainThread([=](){ app->onSuspend(); });
+  MapsApp::runOnMainThread([=](){
+    app->onSuspend();
+
+    //SDL_Event event = {0};
+    //event.type = SDL_APP_WILLENTERBACKGROUND;
+    //app->gui->sdlEvent(&event);
+    //event.type = SDL_APP_DIDENTERBACKGROUND;
+    //app->gui->sdlEvent(&event);
+    //event.type = SDL_WINDOWEVENT;
+    //event.window.event = SDL_WINDOWEVENT_FOCUS_LOST;
+    //app->gui->sdlEvent(&event);
+  });
+}
+
+JNI_FN(onResume)(JNIEnv* env, jclass)
+{
+  //MapsApp::runOnMainThread([=]() {
+  //  SDL_Event event = {0};
+  //  event.type = SDL_APP_WILLENTERFOREGROUND;
+  //  app->gui->sdlEvent(&event);
+  //  event.type = SDL_APP_DIDENTERFOREGROUND;
+  //  app->gui->sdlEvent(&event);
+  //  event.type = SDL_WINDOWEVENT;
+  //  event.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
+  //  app->gui->sdlEvent(&event);
+  //  //app->win->redraw();  -- looks like surfaceChanged is called on resume, so no need for this
+  //});
 }
 
 JNI_FN(touchEvent)(JNIEnv* env, jclass, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)

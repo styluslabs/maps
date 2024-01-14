@@ -582,8 +582,7 @@ Widget* MapsOffline::createPanel()
     std::vector<std::string> layerKeys;
     std::vector<std::string> layerTitles;
     for(const auto& src : app->mapsSources->mapSources) {
-      std::string type = src.second["type"].Scalar();
-      if(type == "Raster" || type == "Vector") {
+      if(src.second["scene"] || src.second["url"]) {  // vector or raster map
         layerKeys.push_back(src.first.Scalar());
         layerTitles.push_back(src.second["title"].Scalar());
       }

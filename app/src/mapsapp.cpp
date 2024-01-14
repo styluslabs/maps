@@ -911,7 +911,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout-narrow" display="none" box-anchor="fill" layout="flex" flex-direction="column">
-        <rect class="statusbar-bg toolbar" display="none" box-anchor="hfill" x="0" y="0" width="20" height="40" />
+        <rect class="statusbar-bg toolbar" display="none" box-anchor="hfill" x="0" y="0" width="20" height="22" />
         <g class="maps-container" box-anchor="fill" layout="box"></g>
         <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
         <g class="panel-container" display="none" box-anchor="hfill" layout="box">
@@ -923,7 +923,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
       <g class="window-layout-wide" display="none" box-anchor="fill" layout="box">
         <g class="maps-container" box-anchor="fill" layout="box"></g>
-        <g class="panel-layout" box-anchor="top left" margin="10 0 0 10" layout="flex" flex-direction="column">
+        <g class="panel-layout" box-anchor="top left" margin="20 0 0 20" layout="flex" flex-direction="column">
           <g class="main-tb-container" box-anchor="hfill" layout="box">
             <rect class="background" fill="none" x="0" y="0" width="360" height="1"/>
           </g>
@@ -1136,9 +1136,9 @@ bool MapsApp::popPanel()
   if(panelHistory.empty())
     return false;
   Widget* popped = panelHistory.back();
+  popped->setVisible(false);
   panelHistory.pop_back();
   popped->sdlUserEvent(gui, PANEL_CLOSED);
-  popped->setVisible(false);
   if(!panelHistory.empty())
     panelHistory.back()->setVisible(true);
   else
@@ -1148,10 +1148,13 @@ bool MapsApp::popPanel()
 
 void MapsApp::maximizePanel(bool maximize)
 {
-  if(currLayout->node->hasClass("window-layout-narrow")) {
+  if(currLayout->node->hasClass("window-layout-narrow") && !panelHistory.empty()) {
     currLayout->selectFirst(".maps-container")->setVisible(!maximize);
     currLayout->selectFirst(".statusbar-bg")->setVisible(maximize);
     panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
+    panelSplitter->setEnabled(!maximize);
+    Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
+    if(minbtn) minbtn->setVisible(!maximize);
   }
 }
 
