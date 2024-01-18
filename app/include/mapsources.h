@@ -21,7 +21,7 @@ public:
 private:
   std::string createSource(std::string savekey, const std::string& yamlStr = "");
   void populateSources();
-  void updateSceneVar(const std::string& path, const std::string& newval, bool reload);
+  void updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload);
   Widget* processUniformVar(const std::string& stylename, const std::string& name);
   void populateSceneVars();
   void populateSourceEdit(std::string key);
@@ -49,6 +49,7 @@ private:
   Widget* varsContent = NULL;
   bool legendsLoaded = false;
   bool sourcesDirty = true;
+  bool saveSourcesNeeded = false;
   std::vector<std::string> layerKeys;
   std::unique_ptr<SelectDialog> selectLayerDialog;
 };

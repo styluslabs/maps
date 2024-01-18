@@ -536,6 +536,13 @@ class MapsInputConnection extends BaseInputConnection
 }
 */
 
+// Some keyboards (e.g. SwiftKey) edit entire string via InputConnection, while others (e.g. Samsung) only edit
+//  composing text via InputConnection and send key events to edit already commited text, so easiest to just
+//  use Android EditText to handle everything
+// refs:
+// - https://github.com/sillsdev/chromium-crosswalk/blob/master/content/public/android/java/src/org/chromium/content/browser/input/AdapterInputConnection.java
+// - https://android.googlesource.com/platform/frameworks/base.git/+/refs/heads/main/core/java/com/android/internal/inputmethod/EditableInputConnection.java
+// - https://github.com/gioui/gio/blob/main/app/GioView.java
 class MapsInputConnection extends BaseInputConnection
 {
   DummyEdit mEditView;

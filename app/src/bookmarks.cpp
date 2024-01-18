@@ -644,7 +644,7 @@ Button* MapsBookmarks::createPanel()
       gui->deleteContents(bkmkMenu->selectFirst(".child-container"));
       int uiWidth = app->getPanelWidth();
       const char* query = "SELECT b.title, b.props, b.lng, b.lat FROM bookmarks AS b "
-          "JOIN lists ON lists.id = b.list_id WHERE lists.archived = 0 ORDER BY timestamp LIMIT 8;";
+          "JOIN lists ON lists.id = b.list_id WHERE lists.archived = 0 ORDER BY timestamp DESC LIMIT 8;";
       SQLiteStmt(app->bkmkDB, query).exec([&](std::string name, std::string props, double lng, double lat){
         Button* item = bkmkMenu->addItem(name.c_str(), MapsApp::uiIcon("pin"),
             [=](){ app->setPickResult(LngLat(lng, lat), name, props); });

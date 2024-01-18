@@ -281,6 +281,13 @@ std::vector<DragDropList::KeyType> DragDropList::getOrder()
 
 void DragDropList::clear()
 {
+  if(placeholder) {
+    // cancel drag in progress!
+    placeholder->removeFromParent();
+    delete placeholder->node;
+    placeholder = NULL;
+    floatWidget->setVisible(false);
+  }
   window()->gui()->deleteContents(content);
 }
 
@@ -362,9 +369,9 @@ void DragDropList::addItem(KeyType key, Widget* item, KeyType nextkey)
         delete placeholder->node;
         placeholder = NULL;
         floatWidget->setVisible(false);
-        std::string nextkey = next ? next->getStringAttr("__sortkey", "") : "";
-        if(onReorder && nextkey != nextItemKey)
-          onReorder(item->node->getStringAttr("__sortkey", ""), nextkey);
+        std::string newnextkey = next ? next->getStringAttr("__sortkey", "") : "";
+        if(onReorder && newnextkey != nextItemKey)
+          onReorder(item->node->getStringAttr("__sortkey", ""), newnextkey);
       }
       //return true;
     }
@@ -603,4 +610,46 @@ void sendKeyPress(SvgGui* gui, Widget* widget, int sdlkey, int mods)
   event.key.type = SDL_KEYUP;
   event.key.state = SDL_RELEASED;
   widget->sdlEvent(gui, &event);
+}
+
+static int getMonthDays(int year, int month)
+{
+  static constexpr int monthDays[12] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  bool leapfeb = (month == 2 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)));
+  return leapfeb ? 29 : monthDays[month-1];
+}
+
+Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int year, int month, int day)> onChange)
+{
+  SpinBox* yearBox = createTextSpinBox(year0, 1, 0, 9999, "%.0f");
+  SpinBox* monthBox = createTextSpinBox(month0, 1, 0, 13, "%02.0f");
+  SpinBox* dayBox = createTextSpinBox(day0, 1, 0, 32, "%02.0f");
+  Widget* row = createRow();
+  row->addWidget(yearBox);
+  row->addWidget(monthBox);
+  row->addWidget(dayBox);
+
+  // we'll leave it to user-supplied onChange() to limit date range (e.g. past or future only)
+  yearBox->onValueChanged = [=](real val){
+    if(monthBox->value() == 2 && dayBox->value() > 28)
+      dayBox->setValue(28);
+    onChange(yearBox->value(), monthBox->value(), dayBox->value());
+  };
+  monthBox->onValueChanged = [=](real val){
+    if(val < 1) { monthBox->setValue(12); yearBox->updateValue(yearBox->value() - 1); }
+    else if(val > 12) { monthBox->setValue(1); yearBox->updateValue(yearBox->value() + 1); }
+    else {
+      int monthdays = getMonthDays(yearBox->value(), monthBox->value());
+      if(dayBox->value() > monthdays) { dayBox->setValue(monthdays); }
+      onChange(yearBox->value(), monthBox->value(), dayBox->value());
+    }
+  };
+  dayBox->onValueChanged = [=](real val){
+    if(val < 1) { dayBox->setValue(31); monthBox->updateValue(monthBox->value() - 1); }
+    else if(val > getMonthDays(yearBox->value(), monthBox->value())) {
+      dayBox->setValue(1); monthBox->updateValue(monthBox->value() + 1);
+    }
+    else { onChange(yearBox->value(), monthBox->value(), dayBox->value()); }
+  };
+  return row;
 }

@@ -65,13 +65,13 @@ function transformQuery(query)
 
   // if no category match, try replacements
   var qwords = q.split(' ');
-  for(var k in replacements) {
-    if(!replacements.hasOwnProperty(k)) continue;
-    for(var ii = 0; ii < qwords.length; ii++) {
-      if(qwords[ii] == k) {
-        replaced = true;
-        qwords[ii] = replacements[k];
-      }
+  for(var ii = 0; ii < qwords.length; ii++) {
+    const val = replacements[qwords[ii]];
+    if(val) {
+      replaced = true;
+      qwords[ii] = val;
+    } else {
+      qwords[ii] = '"' + qwords[ii] + '"';
     }
   }
   return replaced ? qwords.join(" AND ") : "";

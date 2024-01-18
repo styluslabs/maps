@@ -89,3 +89,4 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
 void showInlineDialogModal(Widget* dialog);
 void showModalCentered(Window* modal, SvgGui* gui);
 void sendKeyPress(SvgGui* gui, Widget* widget, int sdlkey, int mods = 0);
+Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int year, int month, int day)> onChange);

@@ -11,6 +11,8 @@
 #include "data/tileData.h"
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
+#include "scene/sceneLoader.h"
+#include "scene/styleContext.h"
 #include "sqlitepp.h"
 
 #include "usvg/svgpainter.h"
@@ -22,6 +24,12 @@
 static sqlite3* searchDB = NULL;
 static sqlite3_stmt* insertStmt = NULL;
 
+class DummyStyleContext : public Tangram::StyleContext {
+public:
+  DummyStyleContext() {}  // bypass JSContext creation
+};
+static DummyStyleContext dummyStyleContext;
+
 static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vector<SearchData>& searchData)
 {
   using namespace Tangram;
@@ -31,9 +39,9 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
     for(const SearchData& searchdata : searchData) {
       if(searchdata.layer == layer.name) {
         for(const Feature& feature : layer.features) {
+          if(feature.points.empty() || !searchdata.filter.eval(feature, dummyStyleContext))
+            continue;
           std::string featname = feature.props.getString("name");
-          if(featname.empty() || feature.points.empty())
-            continue;  // skip POIs w/o name or geometry
           auto lnglat = tileCoordToLngLat(task->tileId(), feature.points.front());
           std::string tags;
           for(const std::string& field : searchdata.fields) {
@@ -59,22 +67,25 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
 
 void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
-  int64_t tileId = -1;
+  int64_t rowId = -1;
+  auto tileId = task->tileId();
   SQLiteStmt(searchDB, "SELECT id FROM tiles WHERE z = ? AND x = ? AND y = ?;")
-      .bind(task->tileId().z, task->tileId().x, task->tileId().y).exec([&](int64_t id) { tileId = id; });
-  if(tileId < 0) {
+      .bind(tileId.z, tileId.x, tileId.y).exec([&](int64_t id) { rowId = id; });
+  if(rowId < 0) {
+    LOGTInit(">>> indexing tile %s", tileId.toString().c_str());
     const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
-    SQLiteStmt(searchDB, query).bind(task->tileId().z, task->tileId().x, task->tileId().y).exec();
-    tileId = sqlite3_last_insert_rowid(searchDB);
-    sqlite3_bind_int64(insertStmt, 6, tileId);  // bind tile_id
+    SQLiteStmt(searchDB, query).bind(tileId.z, tileId.x, tileId.y).exec();
+    rowId = sqlite3_last_insert_rowid(searchDB);
+    sqlite3_bind_int64(insertStmt, 6, rowId);  // bind tile_id
 
     sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
     processTileData(task, insertStmt, searchData);
     sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
-    LOGD("Search indexing completed for tile %s", task->tileId().toString().c_str());
+    LOGT("<<< indexing tile %s %s", tileId.toString().c_str());
+    LOGD("Search indexing completed for tile %s", tileId.toString().c_str());
   }
-  if(tileId >= 0)
-    SQLiteStmt(searchDB, "INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(tileId, mapId).exec();
+  if(rowId >= 0)
+    SQLiteStmt(searchDB, "INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(rowId, mapId).exec();
 }
 
 void MapsSearch::onDelOfflineMap(int mapId)
@@ -88,8 +99,17 @@ void MapsSearch::onDelOfflineMap(int mapId)
 std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
 {
   std::vector<SearchData> searchData;
-  for(auto& elem : node)
-    searchData.push_back({elem["layer"].Scalar(), splitStr<std::vector>(elem["fields"].Scalar(), ", ", true)});
+  for(auto& elem : node) {
+    Tangram::SceneFunctions dummyFns;
+    std::vector<std::string> fields;
+    for(auto& field : elem["fields"])
+      fields.push_back(field.Scalar());
+    auto filter = Tangram::SceneLoader::generateFilter(dummyFns, elem["filter"]);
+    if(dummyFns.empty())
+      searchData.push_back({elem["layer"].Scalar(), std::move(fields), std::move(filter)});
+    else
+      LOGE("search_data entry ignored - filters do not support JS functions");
+  }
   return searchData;
 }
 
@@ -248,7 +268,7 @@ void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, co
   mapResults.push_back({id, {lng, lat}, rank, {}});
   rapidjson::Document& tags = mapResults.back().tags;
   tags.Parse(json);
-  if(!tags.IsObject() || !tags.HasMember("name")) {
+  if(!tags.IsObject()) {  //|| !tags.HasMember("name")) {
     mapResults.pop_back();
     return;
   }
@@ -262,7 +282,7 @@ void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, co
   }
   auto onPicked = [this, idx](){
     SearchResult& res = mapResults[idx];
-    app->setPickResult(res.pos, res.tags["name"].GetString(), res.tags);
+    app->setPickResult(res.pos, "", res.tags);
   };
   markers->createMarker({lng, lat}, onPicked, std::move(props));
 }
@@ -272,9 +292,8 @@ void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, c
   listResults.push_back({id, {lng, lat}, rank, {}});
   rapidjson::Document& tags = listResults.back().tags;
   tags.Parse(json);
-  if(!tags.IsObject() || !tags.HasMember("name"))
+  if(!tags.IsObject())   // || !tags.HasMember("name"))
     listResults.pop_back();
-  //return listResults.back();
 }
 
 void MapsSearch::searchPluginError(const char* err)
@@ -411,8 +430,15 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     if(providerIdx == 0 && !query.empty()) {
       // jsCallFn will return empty string in case of error
       std::string tfquery = phase == RETURN ? app->pluginManager->jsCallFn("transformQuery", query) : "";
-      searchStr = tfquery.empty() ? query + "*" : tfquery;
-      std::replace(searchStr.begin(), searchStr.end(), '\'', ' ');
+      if(!tfquery.empty())
+        searchStr = tfquery;
+      else {
+        // words containing any special characters need to be quoted, so just quote every word (and make AND
+        //  operation explicit)
+        auto words = splitStr<std::vector>(query, " ", true);
+        searchStr = "\"" + joinStr(words, "\" AND \"") + "\"*";
+      }
+      //std::replace(searchStr.begin(), searchStr.end(), '\'', ' ');
       LOGD("Search string: %s", searchStr.c_str());
     }
     else
@@ -516,9 +542,12 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
     std::string placetype = MapsApp::osmPlaceType(res.tags);
-    Button* item = createListItem(MapsApp::uiIcon("search"), res.tags["name"].GetString(), placetype.c_str());
+    std::string namestr = res.tags.HasMember("name") ? res.tags["name"].GetString() : "";
+    if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
+    if(namestr.empty()) continue;  // skip if nothing to show in list
+    Button* item = createListItem(MapsApp::uiIcon("search"), namestr.c_str(), placetype.c_str());
     item->onClicked = [this, &results, ii](){
-      app->setPickResult(results[ii].pos, results[ii].tags["name"].GetString(), results[ii].tags);
+      app->setPickResult(results[ii].pos, "", results[ii].tags);
     };
     double distkm = lngLatDist(app->currLocation.lngLat(), res.pos);
     double dist = app->metricUnits ? distkm : distkm*0.621371;
@@ -529,7 +558,7 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
     distText->node->setAttribute("font-size", "12");
     distText->node->setAttribute("margin", "0 8 0 0");
     item->selectFirst(".child-container")->addWidget(distText);
-    item->node->setAttribute("__querytext", res.tags["name"].GetString());
+    item->node->setAttribute("__querytext", namestr.c_str());
     resultsContent->addWidget(item);
   }
 }

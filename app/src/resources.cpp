@@ -139,9 +139,9 @@ void initResources(const char* baseDir)
 
 namespace Tangram {
 
-bool userLoadSvg(char* svg, Texture* texture)
+bool userLoadSvg(const char* svg, size_t len, Texture* texture)
 {
-  std::unique_ptr<SvgDocument> doc(SvgParser().parseString(svg));
+  std::unique_ptr<SvgDocument> doc(SvgParser().parseString(svg, len));
   if(!doc) return false;
 
   Painter boundsPaint(Painter::PAINT_NULL);

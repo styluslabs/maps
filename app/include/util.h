@@ -18,7 +18,7 @@ TileID lngLatTile(LngLat ll, int z);
 LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord);
 LngLat parseLngLat(const char* s);
 
-std::string yamlToStr(const YAML::Node& node);
+std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false);
 template<typename T>
 void yamlRemove(YAML::Node node, T key);
 std::string osmIdFromProps(const rapidjson::Document& props);

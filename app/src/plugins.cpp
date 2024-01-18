@@ -285,7 +285,8 @@ static int addSearchResult(duk_context* ctx)
 static int addMapSource(duk_context* ctx)
 {
   const char* keystr = duk_require_string(ctx, 0);
-  const char* yamlstr = duk_require_string(ctx, 1);
+  // accept string or JS object
+  const char* yamlstr = duk_is_string(ctx, 1) ? duk_require_string(ctx, 1) : duk_json_encode(ctx, 1);
   try {
     PluginManager::inst->app->mapsSources->addSource(keystr, YAML::Load(yamlstr, strlen(yamlstr)));
   } catch (std::exception& e) {
@@ -352,6 +353,16 @@ static int notifyError(duk_context* ctx)
   return 0;
 }
 
+static int readSceneValue(duk_context* ctx)
+{
+  std::string yamlPath = duk_require_string(ctx, 0);
+  YAML::Node yamlVal = PluginManager::inst->app->readSceneValue(yamlPath);
+  std::string jsonStr = yamlToStr(yamlVal, true);
+  duk_push_string(ctx, jsonStr.c_str());
+  duk_json_decode(ctx, -1);
+  return 1;
+}
+
 void PluginManager::createFns(duk_context* ctx)
 {
   // create C functions
@@ -373,6 +384,8 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addRouteGPX");
   duk_push_c_function(ctx, addRoutePolyline, 1);
   duk_put_global_string(ctx, "addRoutePolyline");
+  duk_push_c_function(ctx, readSceneValue, 1);
+  duk_put_global_string(ctx, "readSceneValue");
 }
 
 // for now, we need somewhere to put TextEdit for entering JS commands; probably would be opened from

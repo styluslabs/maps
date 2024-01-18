@@ -13,6 +13,7 @@
 #include "mapwidgets.h"
 
 #include "offlinemaps.h"
+#include "plugins.h"
 
 // Source selection
 
@@ -164,19 +165,24 @@ int64_t MapsSources::shrinkCache(int64_t maxbytes)
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 {
   mapSources[key] = srcnode;
-  mapSources[key]["__plugin"] = true;
+  if(!mapSources[key]["__plugin"])
+    saveSourcesNeeded = true;
+  if(sourcesPanel && sourcesPanel->isVisible())
+    populateSources();
+  else
+    sourcesDirty = true;
   //for(auto& k : layerkeys) -- TODO: if modified layer is in use, reload
 }
 
 void MapsSources::saveSources()
 {
+  saveSourcesNeeded = false;
   if(srcFile.empty()) return;
   YAML::Node sources = YAML::Node(YAML::NodeType::Map);
   for(auto& node : mapSources) {
-    if(!node.second["__plugin"])
+    if(!node.second["__plugin"])  // plugin can set this flag for sources which should not be saved
       sources[node.first] = node.second;
   }
-
   YAML::Emitter emitter;
   //emitter.SetStringFormat(YAML::DoubleQuoted);
   emitter << sources;
@@ -426,6 +432,8 @@ void MapsSources::populateSources()
 void MapsSources::onMapEvent(MapEvent_t event)
 {
   if(event == SUSPEND) {
+    if(saveSourcesNeeded)
+      saveSources();
     std::vector<std::string> order = sourcesContent->getOrder();
     if(order.empty()) return;
     YAML::Node ordercfg = app->config["sources"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
@@ -462,13 +470,19 @@ void MapsSources::onMapEvent(MapEvent_t event)
   }
 }
 
-void MapsSources::updateSceneVar(const std::string& path, const std::string& newval, bool reload)
+void MapsSources::updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload)
 {
   app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
       [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
   app->sceneUpdates.push_back(SceneUpdate{path, newval});
   sourceModified();
-  if(reload) {
+
+  if(!onchange.empty()) {
+    app->map->updateGlobals({app->sceneUpdates.back()});
+    app->pluginManager->jsCallFn(onchange.c_str());
+    rebuildSource(currSource);  // plugin will update mapSources, so we need to reload completely
+  }
+  else if(reload) {
     app->loadSceneFile();
     sceneVarsLoaded = false;
   }
@@ -516,6 +530,7 @@ void MapsSources::populateSceneVars()
   for(const auto& var : vars) {
     std::string name = var.first.Scalar();  //.as<std::string>("");
     std::string label = var.second["label"].as<std::string>("");
+    std::string onchange = var.second["onchange"].as<std::string>("");
     std::string stylename = var.second["style"].as<std::string>("");
     bool reload = var.second["reload"].as<std::string>("") != "false";
     if(!stylename.empty()) {  // shader uniform
@@ -528,15 +543,37 @@ void MapsSources::populateSceneVars()
       if(value == "true" || value == "false") {
         auto checkbox = createCheckBox("", value == "true");
         checkbox->onToggled = [=](bool newval){
-          updateSceneVar("global." + name, newval ? "true" : "false", reload);
+          updateSceneVar("global." + name, newval ? "true" : "false", onchange, reload);
         };
         varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
+      }
+      else if(var.second["choices"]) {
+        std::vector<std::string> choices;
+        for(const auto& choice : var.second["choices"])
+          choices.push_back(choice.Scalar());
+        auto combobox = createComboBox(choices);
+        combobox->setText(value.c_str());
+        combobox->onChanged = [=](const char* val){
+          updateSceneVar("global." + name, val, onchange, reload);
+        };
+        varsContent->addWidget(createTitledRow(label.c_str(), combobox));
+      }
+      else if(var.second["type"].as<std::string>("") == "date") {
+        auto parts = splitStr<std::vector>(value, " -/");
+        if(parts.size() != 3) parts = {"2024", "01", "01"};
+        int year0 = atoi(parts[0].c_str());
+        int month0 = atoi(parts[1].c_str());  // + (parts[1].front() == '0' ? 1 : 0));
+        int day0 = atoi(parts[2].c_str());  // + (parts[2].front() == '0' ? 1 : 0));
+        auto datepicker = createDatePicker(year0, month0, day0, [=](int year, int month, int day){
+          updateSceneVar("global." + name, fstring("%04d-%02d-%02", year, month, day), onchange, reload);
+        });
+        varsContent->addWidget(createTitledRow(label.c_str(), datepicker));
       }
       else {
         auto textedit = createTitledTextEdit(label.c_str(), value.c_str());
         textedit->addHandler([=](SvgGui* gui, SDL_Event* event){
           if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
-            updateSceneVar("global." + name, textedit->text(), reload);
+            updateSceneVar("global." + name, textedit->text(), onchange, reload);
             return true;
           }
           return false;

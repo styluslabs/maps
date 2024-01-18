@@ -215,8 +215,10 @@ poiClassRanks   = { hospital=1, railway=2, bus=3, attraction=4, harbor=5, colleg
           park=13, library=14, police=15, post=16, golf=17, shop=18, grocery=19,
           fast_food=20, clothing_store=21, bar=22 }
 
-waterClasses    = Set { "river", "riverbank", "stream", "canal", "drain", "ditch", "dock" }
 waterwayClasses = Set { "stream", "river", "canal", "drain", "ditch" }
+waterwayAreas   = Set { "river", "riverbank", "stream", "canal", "drain", "ditch", "dock" }
+waterLanduse    = Set { "reservoir", "basin", "salt_pond" }
+noNameWater     = Set { "river", "basin", "wastewater", "canal", "stream", "ditch", "drain" }
 manMadeClasses  = Set { "pier", "breakwater", "groyne" }  -- "storage_tank", "water_tap", "dyke", "lighthouse"
 
 transitRoutes = { train = 8, subway = 10, tram = 12, share_taxi = 12, light_rail = 12, bus = 14, trolleybus = 14 }
@@ -330,13 +332,7 @@ function way_function(way)
     way:Layer("boundary",false)
     way:AttributeNumeric("admin_level", admin_level)
     way:MinZoom(mz)
-    -- disputed status (0 or 1). some styles need to have the 0 to show it.
-    local disputed = way:Find("disputed")
-    if disputed=="yes" then
-      way:AttributeNumeric("disputed", 1)
-    else
-      way:AttributeNumeric("disputed", 0)
-    end
+    if way:Find("disputed")=="yes" then way:AttributeNumeric("disputed", 1) end
   end
 
   -- Roads ('transportation' and 'transportation_name', plus 'transportation_name_detail')
@@ -551,23 +547,6 @@ function way_function(way)
     end
   end
 
-  -- Set 'waterway' and associated
-  if waterwayClasses[waterway] and not isClosed then
-    if waterway == "river" and way:Holds("name") then
-      way:Layer("waterway", false)
-    else
-      way:Layer("waterway_detail", false)
-    end
-    if way:Find("intermittent")=="yes" then way:AttributeNumeric("intermittent", 1) else way:AttributeNumeric("intermittent", 0) end
-    way:Attribute("class", waterway)
-    way:Attribute("waterway", waterway)
-    SetNameAttributes(way)
-    SetBrunnelAttributes(way)
-  elseif waterway == "boatyard"  then way:Layer("landuse", isClosed); way:Attribute("class", "industrial"); way:MinZoom(12)
-  elseif waterway == "dam"       then way:Layer("building", isClosed)
-  elseif waterway == "fuel"      then way:Layer("landuse", isClosed); way:Attribute("class", "industrial"); way:MinZoom(14)
-  end
-
   -- Set 'building' and associated
   if building~="" then
     way:Layer("building", true)
@@ -582,12 +561,29 @@ function way_function(way)
     end
   end
 
-  -- Set 'water'
+  -- waterway is single way indicating course of a waterway - wide rivers, etc. have additional polygons to map area
+  if waterwayClasses[waterway] and not isClosed then
+    if waterway == "river" and way:Holds("name") then
+      way:Layer("waterway", false)
+    else
+      way:Layer("waterway_detail", false)
+    end
+    if way:Find("intermittent")=="yes" then way:AttributeNumeric("intermittent", 1) end
+    way:Attribute("class", waterway)
+    way:Attribute("waterway", waterway)
+    SetNameAttributes(way)
+    SetBrunnelAttributes(way)
+  elseif waterway == "boatyard"  then way:Layer("landuse", isClosed); way:Attribute("class", "industrial"); way:MinZoom(12)
+  elseif waterway == "dam"       then way:Layer("building", isClosed)
+  elseif waterway == "fuel"      then way:Layer("landuse", isClosed); way:Attribute("class", "industrial"); way:MinZoom(14)
+  end
+
+  -- Water areas (closed ways)
   local waterbody = ""
-  if natural=="water" or natural=="bay" then waterbody = natural
+  if waterLanduse[landuse] then waterbody = landuse
+  elseif waterwayAreas[waterway] then waterbody = waterway
   elseif leisure=="swimming_pool" then waterbody = leisure
-  elseif landuse=="reservoir" or landuse=="basin" then waterbody = landuse
-  elseif waterClasses[waterway] then waterbody = waterway
+  elseif natural=="water" or natural=="bay" then waterbody = natural
   end
 
   if waterbody~="" then
@@ -598,11 +594,11 @@ function way_function(way)
     way:Layer("water", true)
     SetMinZoomByArea(way)
     way:Attribute("class", class)
-    way:Attribute("waterbody", waterbody)
+    way:Attribute("water", water~="" and water or waterbody)
 
     if way:Find("intermittent")=="yes" then way:Attribute("intermittent",1) end
-    -- don't show names for minor man-made basins (e.g. ways 25958687, 27201902, 25309134, 24579306)
-    if way:Holds("name") and natural=="water" and water ~= "basin" and water ~= "wastewater" then
+    -- don't include names for minor man-made basins (e.g. way 25958687) or rivers, which have name on waterway way
+    if way:Holds("name") and natural=="water" and not noNameWater[water] then
       --way:LayerAsCentroid("water_name_detail")
       SetNameAttributes(way, 14)
       --SetMinZoomByArea(way)

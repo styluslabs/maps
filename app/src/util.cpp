@@ -99,9 +99,10 @@ LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord)
   return MapProjection::projectedMetersToLngLat(meters);
 }
 
-std::string yamlToStr(const YAML::Node& node)
+std::string yamlToStr(const YAML::Node& node, bool quoteStrings)
 {
   YAML::Emitter emitter;
+  if(quoteStrings) emitter.SetStringFormat(YAML::DoubleQuoted);
   emitter.SetSeqFormat(YAML::Flow);
   emitter.SetMapFormat(YAML::Flow);
   emitter << node;

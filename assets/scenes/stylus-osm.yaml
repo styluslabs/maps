@@ -156,6 +156,11 @@ global:
     priority_place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
     priority_place_fn: function() { return (global.priority_place[feature.class] || 14) + 100.0/(100 + (feature.population || 1)); }
 
+    # bounds for country-specific filters
+    japan_bounds:  # covers main islands, does not include Okinawa, etc
+        - { $latitude: {min: 31, max: 41.8}, $longitude: {min: 129.6, max: 142.3} }
+        - { $latitude: {min: 41.1, max: 45.8}, $longitude: {min: 139.2, max: 146.3} }
+
     # if we want to easily add on top of various raster sources, have MapsSources set global._vector_order to
     #  layer number for vector source
     show_polygons: true  # function() { return !(global._vector_order > 0); }
@@ -171,12 +176,18 @@ global:
         show_trails: { label: Hike }
         show_motorways: { label: Motorways }
 
-    # specify fields indexed for search
+    # specify fields indexed for search and filter to select indexed features
     search_data:
         - layer: poi
-          fields: name, name_en, amenity, leisure, shop, sport, tourism, cuisine
+          fields: [name, name_en, amenity, leisure, shop, sport, tourism, cuisine]
+          filter:
+              - name: true
+                not:
+                    - highway: [bus_stop]
+              - amenity: [drinking_water, toilets]
         - layer: place
-          fields: name, name_en
+          fields: [name, name_en]
+          filter: { name: true }
 
 
 sources:
@@ -337,6 +348,26 @@ layers:
                 order: 1
                 color: global.color.parks
 
+    pier:
+        data: { source: osm, layer: landuse }
+        enabled: global.show_polygons
+        filter: { man_made: [pier, breakwater, groyne] }
+        pier_areas:
+            filter: { $geometry: polygon }  #$zoom: { min: 13 }
+            pier: { filter: { man_made: pier }, draw: { polygons: { color: global.color.pier } } }
+            draw:
+                polygons:
+                    order: 9
+                    color: global.color.breakwater
+        pier_lines:
+            filter: { $geometry: line }
+            pier: { filter: { man_made: pier }, draw: { lines: { color: global.color.pier } } }
+            draw:
+                lines:
+                    order: 9
+                    color: global.color.breakwater
+                    width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
+
     water:
         data: { source: osm, layer: water }
         enabled: global.show_polygons
@@ -354,6 +385,7 @@ layers:
         data: { source: osm, layer: water }
         filter:
             name: true
+            #water: true
             $geometry: [polygon, point]
             any: [ { $zoom: { min: 17 } }, { area: { min: 500px2 } } ]
         draw:
@@ -366,13 +398,13 @@ layers:
                     fill: global.color.water_name
                     stroke: { color: global.color.water_halo, width: 2 }
                     style: italic
-                    size: 12px
+                    size: [[16, 12px], [17, 14px]]
         oceans:
             filter: { class: ocean, $zoom: { min: 1, max: 8 } }
-            draw: { text: { font: { size: 14pt } } }
-        seas:
-            filter: { class: [lake, sea], $zoom: { min: 7 } }
-            draw: { text: { font: { size: [[9, 9px], [17, 10px], [18, 12px]] } } }
+            draw: { text: { font: { size: 14px } } }
+        #seas:
+        #    filter: { class: [lake, sea], $zoom: { min: 7 } }
+        #    draw: { text: { font: { size: [[9, 9px], [17, 10px], [18, 12px]] } } }
 
     waterway:
         data: { source: osm, layer: water }
@@ -388,8 +420,9 @@ layers:
         data: { source: osm, layer: water }
         filter:
             name: true
-            class: river
-        enabled: global.show_polygons
+            #waterway: true
+            $geometry: line
+            any: [ { $zoom: { min: 17 } }, { waterway: river } ]
         draw:
             text:
                 text_source: global.names_one_line
@@ -399,9 +432,7 @@ layers:
                     fill: global.color.water_name
                     stroke: { color: global.color.water_halo, width: 2 }
                     style: italic
-                    size: [[11, 0px], [12, 8px], [14, 9px], [16, 10px], [17, 11px]]
-        #minor:
-        #    filter: { class: [stream, canal] }
+                    size: [[11, 0px], [12, 10px], [14, 11px], [16, 12px], [17, 14px]]
 
     transportation:
         data: { source: osm, layer: transportation }
@@ -521,25 +552,6 @@ layers:
                 filter: { brunnel: tunnel }
                 draw: { lines: { color: global.color.rail_tunnel } }
 
-        pier:
-            filter: { class: [pier, breakwater, groyne] }
-            enabled: global.show_polygons
-            pier_areas:
-                filter: { $geometry: polygon }  #$zoom: { min: 13 }
-                pier: { filter: { class: pier }, draw: { polygons: { color: global.color.pier } } }
-                draw:
-                    polygons:
-                        order: 9
-                        color: global.color.breakwater
-            pier_lines:
-                filter: { $geometry: line }
-                pier: { filter: { class: pier }, draw: { lines: { color: global.color.pier } } }
-                draw:
-                    lines:
-                        order: 9
-                        color: global.color.pier
-                        width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
-
         ferry:
             filter: { class: ferry }
             draw:
@@ -642,8 +654,7 @@ layers:
                 - $zoom: { min: 13 }
         draw:
             points:
-                #style: poi-points
-                #color: red
+                visible: function() { return feature.ref.split(";")[0].length <= 8; }
                 style: points
                 texture: pois
                 sprite: shield  #function() { return feature.network; }
@@ -651,7 +662,14 @@ layers:
                 priority: global.priority_motorway_ref
                 # faster roads get higher priority
                 #priority: function() { return global.priority_motorway_ref - parseInt(feature.maxspeed)/200; }
-                size: function() { return [(feature.ref.split(";")[0].length || 4)*6.5, 14]; }
+                size: |
+                    function() {
+                        const str = feature.ref.split(";")[0];
+                        var w = 0;
+                        // exact values will depend on font
+                        for (var ii = 0; ii < str.length; ii++) { w += (str[ii] == " ") ? 3.5 : 7.5; }
+                        return [w, 14];
+                    }
                 # midpoint generates too many labels (overwhelming label collider)
                 placement: spaced
                 placement_spacing: 30px
@@ -869,7 +887,7 @@ layers:
                 - { route: [bus, trolleybus], $zoom: {min: 14} }
         draw:
             lines:
-                width: [[13, 3px], [14, 4px]]
+                width: [[10, 2px], [13, 3px], [14, 4px]]
                 order: 150
                 #style: transit-lines
                 color: global.transit_color_fn
@@ -1375,27 +1393,48 @@ layers:
             neighborhoods:
                 exclusive: true
                 filter:
-                    - { class: [neighbourhood, quarter], $zoom: { min: 13 } }
-                    - { place_CN: [subdistrict, neighbourhood], $zoom: { min: 13 } }
+                    - { class: [neighbourhood, quarter], $zoom: { min: 13, max: 19 } }
+                    - { place_CN: [subdistrict, neighbourhood], $zoom: { min: 13, max: 17 } }
                     - { place_CN: [district], $zoom: { min: 11, max: 14 } }
                     #- { class: microhood, $zoom: { min: 15 } }
                 draw:
                     text:
+                        visible: false
                         priority: global.priority_neighborhood
-                        visible: true
-                        interactive: false
+                        #interactive: true
                         font:
                             size: [[13, 11px], [14, 11px], [15, 13px]]
                             style: italic
                             fill: global.color.hood_name
                             stroke: { color: global.color.hood_halo }
                             transform: uppercase
-                district:
+                japan_chome:
+                    # Japan "chome" districts tagged as neighborhoods in OSM - much smaller than neighborhoods
+                    #  in other countries, so adjust zoom level range
+                    exclusive: true
+                    priority: 1
+                    filter:
+                        any: global.japan_bounds
+                        $zoom: { min: 17, max: 19 }
+                    draw:
+                        text:
+                            visible: true
+                            #priority: global.priority_housenumber
+                            font:
+                                size: 12px
+                china_district:
+                    exclusive: true
+                    priority: 2
                     filter: { place_CN: [district] }
                     draw:
                         text:
+                            visible: true
                             priority: global.priority_district_CN
                             font:
                                 fill: global.color.place_name
                                 size: [[11, 11px], [12, 11px], [13, 13px]]
+                default:
+                    # by default, show neighborhoods between z13 and z17
+                    filter: { $zoom: { min: 13, max: 17 } }
+                    draw: { text: { visible: true } }
 

@@ -4,6 +4,7 @@
 #include "util.h"
 #include "yaml-cpp/yaml.h"
 #include "rapidjson/document.h"
+#include "scene/filters.h"
 
 #include "ugui/svggui.h"
 
@@ -12,6 +13,7 @@ using Tangram::TileTask;
 struct SearchData {
   std::string layer;
   std::vector<std::string> fields;
+  Tangram::Filter filter;
 };
 
 struct SearchResult

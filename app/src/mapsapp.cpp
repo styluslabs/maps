@@ -133,6 +133,13 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(!placeInfoProto)
     placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
+  if(namestr.empty() && props.IsObject()) {
+    if(props.HasMember("name_en"))
+      namestr = props["name_en"].GetString();
+    if(namestr.empty() && props.HasMember("name"))
+      namestr = props["name"].GetString();
+  }
+
   std::string osmid = osmIdFromProps(props);
   pickResultCoord = pos;
   pickResultName = namestr;
@@ -143,8 +150,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(mapsTracks->onPickResult())
     return;
 
-  if(namestr.empty())
-    namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
+  // Need something to show for name, but we do not want to use this for pickNameResult
+  std::string placetype = osmPlaceType(props);
+  if(namestr.empty()) {
+    if(!placetype.empty())
+      namestr.swap(placetype);
+    else
+      namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
+  }
   // show marker
   if(pickResultMarker == 0)
     pickResultMarker = map->markerAdd();
@@ -194,8 +207,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     distwdgt->setText(fstring(metricUnits ? "%.1f km" : "%.1f mi", metricUnits ? dist : dist*0.621371).c_str());
   }
 
-  // get place type
-  std::string placetype = osmPlaceType(props);
+  // show place type
   SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
   if(placenode && !placetype.empty())
     placenode->addText(placetype.c_str());
@@ -417,11 +429,10 @@ void MapsApp::tapEvent(float x, float y)
       itemId = props->getAsString("osm_id");
     if(osmType.empty())
       osmType = "node";
-    std::string namestr = props->getAsString("name");
     // clear panel history unless editing track/route
     if(!mapsTracks->activeTrack)
       showPanel(infoPanel);    //mapsSearch->clearSearch();
-    setPickResult(result->coordinates, namestr, props->toJson());
+    setPickResult(result->coordinates, "", props->toJson());
     tapLocation = {NAN, NAN};
   });
 
