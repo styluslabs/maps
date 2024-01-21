@@ -374,6 +374,17 @@ void MapsSources::populateSources()
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowBtn->setMenu(overflowMenu);
 
+    overflowMenu->addItem("Clear cache", [=](){
+      auto& tileSources = app->map->getScene()->tileSources();
+      for(auto& tilesrc : tileSources) {
+        auto& info = tilesrc->offlineInfo();
+        if(info.cacheFile.empty()) continue;
+        auto datasrc = std::make_unique<Tangram::MBTilesDataSource>(
+                *app->platform, tilesrc->name(), info.cacheFile, "", true);
+        datasrc->deleteOldTiles(INT_MAX);
+      }
+    });
+
     overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
       if(archived)
         mapSources[key].remove("archived");
@@ -565,7 +576,7 @@ void MapsSources::populateSceneVars()
         int month0 = atoi(parts[1].c_str());  // + (parts[1].front() == '0' ? 1 : 0));
         int day0 = atoi(parts[2].c_str());  // + (parts[2].front() == '0' ? 1 : 0));
         auto datepicker = createDatePicker(year0, month0, day0, [=](int year, int month, int day){
-          updateSceneVar("global." + name, fstring("%04d-%02d-%02", year, month, day), onchange, reload);
+          updateSceneVar("global." + name, fstring("%04d-%02d-%02d", year, month, day), onchange, reload);
         });
         varsContent->addWidget(createTitledRow(label.c_str(), datepicker));
       }

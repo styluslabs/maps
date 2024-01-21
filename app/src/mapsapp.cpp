@@ -385,15 +385,7 @@ void MapsApp::longPressEvent(float x, float y)
 
 void MapsApp::doubleTapEvent(float x, float y)
 {
-  //map->handleDoubleTapGesture(x, y);
-  LngLat tapped, current;
-  map->screenPositionToLngLat(x, y, &tapped.longitude, &tapped.latitude);
-  map->getPosition(current.longitude, current.latitude);
-  auto pos = map->getCameraPosition();
-  pos.zoom += 1.f;
-  pos.longitude = tapped.longitude;
-  pos.latitude = tapped.latitude;
-  map->setCameraPositionEased(pos, 0.5f, Tangram::EaseType::quint);
+  map->handleDoubleTapGesture(x, y);
 }
 
 void MapsApp::clearPickResult()
@@ -1047,6 +1039,12 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     };
     debugMenu->addItem(debugCb);
   }
+  Button* offlineCb = createCheckBoxMenuItem("Offline");
+  offlineCb->onClicked = [=](){
+    offlineCb->setChecked(!offlineCb->isChecked());
+    platform->isOffline = offlineCb->isChecked();
+  };
+  debugMenu->addItem(offlineCb);
   // dump contents of tile in middle of screen
   debugMenu->addItem("Dump tile", [this](){
     dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
@@ -1098,7 +1096,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsContent->addWidget(crossHair);
 
   legendContainer = createColumn();
-  legendContainer->node->setAttribute("box-anchor", "bottom");
+  legendContainer->node->setAttribute("box-anchor", "hfill bottom");
   legendContainer->node->addClass("legend");
   legendContainer->setMargins(0, 0, 10, 0);
   mapsContent->addWidget(legendContainer);
@@ -1384,6 +1382,8 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   platform = _platform;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
+  // Google Maps and Apple Maps use opposite scaling for this gesture, so definitely needs to be configurable
+  touchHandler->dblTapDragScale = config["gestures"]["dbl_tap_drag_scale"].as<float>(1.0f);
 
   initResources(baseDir.c_str());
 

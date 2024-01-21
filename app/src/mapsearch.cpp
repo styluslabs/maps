@@ -343,7 +343,7 @@ void MapsSearch::onMapEvent(MapEvent_t event)
     }
   }
   bool zoomedin = map->getZoom() - prevZoom > 0.5f;
-  bool zoomedout = map->getZoom() - prevZoom < 0.5f;
+  bool zoomedout = map->getZoom() - prevZoom < -0.5f;
   bool mapmoved = lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude;
   // don't search until animation stops
@@ -637,8 +637,10 @@ Button* MapsSearch::createPanel()
         return true;
       }
     }
-    else if(event->type == SvgGui::FOCUS_GAINED)  // || event->type == SvgGui::FOCUS_LOST)
-      app->maximizePanel(true);  //event->type == SvgGui::FOCUS_GAINED);
+    else if(event->type == SvgGui::FOCUS_GAINED) {
+      app->maximizePanel(true);
+      retryBtn->setVisible(false);  // we could consider keeping visible
+    }
     return false;
   });
 

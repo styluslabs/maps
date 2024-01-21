@@ -26,6 +26,8 @@ public:
   float prevDist = 0;
   float prevAngle = 0;
   float xyScale = 1.0f;
+  float dblTapDragScale = 1.0f;
 
-  enum {TOUCH_NONE, TOUCH_PINCH, TOUCH_ROTATE, TOUCH_SHOVE} multiTouchState;
+  enum { TOUCH_NONE, TOUCH_PINCH, TOUCH_ROTATE, TOUCH_SHOVE } multiTouchState;
+  enum { TAP_NONE, DBL_TAP_DRAG_PENDING, DBL_TAP_DRAG_ACTIVE } tapState;
 };

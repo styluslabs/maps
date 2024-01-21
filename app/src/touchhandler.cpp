@@ -34,7 +34,14 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
       (event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK)) {
     if(event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK)
       return false;
-    if(event->type == SDL_FINGERUP) {
+    if(event->type == SDL_FINGERDOWN) {
+      tapState = gui->fingerClicks == 2 ? DBL_TAP_DRAG_PENDING : TAP_NONE;
+    }
+    else if(event->type == SDL_FINGERMOTION) {
+      if(tapState == DBL_TAP_DRAG_PENDING && gui->fingerClicks == 0)
+        tapState = DBL_TAP_DRAG_ACTIVE;
+    }
+    else if(event->type == SDL_FINGERUP) {
       if(gui->fingerClicks > 0) {
         app->map->handlePanGesture(prevCOM.x, prevCOM.y, initCOM.x, initCOM.y);  // undo any panning
         if(gui->fingerClicks == 1)
@@ -134,7 +141,12 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
   }
   else if(prevpoints > 0) {
-    if(prevpoints == 1) {
+    if(tapState == DBL_TAP_DRAG_ACTIVE) {
+      float h = app->map->getViewportHeight();
+      // alternative is to zoom from center of map instead of tap point - float cx = w/2, cy = h/2;
+      map->handlePinchGesture(initCOM.x, initCOM.y, std::pow(2.0f, dblTapDragScale*(pt.y - prevCOM.y)/h), 0.f);
+    }
+    else if(prevpoints == 1) {
       map->handlePanGesture(prevCOM.x, prevCOM.y, pt.x, pt.y);
     }
     prevCOM = pt;

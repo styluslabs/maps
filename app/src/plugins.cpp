@@ -359,7 +359,8 @@ static int readSceneValue(duk_context* ctx)
   YAML::Node yamlVal = PluginManager::inst->app->readSceneValue(yamlPath);
   std::string jsonStr = yamlToStr(yamlVal, true);
   duk_push_string(ctx, jsonStr.c_str());
-  duk_json_decode(ctx, -1);
+  if(!jsonStr.empty())
+    duk_json_decode(ctx, -1);
   return 1;
 }
 

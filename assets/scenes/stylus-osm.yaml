@@ -71,7 +71,7 @@ global:
         park_halo: white
         housenumber: [0.30,0.30,0.30]  #"#d2b17d"
         housenumber_halo: [0.913,0.925,0.933]  #rgba(38,38,38,0.15)
-        aerialway: '#444'
+        aerialway: '#555'
         aerialway_name: black
         aerialway_halo: white
         piste_name: black
@@ -561,7 +561,7 @@ layers:
                     width: [[14, 1px], [18, 2px]]
 
         aerialway:
-            filter: { class: aerialway }
+            filter: { class: aerialway, $zoom: { min: 10 } }
             draw:
                 lines:
                     order: 150  # aerialway would more often be over bridge vs under
@@ -569,21 +569,25 @@ layers:
                     width: [[14, 0.5px], [15, 1.0px], [16, 2m]]
                 # maybe use dashed line instead?
                 points:
+                    visible: false
                     color: global.color.aerialway
                     size: [[14, 1.25px], [15, 3px], [16, 3px]]
                     collide: false
                     placement: spaced
                     placement_spacing: 10px
                     placement_min_length_ratio: 0
+            show_points:
+                filter: { $zoom: { min: 13 } }
+                draw: { points: { visible: true } }
             gondola:
                 filter: { aerialway: [gondola, cable_car, mixed_lift] }
                 draw:
-                    lines: { width: [[12, 1px], [13, 1px], [14, 2px], [15, 2.5px], [16, 2.5px]] }
+                    lines: { width: [[10,0.5px], [11,1px], [12, 1.5px], [13, 1.5px], [14, 2px], [15, 2.5px]] }
                     points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
             chair_lift:
                 filter: { aerialway: chair_lift }
                 draw:
-                    lines: { width: [[12, 1px], [13, 1px], [14, 2px], [15, 2.5px], [16, 2.5px]] }
+                    lines: { width: [[10,0.5px], [11,1px], [12, 1.5px], [13, 1.5px], [14, 2px], [15, 2.5px]] }
                     points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
             aerialway_label:
                 filter: { $zoom: { min: 14 } }
@@ -611,9 +615,10 @@ layers:
                 filter: { $geometry: line }
                 draw:
                     lines:
+                        visible: global.show_trails
                         order: 65
                         color: global.piste_color_fn
-                        width: [[10,0px],[11,1px],[12,1.25px],[13,2px],[18,3m]]
+                        width: [[10,0.5px],[11,1px],[12,1.25px],[13,2px],[18,3m]]
                         outline:
                             color: global.color.piste_halo
                             width: [[13, 0px], [14, 2px]]
@@ -625,6 +630,9 @@ layers:
                             fill: global.piste_color_fn
                             stroke: { color: global.color.piste_halo, width: 3 }
                             size: 12px
+                default:
+                    filter: { $zoom: { min: 12 } }
+                    draw: { lines: { visible: true } }
 
         road-icons:
             arrows:
@@ -647,7 +655,9 @@ layers:
         filter:
             #function() { const s = feature.maxspeed.split(" "); return parseInt(s[0]) >= (s[1] == "mph" ? 50 : 80); }
             ref: true
-            not: { class: [transit, route, aeroway] }
+            aeroway: false
+            route: false
+            #not: { class: [transit, route, aeroway] }
             any:
                 - { class: motorway, $zoom: { min: 5 } }
                 - { class: [trunk, primary], $zoom: { min: 10 } }
@@ -776,10 +786,10 @@ layers:
 
     airports:
         data: { source: osm, layer: transportation }
+        enabled: global.show_polygons
         filter: { aeroway: true }
 
         footprint:
-            enabled: global.show_polygons
             filter: { aeroway: aerodrome }
             draw:
                 polygons:
@@ -1395,7 +1405,7 @@ layers:
                 filter:
                     - { class: [neighbourhood, quarter], $zoom: { min: 13, max: 19 } }
                     - { place_CN: [subdistrict, neighbourhood], $zoom: { min: 13, max: 17 } }
-                    - { place_CN: [district], $zoom: { min: 11, max: 14 } }
+                    - { place_CN: [district], $zoom: { min: 11, max: 14 } }  # usually tagged with place=city
                     #- { class: microhood, $zoom: { min: 15 } }
                 draw:
                     text:
@@ -1413,15 +1423,15 @@ layers:
                     #  in other countries, so adjust zoom level range
                     exclusive: true
                     priority: 1
-                    filter:
-                        any: global.japan_bounds
-                        $zoom: { min: 17, max: 19 }
-                    draw:
-                        text:
-                            visible: true
-                            #priority: global.priority_housenumber
-                            font:
-                                size: 12px
+                    filter: global.japan_bounds
+                    shown:
+                        filter: { $zoom: { min: 17, max: 19 } }
+                        draw:
+                            text:
+                                visible: true
+                                #priority: global.priority_housenumber
+                                font:
+                                    size: 12px
                 china_district:
                     exclusive: true
                     priority: 2
@@ -1437,4 +1447,3 @@ layers:
                     # by default, show neighborhoods between z13 and z17
                     filter: { $zoom: { min: 13, max: 17 } }
                     draw: { text: { visible: true } }
-

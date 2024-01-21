@@ -1,0 +1,27 @@
+// refs:
+// - https://nasa-gibs.github.io/gibs-api-docs/
+// - https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&request=GetCapabilities (to get TileMatrixSet values)
+
+function nasaWorldView()
+{
+  const date = readSceneValue("global.worldview_date") || "2024-01-01";
+  const tileUrl = "https://gitc-{s}.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/" + date + "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg"
+
+  const updates = {
+    "global.worldview_date": date,
+    "global.gui_variables.worldview_date": { "label": "Date", "type": "date", "onchange": "nasaWorldView" },
+  };
+  const mapSrc = {
+    "title": "NASA Worldview " + date,
+    "url": tileUrl,
+    "url_subdomains": ["a", "b", "c"],
+    //"tile_size": 512,
+    //"headers": headers,
+    "max_zoom": 8,
+    "cache": false,
+    "updates": updates
+  };
+  addMapSource("nasa-worldview", mapSrc);
+}
+
+nasaWorldView();

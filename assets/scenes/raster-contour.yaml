@@ -33,10 +33,11 @@ global:
         #    label: Contour Color
 
     __legend:
+        # menu item to toggle will be created for each item; 340px/150dpi = 2.26in (iPhone mini width)
         slope_angle:
             title: Slope Angle
             svg: |
-                <svg xmlns="http://www.w3.org/2000/svg" width="400" height="80">
+                <svg xmlns="http://www.w3.org/2000/svg" width="340" height="68">
                   <defs>
                     <linearGradient id="grad" x1="0" x2="1.111">
                       <stop offset="0.00" stop-color="#00FF00" />
@@ -48,8 +49,8 @@ global:
                     </linearGradient>
                   </defs>
 
-                  <rect x="0" y="0" rx="4" ry="4" width="400" height="80" fill="white" />
-                  <g transform="translate(20, 8) scale(4)">
+                  <rect x="0" y="0" rx="4" ry="4" width="340" height="68" fill="white" />
+                  <g transform="translate(16, 8) scale(3.4)">
                     <rect x="0" y="0" rx="1" ry="1" width="90" height="12" fill="url(#grad)" />
                     <g transform="translate(-2, 16)" font-size="4">
                       <!-- text x="0" y="0">0°</text -->
