@@ -733,9 +733,17 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
 {
   onApplyLayout = [this](const Rect& src, const Rect& dest){
     if(dest != viewport) {
+      Map* map = app->map.get();
       Rect r = dest * (1/app->gui->inputScale);
       real y = window()->winBounds().height()/app->gui->inputScale - r.bottom;
-      app->map->setViewport(int(r.left + 0.5), int(y + 0.5), int(r.width() + 0.5), int(r.height() + 0.5));
+      int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
+      LngLat pos;
+      map->screenPositionToLngLat(w/2.0, h/2.0, &pos.longitude, &pos.latitude);
+      map->setViewport(int(r.left + 0.5), int(y + 0.5), w, h);
+      // by default, map center is preserved by resize, but we want upper left corner to be fixed instead
+      // ... but skip on initial layout (detected by Rect viewport not yet set)
+      if(viewport.isValid())
+        map->setPosition(pos.longitude, pos.latitude);
       app->platform->requestRender();
     }
     if(src != dest)
@@ -1499,7 +1507,10 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   if(flyToPickResult) {
     // ensure marker is visible and hasn't been covered by opening panel
     Point scr;
-    CameraPosition campos = {pickResultCoord.longitude, pickResultCoord.latitude, std::min(map->getZoom(), 16.0f)};
+    auto campos = map->getCameraPosition();
+    campos.longitude = pickResultCoord.longitude;
+    campos.latitude = pickResultCoord.latitude;
+    campos.zoom = std::min(campos.zoom, 16.0f);
     if(!map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y)
          || panelContainer->node->bounds().contains(scr/gui->paintScale)) {
       // if point is close enough, use simple ease instead of flyTo
