@@ -1013,7 +1013,7 @@ layers:
             points:
                 style: poi-points
                 texture: pois
-                size: [[13, 16px], [15, 20px]]
+                size: [[13, 16px], [16, 18px]]
                 interactive: true
                 collide: true
                 transition: { show: { time: 0s }, hide: { time: 1s } }
@@ -1032,16 +1032,13 @@ layers:
             priority: 1
             filter:
                 name: true
-                all:
-                    - any:
-                        - { leisure: [park, golf_course] }
-                        - { amenity: [grave_yard] }
-                        - { landuse: [cemetery] }
-                    - any:
-                        - { $zoom: { min: 17 } }
-                        - { area: { min: 2000px2 } }
+                any:
+                    - { leisure: [park, golf_course] }
+                    - { amenity: [grave_yard] }
+                    - { landuse: [cemetery] }
             draw:
                 points:
+                    visible: false
                     sprite: tree
                     color: global.poi_color.outdoor
                     priority: global.priority_park
@@ -1051,6 +1048,11 @@ layers:
                             style: italic
                             fill: global.color.park_name
                             stroke: { color: global.color.park_halo, width: 3 }
+            show:
+                filter:
+                    - { $zoom: { min: 17 } }
+                    - { area: { min: 2000px2 } }
+                draw: { points: { visible: true } }
             golf:
                 filter: { leisure: golf_course }
                 draw: { points: { sprite: golf } }

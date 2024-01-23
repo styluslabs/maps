@@ -2,6 +2,7 @@
 #include "pugixml.hpp"
 #include "ulib/stringutil.h"
 #include "util.h"
+#include <iomanip>  // std::get_time
 
 
 std::vector<Waypoint>::iterator GpxFile::findWaypoint(const std::string& uid)
@@ -38,10 +39,15 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
 
   Waypoint wpt({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0},
       trkpt.child("name").child_value(), trkpt.child("desc").child_value());
-  pugi::xml_node extnode = trkpt.child("extensions").child("sl:route");
+  pugi::xml_node extnode = trkpt.child("extensions");
   if(extnode) {
     //wpt.visible = extnode.attribute("visible").as_bool(wpt.visible);
-    wpt.routed = extnode.attribute("routed").as_bool(wpt.routed);
+    pugi::xml_node slroute = extnode.child("sl:route");
+    if(slroute)
+      wpt.routed = slroute.attribute("routed").as_bool(wpt.routed);
+    pugi::xml_node slprops = extnode.child("sl:props");
+    if(slprops)
+      wpt.props = extnode.child_value();
   }
   return wpt;
 }
@@ -141,10 +147,13 @@ static void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
     trkpt.append_child("name").append_child(pugi::node_pcdata).set_value(wpt.name.c_str());
   if(!wpt.desc.empty())
     trkpt.append_child("desc").append_child(pugi::node_pcdata).set_value(wpt.desc.c_str());
-  if(!wpt.routed) {  //|| !wpt.visible
-    pugi::xml_node extnode = trkpt.append_child("extensions").append_child("sl:route");
-    //extnode.append_attribute("visible").set_value(wpt.visible);
-    extnode.append_attribute("routed").set_value(wpt.routed);
+
+  if(!wpt.routed || !wpt.props.empty()) {
+    pugi::xml_node extnode = trkpt.append_child("extensions");
+    if(!wpt.routed)
+      extnode.append_child("sl:route").append_attribute("routed").set_value(wpt.routed);
+    if(!wpt.props.empty())
+      extnode.append_child("sl:props").append_child(pugi::node_pcdata).set_value(wpt.props.c_str());
   }
 }
 

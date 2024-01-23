@@ -194,6 +194,8 @@ void MapsBookmarks::populateLists(bool archived)
     Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     container->addWidget(overflowBtn);
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
+    overflowBtn->setMenu(overflowMenu);
+
     overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
       std::string q2 = fstring("UPDATE lists SET archived = %d WHERE id = ?;", archived ? 0 : 1);
       SQLiteStmt(app->bkmkDB, q2).bind(rowid).exec();
@@ -222,10 +224,9 @@ void MapsBookmarks::populateLists(bool archived)
     });
 
     overflowMenu->addItem("Export", [=](){
-
       // on Android, callback would be called with temp filename, then Android share dialog shown
       // ... should we saveFileDialog pass callback an IOStream instead of a filename?
-      MapsApp::saveFileDialog({{"GPX file", ".gpx"}}, [=](const char* filename){
+      MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}}, list, [=](const char* filename){
         GpxFile gpx(list, "", filename);
         gpx.style = color;
         const char* q = "SELECT rowid, title, props, notes, lng, lat, timestamp FROM bookmarks WHERE list_id = ? ORDER BY timestamp DESC;";
@@ -236,11 +237,7 @@ void MapsBookmarks::populateLists(bool archived)
         });
         saveGPX(&gpx);
       });
-
     });
-
-    // TODO: overflow menu option to generate track from bookmark list - just passes coords to MapsTracks
-    overflowBtn->setMenu(overflowMenu);
 
     if(archived)
       archivedContent->addWidget(item);
@@ -555,34 +552,34 @@ Button* MapsBookmarks::createPanel()
   auto listHeader = app->createPanelHeader(MapsApp::uiIcon("pin"), "Bookmark Lists");
   listHeader->addWidget(newListBtn);
 
-
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem("Import bookmarks", [=](){
-
     MapsApp::openFileDialog({{"GPX files", "gpx"}}, [=](const char* filename){
       GpxFile gpx;
       loadGPX(&gpx, filename);
-
       const char* style = gpx.style.empty() ? "#00FFFF" : gpx.style.c_str();
       SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(gpx.title, style).exec();
       int64_t list_id = sqlite3_last_insert_rowid(app->bkmkDB);
-
       //if(timestamp <= 0) timestamp = int(mSecSinceEpoch()/1000);
       const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
       SQLiteStmt insbkmk(app->bkmkDB, query);
       for(auto& wpt : gpx.waypoints) {
-        std::string osm_id = osmIdFromProps(props);
-        insbkmk.bind(list_id, osm_id, wpt.name, props, wpt.desc, wpt.loc.lng, wpt.loc.lat, int64_t(wpt.loc.time)).exec();
+        std::string osm_id;
+        if(!wpt.props.empty()) {
+          rapidjson::Document props;
+          props.Parse(wpt.props.c_str());
+          osm_id = osmIdFromProps(props);
+        }
+        if(wpt.name.empty())
+          wpt.name = fstring("%.6f, %.6f", wpt.loc.lat, wpt.loc.lng);
+        insbkmk.bind(list_id, osm_id, wpt.name, wpt.props, wpt.desc, wpt.loc.lng, wpt.loc.lat, int64_t(wpt.loc.time)).exec();
       }
       populateLists(false);
-
     });
-
   });
   listHeader->addWidget(overflowBtn);
-
 
   listsPanel = app->createMapPanel(listHeader, NULL, listsCol, false);
 

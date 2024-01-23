@@ -324,6 +324,8 @@ static jmethodID setClipboardMID = nullptr;
 static jmethodID openFileMID = nullptr;
 static jmethodID openUrlMID = nullptr;
 static jmethodID setImeTextMID = nullptr;
+static jmethodID shareFileMID = nullptr;
+static jmethodID notifyStatusBarBGMID = nullptr;
 
 // since Android event loop waits on MapsApp::taskQueue, no need for PLATFORM_WakeEventLoop
 void PLATFORM_WakeEventLoop() {}
@@ -434,12 +436,33 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, OpenFileFn_t callb
   jniEnv->CallVoidMethod(mapsActivityRef, openFileMID);
 }
 
+void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback)
+{
+  if(filters.empty()) return;
+  FSPath filePath(MapsApp::baseDir, "temp/" + name + "." + filters.front().spec);
+  createPath(filePath.parentPath());
+  callback(filePath.c_str());
+  if(!filePath.exists()) return;
+
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jstring jname = jniEnv->NewStringUTF(name.c_str());
+  jstring jmimetype = jniEnv->NewStringUTF(filters.front().name);
+  jstring jfilename = jniEnv->NewStringUTF(filePath.c_str());
+  jniEnv->CallVoidMethod(mapsActivityRef, shareFileMID, jfilename, jmimetype, jname);
+}
+
 bool MapsApp::openURL(const char* url)
 {
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jstring jurl = jniEnv->NewStringUTF(url);
   jniEnv->CallVoidMethod(mapsActivityRef, openUrlMID, jurl);
   return true;
+}
+
+void MapsApp::notifyStatusBarBG(bool isLight)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, notifyStatusBarBGMID, isLight);
 }
 
 // EGL setup and main loop
@@ -549,6 +572,8 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   openFileMID = jniEnv->GetMethodID(cls, "openFile", "()V");
   openUrlMID = jniEnv->GetMethodID(cls, "openUrl", "(Ljava/lang/String;)V");
   setImeTextMID = jniEnv->GetMethodID(cls, "setImeText", "(Ljava/lang/String;II)V");
+  shareFileMID = jniEnv->GetMethodID(cls, "shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+  notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
 
   return TANGRAM_JNI_VERSION;
 }

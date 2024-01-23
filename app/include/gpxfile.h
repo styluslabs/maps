@@ -8,6 +8,7 @@ struct Waypoint
   double dist = 0;
   std::string name;
   std::string desc;
+  std::string props;
   std::string uid;  // id for DragDropList
   MarkerID marker = 0;
   //bool visible = true;  // <extensions><sl:route visible="true" routed="true"/>

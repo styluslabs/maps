@@ -460,6 +460,8 @@ void MapsSources::onMapEvent(MapEvent_t event)
 
   if(!legendsLoaded && app->map->getScene()->isReady()) {
     legendsLoaded = true;
+    // adjust status bar color on mobile
+    app->notifyStatusBarBG(!app->readSceneValue("global.dark_base_map").as<bool>(false));
     // load legend widgets
     app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
     app->gui->deleteContents(app->legendContainer);

@@ -325,7 +325,7 @@ static int addRouteGPX(duk_context* ctx)
 {
   const char* gpx = duk_require_string(ctx, 0);
   GpxFile track;
-  MapsTracks::loadGPX(&track, gpx);
+  loadGPX(&track, gpx);
   for(auto& route : track.routes)
     PluginManager::inst->app->mapsTracks->addRoute(std::move(route.pts));
   return 0;

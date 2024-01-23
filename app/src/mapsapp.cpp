@@ -176,6 +176,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   mapsBookmarks->addPlaceActions(toolbar);
   mapsTracks->addPlaceActions(toolbar);
   toolbar->addWidget(createStretch());
+
+  Button* shareLocBtn = createToolbutton(MapsApp::uiIcon("share"), "Share");
+  shareLocBtn->onClicked = [=](){ openURL(fstring("geo:%.7f,%.7f", pos.latitude, pos.longitude).c_str()); };
+  toolbar->addWidget(shareLocBtn);
+
   item->selectFirst(".action-container")->addWidget(toolbar);
 
   TextLabel* titlenode = static_cast<TextLabel*>(infoPanel->selectFirst(".panel-title"));
@@ -421,9 +426,8 @@ void MapsApp::tapEvent(float x, float y)
       itemId = props->getAsString("osm_id");
     if(osmType.empty())
       osmType = "node";
-    // clear panel history unless editing track/route
     if(!mapsTracks->activeTrack)
-      showPanel(infoPanel);    //mapsSearch->clearSearch();
+      showPanel(infoPanel, true);  // let's try not clearing history
     setPickResult(result->coordinates, "", props->toJson());
     tapLocation = {NAN, NAN};
   });
@@ -815,7 +819,7 @@ public:
 
 Rect ScaleBarWidget::bounds(SvgPainter* svgp) const
 {
-  return svgp->p->getTransform().mapRect(Rect::wh(100, 20));
+  return svgp->p->getTransform().mapRect(Rect::wh(100, 14));
 }
 
 void ScaleBarWidget::directDraw(Painter* p) const
@@ -862,7 +866,7 @@ void ScaleBarWidget::directDraw(Painter* p) const
   p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
   p->setStroke(Color::BLACK, 2);  //, Painter::FlatCap, Painter::BevelJoin);
   p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
-  p->setFontSize(14);
+  p->setFontSize(12);
   p->setStroke(Color::WHITE, 2);
   p->drawText(0, 0, str.c_str());
   p->setFillBrush(Color::BLACK);
@@ -922,7 +926,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout-narrow" display="none" box-anchor="fill" layout="flex" flex-direction="column">
-        <rect class="statusbar-bg toolbar" display="none" box-anchor="hfill" x="0" y="0" width="20" height="22" />
+        <rect class="statusbar-bg toolbar" display="none" box-anchor="hfill" x="0" y="0" width="20" height="30" />
         <g class="maps-container" box-anchor="fill" layout="box"></g>
         <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
         <g class="panel-container" display="none" box-anchor="hfill" layout="box">
@@ -1035,6 +1039,13 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   metricCb->setChecked(metricUnits);
   overflowMenu->addItem(metricCb);
 
+  Button* themeCb = createCheckBoxMenuItem("Use light theme");
+  themeCb->onClicked = [=](){
+    themeCb->setChecked(!themeCb->checked());
+    themeCb->checked() ? win->node->addClass("light") : win->node->removeClass("light");
+  };
+  overflowMenu->addItem(themeCb);
+
   Menu* debugMenu = createMenu(Menu::HORZ);
   const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
       "Tile info", "Labels", "Tangram Info", "Draw all labels", "Tangram stats", "Selection buffer"};
@@ -1096,7 +1107,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   scaleBar = new ScaleBarWidget(map.get());
   scaleBar->node->setAttribute("box-anchor", "bottom left");
-  scaleBar->setMargins(0, 0, 10, 10);
+  scaleBar->setMargins(0, 0, 6, 10);
   mapsContent->addWidget(scaleBar);
 
   crossHair = new CrosshairWidget();
@@ -1106,7 +1117,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   legendContainer = createColumn();
   legendContainer->node->setAttribute("box-anchor", "hfill bottom");
   legendContainer->node->addClass("legend");
-  legendContainer->setMargins(0, 0, 10, 0);
+  legendContainer->setMargins(0, 0, 14, 0);  // shift above scale bar
   mapsContent->addWidget(legendContainer);
 
   // misc setup
@@ -1171,7 +1182,10 @@ void MapsApp::maximizePanel(bool maximize)
     panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
     panelSplitter->setEnabled(!maximize);
     Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
-    if(minbtn) minbtn->setVisible(!maximize);
+    if(minbtn)
+      minbtn->setVisible(!maximize);
+    notifyStatusBarBG(maximize ?
+        win->node->hasClass("light") : !readSceneValue("global.dark_base_map").as<bool>(false));
   }
 }
 
@@ -1440,7 +1454,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
   //map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });
-  map->setPickRadius(1.0f);
+  map->setPickRadius(2.0f);
 
   // Setup UI panels
   mapsSources = std::make_unique<MapsSources>(this);

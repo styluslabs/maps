@@ -11,6 +11,7 @@ import java.io.InputStream;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.FileProvider;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Build;
@@ -231,34 +232,22 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
-  @Override
   public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
-  @Keep
-  public void requestRender()
-  {
-    //mGLSurfaceView.requestRender();
-  }
+  // required for tangram AndroidPlatform.cpp
+  public void requestRender() { /*mGLSurfaceView.requestRender();*/  }
+  public void setRenderMode(int cont) { /*mGLSurfaceView.setRenderMode(...);*/ }
 
-  @Keep
-  public void setRenderMode(int cont)
-  {
-    //mGLSurfaceView.setRenderMode(cont != 0 ? MapsView.RENDERMODE_CONTINUOUSLY : MapsView.RENDERMODE_WHEN_DIRTY);
-  }
-
-  @Keep
   public String getFontFilePath(final String key)
   {
     return FontConfig.getFontFile(key);
   }
 
-  @Keep
   public String getFontFallbackFilePath(final int importance, final int weightHint)
   {
     return FontConfig.getFontFallback(importance, weightHint);
   }
 
-  @Keep
   public void cancelUrlRequest(final long requestHandle)
   {
     Object request = httpRequestHandles.remove(requestHandle);
@@ -267,7 +256,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
-  @Keep
   public void startUrlRequest(@NonNull final String url,
       @NonNull final String headers, @NonNull final String payload, final long requestHandle)
   {
@@ -344,7 +332,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
-  @Keep
   public void openUrl(String url)
   {
     Intent viewUrlIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -353,7 +340,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   private static final int ID_OPEN_DOCUMENT = 2;
 
-  @Keep
   public void openFile()  //Uri pickerInitialUri)
   {
     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -386,6 +372,21 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         //  jniOpenFile(intent.getData().getPath());
       }
     }
+  }
+
+  public void shareFile(String filepath, String mimetype, String title)
+  {
+    final String finaltitle = title;
+    String authority = getApplicationContext().getPackageName() + ".fileprovider";
+    File file = new File(filepath);
+    Uri contentUri = FileProvider.getUriForFile(this, authority, file);
+    final Intent intent = new Intent(android.content.Intent.ACTION_SEND);
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    intent.putExtra(Intent.EXTRA_SUBJECT, title);
+    intent.putExtra(Intent.EXTRA_STREAM, contentUri);
+    intent.setType(mimetype);
+    startActivity(Intent.createChooser(intent, finaltitle));
   }
 
   public String getClipboard()
@@ -445,6 +446,17 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         imm.restartInput(mTextEdit);  // need to clear composing state of keyboard, etc.
       }
+    } });
+  }
+
+  public void notifyStatusBarBG(boolean isLight)
+  {
+    runOnUiThread(new Runnable() { @Override public void run() {
+      //SYSTEM_UI_FLAG_LIGHT_STATUS_BAR requests black text (for light background)
+      Window window = getWindow();
+      int flags = window.getDecorView().getSystemUiVisibility();
+      if(((flags & View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) != 0) != isLight)
+        window.getDecorView().setSystemUiVisibility(flags ^ View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
     } });
   }
 }

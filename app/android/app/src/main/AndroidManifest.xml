@@ -19,6 +19,17 @@
     android:icon="@mipmap/ic_launcher"
     android:label="Explore">
 
+    <!-- Required to enable sharing of files -->
+    <provider
+      android:name="androidx.core.content.FileProvider"
+      android:authorities="com.styluslabs.maps.fileprovider"
+      android:grantUriPermissions="true"
+      android:exported="false">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/filepaths" />
+    </provider>
+
     <activity android:name="MapsActivity"
       android:theme="@android:style/Theme.NoTitleBar"
       android:launchMode="singleTask"

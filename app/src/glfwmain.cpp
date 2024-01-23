@@ -41,9 +41,26 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn
 {
   nfdchar_t* outPath;
   nfdresult_t result = NFD_OpenDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL);
-  if(result == NFD_OKAY)
+  if(result == NFD_OKAY) {
     callback(outPath);
+    NFD_FreePath(outPath);
+  }
 }
+
+void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback)
+{
+  ASSERT(!filters.empty() && "saveFileDialog requires filters!");  // filters required for Android, so test here
+  nfdchar_t* outPath;
+  if(!filters.empty())
+    name.append(".").append(filters.back().spec);
+  nfdresult_t result = NFD_SaveDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL, name.c_str());
+  if(result == NFD_OKAY) {
+    callback(outPath);
+    NFD_FreePath(outPath);
+  }
+}
+
+void MapsApp::notifyStatusBarBG(bool) {}
 
 int main(int argc, char* argv[])
 {

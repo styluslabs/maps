@@ -63,7 +63,7 @@ textures:
     pick-marker:
         density: 2
         url: |
-            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24">
+            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12pt" height="18pt" viewBox="4 0 16 24">
               <g fill="#CF513D" stroke="#000" stroke-opacity="0.2" stroke-width="1" stroke-alignment="inner">
                 <path d="M5 8c0-3.517 3.271-6.602 7-6.602s7 3.085 7 6.602c0 3.455-2.563 7.543-7 14.527-4.489-7.073-7-11.072-7-14.527"/>
               </g>
@@ -72,7 +72,7 @@ textures:
     bookmark-marker:
         density: 2
         url: |
-            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24">
+            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12pt" height="18pt" viewBox="4 0 16 24">
               <g fill="#FF0000" stroke="none" stroke-opacity="0.2" stroke-width="1" stroke-alignment="inner">
                 <path d="M5 8c0-3.517 3.271-6.602 7-6.602s7 3.085 7 6.602c0 3.455-2.563 7.543-7 14.527-4.489-7.073-7-11.072-7-14.527"/>
               </g>
@@ -112,13 +112,13 @@ layers:
             marker:
                 style: points
                 texture: pick-marker
-                size: 32px
+                size: [22px, 33px]
                 interactive: true
                 #collide: false
                 # this indicates all colliding labels should be hidden immediately (see labelManager.cpp)
                 transition: { selected: { time: 1s } }
                 priority: -1  #'function() { return feature.priority; }'
-                offset: [0px, -11px]
+                offset: [0px, -14px]
                 text:
                     text_source: name
                     anchor: [right, left, bottom, top]
@@ -138,7 +138,7 @@ layers:
             marker:
                 style: poi-points
                 texture: bookmark-marker
-                size: 26px
+                size: [18px, 27px]
                 interactive: true
                 collide: true
                 color: function() { return feature.color || '#12B5CB'; }
@@ -178,7 +178,7 @@ layers:
                 sprite: global.poi_sprite_fn
                 sprite_default: generic
                 color: "#CF513D"
-                size: [[13, 16px], [15, 20px]]
+                size: [[13, 16px], [16, 18px]]
                 interactive: true
                 collide: true
                 priority: 'function() { return (1+feature.priority)/1E6; }'

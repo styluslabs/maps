@@ -146,6 +146,8 @@ public:
   typedef std::function<void(const char*)> OpenFileFn_t;
   struct FileDialogFilter_t { const char* name; const char* spec; };
   static void openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn_t callback);
+  static void saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback);
+  static void notifyStatusBarBG(bool isLight);
   static void sdlEvent(SDL_Event* event);
 
   static Platform* platform;

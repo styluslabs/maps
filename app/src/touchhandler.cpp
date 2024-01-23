@@ -69,6 +69,9 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
     touchEvent(fevent->tfinger.fingerId, actionFromSDLFinger(fevent->type), fevent->tfinger.timestamp/1000.0,
         fevent->tfinger.x*xyScale, fevent->tfinger.y*xyScale, 1.0f);
   }
+  else if(event->type == SvgGui::OUTSIDE_PRESSED) {
+    sdlEvent(gui, (SDL_Event*)event->user.data1);
+  }
   else
     return false;
   return true;
@@ -144,7 +147,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     if(tapState == DBL_TAP_DRAG_ACTIVE) {
       float h = app->map->getViewportHeight();
       // alternative is to zoom from center of map instead of tap point - float cx = w/2, cy = h/2;
-      map->handlePinchGesture(initCOM.x, initCOM.y, std::pow(2.0f, dblTapDragScale*(pt.y - prevCOM.y)/h), 0.f);
+      map->handlePinchGesture(initCOM.x, initCOM.y, std::pow(2.0f, 4.0f*dblTapDragScale*(pt.y - prevCOM.y)/h), 0.f);
     }
     else if(prevpoints == 1) {
       map->handlePanGesture(prevCOM.x, prevCOM.y, pt.x, pt.y);
