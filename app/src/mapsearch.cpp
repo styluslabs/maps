@@ -1,3 +1,8 @@
+#define TANGRAM_TRACING
+#include "log.h"
+std::chrono::time_point<std::chrono::system_clock> tangram_log_time_start, tangram_log_time_last;
+std::mutex tangram_log_time_mutex;
+
 #include "mapsearch.h"
 #include "mapsapp.h"
 #include "bookmarks.h"

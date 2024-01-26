@@ -546,19 +546,29 @@ void MapsApp::onSuspend()
   saveConfig();
 }
 
-void MapsApp::updateLocation(const Location& _loc)
+void MapsApp::updateLocMarker()
 {
-  currLocation = _loc;
-  if(currLocation.time <= 0)
-    currLocation.time = mSecSinceEpoch()/1000.0;
   if(!locMarker) {
     locMarker = map->markerAdd();
     map->markerSetStylingFromPath(locMarker, "layers.loc-marker.draw.marker");
     map->markerSetDrawOrder(locMarker, INT_MAX);
   }
-  //map->markerSetVisible(locMarker, true);
   map->markerSetPoint(locMarker, currLocation.lngLat());
-  map->markerSetProperties(locMarker, {{{"hasfix", hasLocation ? 1 : 0}}});
+  map->markerSetProperties(locMarker, {{
+      {"hasfix", hasLocation ? 1 : 0}, {"selected", currLocPlaceInfo ? 1 : 0}, {"angle", orientation}}});
+}
+
+void MapsApp::updateLocation(const Location& _loc)
+{
+  Point l0, l1;
+  map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &l0.x, &l0.y);
+  map->lngLatToScreenPosition(_loc.lng, _loc.lat, &l1.x, &l1.y);
+  LOGW("Location update dist: %.2f pixels", l1.dist(l0));
+
+  currLocation = _loc;
+  if(currLocation.time <= 0)
+    currLocation.time = mSecSinceEpoch()/1000.0;
+  updateLocMarker();
 
   if(currLocPlaceInfo) {
     SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
@@ -586,14 +596,16 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
   gpsStatusBtn->setVisible(!satsUsed);
   if(!satsUsed)
     gpsStatusBtn->setText(fstring("%d", satsVisible).c_str());  //"%d/%d", satsUsed
-  if(locMarker && (satsUsed > 0) != hasLocation)
-    map->markerSetProperties(locMarker, {{{"hasfix", satsUsed > 0 ? 1 : 0}}});
+  bool doupdate = (satsUsed > 0) != hasLocation;
   hasLocation = satsUsed > 0;
+  if(doupdate) updateLocMarker();
 }
 
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
 {
-  orientation = azimuth;
+  orientation = azimuth*M_PI/180.0;
+  LOGW("orientation: %.1f deg", orientation);
+  updateLocMarker();
 }
 
 YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)

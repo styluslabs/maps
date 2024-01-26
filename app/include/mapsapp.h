@@ -167,6 +167,7 @@ private:
   void sendMapEvent(MapEvent_t event);
   void showPanelContainer(bool show);
   void clearPickResult();
+  void updateLocMarker();
 
   bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool flyToPickResult = false;

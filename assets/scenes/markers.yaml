@@ -60,6 +60,15 @@ textures:
         density: 2
         # sprites set from svg ids
 
+    loc-marker:
+        density: 2
+        url: |
+            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24pt" height="24pt" viewBox="-12 -12 24 24">
+              <path d="M0 -11 L-4.5 -6.5 A9 9 0 0 1 4.5 -6.5 L0 -11" fill="#FF0000"/>
+              <circle cx="0" cy="0" r="7" fill="#00FF00"/>
+              <circle cx="0" cy="0" r="5.5" fill="#FF0000"/>
+            </svg>
+
     pick-marker:
         density: 2
         url: |
@@ -81,7 +90,7 @@ textures:
 
 styles:
     loc-points:
-        base: points
+        mix: poi-points
         blend_order: 1000
 
     poi-points:
@@ -210,11 +219,14 @@ layers:
         draw:
             marker:
                 style: loc-points
+                texture: loc-marker
                 interactive: true
                 collide: false
-                size: 18px
+                size: 32px
+                angle: |
+                    function() { return feature.angle; }
                 color: |
-                    function() { return feature.hasfix ? '#0000FF' : '#909090'; }
+                    function() { return feature.selected ? '#CF513D' : (feature.hasfix ? '#0000FF' : '#909090'); }
                 priority: -1000
                 outline:
                     width: 2px

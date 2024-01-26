@@ -105,6 +105,8 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
   }
 
   if(touchPoints.empty()) {
+    if(multiTouchState == TOUCH_PINCH && t - prevTime < 0.1)
+      map->handlePinchGesture(prevCOM.x, prevCOM.y, 1.0, pinchSpeed);
     multiTouchState = TOUCH_NONE;
     return;
   }
@@ -121,8 +123,10 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
     else {
       if(multiTouchState == TOUCH_NONE) {
-        if(std::abs(dist - prevDist) > pinchThreshold*xyScale)
+        if(std::abs(dist - prevDist) > pinchThreshold*xyScale) {
           multiTouchState = TOUCH_PINCH;
+          pinchSpeed = 0;
+        }
         else if(std::abs(angle - prevAngle) > rotateThreshold)
           multiTouchState = TOUCH_ROTATE;
         else if(std::abs(com.y - prevCOM.y) > shoveThreshold*xyScale)
@@ -131,6 +135,12 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       if(multiTouchState == TOUCH_PINCH) {
         map->handlePanGesture(prevCOM.x, prevCOM.y, com.x, com.y);
         map->handlePinchGesture(com.x, com.y, dist/prevDist, 0.f);
+
+        float dd = dist - prevDist;
+        float dt = t - prevTime;
+        // single pole IIR low pass filter for pinch speed
+        float a = std::exp(-dt*pinchInvTau);
+        pinchSpeed = a*pinchSpeed + (1-a)*dd/dt;
       }
       else if(multiTouchState == TOUCH_ROTATE)
         map->handleRotateGesture(com.x, com.y, angle - prevAngle);
@@ -141,6 +151,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       prevCOM = com;
       prevDist = dist;
       prevAngle = angle;
+      prevTime = t;
     }
   }
   else if(prevpoints > 0) {
