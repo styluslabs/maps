@@ -147,6 +147,7 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
 
   // SQL import?
   if(src.url.substr(0, 8) == "file:///") {
+    importRemaining = 0;
     SQLiteDB tileDB(mbtiles->dbHandle());
     if(tileDB.exec(fstring("ATTACH DATABASE '%s' AS src;", src.url.substr(8).c_str()))) {
       const char* nSrcTilesSql = "SELECT count(1) FROM src.tiles WHERE zoom_level = ?";
@@ -308,15 +309,16 @@ bool OfflineDownloader::mbtilesImport(SQLiteDB& tileDB)
       if(canceled) return;
       const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
       const int length = sqlite3_column_bytes(stmt, 0);
-      int x = sqlite3_column_int(stmt, 1);
-      int y = sqlite3_column_int(stmt, 2);
-      auto task = std::make_unique<BinaryTileTask>(TileID(x, y, srcMaxZoom), nullptr);
-      auto& _data = *task->rawTileData;
+      const int x = sqlite3_column_int(stmt, 1);
+      const int y = sqlite3_column_int(stmt, 2);
+      BinaryTileTask task(TileID(x, (1 << srcMaxZoom) - 1 - y, srcMaxZoom), nullptr);
+      task.rawTileData = std::make_shared<std::vector<char>>();
+      auto& _data = *task.rawTileData;
       if(Tangram::zlib_inflate(blob, length, _data) != 0) {
         _data.resize(length);
         memcpy(_data.data(), blob, length);
       }
-      MapsSearch::indexTileData(task.get(), offlineId, searchData);
+      MapsSearch::indexTileData(&task, offlineId, searchData);
       --importRemaining;
 
       Timestamp t0 = mSecSinceEpoch();

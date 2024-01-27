@@ -178,7 +178,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   toolbar->addWidget(createStretch());
 
   Button* shareLocBtn = createToolbutton(MapsApp::uiIcon("share"), "Share");
-  shareLocBtn->onClicked = [=](){ openURL(fstring("geo:%.7f,%.7f", pos.latitude, pos.longitude).c_str()); };
+  std::string geoquery = Url::escapeReservedCharacters(namestr);
+  shareLocBtn->onClicked = [=](){ openURL(fstring("geo:%.7f,%.7f?q=%s", pos.latitude, pos.longitude, geoquery.c_str()).c_str()); };
   toolbar->addWidget(shareLocBtn);
 
   item->selectFirst(".action-container")->addWidget(toolbar);
@@ -563,7 +564,7 @@ void MapsApp::updateLocation(const Location& _loc)
   Point l0, l1;
   map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &l0.x, &l0.y);
   map->lngLatToScreenPosition(_loc.lng, _loc.lat, &l1.x, &l1.y);
-  LOGW("Location update dist: %.2f pixels", l1.dist(l0));
+  //LOGW("Location update dist: %.2f pixels", l1.dist(l0));
 
   currLocation = _loc;
   if(currLocation.time <= 0)
@@ -603,8 +604,10 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
 
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
 {
-  orientation = azimuth*M_PI/180.0;
-  LOGW("orientation: %.1f deg", orientation);
+  float deg = azimuth*180.0f/float(M_PI);
+  if(std::abs(deg - orientation) < 1.0f) return;
+  orientation = deg;
+  //LOGW("orientation: %.1f deg", orientation);
   updateLocMarker();
 }
 
@@ -1103,9 +1106,31 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   reorientBtn->setVisible(false);
 
   Button* recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
-  recenterBtn->onClicked = [this](){
-    map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
+  recenterBtn->onClicked = [=](){
+    if(!sensorsEnabled) {
+      setSensorsEnabled(true);
+      sensorsEnabled = true;
+      recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
+    }
+    else
+      map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
   };
+
+  // should we forward motion events to map (so if user accidently starts drag on button it still works?)
+  recenterBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(isLongPressOrRightClick(event)) {
+      sensorsEnabled = !sensorsEnabled;
+      setSensorsEnabled(sensorsEnabled);
+      recenterBtn->setIcon(MapsApp::uiIcon(sensorsEnabled ? "gps-location" : "gps-location-off"));
+      if(!sensorsEnabled)
+        gpsStatusBtn->setVisible(false);
+      // prevent click event; should OUTSIDE_PRESSED be sent by SvgGui before long press event?
+      recenterBtn->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, recenterBtn);
+      gui->pressedWidget = NULL;
+      return true;
+    }
+    return false;
+  });
 
   gpsStatusBtn = new Widget(loadSVGFragment(gpsStatusSVG));
   gpsStatusBtn->setVisible(false);

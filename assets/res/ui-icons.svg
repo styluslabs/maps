@@ -48,8 +48,24 @@ document.addEventListener('DOMContentLoaded', function(event) {
 <!-- ci-trash-full.svg -->
 <svg id="discard" width="1em" height="1em" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10v7m-4-7v7M6 6v11.8c0 1.12 0 1.68.218 2.108a2 2 0 0 0 .874.874c.427.218.987.218 2.105.218h5.606c1.118 0 1.677 0 2.104-.218c.377-.192.683-.498.875-.874c.218-.428.218-.987.218-2.105V6M6 6h2M6 6H4m4 0h8M8 6c0-.932 0-1.398.152-1.765a2 2 0 0 1 1.082-1.083C9.602 3 10.068 3 11 3h2c.932 0 1.398 0 1.765.152a2 2 0 0 1 1.083 1.083C16 4.602 16 5.068 16 6m0 0h2m0 0h2"/></svg>
 
-<!-- fluent-my-location-24-regular.svg -->
-<svg id="gps-location" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a.75.75 0 0 1 .743.648l.007.102v1.788a7.5 7.5 0 0 1 6.713 6.714l.037-.002h1.75a.75.75 0 0 1 .102 1.493l-.102.007l-1.788-.001a7.5 7.5 0 0 1-6.714 6.714l.002.037v1.75a.75.75 0 0 1-1.493.102l-.007-.102l.001-1.788a7.5 7.5 0 0 1-6.714-6.714l-.037.002H2.75a.75.75 0 0 1-.102-1.493l.102-.007h1.788a7.5 7.5 0 0 1 6.714-6.713L11.25 4.5V2.75A.75.75 0 0 1 12 2Zm0 4a6 6 0 1 0 0 12a6 6 0 0 0 0-12Zm0 2a4 4 0 1 1 0 8a4 4 0 0 1 0-8Z"/></svg>
+<!-- Significatly altered; previous used fluent-my-location-24-regular.svg -->
+<svg id="gps-location" class="icon-tabler icon-tabler-current-location" width="1em" height="1em" viewBox="-2 -2 28 28" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="4.8" fill="currentColor" stroke="none" />
+  <path d="M12 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0 -16 0" />
+  <path d="M12 4l0 -3" />
+  <path d="M12 20l0 3" />
+  <path d="M20 12l3 0" />
+  <path d="M4 12l-3 0" />
+</svg>
+
+<svg id="gps-location-off" class="icon-tabler icon-tabler-current-location-off" width="1em" height="1em" viewBox="-2 -2 28 28" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M6.357 6.33a8 8 0 1 0 11.301 11.326m1.642 -2.378a8 8 0 0 0 -10.597 -10.569" />
+  <path d="M12 4l0 -3" />
+  <path d="M12 20l0 3" />
+  <path d="M20 12l3 0" />
+  <path d="M4 12l-3 0" />
+  <path d="M3 3l18 18" />
+</svg>
 
 <!-- humbleicons-search.svg -->
 <svg id="search" width="1em" height="1em" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="m20 20l-6-6"/><path d="M15 9.5a5.5 5.5 0 1 1-11 0a5.5 5.5 0 0 1 11 0Z"/></g></svg>

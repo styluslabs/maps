@@ -70,6 +70,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private final Map<Long, Object> httpRequestHandles = Collections.synchronizedMap(new HashMap<Long, Object>());
   private float mDeclination = 0;
   private boolean replaceAssets = true;  // for development
+  private boolean sensorsEnabled = true;
 
   public static final int PERM_REQ_LOCATION = 1;
 
@@ -146,13 +147,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onPause()
   {
     super.onPause();
-    //mMapsView.onPause();
-
-    if(canGetLocation()) {
-      locationManager.removeUpdates(this);
-      locationManager.removeGpsStatusListener(this);
-    }
-    mSensorManager.unregisterListener(this);
+    if(sensorsEnabled)
+      stopSensors();
     MapsLib.onPause();
   }
 
@@ -160,8 +156,13 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onResume()
   {
     super.onResume();
-    //mMapsView.onResume();
+    if(sensorsEnabled)
+      startSensors();
+    MapsLib.onResume();
+  }
 
+  public void startSensors()
+  {
     // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
     // - see https://developer.android.com/training/location/request-updates
     // min GPS dt = 0 (ms), dr = 1 (meters)
@@ -171,7 +172,26 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
     mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
     mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
-    MapsLib.onResume();
+  }
+
+  public void stopSensors()
+  {
+    if(canGetLocation()) {
+      locationManager.removeUpdates(this);
+      locationManager.removeGpsStatusListener(this);
+    }
+    mSensorManager.unregisterListener(this);
+  }
+
+  public void setSensorsEnabled(boolean enabled)
+  {
+    runOnUiThread(new Runnable() { @Override public void run() {
+      if(sensorsEnabled && !enabled)
+        stopSensors();
+      else if(!sensorsEnabled && enabled)
+        startSensors();
+      sensorsEnabled = enabled;
+     } });
   }
 
   @Override
@@ -187,8 +207,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     float spderr = loc.getSpeedAccuracyMetersPerSecond();  // speed accuracy in m/s
     long time = loc.getTime();  // ms since unix epoch
     float alterr = loc.getVerticalAccuracyMeters();  // altitude accuracy in meters
-    // for correcting orientation
-    mDeclination = new GeomagneticField((float)lat, (float)lng, (float)alt, time).getDeclination()*180/(float)java.lang.Math.PI;
+    // for correcting orientation - convert degrees to radians
+    mDeclination = new GeomagneticField((float)lat, (float)lng, (float)alt, time).getDeclination()*(float)java.lang.Math.PI/180;
 
     MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
   }

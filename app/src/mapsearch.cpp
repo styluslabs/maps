@@ -86,7 +86,7 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
     sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
     processTileData(task, insertStmt, searchData);
     sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
-    LOGT("<<< indexing tile %s %s", tileId.toString().c_str());
+    LOGT("<<< indexing tile %s", tileId.toString().c_str());
     LOGD("Search indexing completed for tile %s", tileId.toString().c_str());
   }
   if(rowId >= 0)

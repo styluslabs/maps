@@ -326,10 +326,38 @@ static jmethodID openUrlMID = nullptr;
 static jmethodID setImeTextMID = nullptr;
 static jmethodID shareFileMID = nullptr;
 static jmethodID notifyStatusBarBGMID = nullptr;
+static jmethodID setSensorsEnabledMID = nullptr;
+
+#define TANGRAM_JNI_VERSION JNI_VERSION_1_6
+
+extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
+{
+  static const char* ctrlClassName = "com/styluslabs/maps/MapsActivity";
+  JNIEnv* jniEnv = nullptr;
+  if (javaVM->GetEnv(reinterpret_cast<void**>(&jniEnv), TANGRAM_JNI_VERSION) != JNI_OK)
+    return -1;
+  JniHelpers::jniOnLoad(javaVM, NULL);  // pass NULL jniEnv to skip stuff used for full Android library
+  AndroidPlatform::jniOnLoad(javaVM, jniEnv, ctrlClassName);
+
+  jclass cls = jniEnv->FindClass(ctrlClassName);
+  showTextInputMID = jniEnv->GetMethodID(cls, "showTextInput", "(IIII)V");
+  hideTextInputMID = jniEnv->GetMethodID(cls, "hideTextInput", "()V");
+  getClipboardMID = jniEnv->GetMethodID(cls, "getClipboard", "()Ljava/lang/String;");
+  setClipboardMID = jniEnv->GetMethodID(cls, "setClipboard", "(Ljava/lang/String;)V");
+  openFileMID = jniEnv->GetMethodID(cls, "openFile", "()V");
+  openUrlMID = jniEnv->GetMethodID(cls, "openUrl", "(Ljava/lang/String;)V");
+  setImeTextMID = jniEnv->GetMethodID(cls, "setImeText", "(Ljava/lang/String;II)V");
+  shareFileMID = jniEnv->GetMethodID(cls, "shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+  notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
+  setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
+
+  return TANGRAM_JNI_VERSION;
+}
 
 // since Android event loop waits on MapsApp::taskQueue, no need for PLATFORM_WakeEventLoop
 void PLATFORM_WakeEventLoop() {}
-void TANGRAM_WakeEventLoop() { MapsApp::runOnMainThread([](){}); }
+// note we have to push task even if on main thread so we don't get stuck waiting for external event!
+void TANGRAM_WakeEventLoop() { MapsApp::taskQueue.push_back([](){}); }
 
 Uint32 SDL_GetTicks()
 {
@@ -465,6 +493,12 @@ void MapsApp::notifyStatusBarBG(bool isLight)
   jniEnv->CallVoidMethod(mapsActivityRef, notifyStatusBarBGMID, isLight);
 }
 
+void MapsApp::setSensorsEnabled(bool enabled)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, setSensorsEnabledMID, enabled);
+}
+
 // EGL setup and main loop
 
 bool chooseConfig(EGLDisplay display, int depth, int samples, EGLConfig* config)
@@ -551,31 +585,6 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
   //eglDestroyContext(display, context);
   ANativeWindow_release(nativeWin);
   return 0;
-}
-
-#define TANGRAM_JNI_VERSION JNI_VERSION_1_6
-
-extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
-{
-  static const char* ctrlClassName = "com/styluslabs/maps/MapsActivity";
-  JNIEnv* jniEnv = nullptr;
-  if (javaVM->GetEnv(reinterpret_cast<void**>(&jniEnv), TANGRAM_JNI_VERSION) != JNI_OK)
-    return -1;
-  JniHelpers::jniOnLoad(javaVM, NULL);  // pass NULL jniEnv to skip stuff used for full Android library
-  AndroidPlatform::jniOnLoad(javaVM, jniEnv, ctrlClassName);
-
-  jclass cls = jniEnv->FindClass(ctrlClassName);
-  showTextInputMID = jniEnv->GetMethodID(cls, "showTextInput", "(IIII)V");
-  hideTextInputMID = jniEnv->GetMethodID(cls, "hideTextInput", "()V");
-  getClipboardMID = jniEnv->GetMethodID(cls, "getClipboard", "()Ljava/lang/String;");
-  setClipboardMID = jniEnv->GetMethodID(cls, "setClipboard", "(Ljava/lang/String;)V");
-  openFileMID = jniEnv->GetMethodID(cls, "openFile", "()V");
-  openUrlMID = jniEnv->GetMethodID(cls, "openUrl", "(Ljava/lang/String;)V");
-  setImeTextMID = jniEnv->GetMethodID(cls, "setImeText", "(Ljava/lang/String;II)V");
-  shareFileMID = jniEnv->GetMethodID(cls, "shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
-  notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
-
-  return TANGRAM_JNI_VERSION;
 }
 
 #define JNI_FN(name) extern "C" JNIEXPORT void JNICALL Java_com_styluslabs_maps_MapsLib_##name

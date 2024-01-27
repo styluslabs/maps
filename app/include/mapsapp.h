@@ -148,6 +148,7 @@ public:
   static void openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn_t callback);
   static void saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback);
   static void notifyStatusBarBG(bool isLight);
+  static void setSensorsEnabled(bool enabled);
   static void sdlEvent(SDL_Event* event);
 
   static Platform* platform;
@@ -171,4 +172,5 @@ private:
 
   bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool flyToPickResult = false;
+  bool sensorsEnabled = true;
 };

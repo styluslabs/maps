@@ -83,16 +83,16 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
   Map* map = app->map.get();
   size_t prevpoints = touchPoints.size();
   //LOGW("touchEvent: %d for %d, t: %f, x: %f, y: %f; current npts %d", action, ptrId, t, x, y, prevpoints);
-  auto it = touchPoints.begin();
-  while(it < touchPoints.end() && it->id != ptrId) { ++it; }
-  if(it != touchPoints.end()) {
+  auto tpiter = touchPoints.begin();
+  while(tpiter < touchPoints.end() && tpiter->id != ptrId) { ++tpiter; }
+  if(tpiter != touchPoints.end()) {
     if(action == -1) {
-      touchPoints.erase(it);
+      touchPoints.erase(tpiter);
     }
     else {
       if(action == 1)
         LOGE("Duplicate touch press event received!");
-      *it = TouchPt{ptrId, x, y, p};
+      *tpiter = TouchPt{ptrId, x, y, p};
     }
   }
   else {
@@ -105,8 +105,12 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
   }
 
   if(touchPoints.empty()) {
-    if(multiTouchState == TOUCH_PINCH && t - prevTime < 0.1)
+    if(multiTouchState == TOUCH_PINCH && t - prevTime < 0.1) {
+      auto it = --prevDists.end();
+      while(it != prevDists.begin() && prevTime - it->t < 0.05) --it;  //FLING_AVG_SECS
+      float pinchSpeed = (prevDist/it->dist - 1)/float(prevTime - it->t);
       map->handlePinchGesture(prevCOM.x, prevCOM.y, 1.0, pinchSpeed);
+    }
     multiTouchState = TOUCH_NONE;
     return;
   }
@@ -125,7 +129,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       if(multiTouchState == TOUCH_NONE) {
         if(std::abs(dist - prevDist) > pinchThreshold*xyScale) {
           multiTouchState = TOUCH_PINCH;
-          pinchSpeed = 0;
+          prevDists.clear();
         }
         else if(std::abs(angle - prevAngle) > rotateThreshold)
           multiTouchState = TOUCH_ROTATE;
@@ -135,12 +139,10 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       if(multiTouchState == TOUCH_PINCH) {
         map->handlePanGesture(prevCOM.x, prevCOM.y, com.x, com.y);
         map->handlePinchGesture(com.x, com.y, dist/prevDist, 0.f);
-
-        float dd = dist - prevDist;
-        float dt = t - prevTime;
-        // single pole IIR low pass filter for pinch speed
-        float a = std::exp(-dt*pinchInvTau);
-        pinchSpeed = a*pinchSpeed + (1-a)*dd/dt;
+        // once again FIR ends up being simpler than IIR when we need to handle, e.g, input events with dt = 0
+        while(prevDists.size() > 1 && prevTime - prevDists.back().t < 0.005) prevDists.pop_back();  //MIN_INPUT_DT
+        while(prevDists.size() >= 12) prevDists.pop_front();  //MAX_PREV_INPUT
+        prevDists.push_back({prevDist, prevTime});
       }
       else if(multiTouchState == TOUCH_ROTATE)
         map->handleRotateGesture(com.x, com.y, angle - prevAngle);

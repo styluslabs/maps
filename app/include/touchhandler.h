@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <list>
 
 class MapsApp;
 class SvgGui;
@@ -28,8 +29,8 @@ public:
   double prevTime = 0;
   float xyScale = 1.0f;
   float dblTapDragScale = 1.0f;
-  float pinchInvTau = 1/0.05;  // 50 ms time constant for pinch speed averaging
-  float pinchSpeed = 0;
+  struct PrevPinchPt { float dist; double t; };
+  std::list<PrevPinchPt> prevDists;
 
   enum { TOUCH_NONE, TOUCH_PINCH, TOUCH_ROTATE, TOUCH_SHOVE } multiTouchState;
   enum { TAP_NONE, DBL_TAP_DRAG_PENDING, DBL_TAP_DRAG_ACTIVE } tapState;
