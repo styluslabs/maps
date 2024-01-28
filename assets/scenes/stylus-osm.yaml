@@ -56,8 +56,8 @@ global:
         road_halo: white
         ferry_name: '#8db3ce'
         ferry_halo: white
-        border: wheat
-        border_country: [0.824, 0.651, 0.329, 1.00]
+        border: '#777'  #wheat
+        border_country: '#666'  #[0.824, 0.651, 0.329, 1.00]
         city_point: white
         city_point_halo: black
         place_name: [0, 0, 0, .8]
@@ -89,6 +89,34 @@ global:
         #motorway_7: '#D16768'
         #runway_16: '#fff'
         #runway_casing: orange
+
+    order:
+        landuse: 1
+        parks: 1
+        airport: 1
+        golf: 2
+        landcover: 3
+        waterway: 4
+        water: 5
+        pier: 9
+        bldg: 10
+        transportation_casing: 10
+        transportation: 40
+        rail: 40
+        taxiway: 50
+        path: 50
+        runway: 55
+        minor_road: 60
+        piste: 65
+        major_road: 70
+        motorway: 80
+        bridge: 100
+        bicycle: 120
+        transit: 150
+        aerialway: 150
+        border: 190
+        bldg_3d_line: 199
+        bldg_3d: 200
 
     piste_color_fn: function() { return global.color.piste[feature.difficulty] || 'white'; }
     piste_symbols: { easy: '●', intermediate: '■', advanced: '◆', expert: '◆◆' }
@@ -248,6 +276,9 @@ styles:
         base: lines
         lighting: false
     # dash only supported for styles, not draw block because each dash pattern requires separate shader
+    dashed-border:
+        mix: unlit-lines
+        dash: [2.0, 0.5]
     dashed-path:
         mix: unlit-lines
         dash: [3.0, 0.5]
@@ -291,7 +322,7 @@ layers:
             polygons:
                 visible: false
                 style: global.earth_style
-                order: 3
+                order: global.order.landcover
                 color: global.color.landuse
         green:
             filter: { class: [forest, grass, farmland, wetland] }
@@ -299,10 +330,10 @@ layers:
         # golf course can be inside park, so make sure it is drawn on top
         golf:
             filter: { class: golf_course }
-            draw: { polygons: { visible: true, order: 2, color: global.color.golf } }
+            draw: { polygons: { visible: true, order: global.order.golf, color: global.color.golf } }
         park:
             filter: { class: park }
-            draw: { polygons: { visible: true, order: 1, color: global.color.parks } }
+            draw: { polygons: { visible: true, order: global.order.parks, color: global.color.parks } }
         beach:
             filter: { class: sand }
             draw: { polygons: { visible: true, color: global.color.beach } }
@@ -321,7 +352,7 @@ layers:
             polygons:
                 visible: false
                 style: global.earth_style
-                order: 1
+                order: global.order.landuse
                 color: global.color.landuse
         green:
             filter: { class: [zoo, playground, pitch, cemetery] }
@@ -345,7 +376,7 @@ layers:
         draw:
             polygons:
                 style: global.earth_style
-                order: 1
+                order: global.order.parks
                 color: global.color.parks
 
     pier:
@@ -357,14 +388,14 @@ layers:
             pier: { filter: { man_made: pier }, draw: { polygons: { color: global.color.pier } } }
             draw:
                 polygons:
-                    order: 9
+                    order: global.order.pier
                     color: global.color.breakwater
         pier_lines:
             filter: { $geometry: line }
             pier: { filter: { man_made: pier }, draw: { lines: { color: global.color.pier } } }
             draw:
                 lines:
-                    order: 9
+                    order: global.order.pier
                     color: global.color.breakwater
                     width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
 
@@ -374,7 +405,7 @@ layers:
         filter: { $geometry: polygon }
         draw:
             polygons:
-                order: 5
+                order: global.order.water
                 color: global.color.water
         #ocean:
         #    filter: { class: ocean}
@@ -412,7 +443,7 @@ layers:
         filter: { $geometry: line }
         draw:
             lines:
-                order: 4
+                order: global.order.waterway
                 color: global.color.water
                 width: [[7,0.5px],[8,1px],[15,2px]]
 
@@ -442,19 +473,19 @@ layers:
                 style: unlit-lines
                 color: global.color.road
                 width: 0
-                order: 40
+                order: global.order.transportation
                 outline:
                     visible: global.show_polygons
                     color: [[16, global.color.casing_16], [18, global.color.casing_18]]
                     width: 0  #[[15, 0], [16, 2]]
-                    order: 10 # put all outlines below all roads
+                    order: global.order.transportation_casing # put all outlines below all roads
         rounded:
             filter: { $zoom: { min: 18 } }
             draw: { lines: { cap: round } }
         bridge:
             filter: { brunnel: bridge }
             priority: 1
-            draw: { lines: { order: 100 } }
+            draw: { lines: { order: global.order.bridge } }
         tunnel:
             filter: { brunnel: tunnel, $zoom: { min: 12 } }
             priority: 1
@@ -463,7 +494,7 @@ layers:
             filter: { class: motorway }
             draw:
                 lines:
-                    order: 80
+                    order: global.order.motorway
                     color: 'function() { return global.show_motorways ? global.color.motorway : global.color.motorway_muted; }'
                     #[[5, global.color.motorway_5], [7, global.color.motorway_7]]
                     width: [[5, 1px], [8, 1.5px], [14, 2px], [15, 12]]
@@ -483,7 +514,7 @@ layers:
             filter: { class: [trunk, primary, secondary], $zoom: { min: 10 } }
             draw:
                 lines:
-                    order: 70
+                    order: global.order.major_road
                     width: [[10, 0], [13, 2px], [14, 2px], [16, 12]]
                     outline:
                         width: [[16, 0], [17, 1]]
@@ -491,7 +522,7 @@ layers:
             filter: { class: [tertiary, minor, service] }
             draw:
                 lines:
-                    order: 60
+                    order: global.order.minor_road
                     width: [[13, 0px], [14, 1px], [15, 8]]
                     outline:
                         width: [[17, 0], [18, 1]]
@@ -506,7 +537,7 @@ layers:
             filter: { class: path }
             draw:
                 lines:
-                    order: 50
+                    order: global.order.path
                     style: dashed-path
                     color: global.color.path
                     width: [[14, 0px], [15, 1px], [18, 3px]]
@@ -524,7 +555,7 @@ layers:
             filter: { class: track }
             draw:
                 lines:
-                    order: 50
+                    order: global.order.path
                     style: dashed-track
                     color: global.color.path
                     width: [[14, 1px], [15, 2px], [18, 4px]]
@@ -537,7 +568,7 @@ layers:
                 $zoom: { min: 10 }
             draw:
                 lines:
-                    order: 40
+                    order: global.order.rail
                     color: global.color.rail
                     width: [[12, 1px], [14, 1px], [16, 2px]]
             sleepers:
@@ -545,7 +576,7 @@ layers:
                 filter: { $zoom: { min: 14 } }
                 draw:
                     dashed-rail:
-                        order: 40
+                        order: global.order.rail
                         color: global.color.rail
                         width: [[12, 4px], [14, 4px], [16, 6px]]
             tunnel:
@@ -564,7 +595,7 @@ layers:
             filter: { class: aerialway, $zoom: { min: 10 } }
             draw:
                 lines:
-                    order: 150  # aerialway would more often be over bridge vs under
+                    order: global.order.aerialway  # aerialway would more often be over bridge vs under
                     color: global.color.aerialway
                     width: [[14, 0.5px], [15, 1.0px], [16, 2m]]
                 # maybe use dashed line instead?
@@ -609,14 +640,14 @@ layers:
                     polygons:
                         visible: global.show_trails
                         style: global.earth_style
-                        order: 1
+                        order: global.order.landuse
                         color: global.piste_color_fn
             piste_lines:
                 filter: { $geometry: line }
                 draw:
                     lines:
                         visible: global.show_trails
-                        order: 65
+                        order: global.order.piste
                         color: global.piste_color_fn
                         width: [[10,0.5px],[11,1px],[12,1.25px],[13,2px],[18,3m]]
                         outline:
@@ -794,7 +825,7 @@ layers:
             draw:
                 polygons:
                     style: global.earth_style
-                    order: 1
+                    order: global.order.airport
                     color: global.color.airport
 
         taxiways:
@@ -802,7 +833,7 @@ layers:
             draw:
                 lines:
                     color: global.color.taxiway
-                    order: 50
+                    order: global.order.taxiway
                     width: [[13, 0px], [14, 2px], [17, 10px]]
 
         runways:
@@ -811,7 +842,7 @@ layers:
                 lines:
                     color: global.color.runway_13  #[[13, global.color.runway_13], [16, global.color.runway_16]]
                     width: [[12, 3px], [13, 5px], [14, 10px], [15, 75]]
-                    order: 55
+                    order: global.order.runway
                     cap: square
                     #outline:
                     #    color: global.color.runway_casing
@@ -851,7 +882,7 @@ layers:
                 style: unlit-lines
                 color: '#008800'  #global.color.road
                 width: [[13, 2px], [14, 3px]]
-                order: 120
+                order: global.order.bicycle
         track:
             exclusive: true
             priority: 1
@@ -898,7 +929,7 @@ layers:
         draw:
             lines:
                 width: [[10, 2px], [13, 3px], [14, 4px]]
-                order: 150
+                order: global.order.transit
                 #style: transit-lines
                 color: global.transit_color_fn
             text:
@@ -935,7 +966,7 @@ layers:
         draw:
             polygons:
                 style: heightglow
-                order: 10
+                order: global.order.bldg
                 color: global.color.bldg
 
         # extrude 3d buildings
@@ -947,12 +978,12 @@ layers:
                     #extrude: function () { return feature.render_height > 20 || $zoom >= 16; }
                     extrude: true
                     color: global.color.bldg_3d
-                    order: 1001
+                    order: global.order.bldg_3d
                 lines:
                     style: heightglowline
                     width: 2px
                     color: global.color.bldg_3d_line
-                    order: 1000
+                    order: global.order.bldg_3d_line
                     extrude: true
 
 
@@ -962,7 +993,6 @@ layers:
         #enabled: false
         draw:
             text:
-                #order: 1
                 priority: global.priority_housenumber
                 text_source: housenumber
                 font:
@@ -1110,7 +1140,7 @@ layers:
                         sprite: tram
                         priority: global.priority_station_tram
                         size: [[13, 10px], [15, 16px]]
-                        visible: global.show_transit
+                        visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
 
         bus_stop:
             exclusive: true
@@ -1256,15 +1286,16 @@ layers:
         draw:
             lines:
                 visible: false
-                order: 3
-                width: 2px
+                style: dashed-border
+                order: global.order.border
+                width: 1px
                 color: global.color.border
 
             text:
                 priority: global.priority_boundary
-                text_source:
-                    left: 'adm0_l'
-                    right: 'adm0_r'
+                #text_source:
+                #    left: 'adm0_l'
+                #    right: 'adm0_r'
                 font:
                     family: Open Sans
                     size: 12px
@@ -1279,6 +1310,7 @@ layers:
                 lines:
                     visible: true
                     color: global.color.border_country
+                    width: 1.5px
 
         region:
             filter: { admin_level: [3, 4] }

@@ -332,6 +332,7 @@ function way_function(way)
     way:Layer("boundary",false)
     way:AttributeNumeric("admin_level", admin_level)
     way:MinZoom(mz)
+    SetNameAttributes(way)
     if way:Find("disputed")=="yes" then way:AttributeNumeric("disputed", 1) end
   end
 

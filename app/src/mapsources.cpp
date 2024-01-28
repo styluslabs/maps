@@ -125,43 +125,6 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
   srcFile = srcfile.c_str();
 }
 
-// don't run this during offline map download!
-int64_t MapsSources::shrinkCache(int64_t maxbytes)
-{
-  std::vector< std::unique_ptr<Tangram::MBTilesDataSource> > dbsources;
-  std::vector< std::pair<int, int> > tiles;
-  int totalTiles = 0;
-  auto insertTile = [&](int offline_id, int t, int size){ ++totalTiles; if(!offline_id) tiles.emplace_back(t, size); };
-
-  FSPath cachedir(app->baseDir, "cache");
-  for(auto& file : lsDirectory(cachedir)) {
-    FSPath cachefile = cachedir.child(file);
-    if(cachefile.extension() != "mbtiles") continue;
-    dbsources.push_back(std::make_unique<Tangram::MBTilesDataSource>(
-        *app->platform, cachefile.baseName(), cachefile.path, "", true));
-    int ntiles = totalTiles;
-    dbsources.back()->getTileSizes(insertTile);
-    // delete empty cache file
-    if(totalTiles == ntiles) {
-      LOG("Deleting empty cache file %s", cachefile.c_str());
-      dbsources.pop_back();
-      removeFile(cachefile.path);
-    }
-  }
-
-  std::sort(tiles.rbegin(), tiles.rend());  // sort by timestamp, descending (newest to oldest)
-  int64_t tot = 0;
-  for(auto& x : tiles) {
-    tot += x.second;
-    if(tot > maxbytes) {
-      for(auto& src : dbsources)
-        src->deleteOldTiles(x.first);
-      break;
-    }
-  }
-  return tot;
-}
-
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 {
   mapSources[key] = srcnode;
@@ -373,17 +336,6 @@ void MapsSources::populateSources()
     Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowBtn->setMenu(overflowMenu);
-
-    overflowMenu->addItem("Clear cache", [=](){
-      auto& tileSources = app->map->getScene()->tileSources();
-      for(auto& tilesrc : tileSources) {
-        auto& info = tilesrc->offlineInfo();
-        if(info.cacheFile.empty()) continue;
-        auto datasrc = std::make_unique<Tangram::MBTilesDataSource>(
-                *app->platform, tilesrc->name(), info.cacheFile, "", true);
-        datasrc->deleteOldTiles(INT_MAX);
-      }
-    });
 
     overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
       if(archived)
@@ -744,13 +696,6 @@ Button* MapsSources::createPanel()
   srcEditContent->addWidget(varsContent);
   srcEditContent->addWidget(layersContent);
 
-  auto clearCacheFn = [this](std::string res){
-    if(res == "OK") {
-      shrinkCache(20'000'000);  // 20MB just to test shrinkCache code
-      app->storageTotal = app->storageOffline;
-    }
-  };
-
   Widget* offlineBtn = app->mapsOffline->createPanel();
 
   legendBtn = createToolbutton(MapsApp::uiIcon("map-question"), "Legends");
@@ -766,13 +711,31 @@ Button* MapsSources::createPanel()
     importEdit->setText("");
     app->gui->setFocused(importEdit);
   });
-  overflowMenu->addItem("Clear cache", [=](){
-    MapsApp::messageBox("Clear cache", "Delete all cached map data? This action cannot be undone.",
-        {"OK", "Cancel"}, clearCacheFn);
-  });
   overflowMenu->addItem("Restore default sources", [=](){
     FSPath path = FSPath(app->configFile).parent().child("mapsources.default.yaml");
     importSources(path.path);
+  });
+
+  overflowMenu->addItem("Clear cache", [=](){
+    static const char* wipe = "DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM offline_tiles); VACUUM;";
+    auto& tileSources = app->map->getScene()->tileSources();
+    for(auto& tilesrc : tileSources) {
+      auto& info = tilesrc->offlineInfo();
+      if(info.cacheFile.empty()) continue;
+      MapsOffline::queueOfflineTask(0, [db=info.cacheFile](){ MapsOffline::runSQL(db, wipe); });
+    }
+  });
+  auto clearAllCachesFn = [this](std::string res){
+    if(res == "OK") {
+      MapsOffline::queueOfflineTask(0, [this](){
+        int64_t tot = MapsOffline::shrinkCache(20'000'000);
+        app->storageTotal = tot + app->storageOffline;
+      });
+    }
+  };
+  overflowMenu->addItem("Clear all caches", [=](){
+    MapsApp::messageBox("Clear all caches", "Delete all cached map data? This action cannot be undone.",
+        {"OK", "Cancel"}, clearAllCachesFn);
   });
 
   auto sourcesHeader = app->createPanelHeader(MapsApp::uiIcon("layers"), "Map Source");

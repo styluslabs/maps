@@ -132,8 +132,8 @@ public:
   ScaleBarWidget* scaleBar;
   std::vector<Widget*> panelHistory;
 
-  int64_t storageTotal = 0;
-  int64_t storageOffline = 0;
+  std::atomic_int_fast64_t storageTotal = {0};
+  std::atomic_int_fast64_t storageOffline = {0};
 
   enum EventTypes { PANEL_CLOSED=0xE001, PANEL_OPENED };
 

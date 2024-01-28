@@ -429,16 +429,14 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     std::string title = titleEdit->text();
     SQLiteStmt(app->bkmkDB, "UPDATE bookmarks SET title = ?, notes = ? WHERE rowid = ?;")
         .bind(title, noteEdit->text(), rowid).exec();
-    // update title
-    static_cast<TextLabel*>(app->infoPanel->selectFirst(".panel-title"))->setText(title.c_str());
-
+    bkmkPanelDirty = true;
     auto it = bkmkMarkers.find(listid);
     if(it != bkmkMarkers.end())
       it->second->updateMarker(rowid, {{{"name", title}}});
-
-    noteText->setText(noteEdit->text().c_str());
-    noteText->setVisible(true);
-    bkmkPanelDirty = true;
+    app->setPickResult(app->pickResultCoord, title, app->pickResultProps);  // must be last (destroys widget)
+    //static_cast<TextLabel*>(app->infoPanel->selectFirst(".panel-title"))->setText(title.c_str());
+    //noteText->setText(noteEdit->text().c_str());
+    //noteText->setVisible(true);
   };
   auto onCancelEdit = [=](){ noteText->setVisible(true); };
   auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);

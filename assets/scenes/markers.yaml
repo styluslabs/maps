@@ -237,7 +237,7 @@ layers:
             marker:
                 style: poi-points
                 texture: bookmark-marker
-                size: 26px
+                size: [16px, 24px]
                 interactive: true
                 collide: true
                 color: function() { return feature.color || '#12B5CB'; }

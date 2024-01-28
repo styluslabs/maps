@@ -46,6 +46,14 @@ struct OfflineMapInfo
   bool canceled;
 };
 
+struct OfflineTask
+{
+  OfflineTask(int _id, std::function<void()>&& _fn) : id(_id), fn(std::move(_fn)) {}
+  int id;
+  bool canceled;
+  std::function<void()> fn;
+};
+
 class OfflineDownloader
 {
 public:
@@ -77,7 +85,7 @@ static MapsOffline* mapsOfflineInst = NULL;  // for updateProgress()
 static int maxOfflineDownloads = 4;
 static int currTilesTotal = 0;
 static std::atomic<Timestamp> prevProgressUpdate(0);
-static ThreadSafeQueue<OfflineMapInfo, std::list> offlinePending;
+static ThreadSafeQueue<OfflineTask, std::list> offlinePending;
 static ThreadSafeQueue<std::unique_ptr<OfflineDownloader>> offlineDownloaders;
 
 
@@ -87,10 +95,7 @@ static void offlineDLStep()
   while(!offlinePending.empty()) {
     auto& olinfo = offlinePending.front();  // safe because only this thread can remove final item from offlinePending
     if(offlineDownloaders.empty()) {
-      for(auto& source : olinfo.sources) {
-        offlineDownloaders.emplace_back(new OfflineDownloader(platform, olinfo, source));
-        currTilesTotal += offlineDownloaders.back()->remainingTiles();
-      }
+      olinfo.fn();
     }
     while(!offlineDownloaders.empty()) {
       //int nreq = std::max(1, maxOfflineDownloads - int(platform.activeUrlRequests()));
@@ -109,7 +114,6 @@ static void offlineDLStep()
     offlinePending.pop_front();
     currTilesTotal = 0;
   }
-  //platform.onUrlRequestsThreshold = nullptr;  // all done!
 }
 
 static void offlineDLMain()
@@ -336,6 +340,64 @@ bool OfflineDownloader::mbtilesImport(SQLiteDB& tileDB)
   return true;
 }
 
+void MapsOffline::runSQL(std::string dbpath, std::string sql)
+{
+  SQLiteDB db;
+  if(sqlite3_open_v2(dbpath.c_str(), &db.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK)
+    LOGE("Cannot open %s", dbpath.c_str());
+  else if(!db.exec(sql))
+    LOGE("SQL error: %s", db.errMsg());
+}
+
+int64_t MapsOffline::shrinkCache(int64_t maxbytes)
+{
+  std::vector< std::unique_ptr<Tangram::MBTilesDataSource> > dbsources;
+  std::vector< std::pair<int, int> > tiles;
+  int totalTiles = 0;
+  auto insertTile = [&](int oflid, int t, int size){ ++totalTiles; if(!oflid) tiles.emplace_back(t, size); };
+
+  FSPath cachedir(MapsApp::baseDir, "cache");
+  for(auto& file : lsDirectory(cachedir)) {
+    FSPath cachefile = cachedir.child(file);
+    if(cachefile.extension() != "mbtiles") continue;
+    dbsources.push_back(std::make_unique<Tangram::MBTilesDataSource>(
+        *MapsApp::platform, cachefile.baseName(), cachefile.path, "", true));
+    int ntiles = totalTiles;
+    dbsources.back()->getTileSizes(insertTile);
+    // delete empty cache file
+    if(totalTiles == ntiles) {
+      LOG("Deleting empty cache file %s", cachefile.c_str());
+      dbsources.pop_back();
+      removeFile(cachefile.path);
+    }
+  }
+
+  std::sort(tiles.rbegin(), tiles.rend());  // sort by timestamp, descending (newest to oldest)
+  int64_t tot = 0;
+  for(auto& x : tiles) {
+    tot += x.second;
+    if(tot > maxbytes) {
+      for(auto& src : dbsources) {
+        auto totchanges = sqlite3_total_changes(src->dbHandle());
+        src->deleteOldTiles(x.first);
+        if(sqlite3_total_changes(src->dbHandle()) - totchanges > 32)
+          sqlite3_exec(src->dbHandle(), "VACUUM;", NULL, NULL, NULL);
+      }
+      break;
+    }
+  }
+  return tot;
+}
+
+void MapsOffline::queueOfflineTask(int mapid, std::function<void()>&& fn)
+{
+  offlinePending.emplace_back(mapid, std::move(fn));
+  semOfflineWorker.post();
+  runOfflineWorker = true;
+  if(!offlineWorker)
+    offlineWorker = std::make_unique<std::thread>(offlineDLMain);
+}
+
 void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, int maxZoom)
 {
   Map* map = app->map.get();
@@ -360,14 +422,15 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
         Tangram::YamlPath("global.search_data").get(map->getScene()->config(), olinfo.sources.back().searchData);
     }
   }
-  offlinePending.push_back(std::move(olinfo));
+  //offlinePending.push_back(std::move(olinfo));
 
+  queueOfflineTask(mapid, [olinfo=std::move(olinfo)](){
+    for(auto& source : olinfo.sources) {
+      offlineDownloaders.emplace_back(new OfflineDownloader(*MapsApp::platform, olinfo, source));
+      currTilesTotal += offlineDownloaders.back()->remainingTiles();
+    }
+  });
   //MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
-  //MapsApp::platform->urlRequestsThreshold = maxOfflineDownloads - 1;
-  semOfflineWorker.post();
-  runOfflineWorker = true;
-  if(!offlineWorker)
-    offlineWorker = std::make_unique<std::thread>(offlineDLMain);
 }
 
 MapsOffline::~MapsOffline()
@@ -381,7 +444,7 @@ MapsOffline::~MapsOffline()
 
 int MapsOffline::numOfflinePending() const
 {
-  return offlinePending.queue.size();
+  return offlinePending.size();
 }
 
 bool MapsOffline::cancelDownload(int mapid)
@@ -400,7 +463,8 @@ bool MapsOffline::cancelDownload(int mapid)
 
 static void deleteOfflineMap(int mapid)
 {
-  int64_t offlineSize = 0;
+  int64_t dtotal = 0;
+  int64_t storageShrinkMax = MapsApp::config["storage"]["shrink_at"].as<int64_t>(500) * 1024*1024;
   bool purge = MapsApp::config["storage"]["purge_offline"].as<bool>(true);
   FSPath cachedir(MapsApp::baseDir, "cache");
   for(auto& file : lsDirectory(cachedir)) {
@@ -410,13 +474,17 @@ static void deleteOfflineMap(int mapid)
     //if(cachename == "false" || !FSPath(cachefile).exists()) continue;
     FSPath cachefile = cachedir.child(file);
     if(cachefile.extension() != "mbtiles") continue;
-    auto s = std::make_unique<Tangram::MBTilesDataSource>(
+    auto mbtiles = std::make_unique<Tangram::MBTilesDataSource>(
         *MapsApp::platform, cachefile.baseName(), cachefile.path, "", true);
-    offlineSize -= s->getOfflineSize();
-    s->deleteOfflineMap(mapid, purge);
-    offlineSize += s->getOfflineSize();
+    int64_t dsize = mbtiles->getOfflineSize();
+    mbtiles->deleteOfflineMap(mapid, purge);
+    dsize -= mbtiles->getOfflineSize();
+    dtotal += dsize;
+    mbtiles.reset();  // close DB before potentially queueing VACUUM
+    if(purge && storageShrinkMax > 0 && dsize > 8*1024*1024)
+      MapsOffline::queueOfflineTask(0, [=](){ MapsOffline::runSQL(cachefile.path, "VACUUM;"); });
   }
-  MapsApp::platform->notifyStorage(0, offlineSize);  // this can trigger cache shrink, so wait until all sources processed
+  MapsApp::platform->notifyStorage(0, -dtotal);  // this can trigger cache shrink, so wait until all sources processed
   MapsSearch::onDelOfflineMap(mapid);
 
   SQLiteStmt(MapsApp::bkmkDB, "DELETE FROM offlinemaps WHERE mapid = ?;").bind(mapid).exec();
@@ -501,13 +569,12 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
   olinfo.sources.push_back({tileSource->name(), destpath, "file:///" + srcpath, {}, tileSource->maxZoom(), {}});
   if(!tileSource->isRaster())
     Tangram::YamlPath("global.search_data").get(app->map->getScene()->config(), olinfo.sources.back().searchData);
-  offlinePending.push_back(std::move(olinfo));
+  //offlinePending.push_back(std::move(olinfo));
 
-  semOfflineWorker.post();
-  runOfflineWorker = true;
-  if(!offlineWorker)
-    offlineWorker = std::make_unique<std::thread>(offlineDLMain);
-
+  queueOfflineTask(offlineId, [olinfo=std::move(olinfo)](){
+    offlineDownloaders.emplace_back(new OfflineDownloader(*MapsApp::platform, olinfo, olinfo.sources.back()));
+    currTilesTotal += offlineDownloaders.back()->remainingTiles();
+  });
   return true;
 }
 

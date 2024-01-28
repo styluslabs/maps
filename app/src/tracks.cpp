@@ -571,17 +571,15 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
     auto it = track->findWaypoint(uid);
     it->name = titleEdit->text();
     it->desc = noteEdit->text();
-
-    // update title
-    static_cast<TextLabel*>(app->infoPanel->selectFirst(".panel-title"))->setText(titleEdit->text().c_str());
     if(it->marker) {
       app->map->markerSetProperties(it->marker,
           {{{"name", it->name}, {"color", track->style}, {"priority", it->marker}}});
     }
-
-    noteText->setText(noteEdit->text().c_str());
-    noteText->setVisible(true);
     waypointsDirty = true;
+    app->setPickResult(app->pickResultCoord, it->name, app->pickResultProps);  // must be called last
+    //static_cast<TextLabel*>(app->infoPanel->selectFirst(".panel-title"))->setText(titleEdit->text().c_str());
+    //noteText->setText(noteEdit->text().c_str());
+    //noteText->setVisible(true);
   };
   auto onCancelEdit = [=](){ noteText->setVisible(true); };
   auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);

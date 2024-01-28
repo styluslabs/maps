@@ -14,6 +14,10 @@ public:
   void resumeDownloads();
   Widget* createPanel();
 
+  static void queueOfflineTask(int mapid, std::function<void()>&& fn);
+  static int64_t shrinkCache(int64_t maxbytes);
+  static void runSQL(std::string dbpath, std::string sql);
+
   Widget* offlinePanel = NULL;
 
 private:

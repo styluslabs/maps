@@ -143,7 +143,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   std::string osmid = osmIdFromProps(props);
   pickResultCoord = pos;
   pickResultName = namestr;
-  pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
+  if(&props != &pickResultProps)  // rapidjson asserts this
+    pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
   currLocPlaceInfo = (locMarker > 0 && pickedMarkerId == locMarker);
   flyToPickResult = true;
   // allow pick result to be used as waypoint
@@ -1404,8 +1405,8 @@ bool MapsApp::openURL(const char* url)
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)
 void MapsApp::saveConfig()
 {
-  config["storage"]["offline"] = storageOffline;
-  config["storage"]["total"] = storageTotal;
+  config["storage"]["offline"] = storageOffline.load();
+  config["storage"]["total"] = storageTotal.load();
 
   CameraPosition pos = map->getCameraPosition();
   config["view"]["lng"] = pos.longitude;
@@ -1470,8 +1471,8 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // cache management
   storageTotal = config["storage"]["total"].as<int64_t>(0);
   storageOffline = config["storage"]["offline"].as<int64_t>(0);
-  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>(500) * 1000000;
-  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>(250) * 1000000;
+  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>(500) * 1024*1024;
+  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>(250) * 1024*1024;
   // easier to track total storage and offline map storage instead cached storage directly, since offline
   //   map download/deletion can convert some tiles between cached and offline
   platform->onNotifyStorage = [=](int64_t dtotal, int64_t doffline){
@@ -1481,9 +1482,11 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     //  storage will be fixed by shrinkCache
     if(doffline)
       saveConfig();
-    if(storageTotal - storageOffline > storageShrinkMax && !mapsOffline->numOfflinePending()) {
-      int64_t tot = mapsSources->shrinkCache(storageShrinkMin);
-      storageTotal = tot + storageOffline;  // update storage usage
+    if(storageShrinkMax > 0 && storageTotal - storageOffline > storageShrinkMax && !mapsOffline->numOfflinePending()) {
+      MapsOffline::queueOfflineTask(0, [=](){
+        int64_t tot = MapsOffline::shrinkCache(storageShrinkMin);
+        storageTotal = tot + storageOffline;  // update storage usage
+      });
     }
   };
 
