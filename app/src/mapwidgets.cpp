@@ -204,15 +204,17 @@ ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialCo
 
   static const char* colorBtnSVG = R"#(
     <g class="color_preview previewbtn">
-      <pattern id="checkerboard" x="0" y="0" width="18" height="18"
+      <!-- pattern id="checkerboard" x="0" y="0" width="18" height="18"
           patternUnits="userSpaceOnUse" patternContentUnits="userSpaceOnUse">
         <rect fill="black" fill-opacity="0.1" x="0" y="0" width="9" height="9"/>
         <rect fill="black" fill-opacity="0.1" x="9" y="9" width="9" height="9"/>
-      </pattern>
+      </pattern -->
 
-      <rect fill="white" x="1" y="1" width="35" height="35" />
-      <rect fill="url(#checkerboard)" x="1" y="1" width="35" height="35" />
-      <rect class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" x="1" y="1" width="35" height="35" />
+      <!-- rect fill="white" x="1" y="1" width="35" height="35" / -->
+      <!-- rect fill="url(#checkerboard)" x="1" y="1" width="35" height="35" / -->
+      <!-- rect class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" x="1" y="1" width="35" height="35" / -->
+      <rect fill="none" width="42" height="42"/>
+      <circle class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" cx="21" cy="21" r="15.5" />
     </g>
   )#";
   static std::unique_ptr<SvgNode> colorBtnNode;
@@ -474,7 +476,7 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="toolbutton drag-btn" margin="2 5">
-          <use class="listitem-icon icon" width="36" height="36" xlink:href=""/>
+          <use class="listitem-icon icon" width="32" height="32" xlink:href=""/>
         </g>
         <g layout="box" box-anchor="fill">
           <text class="title-text" box-anchor="hfill" margin="0 10 0 10"></text>
@@ -482,6 +484,7 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
         </g>
 
       </g>
+      <rect class="listitem-separator separator" margin="0 0 0 48" box-anchor="bottom hfill" width="20" height="1"/>
     </g>
   )";
   static std::unique_ptr<SvgNode> listItemProto;

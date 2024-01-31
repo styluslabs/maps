@@ -66,6 +66,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private SensorManager mSensorManager;
   private Sensor mAccelSensor;
   private Sensor mMagSensor;
+  private Sensor mOrientSensor;
   private HttpHandler httpHandler;
   private final Map<Long, Object> httpRequestHandles = Collections.synchronizedMap(new HashMap<Long, Object>());
   private float mDeclination = 0;
@@ -95,6 +96,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
     mAccelSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
     mMagSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+    mOrientSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
 
     if(!canGetLocation()) {
       requestPermissions(//this,  //ActivityCompat
@@ -172,6 +174,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
     mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
     mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
+    mSensorManager.registerListener(this, mOrientSensor, SensorManager.SENSOR_DELAY_UI);
   }
 
   public void stopSensors()
@@ -234,6 +237,17 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   @Override
   public void onSensorChanged(SensorEvent event)
   {
+    if(event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+      float rotmat[] = new float[9];  //or 16
+      float orient[] = new float[3];
+      float values[] = new float[4];
+      System.arraycopy(event.values, 0, values, 0, 4);
+      SensorManager.getRotationMatrixFromVector(rotmat, values);
+      SensorManager.getOrientation(rotmat, orient);
+      MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
+      Log.v("Tangram", "Orientation from rot vector: ", (180.0/java.lang.Math.PI)*(orient[0] + mDeclination), " Accuracy: ", (180.0/java.lang.Math.PI)*event.values[4]);
+    }
+
     if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
       mGravity = event.values;
 
@@ -247,7 +261,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         // orientation contains azimut, pitch and roll
         float orient[] = new float[3];
         SensorManager.getOrientation(R, orient);
-        MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
+        //MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
+        Log.v("Tangram", "Orientation from mag field: ", (180.0/java.lang.Math.PI)*(orient[0] + mDeclination));
       }
     }
   }

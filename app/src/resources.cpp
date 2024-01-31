@@ -59,7 +59,7 @@ static std::string uiIconStr;
 static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
 .legend text { fill: inherit; }
-.panel-container { fill: var(--window); }
+.panel-container { fill: var(--dark); }
 .icon { stroke-width: 1.6 }
 )#";
 
@@ -77,6 +77,15 @@ static const char* moreWidgetSVG = R"#(
   <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
     <use class="panel-icon icon" width="36" height="36" xlink:href="" />
     <text class="panel-title" box-anchor="hfill" margin="0 9"></text>
+  </g>
+
+  <g id="toolbutton" class="toolbutton" layout="box">
+    <rect class="background" box-anchor="hfill" width="36" height="42"/>
+    <rect class="checkmark" box-anchor="bottom hfill" margin="0 2" fill="none" width="36" height="3"/>
+    <g margin="0 5" box-anchor="fill" layout="flex" flex-direction="row">
+      <use class="icon" width="32" height="32" xlink:href="" />
+      <text class="title" display="none" margin="0 9"></text>
+    </g>
   </g>
 </svg>
 )#";
@@ -122,12 +131,23 @@ void initResources(const char* baseDir)
   SvgDocument* widgetDoc = SvgParser().parseString(defaultWidgetSVG);
 
   std::unique_ptr<SvgDocument> moreWidgets(SvgParser().parseString(moreWidgetSVG));
-  for(SvgNode* node : moreWidgets->children())
+  for(SvgNode* node : moreWidgets->children()) {
+    // remove widgets we want to replace
+    SvgNode* oldnode = widgetDoc->namedNode(node->xmlId());
+    if(oldnode) {
+      widgetDoc->removeChild(oldnode);
+      delete oldnode;
+    }
     widgetDoc->addChild(node);
+  }
   moreWidgets->children().clear();
 
   const SvgDocument* uiIcons = SvgGui::useFile(":/ui-icons.svg");
-  widgetDoc->removeChild(widgetDoc->selectFirst("defs"));
+  SvgNode* olddefs = widgetDoc->selectFirst("defs");
+  if(olddefs) {
+    widgetDoc->removeChild(olddefs);
+    delete olddefs;
+  }
   SvgDefs* defs = new SvgDefs;
   defs->addChild(uiIcons->namedNode("chevron-down")->clone());
   defs->addChild(uiIcons->namedNode("chevron-left")->clone());

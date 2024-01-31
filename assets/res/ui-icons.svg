@@ -112,8 +112,12 @@ document.addEventListener('DOMContentLoaded', function(event) {
 </svg>
 
 <!-- ion-arrow-back.svg -->
-<svg id="back" class="icon-512" width="1em" height="1em" viewBox="0 0 512 512">
+<svg id="old-back" class="icon-512" width="1em" height="1em" viewBox="0 0 512 512">
   <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M244 400L100 256l144-144M120 256h292"/>
+</svg>
+
+<svg id="back" class="icon-tabler icon-tabler-arrow-left" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 12l14 0 M5 12l6 6 M5 12l6 -6" />
 </svg>
 
 <!-- ion-close-circle-outline.svg -->

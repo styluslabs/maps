@@ -606,6 +606,7 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
 {
   float deg = azimuth*180.0f/float(M_PI);
+  deg = deg - 360*std::floor(deg/360);
   if(std::abs(deg - orientation) < 1.0f) return;
   orientation = deg;
   //LOGW("orientation: %.1f deg", orientation);
@@ -1541,7 +1542,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     glNeedsInit = false;
     map->setupGL();
     // Painter created here since GL context required to build shaders
-    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES));
+    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES));  //Painter::PAINT_SW | Painter::SW_BLIT_GL
     scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
     gui->fullRedraw = painter->usesGPU();
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
@@ -1608,23 +1609,16 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   scaleBar->directDraw(scaleBarPainter.get());
   scaleBarPainter->endFrame();
 
-  painter->endFrame();  // render UI over map
-#if 0  // nanovg_sw renderer
-  if(dirty.isValid()) {
-    // clear dirty rect to transparent pixels
-    painter->setCompOp(Painter::CompOp_Src);
-    painter->fillRect(dirty, Color::TRANSPARENT_COLOR);
-    painter->setCompOp(Painter::CompOp_SrcOver);
+  if(painter->usesGPU())
+    painter->endFrame();  // render UI over map
+  else {  // nanovg_sw renderer
+    if(dirty.isValid()) {
+      painter->setBackgroundColor(Color::INVALID_COLOR);
+      painter->targetImage->fillRect(dirty, Color::TRANSPARENT_COLOR);
+      painter->endFrame();
+    }
+    painter->blitImageToScreen(dirty);
   }
-  painter->endFrame();
-
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  glDisable(GL_DEPTH_TEST);
-  glDisable(GL_STENCIL_TEST);
-  glDisable(GL_CULL_FACE);
-  painter->blitImageToScreen(dirty);
-#endif
   TRACE_END(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
   TRACE_FLUSH();
   return true;

@@ -1017,16 +1017,19 @@ layers:
                 size: 14px
                 interactive: true
                 collide: true
-                priority: function() { return 30 + (1 - feature.ele/10000); }
+                priority: function() { return 30 + (1 - feature.ele/10000.0); }
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 text:
                     interactive: true
+                    # give text same priority as icon
+                    priority: function() { return 30 + (1 - feature.ele/10000.0); }
                     text_source: |
                         function() {
+                            const name = global.show_name_en && feature.name_en ? feature.name_en : feature.name;
                             const ele = global.metric_units ? feature.ele : feature.ele*3.2808399;
-                            if(!feature.name) { return ele.toFixed(0); }
-                            const name = feature.name.length > 17 ? feature.name.substring(0, 17) + "…" : feature.name;
-                            return name + "\n" + ele.toFixed(0);
+                            if(!name) { return ele.toFixed(0); }
+                            const elided = name.length > 17 ? name.substring(0, 17) + "…" : name;
+                            return elided + "\n" + ele.toFixed(0);
                         }
                     text_wrap: 100
                     max_lines: 2

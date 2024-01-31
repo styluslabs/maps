@@ -50,7 +50,7 @@ struct OfflineTask
 {
   OfflineTask(int _id, std::function<void()>&& _fn) : id(_id), fn(std::move(_fn)) {}
   int id;
-  bool canceled;
+  bool canceled = false;
   std::function<void()> fn;
 };
 
@@ -492,6 +492,7 @@ static void deleteOfflineMap(int mapid)
 
 void MapsOffline::downloadCompleted(int id, bool canceled)
 {
+  if(!id) return;
   if(canceled)
     deleteOfflineMap(id);
   else
