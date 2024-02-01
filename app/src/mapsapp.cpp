@@ -205,10 +205,13 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   map->markerSetProperties(pickResultMarker, {{{"name", namestr}}});  //{"priority", priority}
 
   Widget* distwdgt = item->selectFirst(".dist-text");
-  if(distwdgt) {
+  Widget* diricon = item->selectFirst(".direction-icon");
+  if(distwdgt && diricon) {
+    distwdgt->setVisible(hasLocation);
+    diricon->setVisible(hasLocation);
     double dist = lngLatDist(currLocation.lngLat(), pos);
     double bearing = lngLatBearing(currLocation.lngLat(), pos);
-    SvgUse* icon = static_cast<SvgUse*>(item->containerNode()->selectFirst(".direction-icon"));
+    SvgUse* icon = static_cast<SvgUse*>(diricon->node);
     if(icon)
       icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
     distwdgt->setText(fstring(metricUnits ? "%.1f km" : "%.1f mi", metricUnits ? dist : dist*0.621371).c_str());
@@ -428,8 +431,9 @@ void MapsApp::tapEvent(float x, float y)
       itemId = props->getAsString("osm_id");
     if(osmType.empty())
       osmType = "node";
-    if(!mapsTracks->activeTrack)
-      showPanel(infoPanel, true);  // let's try not clearing history
+    // we'll clear history iff panel is minimized
+    if(!panelContainer->isVisible())  // !mapsTracks->activeTrack)
+      showPanel(infoPanel, false);
     setPickResult(result->coordinates, "", props->toJson());
     tapLocation = {NAN, NAN};
   });
@@ -562,9 +566,9 @@ void MapsApp::updateLocMarker()
 
 void MapsApp::updateLocation(const Location& _loc)
 {
-  Point l0, l1;
-  map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &l0.x, &l0.y);
-  map->lngLatToScreenPosition(_loc.lng, _loc.lat, &l1.x, &l1.y);
+  //Point l0, l1;
+  //map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &l0.x, &l0.y);
+  //map->lngLatToScreenPosition(_loc.lng, _loc.lat, &l1.x, &l1.y);
   //LOGW("Location update dist: %.2f pixels", l1.dist(l0));
 
   currLocation = _loc;
@@ -611,6 +615,9 @@ void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
   orientation = deg;
   //LOGW("orientation: %.1f deg", orientation);
   updateLocMarker();
+  // we'll probably have to add a low-pass for this
+  if(followOrientation)
+    map->setRotation(azimuth);
 }
 
 YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
@@ -1113,13 +1120,38 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       setSensorsEnabled(true);
       sensorsEnabled = true;
       recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
+      return;
     }
-    else
-      map->flyTo(CameraPosition{currLocation.lng, currLocation.lat, map->getZoom()}, 1.0);
+    auto campos = map->getCameraPosition();
+    campos.longitude = currLocation.lng;
+    campos.latitude = currLocation.lat;
+    //campos.zoom = std::min(campos.zoom, 16.0f);
+    Point loc, center(map->getViewportWidth()/2, map->getViewportHeight()/2);
+    bool locvisible = map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &loc.x, &loc.y);
+    if(!mapMovedManually && center.dist(loc)/gui->paintScale < 40) {
+      campos.zoom = std::min(20.0f, campos.zoom + 1);
+      map->flyTo(campos, 0.35f);
+    }
+    else if(!locvisible && !std::isnan(pickResultCoord.latitude) &&
+        map->lngLatToScreenPosition(pickResultCoord.longitude, pickResultCoord.latitude, NULL, NULL)) {
+      auto viewboth = map->getEnclosingCameraPosition(pickResultCoord, currLocation.lngLat(), {32});
+      campos.zoom = viewboth.zoom - 1;
+      map->flyTo(campos, 1.0);
+    }
+    else {
+      if(campos.zoom < 12) campos.zoom = 15;
+      map->flyTo(campos, 1.0);
+      mapMovedManually = false;
+    }
   };
 
   // should we forward motion events to map (so if user accidently starts drag on button it still works?)
   recenterBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERUP && gui->fingerClicks == 2) {
+      followOrientation = !followOrientation;
+      map->setRotation(followOrientation ? orientation*float(M_PI)/180 : 0);
+      return true;
+    }
     if(isLongPressOrRightClick(event)) {
       sensorsEnabled = !sensorsEnabled;
       setSensorsEnabled(sensorsEnabled);
@@ -1617,7 +1649,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
       painter->targetImage->fillRect(dirty, Color::TRANSPARENT_COLOR);
       painter->endFrame();
     }
-    painter->blitImageToScreen(dirty);
+    painter->blitImageToScreen(dirty, true);
   }
   TRACE_END(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
   TRACE_FLUSH();

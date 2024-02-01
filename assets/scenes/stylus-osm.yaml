@@ -195,6 +195,7 @@ global:
     show_bike: false
     show_transit: false
     show_trails: false
+    show_parking: false
     show_motorways: true
 
     gui_variables:
@@ -202,6 +203,7 @@ global:
         show_bike: { label: Bike }
         show_transit: { label: Transit }
         show_trails: { label: Hike }
+        show_parking: { label: Parking }
         show_motorways: { label: Motorways }
 
     # specify fields indexed for search and filter to select indexed features
@@ -1218,7 +1220,7 @@ layers:
                     filter: { amenity: parking }
                     draw:
                         points:
-                            visible: global.show_trails    # parking == trailhead!
+                            visible: global.show_parking
                             priority: global.priority_poi_parking
                     default:
                         filter: { $zoom: { min: 18 } }

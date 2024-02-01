@@ -60,7 +60,6 @@ static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
 .legend text { fill: inherit; }
 .panel-container { fill: var(--dark); }
-.icon { stroke-width: 1.6 }
 )#";
 
 static const char* moreWidgetSVG = R"#(

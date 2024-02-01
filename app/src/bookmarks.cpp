@@ -55,7 +55,7 @@ int MapsBookmarks::getListId(const char* listname, bool create)
 static Widget* createNewListWidget(std::function<void(int, std::string)> callback)
 {
   TextEdit* newListTitle = createTitledTextEdit("Title");
-  ColorPicker* newListColor = createColorPicker(MapsApp::markerColors, Color::BLUE);
+  ColorPicker* newListColor = createColorPicker(MapsApp::markerColors, Color::CYAN);
   Widget* newListRow = createRow();
   newListRow->addWidget(newListTitle);
   newListRow->addWidget(newListColor);
@@ -73,7 +73,21 @@ static Widget* createNewListWidget(std::function<void(int, std::string)> callbac
   newListTitle->onChanged = [=](const char* s){ newListContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
   newListContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
-      newListColor->setColor(Color(0x12, 0xB5, 0xCB));
+      // choose color from markerColors most distant from color of newest list (using hue for now)
+      std::string prevcolor = "#12B5CB";
+      SQLiteStmt(MapsApp::bkmkDB, "SELECT color FROM lists ORDER BY rowid DESC LIMIT 1;").onerow(prevcolor);
+      float prevhue = ColorF(parseColor(prevcolor.c_str(), Color::CYAN)).hueHSV();
+      float maxdist = 0;
+      size_t next = 0;
+      for(size_t ii = 0; ii < MapsApp::markerColors.size(); ++ii) {
+        float d = std::abs(ColorF(MapsApp::markerColors[ii]).hueHSV() - prevhue);
+        d = std::min(d, 360 - d);
+        if(d > maxdist) {
+          maxdist = d;
+          next = ii;
+        }
+      }
+      newListColor->setColor(MapsApp::markerColors[next]);
       newListTitle->setText("");
     }
     return false;
@@ -478,6 +492,15 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   chooseListBtn->onClicked = [=](){
     chooseBookmarkList(setListFn);  //rowid);
   };
+
+  // long press to open list from a member
+  chooseListBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(isLongPressOrRightClick(event)) {
+      populateBkmks(listid, true);
+      return true;
+    }
+    return false;
+  });
 
   toolRow->addWidget(chooseListBtn);
   //toolRow->addWidget(createStretch());

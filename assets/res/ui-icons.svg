@@ -19,16 +19,19 @@ document.addEventListener('DOMContentLoaded', function(event) {
 
 <style type="text/css">
   <![CDATA[
-    .preview .icon-tabler { stroke-width: 2 }
-    .preview .icon-default { stroke-width: 2 }
-    .preview .icon-21 { stroke-width: 1.75 }
-    .preview .icon-32 { stroke-width: 2.667 }
-    .preview .icon-48 { stroke-width: 4 }
-    .preview .icon-512 { stroke-width: 42.667 }
-  ]]>
+    .heavy .icon-default { stroke-width: 2 }
+    .heavy .icon-21 { stroke-width: 1.75 }
+    .heavy .icon-32 { stroke-width: 2.667 }
+    .heavy .icon-512 { stroke-width: 42.667 }
+
+    .icon-default { stroke-width: 1.6 }
+    .icon-21 { stroke-width: 1.5 }
+    .icon-32 { stroke-width: 2.13 }
+    .icon-512 { stroke-width: 34.13 }
+]]>
 </style>
 
-<svg id="add-map" class="icon-tabler icon-tabler-map-plus" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="add-map" class="icon-default icon-tabler-map-plus" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M12 18.5l-3 -1.5l-6 3v-13l6 -3l6 3l6 -3v8.5"></path>
    <path d="M9 4v13"></path>
@@ -37,12 +40,12 @@ document.addEventListener('DOMContentLoaded', function(event) {
    <path d="M19 16v6"></path>
 </svg>
 
-<svg id="chevron-right" class="icon-tabler icon-tabler-chevron-right" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="chevron-right" class="icon-default icon-tabler-chevron-right" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M9 6l6 6l-6 6"></path>
 </svg>
 
-<svg id="chevron-left" class="icon-tabler icon-tabler-chevron-left" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="chevron-left" class="icon-default icon-tabler-chevron-left" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M15 6l-6 6l6 6"></path>
 </svg>
@@ -62,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
 <svg id="discard" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M14 10v7m-4-7v7M6 6v11.8c0 1.12 0 1.68.218 2.108a2 2 0 0 0 .874.874c.427.218.987.218 2.105.218h5.606c1.118 0 1.677 0 2.104-.218c.377-.192.683-.498.875-.874c.218-.428.218-.987.218-2.105V6M6 6h2M6 6H4m4 0h8M8 6c0-.932 0-1.398.152-1.765a2 2 0 0 1 1.082-1.083C9.602 3 10.068 3 11 3h2c.932 0 1.398 0 1.765.152a2 2 0 0 1 1.083 1.083C16 4.602 16 5.068 16 6m0 0h2m0 0h2"/></svg>
 
 <!-- Significatly altered; previous used fluent-my-location-24-regular.svg -->
-<svg id="gps-location" class="icon-tabler icon-tabler-current-location" width="1em" height="1em" viewBox="-2 -2 28 28" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="gps-location" class="icon-default icon-tabler-current-location" width="1em" height="1em" viewBox="-2 -2 28 28" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
   <circle cx="12" cy="12" r="4.8" fill="currentColor" stroke="none" />
   <path d="M12 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0 -16 0" />
   <path d="M12 4l0 -3" />
@@ -71,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
   <path d="M4 12l-3 0" />
 </svg>
 
-<svg id="gps-location-off" class="icon-tabler icon-tabler-current-location-off" width="1em" height="1em" viewBox="-2 -2 28 28" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="gps-location-off" class="icon-default icon-tabler-current-location-off" width="1em" height="1em" viewBox="-2 -2 28 28" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
   <path d="M6.357 6.33a8 8 0 1 0 11.301 11.326m1.642 -2.378a8 8 0 0 0 -10.597 -10.569" />
   <path d="M12 4l0 -3" />
   <path d="M12 20l0 3" />
@@ -81,13 +84,13 @@ document.addEventListener('DOMContentLoaded', function(event) {
 </svg>
 
 <!-- humbleicons-search.svg -->
-<svg id="search" width="1em" height="1em" viewBox="0 0 24 24"><g fill="none" stroke="currentColor"><path stroke-linecap="round" d="m20 20l-6-6"/><path d="M15 9.5a5.5 5.5 0 1 1-11 0a5.5 5.5 0 0 1 11 0Z"/></g></svg>
+<svg id="search" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><g fill="none" stroke="currentColor"><path stroke-linecap="round" d="m20 20l-6-6"/><path d="M15 9.5a5.5 5.5 0 1 1-11 0a5.5 5.5 0 0 1 11 0Z"/></g></svg>
 
 <!-- iconamoon-eye-off.svg -->
 <svg id="eye-slash" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round"><path stroke-linejoin="round" d="M10.73 5.073A10.96 10.96 0 0 1 12 5c4.664 0 8.4 2.903 10 7a11.595 11.595 0 0 1-1.555 2.788M6.52 6.519C4.48 7.764 2.9 9.693 2 12c1.6 4.097 5.336 7 10 7a10.44 10.44 0 0 0 5.48-1.52m-7.6-7.6a3 3 0 1 0 4.243 4.243"/><path d="m4 4l16 16"/></g></svg>
 
 <!-- iconamoon-eye.svg -->
-<svg id="eye" width="1em" height="1em" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12a3 3 0 1 1-6 0a3 3 0 0 1 6 0Z"/><path d="M2 12c1.6-4.097 5.336-7 10-7s8.4 2.903 10 7c-1.6 4.097-5.336 7-10 7s-8.4-2.903-10-7Z"/></g></svg>
+<svg id="eye" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12a3 3 0 1 1-6 0a3 3 0 0 1 6 0Z"/><path d="M2 12c1.6-4.097 5.336-7 10-7s8.4 2.903 10 7c-1.6 4.097-5.336 7-10 7s-8.4-2.903-10-7Z"/></g></svg>
 
 <!-- iconamoon-sorting-left.svg -->
 <svg id="sort" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h4"/></svg>
@@ -116,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
   <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M244 400L100 256l144-144M120 256h292"/>
 </svg>
 
-<svg id="back" class="icon-tabler icon-tabler-arrow-left" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="back" class="icon-default icon-tabler-arrow-left" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
   <path d="M5 12l14 0 M5 12l6 6 M5 12l6 -6" />
 </svg>
 
@@ -210,20 +213,19 @@ document.addEventListener('DOMContentLoaded', function(event) {
 <!-- lucide:text-cursor-input -->
 <svg id="textbox" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M5 4h1a3 3 0 0 1 3 3a3 3 0 0 1 3-3h1m0 16h-1a3 3 0 0 1-3-3a3 3 0 0 1-3 3H5m0-4H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1m8 0h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7M9 7v10"/></svg>
 
+<!-- filled icon -->
 <svg id="compass" width="1em" height="1em" viewBox="0 0 24 24">
   <path fill="#D8263E" d="M17,10L12,2L7,10H17Z"/>
   <path fill="currentColor" d="M7,22V12H9.5L15,19.3333V12H17V22H14.5L9,14.6667V22H7Z"/>
 </svg>
 
-<!-- icon-park-outline:knife-fork -->
-<svg id="food" class="icon-48" width="1em" height="1em" viewBox="0 0 48 48">
-  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14 4v40M8 5v10c0 5 6 5 6 5s6 0 6-5V5"/><path d="M30 12c0-8 8-8 8-8v17h-8v-9Z"/>
-    <path d="M38 21h-8v-9c0-8 8-8 8-8v17Zm0 0v23"/>
-  </g>
+<!-- now using a filled icon from github.com/ionic-team/ionicons; was: icon-park-outline:knife-fork -->
+<svg id="food" width="1em" height="1em" viewBox="0 0 512 512">
+  <path transform="translate(-75, 0)" d="M320 166c0-43.2-15-93.2-24-133.7V32h-8l-.2 116.9c0 6.1-2.9 11.1-9 11.1-5.7 0-8-4.3-8.6-9.9-.1-.4 0-.8 0-1.2L259.9 32h-8l-9 117-.1 1.1c-.6 5.6-3.7 9.9-9.5 9.9-6.1 0-9.1-5-9.1-11.1L223.8 32h-8C207 73 192 122.9 192 166.1c0 25.7 14.6 48.1 36.7 58.2 11.2 5.1 11.3 10.3 11.3 10.3s-16 201.7-16 213.1c0 11.4 4 18.5 9.5 24s14.2 8.2 22.4 8.2h.4c8.2 0 16.8-2.7 22.4-8.2 5.5-5.5 9.3-10.9 9.3-24s-16-213.1-16-213.1-1-5 11.4-10.6c21.6-9.8 36.6-32.2 36.6-58z" fill="currentColor"/>
+  <path transform="translate(75, 0)" d="M285.7 32c-3.3 0-6 1.4-8 3.8C259 58.7 224 116.1 224 250.1c0 39.2 33 39.2 32 69.4v.4c-2 47.1-14.9 111.1-16 130.3-.4 15.2 9.7 29.8 24.1 29.8h.4c14.4 0 23.5-14.4 23.5-29.6V38.3c0-5-.5-6.3-2.3-6.3z" fill="currentColor"/>
 </svg>
 
-<svg id="road" class="icon-tabler icon-tabler-road" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="road" class="icon-default icon-tabler-road" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M4 19l4 -14"></path>
    <path d="M16 5l4 14"></path>
@@ -235,14 +237,14 @@ document.addEventListener('DOMContentLoaded', function(event) {
 <!-- lucide:satellite-dish -->
 <svg id="satellite" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M4 10a7.31 7.31 0 0 0 10 10Zm5 5l3-3m5 1a6 6 0 0 0-6-6m10 6A10 10 0 0 0 11 3"/></svg>
 
-<svg id="car" class="icon-tabler icon-tabler-car" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="car" class="icon-default icon-tabler-car" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
    <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
    <path d="M5 17h-2v-6l2 -5h9l4 5h1a2 2 0 0 1 2 2v4h-2m-4 0h-6m-6 -6h15m-6 0v-5"></path>
 </svg>
 
-<svg id="bike" class="icon-tabler icon-tabler-bike" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="bike" class="icon-default icon-tabler-bike" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M5 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"></path>
    <path d="M19 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"></path>
@@ -250,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
    <path d="M17 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
 </svg>
 
-<svg id="walk" class="icon-tabler icon-tabler-walk" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="walk" class="icon-default icon-tabler-walk" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M13 4m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path>
    <path d="M7 21l3 -4"></path>
@@ -258,37 +260,37 @@ document.addEventListener('DOMContentLoaded', function(event) {
    <path d="M6 12l2 -3l4 -1l3 3l3 1"></path>
 </svg>
 
-<svg id="segment" class="icon-tabler icon-tabler-line" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="segment" class="icon-default icon-tabler-line" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path d="M6 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/>
    <path d="M18 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/>
    <path d="M7.5 16.5l9 -9"/>
 </svg>
 
-<svg id="plugin" class="icon-tabler icon-tabler-puzzle" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="plugin" class="icon-default icon-tabler-puzzle" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M4 7h3a1 1 0 0 0 1 -1v-1a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 0 4h-1a1 1 0 0 0 -1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-1a2 2 0 0 0 -4 0v1a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1a2 2 0 0 0 0 -4h-1a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1"></path>
 </svg>
 
-<svg id="no-plugin" class="icon-tabler icon-tabler-puzzle-off" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="no-plugin" class="icon-default icon-tabler-puzzle-off" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M8.18 4.171a2 2 0 0 1 3.82 .829v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 .819 3.825m-2.819 1.175v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-1a2 2 0 1 0 -4 0v1a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1a2 2 0 1 0 0 -4h-1a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h3"></path>
    <path d="M3 3l18 18"></path>
 </svg>
 
-<svg id="mountain" class="icon-tabler icon-tabler-mountain" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="mountain" class="icon-default icon-tabler-mountain" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M3 20h18l-6.921 -14.612a2.3 2.3 0 0 0 -4.158 0l-6.921 14.612z"></path>
    <path d="M7.5 11l2 2.5l2.5 -2.5l2 3l2.5 -2"></path>
 </svg>
 
-<svg id="arrow-narrow-up" class="icon-tabler icon-tabler-arrow-narrow-up" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="arrow-narrow-up" class="icon-default icon-tabler-arrow-narrow-up" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M12 5l0 14"></path>
    <path d="M16 9l-4 -4"></path>
    <path d="M8 9l4 -4"></path>
 </svg>
 
-<svg id="directions" class="icon-tabler icon-tabler-direction-sign" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="directions" class="icon-default icon-tabler-direction-sign" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
    <path d="M3.32 12.774l7.906 7.905c.427 .428 1.12 .428 1.548 0l7.905 -7.905a1.095 1.095 0 0 0 0 -1.548l-7.905 -7.905a1.095 1.095 0 0 0 -1.548 0l-7.905 7.905a1.095 1.095 0 0 0 0 1.548z"></path>
    <path d="M8 12h7.5"></path>
@@ -298,13 +300,13 @@ document.addEventListener('DOMContentLoaded', function(event) {
 <!-- assembled from draw-track and pin -->
 <svg id="waypoint" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24">
 <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M6 14H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4"/>
-<g fill="none" stroke="currentColor" stroke-width="3.33" transform="scale(0.6) translate(8,4)">
+<g fill="none" stroke="currentColor" stroke-width="2.64" transform="scale(0.6) translate(8,4)">
   <path d="M20 10c0 4.418-8 12-8 12s-8-7.582-8-12a8 8 0 1 1 16 0Z"/>
   <path fill="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M12 11a1 1 0 1 0 0-2a1 1 0 0 0 0 2Z"/>
 </g>
 </svg>
 
-<svg id="crosshair" class="icon-tabler icon-tabler-crosshair" width="1em" height="1em" viewBox="0 0 24 24">
+<svg id="crosshair" class="icon-default icon-tabler-crosshair" width="1em" height="1em" viewBox="0 0 24 24">
   <g stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 8v-2a2 2 0 0 1 2 -2h2"/>
     <path d="M4 16v2a2 2 0 0 0 2 2h2"/>
@@ -315,7 +317,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
   </g>
 </svg>
 
-<svg id="map-question" class="icon-tabler icon-tabler-map-question" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="map-question" class="icon-default icon-tabler-map-question" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path d="M15 20l-6 -3l-6 3v-13l6 -3l6 3l6 -3v7.5"></path>
    <path d="M9 4v13"></path>
    <path d="M15 7v5.5"></path>
@@ -330,7 +332,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
   </g>
 </svg>
 
-<svg id="measure" class="icon-tabler icon-tabler-ruler-measure" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="measure" class="icon-default icon-tabler-ruler-measure" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path d="M19.875 12c.621 0 1.125 .512 1.125 1.143v5.714c0 .631 -.504 1.143 -1.125 1.143h-15.875a1 1 0 0 1 -1 -1v-5.857c0 -.631 .504 -1.143 1.125 -1.143h15.75z"></path>
    <path d="M9 12v2"></path>
    <path d="M6 12v3"></path>
@@ -342,19 +344,19 @@ document.addEventListener('DOMContentLoaded', function(event) {
    <path d="M21 3v4"></path>
 </svg>
 
-<svg id="retry" class="icon-tabler icon-tabler-refresh-alert" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="retry" class="icon-default icon-tabler-refresh-alert" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path>
    <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path>
    <path d="M12 9l0 3"></path>
    <path d="M12 15l.01 0"></path>
 </svg>
 
-<svg id="refresh" class="icon-tabler icon-tabler-refresh" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="refresh" class="icon-default icon-tabler-refresh" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
    <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path>
    <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path>
 </svg>
 
-<svg id="share" class="icon-tabler icon-tabler-share" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<svg id="share" class="icon-default icon-tabler-share" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
   <path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
   <path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
   <path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />

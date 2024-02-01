@@ -50,9 +50,14 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
           app->doubleTapEvent(initCOM.x, initCOM.y);
       }
       else if(gui->flingV != Point(0,0)) {
-        Point v = Point(gui->flingV).clamp(-2000, 2000)*xyScale;
-        // handleFlingGesture will ignore if velocity is too low
-        app->map->handleFlingGesture(prevCOM.x, prevCOM.y, v.x, v.y);
+        Point v = Point(gui->flingV).clamp(-2000, 2000)*xyScale;  // pixels per second
+        // Tangram will ignore gestures if velocity is too low (as desired)
+        if(tapState == DBL_TAP_DRAG_ACTIVE) {
+          float h = app->map->getViewportHeight();
+          app->map->handlePinchGesture(initCOM.x, initCOM.y, 1.0, 4.0f*dblTapDragScale*v.y/h);
+        }
+        else
+          app->map->handleFlingGesture(prevCOM.x, prevCOM.y, v.x, v.y);
       }
     }
     touchEvent(0, actionFromSDLFinger(event->type), event->tfinger.timestamp/1000.0,
@@ -103,6 +108,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     else
       LOGE("Release event received for unknown touch point!");
   }
+  app->mapMovedManually = true;
 
   if(touchPoints.empty()) {
     if(multiTouchState == TOUCH_PINCH && t - prevTime < 0.1) {
