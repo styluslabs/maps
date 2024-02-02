@@ -769,8 +769,14 @@ Button* MapsSources::createPanel()
       for(const std::string& key : sources) {
         auto src = mapSources[key];
         if(!src || src["layer"].as<bool>(false)) continue;
-        Button* item = sourcesMenu->addItem(mapSources[key]["title"].Scalar().c_str(),
-            MapsApp::uiIcon("layers"), [this, key](){ rebuildSource(key); });
+        auto onClicked = [this, key](){
+          if(key != currSource)
+            rebuildSource(key);
+          if(sourceEditPanel->isVisible())
+            populateSourceEdit(key);
+        };
+        std::string title = mapSources[key]["title"].Scalar();
+        Button* item = sourcesMenu->addItem(title.c_str(), MapsApp::uiIcon("layers"), onClicked);
         SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
         if(++ii >= 10) break;
       }

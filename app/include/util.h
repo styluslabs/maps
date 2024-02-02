@@ -21,8 +21,11 @@ LngLat parseLngLat(const char* s);
 std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false);
 template<typename T>
 void yamlRemove(YAML::Node node, T key);
-std::string osmIdFromProps(const rapidjson::Document& props);
+std::string osmIdFromJson(const rapidjson::Document& props);
 std::string rapidjsonToStr(const rapidjson::Document& props);
+rapidjson::Document strToJson(const char* json);
+Tangram::Properties jsonToProps(const char* json);
+Tangram::Properties jsonToProps(const rapidjson::Document& tags);
 
 std::string ftimestr(const char* fmt, int64_t msec_epoch = 0);
 

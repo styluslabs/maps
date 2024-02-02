@@ -19,8 +19,8 @@
 
 // bookmarks (saved places)
 
-int MapsBookmarks::addBookmark(int list_id, const char* osm_id, const char* name, const char* props,
-    const char* note, LngLat pos, int timestamp)//, int rowid)
+int MapsBookmarks::addBookmark(int list_id, const std::string& osm_id, const std::string& name,
+    const std::string& props, const std::string& note, LngLat pos, int timestamp)//, int rowid)
 {
   if(timestamp <= 0) timestamp = int(mSecSinceEpoch()/1000);
   const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
@@ -77,17 +77,17 @@ static Widget* createNewListWidget(std::function<void(int, std::string)> callbac
       std::string prevcolor = "#12B5CB";
       SQLiteStmt(MapsApp::bkmkDB, "SELECT color FROM lists ORDER BY rowid DESC LIMIT 1;").onerow(prevcolor);
       float prevhue = ColorF(parseColor(prevcolor.c_str(), Color::CYAN)).hueHSV();
-      float maxdist = 0;
-      size_t next = 0;
-      for(size_t ii = 0; ii < MapsApp::markerColors.size(); ++ii) {
+      float mindist = 1e6;
+      size_t minidx = 0, ncolors = MapsApp::markerColors.size();
+      for(size_t ii = 0; ii < ncolors; ++ii) {
         float d = std::abs(ColorF(MapsApp::markerColors[ii]).hueHSV() - prevhue);
         d = std::min(d, 360 - d);
-        if(d > maxdist) {
-          maxdist = d;
-          next = ii;
+        if(d < mindist) {
+          mindist = d;
+          minidx = ii;
         }
       }
-      newListColor->setColor(MapsApp::markerColors[next]);
+      newListColor->setColor(MapsApp::markerColors[(minidx + ncolors/2 - 1)%ncolors]);
       newListTitle->setText("");
     }
     return false;
@@ -520,13 +520,9 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
   //createBkmkBtn->node->setAttribute("box-anchor", "left");
 
   auto createBkmkFn = [=](int list_id, std::string listname){
-    rapidjson::Document& doc = app->pickResultProps;
-    std::string title = doc.IsObject() && doc.HasMember("name") ?  doc["name"].GetString()
-        : fstring("Pin: %.6f, %.6f", app->pickResultCoord.latitude, app->pickResultCoord.longitude);
-    int rowid = addBookmark(list_id, osmIdFromProps(doc).c_str(), title.c_str(),
-        rapidjsonToStr(doc).c_str(), "", app->pickResultCoord);
-
-    Widget* section = getPlaceInfoSubSection(rowid, list_id, title.c_str(), "");
+    int rowid = addBookmark(list_id, app->pickResultOsmId,
+        app->pickResultName, app->pickResultProps, "", app->pickResultCoord);
+    Widget* section = getPlaceInfoSubSection(rowid, list_id, app->pickResultName, "");
     app->infoContent->selectFirst(".bkmk-content")->addWidget(section);
   };
 
@@ -587,12 +583,7 @@ Button* MapsBookmarks::createPanel()
       const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
       SQLiteStmt insbkmk(app->bkmkDB, query);
       for(auto& wpt : gpx.waypoints) {
-        std::string osm_id;
-        if(!wpt.props.empty()) {
-          rapidjson::Document props;
-          props.Parse(wpt.props.c_str());
-          osm_id = osmIdFromProps(props);
-        }
+        std::string osm_id = osmIdFromJson(strToJson(wpt.props.c_str()));
         if(wpt.name.empty())
           wpt.name = fstring("%.6f, %.6f", wpt.loc.lat, wpt.loc.lng);
         insbkmk.bind(list_id, osm_id, wpt.name, wpt.props, wpt.desc, wpt.loc.lng, wpt.loc.lat, int64_t(wpt.loc.time)).exec();

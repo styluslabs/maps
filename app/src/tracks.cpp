@@ -676,7 +676,8 @@ bool MapsTracks::onPickResult()
 {
   if(!activeTrack || !(tapToAddWaypt || stealPickResult || replaceWaypt))
     return false;
-  addWaypoint({app->pickResultCoord, app->pickResultName});
+  // make lat,lng markers nameless so they can be hidden easily
+  addWaypoint({app->pickResultCoord, app->pickResultOsmId.empty() ? "" : app->pickResultName});
   while(app->panelHistory.back() != wayptPanel && app->popPanel()) {}
   return true;
 }
@@ -883,7 +884,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   if(activeTrack) {
     Button* addWptBtn = createToolbutton(MapsApp::uiIcon("waypoint"), "Add waypoint");
     addWptBtn->onClicked = [=](){
-      Waypoint* wpt = addWaypoint({app->pickResultCoord, app->pickResultName});
+      Waypoint* wpt = addWaypoint({app->pickResultCoord, app->pickResultOsmId.empty() ? "" : app->pickResultName});
       if(wpt)
         setPlaceInfoSection(activeTrack, *wpt);
     };
@@ -894,8 +895,6 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     routeBtn->onClicked = [=](){
       LngLat r1 = app->currLocation.lngLat(), r2 = app->pickResultCoord;
       double km = lngLatDist(r1, r2);
-      std::string namestr = app->pickResultName.empty() ?
-          fstring("%.6f, %.6f", r2.latitude, r2.longitude) : app->pickResultName;
       removeTrackMarkers(&navRoute);
       navRoute.title = "Navigation";
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
@@ -903,7 +902,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       navRoute.wayPtSerial = 0;
       if(km > 0.01)
         navRoute.addWaypoint({r1, "Start"});  //"Current location"
-      navRoute.addWaypoint({r2, namestr});
+      navRoute.addWaypoint({r2, app->pickResultName});
       activeTrack = NULL;
       createRoute(&navRoute);
       populateWaypoints(&navRoute);
@@ -912,15 +911,13 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
 
     Button* measureBtn = createToolbutton(MapsApp::uiIcon("measure"), "Directions");
     measureBtn->onClicked = [=](){
-      std::string namestr = app->pickResultName.empty() ? fstring("%.6f, %.6f",
-          app->pickResultCoord.latitude, app->pickResultCoord.longitude) : app->pickResultName;
       removeTrackMarkers(&navRoute);
       navRoute.title = "Measurement";
       navRoute.routeMode = "direct";
       navRoute.routes.clear();
       navRoute.waypoints.clear();
       navRoute.wayPtSerial = 0;
-      navRoute.addWaypoint({app->pickResultCoord, namestr});
+      navRoute.addWaypoint({app->pickResultCoord, app->pickResultName});
       activeTrack = NULL;
       populateWaypoints(&navRoute);
     };

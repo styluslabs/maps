@@ -17,7 +17,7 @@ function nasaWorldView()
     "url_subdomains": ["a", "b", "c"],
     //"tile_size": 512,
     //"headers": headers,
-    "max_zoom": 8,
+    "max_zoom": 9,
     "cache": false,
     "updates": updates
   };

@@ -3,7 +3,6 @@
 #include "tangram.h"
 #include <cmath>
 
-//using namespace Tangram;
 #include "mapscomponent.h"
 #include "ulib/threadutil.h"
 
@@ -32,9 +31,6 @@ struct SDL_Window;
 union SDL_Event;
 
 namespace YAML { class Node; }
-//namespace rapidjson { class Document; }
-//#include "rapidjson/fwd.h"  // don't worry, we'll be getting rid of rapidjson soon
-#include "rapidjson/document.h"
 
 class MapsApp
 {
@@ -60,11 +56,11 @@ public:
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   LngLat getMapCenter();
   void getElevation(LngLat pos, std::function<void(double)> callback);
-  void setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props);  //, int priority = 1);
-  void setPickResult(LngLat pos, std::string namestr, std::string propstr);
+  void setPickResult(LngLat pos, std::string namestr, const std::string& propstr);
   YAML::Node readSceneValue(const std::string& yamlPath);
   void placeInfoPluginError(const char* err);
   int getPanelWidth() const;
+  std::string getPlaceTitle(const Properties& props) const;
 
   Location currLocation;
   float orientation = 0;
@@ -73,10 +69,11 @@ public:
   MarkerID pickedMarkerId = 0;
   MarkerID locMarker = 0;
   Tangram::MapState mapState;
-  rapidjson::Document pickResultProps;
+  std::string pickResultName;
+  std::string pickResultProps;
+  std::string pickResultOsmId;
   LngLat pickResultCoord = {NAN, NAN};
   LngLat tapLocation = {NAN, NAN};
-  std::string pickResultName;
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
   bool hasLocation = false;
@@ -139,7 +136,6 @@ public:
 
   enum EventTypes { PANEL_CLOSED=0xE001, PANEL_OPENED };
 
-  static std::string osmPlaceType(const rapidjson::Document& props);
   static bool openURL(const char* url);
   static SvgNode* uiIcon(const char* id);
   static void runOnMainThread(std::function<void()> fn);

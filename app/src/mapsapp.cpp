@@ -87,23 +87,15 @@ LngLat MapsApp::getMapCenter()
   return res;
 }
 
-// I think we'll eventually want to use a plugin for this
-std::string MapsApp::osmPlaceType(const rapidjson::Document& props)
+// this should get list of name properties from config or current scene to support other languages
+std::string MapsApp::getPlaceTitle(const Properties& props) const
 {
-  if(!props.IsObject()) return {};
-  auto jit = props.FindMember("tourism");
-  if(jit == props.MemberEnd()) jit = props.FindMember("leisure");
-  if(jit == props.MemberEnd()) jit = props.FindMember("amenity");
-  if(jit == props.MemberEnd()) jit = props.FindMember("historic");
-  if(jit == props.MemberEnd()) jit = props.FindMember("shop");
-  if(jit == props.MemberEnd()) return {};
-  std::string val = jit->value.GetString();
-  val[0] = std::toupper(val[0]);
-  std::replace(val.begin(), val.end(), '_', ' ');
-  return val;
+  std::string name;
+  props.getString("name_en", name) || props.getString("name", name);
+  return name;
 }
 
-void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Document& props)  //, int priority)
+void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& propstr)  //, int priority)
 {
   static const char* placeInfoProtoSVG = R"#(
     <g layout="flex" flex-direction="column" box-anchor="hfill">
@@ -133,32 +125,26 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
   if(!placeInfoProto)
     placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
-  if(namestr.empty() && props.IsObject()) {
-    if(props.HasMember("name_en"))
-      namestr = props["name_en"].GetString();
-    if(namestr.empty() && props.HasMember("name"))
-      namestr = props["name"].GetString();
-  }
+  rapidjson::Document json;
+  json.Parse(propstr.c_str());
+  Properties props = jsonToProps(json);
 
-  std::string osmid = osmIdFromProps(props);
+  std::string placetype = pluginManager->jsCallFn("getPlaceType", propstr);
+  if(namestr.empty()) namestr = getPlaceTitle(props);
+  if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
+  if(namestr.empty()) namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
+
+  std::string osmid = osmIdFromJson(json);
   pickResultCoord = pos;
   pickResultName = namestr;
-  if(&props != &pickResultProps)  // rapidjson asserts this
-    pickResultProps.CopyFrom(props, pickResultProps.GetAllocator());
+  pickResultProps = propstr;
+  pickResultOsmId = osmid;
   currLocPlaceInfo = (locMarker > 0 && pickedMarkerId == locMarker);
   flyToPickResult = true;
   // allow pick result to be used as waypoint
   if(mapsTracks->onPickResult())
     return;
 
-  // Need something to show for name, but we do not want to use this for pickNameResult
-  std::string placetype = osmPlaceType(props);
-  if(namestr.empty()) {
-    if(!placetype.empty())
-      namestr.swap(placetype);
-    else
-      namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
-  }
   // show marker
   if(pickResultMarker == 0)
     pickResultMarker = map->markerAdd();
@@ -200,10 +186,6 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     return;
   }
 
-  map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
-  map->markerSetPoint(pickResultMarker, pos);  // geometry must be set before properties for new marker!
-  map->markerSetProperties(pickResultMarker, {{{"name", namestr}}});  //{"priority", priority}
-
   Widget* distwdgt = item->selectFirst(".dist-text");
   Widget* diricon = item->selectFirst(".direction-icon");
   if(distwdgt && diricon) {
@@ -230,8 +212,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     }
   };
 
-  if(props.IsObject() && props.HasMember("ele"))
-    elevFn(props["ele"].GetDouble());
+  if(json.IsObject() && json.HasMember("ele"))
+    elevFn(json["ele"].GetDouble());
   else
     getElevation(pos, elevFn);
 
@@ -259,25 +241,23 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const rapidjson::Do
     providerSel->onChanged("");
   }
 
-  if(props.IsObject() && props.HasMember("place_info")) {
-    for(auto& info : props["place_info"].GetArray())
+  if(json.IsObject() && json.HasMember("place_info")) {
+    for(auto& info : json["place_info"].GetArray())
       addPlaceInfo(info["icon"].GetString(), info["title"].GetString(), info["value"].GetString());
   }
-}
 
-void MapsApp::setPickResult(LngLat pos, std::string namestr, std::string propstr)
-{
-  rapidjson::Document props;
-  props.Parse(propstr.c_str());
-  setPickResult(pos, namestr, props);
+  // must be last (or we must copy props)
+  props.set("name", namestr);
+  map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
+  map->markerSetPoint(pickResultMarker, pos);  // geometry must be set before properties for new marker!
+  map->markerSetProperties(pickResultMarker, std::move(props));  //{"priority", priority}
 }
 
 void MapsApp::placeInfoPluginError(const char* err)
 {
   Button* retryBtn = createToolbutton(MapsApp::uiIcon("retry"), "Retry", true);
   retryBtn->onClicked = [=](){
-    std::string osmid = osmIdFromProps(pickResultProps);
-    pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, osmid);
+    pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, pickResultOsmId);
     retryBtn->setVisible(false);
   };
   infoContent->selectFirst(".info-section")->addWidget(retryBtn);
@@ -400,10 +380,12 @@ void MapsApp::doubleTapEvent(float x, float y)
 
 void MapsApp::clearPickResult()
 {
-  pickResultProps.SetNull();
+  pickResultName.clear();
+  pickResultProps.clear();
+  pickResultOsmId.clear();
+  pickResultCoord = LngLat(NAN, NAN);
   if(pickResultMarker > 0)
     map->markerSetVisible(pickResultMarker, false);
-  pickResultCoord = LngLat(NAN, NAN);
   currLocPlaceInfo = false;
   flyToPickResult = false;
 }
@@ -1252,12 +1234,12 @@ void MapsApp::maximizePanel(bool maximize)
     currLayout->selectFirst(".statusbar-bg")->setVisible(maximize);
     panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
     panelSplitter->setEnabled(!maximize);
-    Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
-    if(minbtn)
-      minbtn->setVisible(!maximize);
     notifyStatusBarBG(maximize ?
         win->node->hasClass("light") : !readSceneValue("global.dark_base_map").as<bool>(false));
   }
+  Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
+  if(minbtn)
+    minbtn->setVisible(!maximize);
 }
 
 // make this a static method or standalone fn?

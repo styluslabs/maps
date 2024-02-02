@@ -68,10 +68,10 @@ global:
 sources:
     elevation:
         type: Raster
-        url: https://tile.nextzen.org/tilezen/terrain/v1/256/terrarium/{z}/{x}/{y}.png
-        #url: https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png
-        url_params:
-            api_key: global.sdk_api_key
+        url: https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png
+        #url: https://tile.nextzen.org/tilezen/terrain/v1/256/terrarium/{z}/{x}/{y}.png
+        #url_params:
+        #    api_key: global.sdk_api_key
         max_zoom: 14
         zoom_offset: -1
         filtering: nearest

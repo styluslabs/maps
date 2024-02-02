@@ -3,7 +3,6 @@
 #include "mapscomponent.h"
 #include "util.h"
 #include "yaml-cpp/yaml.h"
-#include "rapidjson/document.h"
 #include "scene/filters.h"
 
 #include "ugui/svggui.h"
@@ -21,7 +20,7 @@ struct SearchResult
   int64_t id;
   LngLat pos;
   float rank;
-  rapidjson::Document tags;  // will eventually be a DuktapeValue? standard osm tag names for now
+  std::string tags;
 };
 
 class MapsSearch : public MapsComponent

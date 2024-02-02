@@ -57,7 +57,7 @@ function node_function(node)
     node:MinZoom(11)
     node:Attribute("aeroway", aeroway)
     node:Attribute("ref", node:Find("ref"))
-    SetNameAttributesEx(node, "node")
+    SetNameAttributes(node, 0, "node")
     SetEleAttributes(node)
     node:Attribute("iata", node:Find("iata"))
     node:Attribute("icao", node:Find("icao"))
@@ -108,30 +108,28 @@ function node_function(node)
     if pop then node:AttributeNumeric("population", pop) end
     if place=="country" then node:Attribute("iso_a2", node:Find("ISO3166-1:alpha2")) end
     if placeCN ~= "" then node:Attribute("place_CN", placeCN) end
-    SetNameAttributesEx(node, "node")
+    SetNameAttributes(node, 0, "node")
     return
   end
 
   -- Write 'poi'
   --local rank, class, subclass = GetPOIRank(node)
   --if rank then WritePOI(node,class,subclass,rank) end
-  if NewWritePOI(node, 0) then
-    SetNameAttributesEx(node, "node")
-  end
+  NewWritePOI(node, 0, "node")
 
   -- Write 'mountain_peak' and 'water_name'
   local natural = node:Find("natural")
   if natural == "peak" or natural == "volcano" then
     node:Layer("mountain_peak", false)
     SetEleAttributes(node)
-    node:AttributeNumeric("rank", 1)
+    --node:AttributeNumeric("rank", 1)
     node:Attribute("class", natural)
-    SetNameAttributesEx(node, "node")
+    SetNameAttributes(node, 0, "node")
     return
   end
   if natural == "bay" then
     node:Layer("water", false)  --node:Layer("water_name", false)
-    SetNameAttributesEx(node, "node", 14)
+    SetNameAttributes(node, 14, "node")
     return
   end
 end
@@ -220,6 +218,7 @@ waterwayAreas   = Set { "river", "riverbank", "stream", "canal", "drain", "ditch
 waterLanduse    = Set { "reservoir", "basin", "salt_pond" }
 noNameWater     = Set { "river", "basin", "wastewater", "canal", "stream", "ditch", "drain" }
 manMadeClasses  = Set { "pier", "breakwater", "groyne" }  -- "storage_tank", "water_tap", "dyke", "lighthouse"
+aerowayClasses  = Set { "taxiway", "hangar", "runway", "helipad", "aerodrome", "airstrip", "tower" }
 
 transitRoutes = { train = 8, subway = 10, tram = 12, share_taxi = 12, light_rail = 12, bus = 14, trolleybus = 14 }
 otherRoutes = { road = 8, ferry = 9, bicycle = 10, hiking = 10, foot = 12, mtb = 10, ski = 12 }  --piste = 12,
@@ -245,7 +244,7 @@ function relation_function(relation)
       relation:Layer("transportation", false)
       relation:Attribute("class", "ferry")
       relation:MinZoom(9)
-      SetNameAttributesEx(relation, "relation", 12)
+      SetNameAttributes(relation, 12, "relation")
       return
     elseif transitRoutes[route] then
       relation:Layer("transit", false)
@@ -288,12 +287,11 @@ function way_function(way)
   local tourism  = way:Find("tourism")
   local man_made = way:Find("man_made")
   local boundary = way:Find("boundary")
-  local isClosed = way:IsClosed()
   local housenumber = way:Find("addr:housenumber")
-  local write_name = false
   local construction = way:Find("construction")
   local piste_diff = way:Find("piste:difficulty")
   local aerialway = way:Find("aerialway")
+  local isClosed = way:IsClosed()
 
   -- Miscellaneous preprocessing
   if way:Find("disused") == "yes" then return end
@@ -529,14 +527,12 @@ function way_function(way)
   end
 
   -- 'Aeroway'
-  if aeroway~="" then
+  if aerowayClasses[aeroway] then
     way:Layer("transportation", isClosed)  --"aeroway"
     way:MinZoom(10)
     way:Attribute("aeroway", aeroway)
     way:Attribute("ref", way:Find("ref"))
-    write_name = true
-
-    -- 'aerodrome_label'
+    --write_name = true
     if aeroway=="aerodrome" then
       --way:LayerAsCentroid("aerodrome_label")
       SetNameAttributes(way)
@@ -545,6 +541,7 @@ function way_function(way)
       way:Attribute("icao", way:Find("icao"))
       local aerodrome = way:Find("aerodrome")
       way:Attribute("aerodrome", aerodromeValues[aerodrome] and aerodrome or "other")
+      way:AttributeNumeric("area", way:Area())
     end
   end
 
@@ -613,6 +610,7 @@ function way_function(way)
   -- landuse/landcover
   --"landcover":        { "minzoom":  0, "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "landuse" },
   --"park":             { "minzoom": 11, "maxzoom": 14 },
+  local landuse_poi = false
   local l = landuse
   if l=="" then l=natural end
   if l=="" then l=leisure end
@@ -621,15 +619,8 @@ function way_function(way)
   if landuseKeys[l] then
     way:Layer("landuse", true)
     way:Attribute("class", landuseKeys[l])
-    --if landcover then
     SetMinZoomByArea(way)
-    --else
-    --  if landuse=="residential" then
-    --    if way:Area()<ZRES8^2 then way:MinZoom(8) else SetMinZoomByArea(way) end
-    --  else
-    --    way:MinZoom(11)
-    --  end
-    --end
+    --if landuse=="residential" and way:Area()<ZRES8^2 then way:MinZoom(8) else SetMinZoomByArea(way) end
     if landuse~="" then way:Attribute("landuse", landuse)
     elseif natural~="" then way:Attribute("natural", natural)
     elseif leisure~="" then way:Attribute("leisure", leisure)
@@ -637,38 +628,25 @@ function way_function(way)
     elseif tourism~="" then way:Attribute("tourism", tourism) end
 
     if natural=="wetland" then way:Attribute("wetland", way:Find("wetland")) end
-    write_name = true
+    landuse_poi = true
   end
 
   -- Parks
-  local write_area = false;
   local park_boundary = parkValues[boundary]
   if park_boundary or leisure=="nature_reserve" then
     way:Layer("landuse", true)
     SetMinZoomByArea(way)  --way:MinZoom(11)
     way:Attribute("class", park_boundary and boundary or leisure)  --"park");
-    --way:Attribute("subclass", park_boundary and boundary or leisure);
     SetNameAttributes(way)
-    write_area = true
+    landuse_poi = true
   end
 
   -- POIs ('poi' and 'poi_detail')
-  if NewWritePOI(way, (write_name or write_area) and way:Area() or 0) then
-    SetNameAttributes(way)
-    return
-  end
-
-  -- Catch-all
-  if (building~="" or write_name) and way:Holds("name") then
+  if NewWritePOI(way, landuse_poi and way:Area() or 0) then  -- empty
+  elseif (building~="" or landuse_poi) and way:Holds("name") then
     way:LayerAsCentroid("poi_detail")
     SetNameAttributes(way)
-    if write_name then
-      rank=6
-      way:AttributeNumeric("area", way:Area())
-    else
-      rank=25
-    end
-    way:AttributeNumeric("rank", rank)
+    if landuse_poi then way:AttributeNumeric("area", way:Area()) end
   end
 end
 
@@ -689,7 +667,7 @@ end
 -- Common functions
 
 extraPoiTags = Set { "cuisine", "station", "religion", "operator" }  -- atm:operator
-function NewWritePOI(obj, area)
+function NewWritePOI(obj, area, osm_type)
   for k,lists in pairs(poiTags) do
     local val = obj:Find(k)
     if val ~= "" then
@@ -699,7 +677,7 @@ function NewWritePOI(obj, area)
         if next(list) == nil or (exclude and not list[val] or list[val]) then
           obj:LayerAsCentroid("poi")
           obj:MinZoom(area > 0 and 12 or minzoom)
-          --SetNameAttributesEx(obj, osm_type)
+          SetNameAttributes(obj, 0, osm_type)
           if area > 0 then obj:AttributeNumeric("area", area) end
           -- write value for all tags in poiTags (if present)
           for tag, _ in pairs(poiTags) do
@@ -719,10 +697,11 @@ function NewWritePOI(obj, area)
 end
 
 -- Set name attributes on any object
-function SetNameAttributesEx(obj, osm_type, minzoom)
+function SetNameAttributes(obj, minzoom, osm_type)
   local name = obj:Find("name"), iname
   local main_written = name
   minzoom = minzoom or 0
+  osm_type = osm_type or (obj:Find("type") == "multipolygon" and "relation" or "way");
   -- if we have a preferred language, then write that (if available), and additionally write the base name tag
   if preferred_language and obj:Holds("name:"..preferred_language) then
     iname = obj:Find("name:"..preferred_language)
@@ -742,11 +721,6 @@ function SetNameAttributesEx(obj, osm_type, minzoom)
   -- add OSM id
   obj:Attribute("osm_id", obj:Id())
   obj:Attribute("osm_type", osm_type)
-end
-
-function SetNameAttributes(obj, minzoom)
-  local osm_type = obj:Find("type") == "multipolygon" and "relation" or "way";
-  SetNameAttributesEx(obj, osm_type, minzoom)
 end
 
 -- Set ele and ele_ft on any object

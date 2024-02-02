@@ -47,6 +47,8 @@ public:
       if(dukTryCall(ctx, sizeof...(Types)))
         res = duk_safe_to_string(ctx, -1);
     }
+    else
+      LOGW("JS plugin function missing: %s", fnname.c_str());
     duk_pop(ctx);
     return res;
   }

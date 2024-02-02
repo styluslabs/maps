@@ -192,7 +192,7 @@ layers:
                 collide: true
                 priority: 'function() { return (1+feature.priority)/1E6; }'
                 text:
-                    text_source: name
+                    text_source: ['name_en', 'name']
                     anchor: [right, left, bottom, top]
                     collide: true
                     optional: true

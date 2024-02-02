@@ -125,7 +125,7 @@ void yamlRemove(YAML::Node node, T key)
 // explicit instantiations
 template void yamlRemove<int>(YAML::Node node, int key);
 
-std::string osmIdFromProps(const rapidjson::Document& props)
+std::string osmIdFromJson(const rapidjson::Document& props)
 {
   std::string osm_id;
   if(!props.IsObject()) {}
@@ -142,6 +142,34 @@ std::string rapidjsonToStr(const rapidjson::Document& props)
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
   props.Accept(writer);
   return sb.GetString();
+}
+
+rapidjson::Document strToJson(const char* json)
+{
+  rapidjson::Document doc;
+  if(json[0])
+    doc.Parse(json);
+  return doc;
+}
+
+Properties jsonToProps(const char* json)
+{
+  rapidjson::Document tags;
+  tags.Parse(json);
+  return jsonToProps(tags);
+}
+
+Properties jsonToProps(const rapidjson::Document& tags)
+{
+  Properties props;
+  if(!tags.IsObject()) return props;
+  for(auto& m : tags.GetObject()) {
+    if(m.value.IsNumber())
+      props.set(m.name.GetString(), m.value.GetDouble());
+    else if(m.value.IsString())
+      props.set(m.name.GetString(), m.value.GetString());
+  }
+  return props;
 }
 
 std::string ftimestr(const char* fmt, int64_t msec_epoch)

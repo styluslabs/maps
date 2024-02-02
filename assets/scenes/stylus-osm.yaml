@@ -90,6 +90,7 @@ global:
         #runway_16: '#fff'
         #runway_casing: orange
 
+    # z-order for polygons and lines (higher z-order draws over lower)
     order:
         landuse: 1
         parks: 1
@@ -133,11 +134,11 @@ global:
         }
 
     show_name_en: true
-    #function() { return global.show_name_en && feature.name_en ? feature.name_en + " " + feature.name : feature.name; }
-    names_one_line: |
+    names_one_line: ['name_en', 'name']
+    names_one_line_fn: |
         function() { return global.show_name_en && feature.name_en ? feature.name_en : feature.name; }
     names_two_lines: |
-        function() { return global.show_name_en && feature.name_en ? feature.name_en + "\n" + feature.name : feature.name; }
+        function() { return global.show_name_en && feature.name_en && feature.name ? feature.name_en + "\n" + feature.name : feature.name; }
 
     # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
     priority_boundary: 0
@@ -732,12 +733,13 @@ layers:
         filter:
             name: true
             not: { class: [rail, aeroway, route, piste, aerialway] }
+            aeroway: false
         draw:
             text:
                 #interactive: true
                 text_source: |
                     function() {
-                       const name = global.names_one_line();
+                       const name = global.names_one_line_fn();
                        return name.replace(" Avenue", " Ave.").replace(" Street", " St.").replace(" Boulevard", " Blvd.").replace(" Drive", " Dr.").replace(" Lane", " Ln.").replace(" Road", " Rd.");
                     }
                 transition: { show: { time: 0s }, hide: { time: 1s } }

@@ -12,7 +12,6 @@ std::mutex tangram_log_time_mutex;
 #include "mapwidgets.h"
 
 #include <deque>
-#include "rapidjson/writer.h"
 #include "data/tileData.h"
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
@@ -270,35 +269,17 @@ void MapsSearch::clearSearch()
 void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, const char* json)
 {
   size_t idx = mapResults.size();
-  mapResults.push_back({id, {lng, lat}, rank, {}});
-  rapidjson::Document& tags = mapResults.back().tags;
-  tags.Parse(json);
-  if(!tags.IsObject()) {  //|| !tags.HasMember("name")) {
-    mapResults.pop_back();
-    return;
-  }
-  Properties props;
-  //props.set("priority", idx);
-  for(auto& m : mapResults.back().tags.GetObject()) {
-    if(m.value.IsNumber())
-      props.set(m.name.GetString(), m.value.GetDouble());
-    else if(m.value.IsString())
-      props.set(m.name.GetString(), m.value.GetString());
-  }
+  mapResults.push_back({id, {lng, lat}, rank, json});
   auto onPicked = [this, idx](){
     SearchResult& res = mapResults[idx];
     app->setPickResult(res.pos, "", res.tags);
   };
-  markers->createMarker({lng, lat}, onPicked, std::move(props));
+  markers->createMarker({lng, lat}, onPicked, jsonToProps(json));
 }
 
 void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, const char* json)
 {
-  listResults.push_back({id, {lng, lat}, rank, {}});
-  rapidjson::Document& tags = listResults.back().tags;
-  tags.Parse(json);
-  if(!tags.IsObject())   // || !tags.HasMember("name"))
-    listResults.pop_back();
+  listResults.push_back({id, {lng, lat}, rank, json});
 }
 
 void MapsSearch::searchPluginError(const char* err)
@@ -546,8 +527,9 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 {
   for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = results[ii];
-    std::string placetype = MapsApp::osmPlaceType(res.tags);
-    std::string namestr = res.tags.HasMember("name") ? res.tags["name"].GetString() : "";
+    Properties props = jsonToProps(res.tags.c_str());
+    std::string namestr = app->getPlaceTitle(props);
+    std::string placetype = app->pluginManager->jsCallFn("getPlaceType", res.tags);
     if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
     if(namestr.empty()) continue;  // skip if nothing to show in list
     Button* item = createListItem(MapsApp::uiIcon("search"), namestr.c_str(), placetype.c_str());

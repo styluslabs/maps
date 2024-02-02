@@ -570,14 +570,18 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
   btns->addWidget(cancelBtn);
   dialog->setVisible(false);
 
-  //dialog->addHandler([=](SvgGui* gui, SDL_Event* event){
-  //  if(event->type == SvgGui::OUTSIDE_MODAL) {
-  //    gui->closeMenus(dialog->parent(), true);
-  //    if(onCancel) onCancel();
-  //    return true;
-  //  }
-  //  return false;
-  //});
+  dialog->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE) {
+      dialog->setVisible(false);
+      return true;
+    }
+    //if(event->type == SvgGui::OUTSIDE_MODAL) {
+    //  gui->closeMenus(dialog->parent(), true);
+    //  if(onCancel) onCancel();
+    //  return true;
+    //}
+    return false;
+  });
 
   return dialog;
 }

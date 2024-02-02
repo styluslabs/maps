@@ -5,6 +5,16 @@
 //function addPlaceInfo(icon, title, value) { console.log(title + ": " + value); }
 //function httpRequest(url, hdrs, callback) { if(!callback) callback = hdrs; fetch(url).then(res => res.text()).then(j => callback(j)); }
 
+// get POI name and type (fn name is hardcoded in app)
+function getPlaceType(_props)
+{
+  const props = JSON.parse(_props);
+  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"];
+  if(!type) return "";
+  type = type.replace("_", " ");
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 // from https://github.com/osmlab/jsopeninghours
 // - see https://wiki.openstreetmap.org/wiki/Key:opening_hours for more sophisticated (and far more complex) parsers
 function parseOpeningHours(text)
