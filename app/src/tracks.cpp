@@ -420,7 +420,7 @@ void MapsTracks::updateDistances()
     for(Widget* item : wayPtItems) {
       auto it = activeTrack->findWaypoint(item->node->getStringAttr("__sortkey"));
       if(!it->routed) continue;
-      while(rteidx < route.size()-1 && !(route[rteidx].lngLat() == it->lngLat())) ++rteidx;
+      while(rteidx < route.size()-1 && route[rteidx].lngLat() != it->lngLat()) ++rteidx;
       TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
       std::string s = distKmToStr(route[rteidx].dist/1000);
       if(!it->desc.empty())
@@ -849,7 +849,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       previewMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(previewMarker, "layers.track.draw.track");  //styling);
     }
-    if(previewRoute.empty() || !(pts[0] == previewRoute[0] && pts[1] == previewRoute[1])) {
+    if(previewRoute.empty() || pts[0] != previewRoute[0] || pts[1] != previewRoute[1]) {
       app->map->markerSetPolyline(previewMarker, pts.data(), 2);
       app->map->markerSetProperties(previewMarker, {{{"color", "red"}}});
       app->map->markerSetVisible(previewMarker, pix > 2);

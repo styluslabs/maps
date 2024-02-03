@@ -8,10 +8,11 @@
 // get POI name and type (fn name is hardcoded in app)
 function getPlaceType(_props)
 {
+  if(!_props) return "";
   const props = JSON.parse(_props);
   var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"];
   if(!type) return "";
-  type = type.replace("_", " ");
+  type = type.replace(/_/g, " ");
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 

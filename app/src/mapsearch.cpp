@@ -529,7 +529,7 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
     const SearchResult& res = results[ii];
     Properties props = jsonToProps(res.tags.c_str());
     std::string namestr = app->getPlaceTitle(props);
-    std::string placetype = app->pluginManager->jsCallFn("getPlaceType", res.tags);
+    std::string placetype = !res.tags.empty() ? app->pluginManager->jsCallFn("getPlaceType", res.tags) : "";
     if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
     if(namestr.empty()) continue;  // skip if nothing to show in list
     Button* item = createListItem(MapsApp::uiIcon("search"), namestr.c_str(), placetype.c_str());

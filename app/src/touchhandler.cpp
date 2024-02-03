@@ -108,7 +108,6 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     else
       LOGE("Release event received for unknown touch point!");
   }
-  app->mapMovedManually = true;
 
   if(touchPoints.empty()) {
     if(multiTouchState == TOUCH_PINCH && t - prevTime < 0.1) {
@@ -168,9 +167,10 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       // alternative is to zoom from center of map instead of tap point - float cx = w/2, cy = h/2;
       map->handlePinchGesture(initCOM.x, initCOM.y, std::pow(2.0f, 4.0f*dblTapDragScale*(pt.y - prevCOM.y)/h), 0.f);
     }
-    else if(prevpoints == 1) {
+    else if(prevpoints == 1 && tapState == TAP_NONE) {
       map->handlePanGesture(prevCOM.x, prevCOM.y, pt.x, pt.y);
     }
+    // we'll update prevCOM even in DBL_TAP_DRAG_PENDING so there isn't a jump in zoom when gesture becomes active
     prevCOM = pt;
   }
   else if(prevpoints == 0) {

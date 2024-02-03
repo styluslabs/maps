@@ -32,9 +32,7 @@ int MapsBookmarks::addBookmark(int list_id, const std::string& osm_id, const std
 
   auto it = bkmkMarkers.find(list_id);
   if(it != bkmkMarkers.end()) {
-    std::string propstr(props);
-    std::string namestr(name);
-    auto onPicked = [=](){ app->setPickResult(pos, namestr, propstr); };
+    auto onPicked = [=](){ app->setPickResult(pos, name, props); };
     it->second->createMarker(pos, onPicked, {{{"name", name}}}, rowid);
   }
 
@@ -159,10 +157,11 @@ void MapsBookmarks::populateLists(bool archived)
     listsContent->clear();
   }
 
-  // order by title for archived - main list will use saved sort order
-  const char* query = "SELECT lists.id, lists.title, lists.color, COUNT(1) FROM lists JOIN bookmarks AS b"
-      " ON lists.id = b.list_id WHERE lists.archived = ? GROUP by lists.id ORDER BY lists.title;";
-  SQLiteStmt(app->bkmkDB, query).bind(archived).exec([=](int rowid, std::string list, std::string color, int nplaces){
+  // order by title for archived and by newest for main list to new lists not in sort order at top
+  const char* query = "SELECT lists.id, lists.title, lists.color, COUNT(b.rowid) FROM lists LEFT JOIN"
+      " bookmarks AS b ON lists.id = b.list_id WHERE lists.archived = ? GROUP by lists.id ORDER BY %s;";
+  SQLiteStmt(app->bkmkDB, fstring(query, archived ? "lists.title" : "lists.rowid DESC")).bind(archived)
+      .exec([=](int rowid, std::string list, std::string color, int nplaces){
     Button* item = createListItem(MapsApp::uiIcon("folder"),
         list.c_str(), nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());  //new Button(bkmkListProto->clone());
     item->onClicked = [=](){ populateBkmks(rowid, true); };
@@ -472,6 +471,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   removeBtn->onClicked = [=](){
     deleteBookmark(listid, rowid);
     bkmkPanelDirty = true;
+    listsDirty = archiveDirty = true;  // list is dirty too since it shows number of bookmarks
     app->gui->deleteWidget(section);
   };
 
@@ -483,9 +483,26 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     app->gui->setFocused(noteEdit);
   };
 
-  auto setListFn = [=](int list_id, std::string listname){
-    SQLiteStmt(app->bkmkDB, "UPDATE bookmarks SET list_id = ? WHERE rowid = ?;").bind(list_id, rowid).exec();
+  auto setListFn = [=](int newlistid, std::string listname){
+    if(newlistid == listid) return;
+    SQLiteStmt(app->bkmkDB, "UPDATE bookmarks SET list_id = ? WHERE rowid = ?;").bind(newlistid, rowid).exec();
     chooseListBtn->setTitle(listname.c_str());
+    // delete old marker
+    auto oldit = bkmkMarkers.find(listid);
+    if(oldit != bkmkMarkers.end())
+      oldit->second->deleteMarker(rowid);
+    // create new marker
+    auto newit = bkmkMarkers.find(newlistid);
+    if(newit != bkmkMarkers.end()) {
+      LngLat pos;
+      std::string name, props;
+      std::string query = "SELECT title, props, lng, lat FROM bookmarks WHERE rowid = ?;";
+      SQLiteStmt(app->bkmkDB, query).bind(rowid).onerow(name, props, pos.longitude, pos.latitude);
+      auto onPicked = [=](){ app->setPickResult(pos, name, props); };
+      newit->second->createMarker(pos, onPicked, {{{"name", name}}}, rowid);
+    }
+    bkmkPanelDirty = true;
+    listsDirty = archiveDirty = true;
   };
 
   //Button* chooseListBtn = new Button(widget->containerNode()->selectFirst(".combobox"));

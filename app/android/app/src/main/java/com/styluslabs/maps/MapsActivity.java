@@ -64,8 +64,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private DummyEdit mTextEdit;
   private LocationManager locationManager;
   private SensorManager mSensorManager;
-  private Sensor mAccelSensor;
-  private Sensor mMagSensor;
+  //private Sensor mAccelSensor;
+  //private Sensor mMagSensor;
   private Sensor mOrientSensor;
   private HttpHandler httpHandler;
   private final Map<Long, Object> httpRequestHandles = Collections.synchronizedMap(new HashMap<Long, Object>());
@@ -94,8 +94,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
     // stackoverflow.com/questions/20339942 ; github.com/streetcomplete/StreetComplete ... Compass.kt
     mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
-    mAccelSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-    mMagSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+    //mAccelSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+    //mMagSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
     mOrientSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
 
     if(!canGetLocation()) {
@@ -172,8 +172,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);  //FUSED_PROVIDER || "fused"
       locationManager.addGpsStatusListener(this);  //catch (SecurityException e)
     }
-    mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
-    mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
+    //mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
+    //mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
     mSensorManager.registerListener(this, mOrientSensor, SensorManager.SENSOR_DELAY_UI);
   }
 
@@ -231,8 +231,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
 
-  private float[] mGravity;
-  private float[] mGeomagnetic;
+  //private float[] mGravity;
+  //private float[] mGeomagnetic;
 
   @Override
   public void onSensorChanged(SensorEvent event)
@@ -245,26 +245,25 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       SensorManager.getRotationMatrixFromVector(rotmat, values);
       SensorManager.getOrientation(rotmat, orient);
       MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
-      Log.v("Tangram", "Orientation from rot vector: ", (180.0/java.lang.Math.PI)*(orient[0] + mDeclination), " Accuracy: ", (180.0/java.lang.Math.PI)*event.values[4]);
     }
 
-    if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-      mGravity = event.values;
+    //if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+    //  mGravity = event.values;
 
-    if(event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
-      mGeomagnetic = event.values;
+    //if(event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
+    //  mGeomagnetic = event.values;
 
-    if(mGravity != null && mGeomagnetic != null) {
-      float R[] = new float[9];
-      float I[] = new float[9];
-      if(SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic)) {
-        // orientation contains azimut, pitch and roll
-        float orient[] = new float[3];
-        SensorManager.getOrientation(R, orient);
-        //MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
-        Log.v("Tangram", "Orientation from mag field: ", (180.0/java.lang.Math.PI)*(orient[0] + mDeclination));
-      }
-    }
+    //if(mGravity != null && mGeomagnetic != null) {
+    //  float R[] = new float[9];
+    //  float I[] = new float[9];
+    //  if(SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic)) {
+    //    // orientation contains azimut, pitch and roll
+    //    float orient[] = new float[3];
+    //    SensorManager.getOrientation(R, orient);
+    //    MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
+    //    //Log.v("Tangram", "Orientation from mag field: " + (180.0/java.lang.Math.PI)*(orient[0] + mDeclination));
+    //  }
+    //}
   }
 
   public void onAccuracyChanged(Sensor sensor, int accuracy) {}

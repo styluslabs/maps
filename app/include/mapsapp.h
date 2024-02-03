@@ -61,9 +61,13 @@ public:
   void placeInfoPluginError(const char* err);
   int getPanelWidth() const;
   std::string getPlaceTitle(const Properties& props) const;
+  void gotoCameraPos(const CameraPosition& campos);
 
   Location currLocation;
   float orientation = 0;
+  float locMarkerAngle = 0;
+  CameraPosition prevCamPos;
+  enum { NO_FOLLOW = 0, FOLLOW_PENDING, FOLLOW_ACTIVE } followState = NO_FOLLOW;
 
   MarkerID pickResultMarker = 0;
   MarkerID pickedMarkerId = 0;
@@ -77,8 +81,6 @@ public:
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
   bool hasLocation = false;
-  bool followOrientation = false;
-  bool mapMovedManually = false;
   bool glNeedsInit = true;
 
   std::vector<SceneUpdate> sceneUpdates;
@@ -125,6 +127,7 @@ public:
   Widget* mapsContent = NULL;
   MapsWidget* mapsWidget = NULL;
   Button* reorientBtn = NULL;
+  Button* recenterBtn = NULL;
   Widget* gpsStatusBtn = NULL;
   Widget* crossHair = NULL;
   Widget* legendContainer = NULL;
