@@ -141,49 +141,50 @@ global:
         function() { return global.show_name_en && feature.name_en && feature.name ? feature.name_en + "\n" + feature.name : feature.name; }
 
     # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
-    priority_boundary: 0
-    priority_continent: 6
-    priority_district_CN: 9.5
-    priority_neighborhood: 15
-    priority_park: 21
-    priority_forest: 22
-    # road labels
-    priority_motorway_ref: 25
-    priority_motorway_name: 26
-    priority_road_primary: 30
-    priority_road_secondary: 40
-    priority_road_tertiary: 50
-    priority_road_minor: 60
-    # transit line labels
-    priority_transit_ref: 19
-    priority_transit_ref_tram: 24
-    priority_transit_ref_bus: 29
-    # transit stops
-    priority_bus_stop: 20  # bus stops only shown when show_transit = true
-    priority_station_transit: 5 # transit station priority when show_transit = true
-    priority_station_default: 29  # transit station priority when show_transit = false
-    priority_station_tram: 6  # only shown when show_transit = true
-    # we want to show every traffic light if showing any
-    priority_traffic_light: 4
-    # housenumbers only shown at high zoom and unlikely to collide
-    priority_housenumber: 350
-    # POIs - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
-    # - looks like it's faster to let Tangram convert string to number instead of using Number() in JS fn
-    priority_poi_default: function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_viewpoint: function() { return '31.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_toilet: function() { return '32.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_university: function() { return '33.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_grocery: function() { return '34.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_culture: function() { return '41.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_restaurant: function() { return '43.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_cafe: function() { return '44.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_convenience: function() { return '51.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_school: function() { return '52.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_religion: function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-    priority_poi_parking: function() { return '102.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-
-    priority_place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
-    priority_place_fn: function() { return (global.priority_place[feature.class] || 14) + 100.0/(100 + (feature.population || 1)); }
+    priority:
+        boundary: 0
+        continent: 6
+        district_CN: 9.5
+        neighborhood: 15
+        park: 21
+        forest: 22
+        # road labels
+        motorway_ref: 25
+        motorway_name: 26
+        road_primary: 30
+        road_secondary: 40
+        road_tertiary: 50
+        road_minor: 60
+        # transit line labels
+        transit_ref: 19
+        transit_ref_tram: 24
+        transit_ref_bus: 29
+        # transit stops
+        bus_stop: 20  # bus stops only shown when show_transit = true
+        station_transit: 5 # transit station priority when show_transit = true
+        station_default: 29  # transit station priority when show_transit = false
+        station_tram: 6  # only shown when show_transit = true
+        # we want to show every traffic light if showing any
+        traffic_light: 4
+        # housenumbers only shown at high zoom and unlikely to collide
+        housenumber: 350
+        # POIs - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
+        # - looks like it's faster to let Tangram convert string to number instead of using Number() in JS fn
+        poi_default:     function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_viewpoint:   function() { return  '31.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_toilet:      function() { return  '32.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_university:  function() { return  '33.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_grocery:     function() { return  '34.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_culture:     function() { return  '41.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_restaurant:  function() { return  '43.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_cafe:        function() { return  '44.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_convenience: function() { return  '51.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_school:      function() { return  '52.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_religion:    function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_parking:     function() { return '102.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        # cities, states, countries
+        place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
+        place_fn: function() { return (global.priority.place[feature.class] || 14) + 100.0/(100 + (feature.population || 1)); }
 
     # bounds for country-specific filters
     japan_bounds:  # covers main islands, does not include Okinawa, etc
@@ -703,9 +704,9 @@ layers:
                 texture: pois
                 sprite: shield  #function() { return feature.network; }
                 #sprite_default: shield
-                priority: global.priority_motorway_ref
+                priority: global.priority.motorway_ref
                 # faster roads get higher priority
-                #priority: function() { return global.priority_motorway_ref - parseInt(feature.maxspeed)/200; }
+                #priority: function() { return global.priority.motorway_ref - parseInt(feature.maxspeed)/200; }
                 size: |
                     function() {
                         const str = feature.ref.split(";")[0];
@@ -757,7 +758,7 @@ layers:
                     visible: global.show_motorways
                     repeat_distance: 200px
                     repeat_group: road_labels
-                    priority: global.priority_motorway_name
+                    priority: global.priority.motorway_name
                     font:
                         stroke: { width: 4 }
 
@@ -771,7 +772,7 @@ layers:
                 text:
                     repeat_distance: 100px
                     repeat_group: roads
-                    priority: global.priority_road_primary
+                    priority: global.priority.road_primary
                     font:
                         size: 14px
                         stroke: { width: 4 }
@@ -783,7 +784,7 @@ layers:
                 text:
                     repeat_distance: 100px
                     repeat_group: roads
-                    priority: global.priority_road_secondary
+                    priority: global.priority.road_secondary
                     font:
                         size: 14px
                         stroke: { width: 4 }
@@ -793,7 +794,7 @@ layers:
             filter: { class: tertiary, $zoom: { min: 15 } }
             draw:
                 text:
-                    priority: global.priority_road_tertiary
+                    priority: global.priority.road_tertiary
                     font:
                         size: 12px
                         stroke: { width: 4 }
@@ -803,7 +804,7 @@ layers:
             filter: { class: minor, $zoom: { min: 16 } }
             draw:
                 text:
-                    priority: global.priority_road_minor
+                    priority: global.priority.road_minor
                     font:
                         size: 10px
                         stroke: { width: 4 }
@@ -938,7 +939,7 @@ layers:
                 color: global.transit_color_fn
             text:
                 interactive: true
-                priority: global.priority_transit_ref
+                priority: global.priority.transit_ref
                 text_source: ref  #'function() { return feature.ref.length < 6 ? feature.ref : ''; }'
                 # non-zero offset bypasses addCurvedTextLabels, which generates massive number of label
                 #  objects, resulting in label collider pegging CPU
@@ -955,12 +956,12 @@ layers:
             filter: { route: [light_rail, tram, monorail] }
             draw:
                 lines: { width: [[13, 2px], [14, 3px]] }
-                text: { priority: global.priority_transit_ref_tram }
+                text: { priority: global.priority.transit_ref_tram }
         bus:
             filter: { route: [bus, trolleybus] }
             draw:
                 lines: { width: [[14, 1px], [16, 2px]] }
-                text: { priority: global.priority_transit_ref_bus }
+                text: { priority: global.priority.transit_ref_bus }
 
 
     buildings:
@@ -997,7 +998,7 @@ layers:
         #enabled: false
         draw:
             text:
-                priority: global.priority_housenumber
+                priority: global.priority.housenumber
                 text_source: housenumber
                 font:
                     family: Open Sans
@@ -1078,7 +1079,7 @@ layers:
                     visible: false
                     sprite: tree
                     color: global.poi_color.outdoor
-                    priority: global.priority_park
+                    priority: global.priority.park
                     text:
                         font:
                             size: 10pt
@@ -1111,7 +1112,7 @@ layers:
                 points:
                     visible: false
                 text:
-                    priority: global.priority_forest
+                    priority: global.priority.forest
                     font:
                         size: 9pt
                         style: italic
@@ -1129,7 +1130,7 @@ layers:
             draw:
                 points:
                     visible: 'function() { return $zoom >= (global.show_transit ? 13 : 15); }'
-                    priority: 'function() { return global.show_transit ? global.priority_station_transit : global.priority_station_default; }'
+                    priority: 'function() { return global.show_transit ? global.priority.station_transit : global.priority.station_default; }'
                     sprite: train
                     color: global.poi_color.public
                     size: [[13, 12px], [15, 18px]]
@@ -1145,7 +1146,7 @@ layers:
                 draw:
                     points:
                         sprite: tram
-                        priority: global.priority_station_tram
+                        priority: global.priority.station_tram
                         size: [[13, 10px], [15, 16px]]
                         visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
 
@@ -1159,7 +1160,7 @@ layers:
                     color: global.poi_color.public
                     size: [[16, 12px], [18, 16px]]
                     visible: global.show_transit
-                    priority: global.priority_bus_stop
+                    priority: global.priority.bus_stop
                     text: { visible: false }
 
         traffic_signals:
@@ -1171,7 +1172,7 @@ layers:
                     style: points
                     interactive: false
                     sprite: traffic_light
-                    priority: global.priority_traffic_light
+                    priority: global.priority.traffic_light
                     text: { visible: false }
 
         not_landuse:
@@ -1190,7 +1191,7 @@ layers:
                     #interactive: true  -- already set on parent
                     sprite: global.poi_sprite_fn
                     color: global.poi_color_fn
-                    priority: global.priority_poi_default
+                    priority: global.priority.poi_default
                     # transition.selected < 0 to indicate label should be hidden when search results shown
                     transition: { selected: { time: -1s } }
                     text:
@@ -1213,7 +1214,7 @@ layers:
                     draw:
                         points:
                             visible: global.show_trails
-                            priority: global.priority_poi_viewpoint
+                            priority: global.priority.poi_viewpoint
                     default:
                         filter: { $zoom: { min: 17 } }
                         draw: { points: { visible: true } }
@@ -1223,7 +1224,7 @@ layers:
                     draw:
                         points:
                             visible: global.show_parking
-                            priority: global.priority_poi_parking
+                            priority: global.priority.poi_parking
                     default:
                         filter: { $zoom: { min: 18 } }
                         draw: { points: { visible: true } }
@@ -1241,49 +1242,49 @@ layers:
                 university:
                     exclusive: true
                     filter: { amenity: university }
-                    draw: { points: { priority: global.priority_poi_university } }
+                    draw: { points: { priority: global.priority.poi_university } }
                 school:
                     exclusive: true
                     filter: { amenity: [school, college, kindergarten] }
-                    draw: { points: { visible: false, priority: global.priority_poi_school } }
+                    draw: { points: { visible: false, priority: global.priority.poi_school } }
                     show:
                         filter: { $zoom: { min: 16 } }
                         draw: { points: { visible: true } }
                 restaurant:
                     exclusive: true
                     filter: { amenity: [restaurant, fast_food] }
-                    draw: { points: { priority: global.priority_poi_restaurant } }
+                    draw: { points: { priority: global.priority.poi_restaurant } }
                 cafe:
                     exclusive: true
                     filter:
                         - amenity: [cafe, ice_cream]
                         - shop: [beverages, confectionery, bakery, pastry]
-                    draw: { points: { priority: global.priority_poi_cafe } }
+                    draw: { points: { priority: global.priority.poi_cafe } }
                 grocery:
                     exclusive: true
                     filter: { shop: supermarket }
-                    draw: { points: { priority: global.priority_poi_grocery } }
+                    draw: { points: { priority: global.priority.poi_grocery } }
                 convenience:
                     exclusive: true
                     filter: { shop: [convenience, greengrocer, deli, delicatessen, butcher, farm] }
-                    draw: { points: { priority: global.priority_poi_convenience } }
+                    draw: { points: { priority: global.priority.poi_convenience } }
                 culture:
                     exclusive: true
                     filter:
                         - amenity: [cinema, theatre, concert_hall, arts_centre, library]
                         - tourism: museum
-                    draw: { points: { priority: global.priority_poi_culture } }
+                    draw: { points: { priority: global.priority.poi_culture } }
                 church:
                     exclusive: true
                     filter: { amenity: place_of_worship }
-                    draw: { points: { visible: false, priority: global.priority_poi_religion } }
+                    draw: { points: { visible: false, priority: global.priority.poi_religion } }
                     show:
                         filter: { $zoom: { min: 16 } }
                         draw: { points: { visible: true } }
                 toilet:
                     exclusive: true
                     filter: { amenity: [drinking_water, water_point, toilets] }
-                    draw: { points: { visible: false, priority: global.priority_poi_toilet } }
+                    draw: { points: { visible: false, priority: global.priority.poi_toilet } }
                     show:
                         filter: { $zoom: { min: 18 } }
                         draw: { points: { visible: true } }
@@ -1299,7 +1300,7 @@ layers:
                 color: global.color.border
 
             text:
-                priority: global.priority_boundary
+                priority: global.priority.boundary
                 #text_source:
                 #    left: 'adm0_l'
                 #    right: 'adm0_r'
@@ -1333,7 +1334,7 @@ layers:
             draw:
                 text:
                     text_source: global.names_two_lines
-                    priority: global.priority_continent
+                    priority: global.priority.continent
                     font:
                         family: Open Sans
                         size: 12px
@@ -1356,7 +1357,7 @@ layers:
                     outline: { color: global.color.city_point_halo, width: 1px }
                     text:
                         text_source: global.names_two_lines
-                        priority: global.priority_place_fn
+                        priority: global.priority.place_fn
                         #collide: true
                         #optional: false
                         interactive: true
@@ -1382,7 +1383,7 @@ layers:
                     visible: false
                     interactive: true
                     text_source: global.names_two_lines
-                    priority: global.priority_place_fn
+                    priority: global.priority.place_fn
                     font:
                         family: Open Sans
                         size: 12px
@@ -1451,7 +1452,7 @@ layers:
                 draw:
                     text:
                         visible: false
-                        priority: global.priority_neighborhood
+                        priority: global.priority.neighborhood
                         #interactive: true
                         font:
                             size: [[13, 11px], [14, 11px], [15, 13px]]
@@ -1470,7 +1471,7 @@ layers:
                         draw:
                             text:
                                 visible: true
-                                #priority: global.priority_housenumber
+                                #priority: global.priority.housenumber
                                 font:
                                     size: 12px
                 china_district:
@@ -1480,7 +1481,7 @@ layers:
                     draw:
                         text:
                             visible: true
-                            priority: global.priority_district_CN
+                            priority: global.priority.district_CN
                             font:
                                 fill: global.color.place_name
                                 size: [[11, 11px], [12, 11px], [13, 13px]]

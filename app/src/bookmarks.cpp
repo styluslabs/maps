@@ -645,6 +645,15 @@ Button* MapsBookmarks::createPanel()
     SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(
         listTitle->text(), colorstr, activeListId).exec();
     listsDirty = archiveDirty = true;
+    // update panel title, including in case of bookmark list opened from place info
+    if(app->pickResultName.empty())
+      static_cast<TextLabel*>(bkmkPanel->selectFirst(".panel-title"))->setText(listTitle->text().c_str());
+    else {
+      int listid = activeListId;
+      app->popPanel();
+      app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
+      populateBkmks(listid, true);
+    }
   };
   auto editListContent = createInlineDialog({editListRow}, "Apply", onAcceptListEdit);
   bkmkContent->addWidget(editListContent);
@@ -717,8 +726,8 @@ Button* MapsBookmarks::createPanel()
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(bkmkMenu->selectFirst(".child-container"));
       int uiWidth = app->getPanelWidth();
-      const char* query = "SELECT b.title, b.props, b.lng, b.lat FROM bookmarks AS b "
-          "JOIN lists ON lists.id = b.list_id WHERE lists.archived = 0 ORDER BY timestamp DESC LIMIT 8;";
+      const char* query = "SELECT b.title, b.props, b.lng, b.lat FROM bookmarks AS b JOIN lists ON "
+          "lists.id = b.list_id WHERE lists.archived = 0 AND b.title <> '' ORDER BY timestamp DESC LIMIT 8;";
       SQLiteStmt(app->bkmkDB, query).exec([&](std::string name, std::string props, double lng, double lat){
         Button* item = bkmkMenu->addItem(name.c_str(), MapsApp::uiIcon("pin"),
             [=](){ app->setPickResult(LngLat(lng, lat), name, props); });

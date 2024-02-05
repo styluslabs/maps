@@ -237,6 +237,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   @Override
   public void onSensorChanged(SensorEvent event)
   {
+    // refs: github.com/barbeau/gpstest
     if(event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
       float rotmat[] = new float[9];  //or 16
       float orient[] = new float[3];

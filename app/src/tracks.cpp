@@ -993,8 +993,12 @@ Waypoint MapsTracks::interpTrack(const std::vector<Waypoint>& locs, double s, si
 
 void MapsTracks::updateDB(GpxFile* track)
 {
-  if(track->filename.empty())
-    track->filename = FSPath(MapsApp::baseDir, "tracks/" + track->title + ".gpx").c_str();
+  if(track->filename.empty()) {
+    FSPath file(MapsApp::baseDir, "tracks/" + track->title + ".gpx");
+    for(int ii = 1; file.exists(); ++ii)
+      file = file.basePath() + fstring(" (%d).gpx", ii);
+    track->filename = file.path;
+  }
   if(track->rowid < 0) {
     SQLiteStmt(app->bkmkDB, "INSERT INTO tracks (title,filename) VALUES (?,?);")
         .bind(track->title, track->filename).exec();
@@ -1329,7 +1333,7 @@ Button* MapsTracks::createPanel()
   tracksContainer->node->setAttribute("box-anchor", "fill");
   tracksContent = new DragDropList;  //createColumn();
 
-  Button* drawTrackBtn = createToolbutton(MapsApp::uiIcon("draw-track"), "Create Route");
+  Button* drawTrackBtn = createToolbutton(MapsApp::uiIcon("add-track"), "Create Route");
   TextEdit* newTrackTitle = createTitledTextEdit("Title");
   TextEdit* newTrackFile = createTitledTextEdit("File");
   Widget* newTrackContent = createInlineDialog({newTrackTitle, newTrackFile}, "Create", [=](){
@@ -1437,25 +1441,35 @@ Button* MapsTracks::createPanel()
   });
   editRouteTitle->onChanged = [=](const char* s){ editRouteContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
 
-  TextEdit* saveRouteTitle = createTitledTextEdit("Title");
-  TextEdit* saveRouteFile = createTitledTextEdit("File");
-  Widget* saveRouteContent = createInlineDialog({saveRouteTitle, saveRouteFile}, "Create", [=](){
-    tracks.push_back(std::move(navRoute));
-    tracks.back().title = saveRouteTitle->text();
-    tracks.back().desc = ftimestr("%F");
-    tracks.back().filename = saveRouteFile->text();
-    updateDB(&tracks.back());
-    populateWaypoints(&tracks.back());
-  });
-  saveRouteTitle->onChanged = [=](const char* s){ saveRouteContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
+  //TextEdit* saveRouteTitle = createTitledTextEdit("Title");
+  //TextEdit* saveRouteFile = createTitledTextEdit("File");
+  //Widget* saveRouteContent = createInlineDialog({saveRouteTitle, saveRouteFile}, "Create", [=](){
+  //  tracks.push_back(std::move(navRoute));
+  //  tracks.back().title = saveRouteTitle->text();
+  //  tracks.back().desc = ftimestr("%F");
+  //  tracks.back().filename = saveRouteFile->text();
+  //  updateDB(&tracks.back());
+  //  populateWaypoints(&tracks.back());
+  //});
+  //saveRouteTitle->onChanged = [=](const char* s){ saveRouteContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
 
   Button* saveRouteBtn = createToolbutton(MapsApp::uiIcon("save"), "Save");
   saveRouteBtn->onClicked = [=](){
-    if(activeTrack->filename.empty()) {
-      saveRouteTitle->setText("");
-      saveRouteFile->setText("");
-      showInlineDialogModal(saveRouteContent);
+    if(activeTrack == &navRoute) {
+      auto& dest = navRoute.waypoints.back().name;
+      tracks.push_back(std::move(navRoute));
+      tracks.back().title = dest.empty() ? "Route" : "Route to " + dest;
+      tracks.back().desc = ftimestr("%F");
+      tracks.back().filename = "";  //saveRouteFile->text();
+      tracks.back().visible = true;
+      updateDB(&tracks.back());
+      populateWaypoints(&tracks.back());
+      //saveRouteTitle->setText("");
+      //saveRouteFile->setText("");
+      //showInlineDialogModal(saveRouteContent);
     }
+    else if(activeTrack->filename.empty())
+      LOGE("Active track has no filename!");
     else
       activeTrack->modified = !saveGPX(activeTrack);
   };
@@ -1565,12 +1579,21 @@ Button* MapsTracks::createPanel()
 
   wayptContainer->addWidget(routeEditTb);
   wayptContainer->addWidget(editRouteContent);
-  wayptContainer->addWidget(saveRouteContent);
+  //wayptContainer->addWidget(saveRouteContent);
   wayptContainer->addWidget(sparkStats);
   wayptContainer->addWidget(wayptContent);
 
+  Button* showRouteEdit = createToolbutton(MapsApp::uiIcon("draw-track"), "Edit Route");
+  showRouteEdit->onClicked = [=](){
+    bool show = !showRouteEdit->isChecked();
+    showRouteEdit->setChecked(show);
+    routeEditTb->setVisible(show);
+  };
+  routeEditTb->setVisible(false);
+
   auto wayptsTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Waypoints");
   wayptsTb->addWidget(saveRouteBtn);
+  wayptsTb->addWidget(showRouteEdit);
   wayptsTb->addWidget(routeModeBtn);
   wayptsTb->addWidget(routePluginBtn);
   wayptsTb->addWidget(wayptsOverflowBtn);
@@ -1637,7 +1660,7 @@ Button* MapsTracks::createPanel()
             tracksMenu->addItem(item);
             SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
             item->onClicked = [jj, this](){ setTrackVisible(&tracks[jj], !tracks[jj].visible); };
-            item->setChecked(tracks[jj].visible);
+            item->setChecked(tracks[jj].visible || &tracks[jj] == activeTrack);
             break;
           }
         }

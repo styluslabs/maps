@@ -302,16 +302,18 @@ void MarkerGroup::reset()
 
 void MarkerGroup::updateMarker(int id, Properties&& props)
 {
-  for(auto it = places.begin(); it != places.end(); ++it) {
-    if(it->id == id) {
-      it->props = std::move(props);
+  for(size_t ii = 0; ii < places.size(); ++ii) {
+    if(places[ii].id == id) {
+      PlaceInfo& res = places[ii];
+      res.props = std::move(props);
+      res.props.set("priority", ii);
       for(auto& item : commonProps.items())
-        it->props.setValue(item.key, item.value);
+        res.props.setValue(item.key, item.value);
       //map->markerSetPoint(it->markerId, it->pos);  // to force marker update
-      if(it->markerId > 0)
-        map->markerSetProperties(it->markerId, Properties(it->props));
-      if(it->altMarkerId > 0)
-        map->markerSetProperties(it->altMarkerId, Properties(it->props));
+      if(res.markerId > 0)
+        map->markerSetProperties(res.markerId, Properties(res.props));
+      if(res.altMarkerId > 0)
+        map->markerSetProperties(res.altMarkerId, Properties(res.props));
       // we use fixed radius for marker, so changing title doesn't affect our collision calc
       break;
     }

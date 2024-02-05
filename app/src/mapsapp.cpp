@@ -403,7 +403,7 @@ void MapsApp::tapEvent(float x, float y)
   LOGD("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, tapLocation.longitude, tapLocation.latitude, xx, yy);
 #endif
 
-  map->pickLabelAt(x, y, [&](const Tangram::LabelPickResult* result) {
+  map->pickLabelAt(x, y, [this](const Tangram::LabelPickResult* result) {
     auto& props = result->touchItem.properties;
     LOGD("Picked label: %s", result ? props->getAsString("name").c_str() : "none");
     if (!result) {
@@ -423,15 +423,23 @@ void MapsApp::tapEvent(float x, float y)
     tapLocation = {NAN, NAN};
   });
 
-  map->pickMarkerAt(x, y, [&](const Tangram::MarkerPickResult* result) {
+  map->pickMarkerAt(x, y, [this](const Tangram::MarkerPickResult* result) {
     if(!result || result->id == pickResultMarker)
       return;
     LOGD("Marker %d picked", result->id);
-    map->markerSetVisible(pickResultMarker, false);  // ???
-    pickedMarkerId = result->id;
-    map->screenPositionToLngLat(
-        result->position[0], result->position[1], &pickResultCoord.longitude, &pickResultCoord.latitude);
-    //pickResultCoord = result->coordinates;  -- just set to center of marker for polylines/polygons
+    if(result->id == pickResultMarker) {
+      if(!panelContainer->isVisible())
+        showPanelContainer(true);
+      else
+        clearPickResult();
+    }
+    else {
+      //map->markerSetVisible(pickResultMarker, false);  // ???
+      pickedMarkerId = result->id;
+      map->screenPositionToLngLat(
+          result->position[0], result->position[1], &pickResultCoord.longitude, &pickResultCoord.latitude);
+      //pickResultCoord = result->coordinates;  -- just set to center of marker for polylines/polygons
+    }
     tapLocation = {NAN, NAN};
   });
 
@@ -495,9 +503,12 @@ void MapsApp::sendMapEvent(MapEvent_t event)
 
 static bool camerasMatch(const CameraPosition& cam0, const CameraPosition& cam1)
 {
+  float drot = std::abs(cam0.rotation - cam1.rotation);
+  drot = std::min(drot, 360 - drot);
   return std::abs(cam0.zoom - cam1.zoom) < 1E-7
       && std::abs(cam0.longitude - cam1.longitude) < 1E-7
-      && std::abs(cam0.latitude - cam1.latitude) < 1E-7;
+      && std::abs(cam0.latitude - cam1.latitude) < 1E-7
+      && drot < 1.0*M_PI/180;
 }
 
 void MapsApp::mapUpdate(double time)
@@ -1039,6 +1050,15 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       panelSplitter->setSplitSize(std::max(panelSplitter->initialSize, panelSplitter->minSize + 40));
     }
   };
+  // enable swipe down gesture to hide panel
+  panelSplitter->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SDL_FINGERUP) {
+      if(gui->flingV.y > 1000 && std::abs(gui->flingV.x) < 200)   // flingV is in pixels/sec
+        panelSplitter->onSplitChanged(panelSplitter->minSize);  // dismiss panel
+      return true;
+    }
+    return false;
+  });
 
   // adjust map center to account for sidebar
   //Tangram::EdgePadding padding = {0,0,0,0};  //{200, 0, 0, 0};
@@ -1097,7 +1117,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   Menu* debugMenu = createMenu(Menu::HORZ);
   const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
-      "Tile info", "Labels", "Tangram Info", "Draw all labels", "Tangram stats", "Selection buffer"};
+      "Tile info", "Label bounds", "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer"};
   for(int ii = 0; ii < 9; ++ii) {
     Button* debugCb = createCheckBoxMenuItem(debugFlags[ii]);
     debugCb->onClicked = [=](){

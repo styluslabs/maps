@@ -299,11 +299,19 @@ document.addEventListener('DOMContentLoaded', function(event) {
 
 <!-- assembled from draw-track and pin -->
 <svg id="waypoint" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24">
-<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M6 14H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4"/>
-<g fill="none" stroke="currentColor" stroke-width="2.64" transform="scale(0.6) translate(8,4)">
-  <path d="M20 10c0 4.418-8 12-8 12s-8-7.582-8-12a8 8 0 1 1 16 0Z"/>
-  <path fill="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M12 11a1 1 0 1 0 0-2a1 1 0 0 0 0 2Z"/>
-</g>
+  <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M6 14H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4"/>
+  <g fill="none" stroke="currentColor" stroke-width="2.64" transform="scale(0.6) translate(8,4)">
+    <path d="M20 10c0 4.418-8 12-8 12s-8-7.582-8-12a8 8 0 1 1 16 0Z"/>
+    <path fill="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M12 11a1 1 0 1 0 0-2a1 1 0 0 0 0 2Z"/>
+  </g>
+</svg>
+
+<!-- assembled from draw-track and add -->
+<svg id="add-track" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M6 14H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4"/>
+  <g stroke-width="2.64" transform="scale(0.6) translate(8,4)">
+    <path d="M12 5v14m-7-7h14"/>
+  </g>
 </svg>
 
 <svg id="crosshair" class="icon-default icon-tabler-crosshair" width="1em" height="1em" viewBox="0 0 24 24">

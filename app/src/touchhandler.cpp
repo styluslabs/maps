@@ -6,7 +6,7 @@
 //static constexpr float flingInvTau = 1/0.05f;  // time constant for smoothing of pan speed
 static constexpr float pinchThreshold = 30;  // pixels/xyScale (change in distance between fingers)
 static constexpr float rotateThreshold = 0.25f;  // radians
-static constexpr float shoveThreshold = 30;  // pixels/xyScale (translation of centroid of fingers)
+static constexpr float shoveThreshold = 60;  // pixels/xyScale (translation of centroid of fingers)
 
 //static constexpr float maxTapDist = 20;  // max pixels between start and end points for a tap
 //static constexpr float minFlingDist = 150;
@@ -122,7 +122,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
 
   const TouchPt& pt = touchPoints.front();
   if(touchPoints.size() > 1) {
-    const TouchPt& pt2 = touchPoints.back();
+    const TouchPt& pt2 = touchPoints[1];  //.back();  -- ignore touch points beyond first two
     TouchPt com = {0, 0.5f*(pt.x + pt2.x), 0.5f*(pt.y + pt2.y), 0};
     float dx = pt2.x - pt.x, dy = pt2.y - pt.y;
     float dist = std::sqrt(dx*dx + dy*dy);
@@ -132,13 +132,14 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
     else {
       if(multiTouchState == TOUCH_NONE) {
+         float threshscale = (map->getRotation() != 0 || map->getTilt() != 0) ? 0.5f : 1.0f;
         if(std::abs(dist - prevDist) > pinchThreshold*xyScale) {
           multiTouchState = TOUCH_PINCH;
           prevDists.clear();
         }
-        else if(std::abs(angle - prevAngle) > rotateThreshold)
+        else if(std::abs(angle - prevAngle) > threshscale*rotateThreshold)
           multiTouchState = TOUCH_ROTATE;
-        else if(std::abs(com.y - prevCOM.y) > shoveThreshold*xyScale)
+        else if(std::abs(com.y - prevCOM.y) > threshscale*shoveThreshold*xyScale)
           multiTouchState = TOUCH_SHOVE;
       }
       if(multiTouchState == TOUCH_PINCH) {

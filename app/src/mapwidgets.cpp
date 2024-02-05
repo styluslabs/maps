@@ -571,8 +571,19 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
   dialog->setVisible(false);
 
   dialog->addHandler([=](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE) {
-      dialog->setVisible(false);
+    if(event->type == SDL_KEYDOWN) {
+      if(event->key.keysym.sym == SDLK_ESCAPE)
+        cancelBtn->onClicked();
+      else if(event->key.keysym.sym == SDLK_RETURN)
+        acceptBtn->onClicked();
+      else if(event->key.keysym.sym == SDLK_TAB) {
+        Widget* w = SvgGui::findNextFocusable(dialog,
+            dialog->window()->focusedWidget, event->key.keysym.mod & KMOD_SHIFT);
+        if(w)
+          gui->setFocused(w);
+      }
+      else
+        return false;
       return true;
     }
     //if(event->type == SvgGui::OUTSIDE_MODAL) {
