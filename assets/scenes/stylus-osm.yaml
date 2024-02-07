@@ -21,7 +21,7 @@ global:
         default_halo: white
         landuse: honeydew
         parks: '#bddec5'
-        park_detail: '#9dbea5'
+        park_detail: hsl(134.5, 21%, 72%)  #'#9dbea5'
         golf: hsl(124, 83%, 88%)  #'#C8FACC'
         industry: '#C0CDCD'
         retail: '#FEF0D0'
@@ -93,15 +93,16 @@ global:
     # z-order for polygons and lines (higher z-order draws over lower)
     order:
         landuse: 1
-        parks: 1
-        airport: 1
-        golf: 2
-        landcover: 3
-        waterway: 4
-        water: 5
+        parks: 2
+        park_detail: 3
+        golf: 4
+        airport: 5
+        landcover: 6
+        waterway: 7
+        water: 8
         pier: 9
         bldg: 10
-        transportation_casing: 10
+        transportation_casing: 11
         transportation: 40
         rail: 40
         taxiway: 50
@@ -184,7 +185,10 @@ global:
         poi_parking:     function() { return '102.' + feature.osm_id.substring(feature.osm_id.length - 6); }
         # cities, states, countries
         place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
-        place_fn: function() { return (global.priority.place[feature.class] || 14) + 100.0/(100 + (feature.population || 1)); }
+        place_fn: |
+            function() {
+                return (global.priority.place[feature.class] || 14) + 100.0/(100 + (feature.population || 1));
+            }
 
     # bounds for country-specific filters
     japan_bounds:  # covers main islands, does not include Okinawa, etc
@@ -226,7 +230,7 @@ sources:
     osm:
         type: MVT
         cache: stylus-osm
-        #url: file:///home/mwhite/maps/tilemaker/sf.mbtiles
+        #url: file:///home/mwhite/maps/tilemaker/countries.mbtiles
         #url: file:///home/mwhite/maps/sf.mbtiles  # maptiler 2017 extract
         #url: file:///home/mwhite/maps/SanFrancisco-bbbike.mbtiles   # from bbbike.org, but no bike info!
         #url: http://tiles.basemaps.cartocdn.com/vectortiles/carto.streets/v1/{z}/{x}/{y}.mvt
@@ -360,7 +364,7 @@ layers:
                 color: global.color.landuse
         green:
             filter: { class: [zoo, playground, pitch, cemetery] }
-            draw: { polygons: { visible: true, color: global.color.park_detail } }
+            draw: { polygons: { visible: true, order: global.order.park_detail, color: global.color.park_detail } }
         retail:
             filter: { landuse: [retail] }  #industrial, commercial
             draw: { polygons: { visible: true, color: global.color.retail } }
@@ -501,7 +505,7 @@ layers:
                     order: global.order.motorway
                     color: 'function() { return global.show_motorways ? global.color.motorway : global.color.motorway_muted; }'
                     #[[5, global.color.motorway_5], [7, global.color.motorway_7]]
-                    width: [[5, 1px], [8, 1.5px], [14, 2px], [15, 12]]
+                    width: [[4, 0], [5, 1px], [8, 1.5px], [14, 2px], [15, 12]]
                     outline:
                         width: [[14, 0], [15, 2]]
             tunnel:
@@ -514,8 +518,16 @@ layers:
                     lines:
                         #color: global.color.motorway_link
                         width: [[13, 0], [14, 12]]
+        trunk:
+            filter: { class: [trunk], $zoom: { min: 8 } }
+            draw:
+                lines:
+                    order: global.order.major_road
+                    width: [[8, 1px], [13, 2px], [14, 2px], [16, 12]]
+                    outline:
+                        width: [[16, 0], [17, 1]]
         major_road:
-            filter: { class: [trunk, primary, secondary], $zoom: { min: 10 } }
+            filter: { class: [primary, secondary], $zoom: { min: 10 } }
             draw:
                 lines:
                     order: global.order.major_road
@@ -694,7 +706,7 @@ layers:
             route: false
             #not: { class: [transit, route, aeroway] }
             any:
-                - { class: motorway, $zoom: { min: 5 } }
+                - { class: motorway, $zoom: { min: 6 } }
                 - { class: [trunk, primary], $zoom: { min: 10 } }
                 - $zoom: { min: 13 }
         draw:
@@ -1294,7 +1306,6 @@ layers:
         draw:
             lines:
                 visible: false
-                style: dashed-border
                 order: global.order.border
                 width: 1px
                 color: global.color.border
@@ -1318,13 +1329,17 @@ layers:
                 lines:
                     visible: true
                     color: global.color.border_country
-                    width: 1.5px
+                    width: 1px
+            disputed:
+                filter: { disputed: true }
+                draw: { lines: { style: dashed-border } }
 
         region:
             filter: { admin_level: [3, 4] }
             draw:
                 lines:
                     visible: true
+                    style: dashed-border
 
     places:
         data: { source: osm, layer: place }
@@ -1348,10 +1363,19 @@ layers:
             filter:
                 class: city
                 $zoom: { max: 9 }
+                any:
+                    - rank: false
+                    - { rank: { max: 1 }, $zoom: { min: 3 } }  # note that upper limit is in included!
+                    - { rank: { max: 3 }, $zoom: { min: 4 } }
+                    - { rank: { max: 4 }, $zoom: { min: 5 } }
+                    - { rank: { max: 6 }, $zoom: { min: 6 } }
+                    - { rank: { max: 7 }, $zoom: { min: 7 } }
+                    - { rank: { max: 10 }, $zoom: { min: 8 } }
             draw:
                 points:
                     size: 6px
                     color: global.color.city_point
+                    priority: global.priority.place_fn
                     #collide: false
                     interactive: true
                     outline: { color: global.color.city_point_halo, width: 1px }

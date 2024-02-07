@@ -141,17 +141,15 @@ void initResources(const char* baseDir)
   }
   moreWidgets->children().clear();
 
+  // replace widget default icons (e.g. combo box chevron)
   const SvgDocument* uiIcons = SvgGui::useFile(":/ui-icons.svg");
-  SvgNode* olddefs = widgetDoc->selectFirst("defs");
-  if(olddefs) {
-    widgetDoc->removeChild(olddefs);
-    delete olddefs;
+  auto useNodes = widgetDoc->select("use");
+  for(SvgNode* n : useNodes) {
+    SvgUse* usenode = static_cast<SvgUse*>(n);
+    SvgNode* target = uiIcons->namedNode(usenode->href());
+    if(target)
+      usenode->setTarget(target);
   }
-  SvgDefs* defs = new SvgDefs;
-  defs->addChild(uiIcons->namedNode("chevron-down")->clone());
-  defs->addChild(uiIcons->namedNode("chevron-left")->clone());
-  defs->addChild(uiIcons->namedNode("chevron-right")->clone());
-  widgetDoc->addChild(defs, widgetDoc->firstChild());
 
   setGuiResources(widgetDoc, styleSheet);
 }

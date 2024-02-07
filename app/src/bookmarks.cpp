@@ -334,7 +334,9 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
       markerGroup->createMarker(LngLat(lng, lat), onPicked, {{{"name", namestr}}}, rowid);
 
     if(createUI) {
-      Button* item = createListItem(MapsApp::uiIcon("pin"), namestr.c_str(), notestr);
+      // We allow empty name for marker to have marker w/o text on map, but need some text for list item
+      const char* itemname = namestr.empty() ? "Untitled" : namestr.c_str();
+      Button* item = createListItem(MapsApp::uiIcon("pin"), itemname, notestr);
       item->onClicked = onPicked;
 
       // alternative to overflow would be multi-select w/ selection toolbar; part of MapPanel, shared
@@ -363,29 +365,29 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 
 void MapsBookmarks::onMapEvent(MapEvent_t event)
 {
-  if(event == SUSPEND) {
+  if(event == MAP_CHANGE) {
+    for(auto& mg : bkmkMarkers)
+      mg.second->onZoom();
+    if(mapAreaBkmks) {
+      for(Widget* item : bkmkContent->select(".listitem")) {
+        LngLat pos = item->userData<LngLat>();
+        item->setVisible(app->map->lngLatToScreenPosition(pos.longitude, pos.latitude));
+      }
+    }
+  }
+  else if(event == MARKER_PICKED) {
+    for(auto& mg : bkmkMarkers) {
+      if(app->pickedMarkerId <= 0) return;
+      if(mg.second->onPicked(app->pickedMarkerId))
+        app->pickedMarkerId = 0;
+    }
+  }
+  else if(event == SUSPEND) {
     std::vector<std::string> order = listsContent->getOrder();
     if(order.empty()) return;
     YAML::Node ordercfg = app->config["places"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
     for(const std::string& s : order)
       ordercfg.push_back(s);
-    return;
-  }
-  if(event != MAP_CHANGE)
-    return;
-  if(mapAreaBkmks) {
-    for(Widget* item : bkmkContent->select(".listitem")) {
-      LngLat pos = item->userData<LngLat>();
-      item->setVisible(app->map->lngLatToScreenPosition(pos.longitude, pos.latitude));
-    }
-  }
-
-  for(auto& mg : bkmkMarkers) {
-    mg.second->onZoom();
-    if(app->pickedMarkerId > 0) {
-      if(mg.second->onPicked(app->pickedMarkerId))
-        app->pickedMarkerId = 0;
-    }
   }
 }
 
@@ -645,15 +647,17 @@ Button* MapsBookmarks::createPanel()
     SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(
         listTitle->text(), colorstr, activeListId).exec();
     listsDirty = archiveDirty = true;
-    // update panel title, including in case of bookmark list opened from place info
-    if(app->pickResultName.empty())
-      static_cast<TextLabel*>(bkmkPanel->selectFirst(".panel-title"))->setText(listTitle->text().c_str());
-    else {
-      int listid = activeListId;
+    // if bookmark list opened from place info, need to update list title there
+    int listid = activeListId;
+    if(!app->pickResultName.empty()) {
       app->popPanel();
       app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
-      populateBkmks(listid, true);
     }
+    // rebuild makers in case color changed
+    auto it1 = bkmkMarkers.find(listid);
+    if(it1 != bkmkMarkers.end())
+      bkmkMarkers.erase(it1);
+    populateBkmks(listid, true);
   };
   auto editListContent = createInlineDialog({editListRow}, "Apply", onAcceptListEdit);
   bkmkContent->addWidget(editListContent);

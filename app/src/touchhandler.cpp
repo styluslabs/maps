@@ -6,7 +6,7 @@
 //static constexpr float flingInvTau = 1/0.05f;  // time constant for smoothing of pan speed
 static constexpr float pinchThreshold = 30;  // pixels/xyScale (change in distance between fingers)
 static constexpr float rotateThreshold = 0.25f;  // radians
-static constexpr float shoveThreshold = 60;  // pixels/xyScale (translation of centroid of fingers)
+static constexpr float shoveThreshold = 100;  // pixels/xyScale (translation of centroid of fingers)
 
 //static constexpr float maxTapDist = 20;  // max pixels between start and end points for a tap
 //static constexpr float minFlingDist = 150;
@@ -137,9 +137,9 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
           multiTouchState = TOUCH_PINCH;
           prevDists.clear();
         }
-        else if(std::abs(angle - prevAngle) > threshscale*rotateThreshold)
+        else if(prevDist > 150*xyScale && std::abs(angle - prevAngle) > threshscale*rotateThreshold)
           multiTouchState = TOUCH_ROTATE;
-        else if(std::abs(com.y - prevCOM.y) > threshscale*shoveThreshold*xyScale)
+        else if(prevDist < 250*xyScale && std::abs(com.y - prevCOM.y) > threshscale*shoveThreshold*xyScale)
           multiTouchState = TOUCH_SHOVE;
       }
       if(multiTouchState == TOUCH_PINCH) {

@@ -751,8 +751,6 @@ void MapsTracks::populateWaypoints(GpxFile* track)
   static_cast<TextLabel*>(wayptPanel->selectFirst(".panel-title"))->setText(track->title.c_str());
 
   showTrack(track, true);
-  directRoutePreview = true;
-  app->crossHair->setVisible(true);
   if(activeTrack != track) {
     activeTrack = track;
     insertionWpt.clear();
@@ -789,16 +787,32 @@ bool MapsTracks::findPickedWaypoint(GpxFile* track)
 
 void MapsTracks::onMapEvent(MapEvent_t event)
 {
-  if(event == SUSPEND) {
-    std::vector<std::string> order = tracksContent->getOrder();
-    if(order.empty()) return;
-    YAML::Node ordercfg = app->config["tracks"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
-    for(const std::string& s : order)
-      ordercfg.push_back(s);
-    return;
+  if(event == MAP_CHANGE) {
+    if(!activeTrack) return;
+    // update polyline marker in direct mode
+    if(directRoutePreview && activeTrack->routeMode == "direct" && !activeTrack->waypoints.empty()) {
+      auto it = insertionWpt.empty() ? activeTrack->waypoints.end() : activeTrack->findWaypoint(insertionWpt);
+      std::vector<LngLat> pts = {(--it)->lngLat(), app->getMapCenter()};
+      double distkm = lngLatDist(pts[0], pts[1]);
+      double pix = distkm*1000/MapProjection::metersPerPixelAtZoom(app->map->getZoom());
+      if(previewMarker <= 0) {
+        previewMarker = app->map->markerAdd();
+        app->map->markerSetStylingFromPath(previewMarker, "layers.track.draw.track");  //styling);
+      }
+      if(previewRoute.empty() || pts[0] != previewRoute[0] || pts[1] != previewRoute[1]) {
+        app->map->markerSetPolyline(previewMarker, pts.data(), 2);
+        app->map->markerSetProperties(previewMarker, {{{"color", "red"}}});
+        app->map->markerSetVisible(previewMarker, pix > 2);
+      }
+      previewRoute = pts;
+      previewDistText->setText(distKmToStr(distkm).c_str());
+    }
   }
-
-  if(app->pickedMarkerId > 0) {
+  else if(event == LOC_UPDATE) {
+    updateLocation(app->currLocation);
+  }
+  else if(event == MARKER_PICKED) {
+    if(app->pickedMarkerId <= 0) return;
     if(app->pickedMarkerId == trackHoverMarker) {
       app->setPickResult(trackHoverLoc.lngLat(), "", "");  //activeTrack->title + " waypoint"
       app->pickedMarkerId = 0;
@@ -829,33 +843,14 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       }
     }
   }
-
-  if(!activeTrack)
-    return;
-  if(event == LOC_UPDATE)
-    updateLocation(app->currLocation);
-  else if(event == SUSPEND && activeTrack->modified)
-    activeTrack->modified = !saveGPX(activeTrack);
-  if(event != MAP_CHANGE)
-    return;
-
-  // update polyline marker in direct mode
-  if(directRoutePreview && activeTrack->routeMode == "direct" && !activeTrack->waypoints.empty()) {
-    auto it = insertionWpt.empty() ? activeTrack->waypoints.end() : activeTrack->findWaypoint(insertionWpt);
-    std::vector<LngLat> pts = {(--it)->lngLat(), app->getMapCenter()};
-    double distkm = lngLatDist(pts[0], pts[1]);
-    double pix = distkm*1000/MapProjection::metersPerPixelAtZoom(app->map->getZoom());
-    if(previewMarker <= 0) {
-      previewMarker = app->map->markerAdd();
-      app->map->markerSetStylingFromPath(previewMarker, "layers.track.draw.track");  //styling);
-    }
-    if(previewRoute.empty() || pts[0] != previewRoute[0] || pts[1] != previewRoute[1]) {
-      app->map->markerSetPolyline(previewMarker, pts.data(), 2);
-      app->map->markerSetProperties(previewMarker, {{{"color", "red"}}});
-      app->map->markerSetVisible(previewMarker, pix > 2);
-    }
-    previewRoute = pts;
-    previewDistText->setText(distKmToStr(distkm).c_str());
+  else if(event == SUSPEND) {
+    std::vector<std::string> order = tracksContent->getOrder();
+    if(order.empty()) return;
+    YAML::Node ordercfg = app->config["tracks"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
+    for(const std::string& s : order)
+      ordercfg.push_back(s);
+    if(activeTrack && activeTrack->modified)
+      activeTrack->modified = !saveGPX(activeTrack);
   }
 }
 
@@ -867,13 +862,11 @@ void MapsTracks::setRouteMode(const std::string& mode)
   else if(parts[0] == "bike") icon = "bike";
   else if(parts[0] == "drive") icon = "car";
   routeModeBtn->setIcon(MapsApp::uiIcon(icon));
-  if(directRoutePreview) {
-    previewRoute.clear();
-    if(mode != "direct")
-      app->map->markerSetVisible(previewMarker, false);
-    else
-      onMapEvent(MAP_CHANGE);
-  }
+  previewRoute.clear();
+  if(directRoutePreview && mode == "direct")
+    onMapEvent(MAP_CHANGE);
+  else
+    app->map->markerSetVisible(previewMarker, false);
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
   createRoute(activeTrack);
@@ -1588,6 +1581,9 @@ Button* MapsTracks::createPanel()
     bool show = !showRouteEdit->isChecked();
     showRouteEdit->setChecked(show);
     routeEditTb->setVisible(show);
+    app->crossHair->setVisible(show);
+    directRoutePreview = show;
+    setRouteMode(activeTrack->routeMode);  // update previewMarker
   };
   routeEditTb->setVisible(false);
 
@@ -1602,14 +1598,18 @@ Button* MapsTracks::createPanel()
     if(event->type == SvgGui::VISIBLE) {
       replaceWaypt = false;  // clear this when coming back from search, regardless of point choosen or not
       stealPickResult = false;
+      directRoutePreview = routeEditTb->isVisible();
+      app->crossHair->setVisible(directRoutePreview);
       if(waypointsDirty)
         populateWaypoints(activeTrack);
     }
+    else if(event->type == SvgGui::INVISIBLE) {
+      directRoutePreview = false;
+      app->crossHair->setVisible(false);
+      app->map->markerSetVisible(previewMarker, false);
+    }
     else if(event->type == MapsApp::PANEL_CLOSED) {
       app->pluginManager->cancelRequests(PluginManager::ROUTE);
-      directRoutePreview = false;
-      app->map->markerSetVisible(previewMarker, false);
-      app->crossHair->setVisible(false);
       if(activeTrack) {
         if(activeTrack->modified)
           activeTrack->modified = !saveGPX(activeTrack);

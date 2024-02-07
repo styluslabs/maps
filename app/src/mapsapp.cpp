@@ -156,7 +156,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   infoContent->addWidget(item);
 
   showPanel(infoPanel, true);
-  infoPanel->selectFirst(".minimize-btn")->setVisible(panelHistory.size() > 1);
+  Widget* minbtn = infoPanel->selectFirst(".minimize-btn");
+  if(minbtn) minbtn->setVisible(panelHistory.size() > 1);
 
   // actions toolbar
   Toolbar* toolbar = createToolbar();
@@ -397,7 +398,7 @@ void MapsApp::tapEvent(float x, float y)
 {
   //LngLat location;
   map->screenPositionToLngLat(x, y, &tapLocation.longitude, &tapLocation.latitude);
-#if IS_DEBUG
+#if 0  //IS_DEBUG
   double xx, yy;
   map->lngLatToScreenPosition(tapLocation.longitude, tapLocation.latitude, &xx, &yy);
   LOGD("tapEvent: %f,%f -> %f,%f (%f, %f)\n", x, y, tapLocation.longitude, tapLocation.latitude, xx, yy);
@@ -406,10 +407,7 @@ void MapsApp::tapEvent(float x, float y)
   map->pickLabelAt(x, y, [this](const Tangram::LabelPickResult* result) {
     auto& props = result->touchItem.properties;
     LOGD("Picked label: %s", result ? props->getAsString("name").c_str() : "none");
-    if (!result) {
-      clearPickResult();
-      return;
-    }
+    if (!result) return;
     std::string itemId = props->getAsString("id");
     std::string osmType = props->getAsString("osm_type");
     if(itemId.empty())
@@ -424,14 +422,12 @@ void MapsApp::tapEvent(float x, float y)
   });
 
   map->pickMarkerAt(x, y, [this](const Tangram::MarkerPickResult* result) {
-    if(!result || result->id == pickResultMarker)
-      return;
+    if(!result) return;
     LOGD("Marker %d picked", result->id);
     if(result->id == pickResultMarker) {
-      if(!panelContainer->isVisible())
-        showPanelContainer(true);
-      else
-        clearPickResult();
+      if(panelContainer->isVisible())
+        return;  // info panel will be closed and pick result cleared
+      showPanelContainer(true);
     }
     else {
       //map->markerSetVisible(pickResultMarker, false);  // ???
@@ -503,12 +499,12 @@ void MapsApp::sendMapEvent(MapEvent_t event)
 
 static bool camerasMatch(const CameraPosition& cam0, const CameraPosition& cam1)
 {
-  float drot = std::abs(cam0.rotation - cam1.rotation);
+  float drot = std::abs(cam0.rotation - cam1.rotation)*180/M_PI;
   drot = std::min(drot, 360 - drot);
   return std::abs(cam0.zoom - cam1.zoom) < 1E-7
       && std::abs(cam0.longitude - cam1.longitude) < 1E-7
       && std::abs(cam0.latitude - cam1.latitude) < 1E-7
-      && drot < 1.0*M_PI/180;
+      && drot < 1.0;
 }
 
 void MapsApp::mapUpdate(double time)
@@ -536,16 +532,7 @@ void MapsApp::mapUpdate(double time)
   reorientBtn->setVisible(cpos.tilt != 0 || cpos.rotation != 0);
   reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(cpos.rotation));
 
-  if(locMarker > 0 && pickedMarkerId == locMarker) {
-    if(!mapsTracks->activeTrack)
-      showPanel(infoPanel);
-    setPickResult(currLocation.lngLat(), "Current location", "");
-    mapsSearch->clearSearch();  // ???
-    pickedMarkerId = 0;
-  }
-
   sendMapEvent(MAP_CHANGE);
-  pickedMarkerId = 0;  // prevent repeated searched for ignored marker
 }
 
 //void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
@@ -974,10 +961,10 @@ void MapsApp::setWindowLayout(int fbWidth)
       }
     }
 
-    SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
-    auto minbtns = panelContent->select(".minimize-btn");
-    for(Widget* btn : minbtns)
-      static_cast<Button*>(btn)->setIcon(minicon);
+    //SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
+    //auto minbtns = panelContent->select(".//-btn");
+    //for(Widget* btn : minbtns)
+    //  static_cast<Button*>(btn)->setIcon(minicon);
   }
 }
 
@@ -1052,8 +1039,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   };
   // enable swipe down gesture to hide panel
   panelSplitter->addHandler([=](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SDL_FINGERUP) {
-      if(gui->flingV.y > 1000 && std::abs(gui->flingV.x) < 200)   // flingV is in pixels/sec
+    if(event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED) {
+      if(gui->flingV.y > 1000 && std::abs(gui->flingV.x) < 500)   // flingV is in pixels/sec
         panelSplitter->onSplitChanged(panelSplitter->minSize);  // dismiss panel
       return true;
     }
@@ -1271,6 +1258,7 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
   if(!panelHistory.empty()) {
     if(panelHistory.back() == panel) {
       panel->setVisible(true);
+      showPanelContainer(true);
       return;
     }
     panelHistory.back()->setVisible(false);
@@ -1392,16 +1380,11 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widge
 
 Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent, bool canMinimize)
 {
-  // what about just swiping down to minimize instead of a button?
-  if(canMinimize) {
+  // on mobile, easier to just swipe down to minimize instead of tapping button
+  if(PLATFORM_DESKTOP && canMinimize) {
     auto minimizeBtn = createToolbutton(MapsApp::uiIcon("chevron-down"));
     minimizeBtn->node->addClass("minimize-btn");
-    minimizeBtn->onClicked = [this](){
-      // options:
-      // 1. hide container and splitter and show a floating restore btn
-      // 2. use setSplitSize() to shrink panel to toolbar height
-      showPanelContainer(false);
-    };
+    minimizeBtn->onClicked = [this](){ showPanelContainer(false); };
     header->addWidget(minimizeBtn);
   }
 
@@ -1670,10 +1653,20 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     TRACE_END(t0, "map update");
     //mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
     map->render();
-    // selection queries are processed by render() - if nothing selected, tapLocation will still be valid
-    if(!std::isnan(tapLocation.longitude)) {
+    // selection queries are processed by render(); if nothing selected, tapLocation will still be valid
+    if(pickedMarkerId > 0) {
+      if(pickedMarkerId == locMarker) {
+        if(!mapsTracks->activeTrack)
+          showPanel(infoPanel);
+        setPickResult(currLocation.lngLat(), "Current location", "");
+      }
+      else
+        sendMapEvent(MARKER_PICKED);
+      pickedMarkerId = 0;
+    }
+    else if(!std::isnan(tapLocation.longitude)) {
       if(!panelHistory.empty() && panelHistory.back() == infoPanel)
-        popPanel();
+        popPanel();  // closing info panel will clear pick result
       mapsTracks->tapEvent(tapLocation);
       tapLocation = {NAN, NAN};
     }

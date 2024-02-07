@@ -316,8 +316,16 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 
 void MapsSearch::onMapEvent(MapEvent_t event)
 {
-  if(event != MAP_CHANGE || !app->searchActive)
+  if(!app->searchActive) return;
+  if(event == MARKER_PICKED) {
+    if(app->pickedMarkerId > 0) {
+      if(markers->onPicked(app->pickedMarkerId))
+        app->pickedMarkerId = 0;
+    }
     return;
+  }
+  if(event != MAP_CHANGE) return;
+
   Map* map = app->map.get();
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
@@ -345,10 +353,6 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   if(mapmoved || zoomedin || zoomedout)
     retryBtn->setVisible(true);
 
-  if(app->pickedMarkerId > 0) {
-    if(markers->onPicked(app->pickedMarkerId))
-      app->pickedMarkerId = 0;
-  }
   // make sure extra labels still hidden if scene reloaded or source changed
   map->getScene()->hideExtraLabels = true;
 }
