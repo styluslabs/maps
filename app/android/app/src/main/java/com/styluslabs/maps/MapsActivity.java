@@ -118,9 +118,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
     switch (requestCode) {
     case PERM_REQ_LOCATION:
-      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && canGetLocation()) {
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);
-        locationManager.addGpsStatusListener(this);
+      if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && canGetLocation()) {
+        startSensors();
       }
       break;
     }
@@ -167,10 +166,15 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
     // - see https://developer.android.com/training/location/request-updates
-    // min GPS dt = 0 (ms), dr = 1 (meters)
     if(canGetLocation()) {
-      locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);  //FUSED_PROVIDER || "fused"
+      String provider = locationManager.hasProvider("fused") ? "fused" : LocationManager.GPS_PROVIDER;
+      Log.v("Tangram", "Using location provider: " + provider);
+      onLocationChanged(locationManager.getLastKnownLocation(provider));
+      // min GPS dt = 0 (ms), dr = 1 (meters)
+      locationManager.requestLocationUpdates(provider, 0, 1, this);
+      onGpsStatusChanged(0);
       locationManager.addGpsStatusListener(this);  //catch (SecurityException e)
+
     }
     //mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
     //mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);

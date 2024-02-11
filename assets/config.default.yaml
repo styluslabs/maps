@@ -23,6 +23,10 @@ view:
   lat: 37.776444
   zoom: 15
 
+search:
+  min_poi_zoom: 19
+  hide_bookmarks: false
+
 metric_units: true
 
 # color choices for tracks and markers; from https://colorkit.co

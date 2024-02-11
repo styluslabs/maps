@@ -174,44 +174,8 @@ poiTags = { aerialway = Set { "station" },
           railway = { [12] = Set { "halt", "station", "tram_stop" }, [poiMinZoom] = Set { "subway_entrance", "train_station_entrance" } },
           shop = {},
           sport = {},
-          tourism = { [12] = Set { "attraction", "viewpoint" }, [poiMinZoom] = Set { "alpine_hut", "aquarium", "artwork", "bed_and_breakfast", "camp_site", "caravan_site", "chalet", "gallery", "guest_house", "hostel", "hotel", "information", "motel", "museum", "picnic_site", "theme_park", "zoo" } },
+          tourism = { [12] = Set { "attraction", "viewpoint", "museum" }, [poiMinZoom] = Set { "alpine_hut", "aquarium", "artwork", "bed_and_breakfast", "camp_site", "caravan_site", "chalet", "gallery", "guest_house", "hostel", "hotel", "information", "motel","picnic_site", "theme_park", "zoo" } },
           waterway = Set { "dock" } }
-
--- POI "class" values: based on https://github.com/openmaptiles/openmaptiles/blob/master/layers/poi/poi.yaml
-poiClasses      = { townhall="town_hall", public_building="town_hall", courthouse="town_hall", community_centre="town_hall",
-          golf="golf", golf_course="golf", miniature_golf="golf",
-          fast_food="fast_food", food_court="fast_food",
-          park="park", bbq="park",
-          bus_stop="bus", bus_station="bus",
-          subway_entrance="entrance", train_station_entrance="entrance",
-          camp_site="campsite", caravan_site="campsite",
-          laundry="laundry", dry_cleaning="laundry",
-          supermarket="grocery", deli="grocery", delicatessen="grocery", greengrocer="grocery", marketplace="grocery",  --department_store="grocery"
-          library="library",  --books="library",
-          university="college", college="college",
-          hotel="lodging", motel="lodging", bed_and_breakfast="lodging", guest_house="lodging", hostel="lodging", chalet="lodging", alpine_hut="lodging", dormitory="lodging",
-          chocolate="ice_cream", confectionery="ice_cream",
-          post_box="post",  post_office="post",
-          cafe="cafe", restaurant="restaurant", fast_food="restaurant",
-          school="school",  kindergarten="school",
-          alcohol="alcohol_shop", wine="alcohol_shop",  --beverages="alcohol_shop",
-          bar="bar", nightclub="bar",
-          marina="harbor", dock="harbor",
-          car="car", car_repair="car", taxi="car",
-          hospital="hospital", nursing_home="hospital",  clinic="hospital",
-          grave_yard="cemetery", cemetery="cemetery",
-          attraction="attraction", viewpoint="attraction",
-          biergarten="beer", pub="beer",
-          music="music", musical_instrument="music",
-          american_football="stadium", stadium="stadium", soccer="stadium",
-          art="art_gallery", artwork="art_gallery", gallery="art_gallery", arts_centre="art_gallery",
-          bag="clothing_store", clothes="clothing_store",
-          swimming_area="swimming", swimming="swimming",
-          castle="castle", ruins="castle" }
-poiClassRanks   = { hospital=1, railway=2, bus=3, attraction=4, harbor=5, college=6,
-          school=7, stadium=8, zoo=9, town_hall=10, campsite=11, cemetery=12,
-          park=13, library=14, police=15, post=16, golf=17, shop=18, grocery=19,
-          fast_food=20, clothing_store=21, bar=22 }
 
 waterwayClasses = Set { "stream", "river", "canal", "drain", "ditch" }
 waterwayAreas   = Set { "river", "riverbank", "stream", "canal", "drain", "ditch", "dock" }

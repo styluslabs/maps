@@ -63,7 +63,7 @@ public:
   std::string getPlaceTitle(const Properties& props) const;
   void gotoCameraPos(const CameraPosition& campos);
 
-  Location currLocation;
+  Location currLocation = {0};
   float orientation = 0;
   float locMarkerAngle = 0;
   CameraPosition prevCamPos;

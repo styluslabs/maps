@@ -212,8 +212,7 @@ void MapsBookmarks::populateLists(bool archived)
     overflowMenu->addItem(archived ? "Unarchive" : "Archive", [=](){
       std::string q2 = fstring("UPDATE lists SET archived = %d WHERE id = ?;", archived ? 0 : 1);
       SQLiteStmt(app->bkmkDB, q2).bind(rowid).exec();
-      if(archived) listsDirty = true; else archiveDirty = true;
-      app->gui->deleteWidget(item);
+      populateLists(archived);  // count for "Archived" item has to be updated
     });
 
     // undo?  maybe try https://www.sqlite.org/undoredo.html (using triggers to populate an undo table)
@@ -576,7 +575,7 @@ Button* MapsBookmarks::createPanel()
   //    " rotation REAL, tilt REAL, width REAL, height REAL);");
 
   // Bookmark lists panel (main and archived lists)
-  Widget* newListContent = createNewListWidget({});
+  Widget* newListContent = createNewListWidget([this](int, std::string){ populateLists(false); });
   Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
   newListBtn->onClicked = [=](){ showInlineDialogModal(newListContent); };
 

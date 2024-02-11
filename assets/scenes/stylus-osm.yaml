@@ -14,6 +14,7 @@ global:
     elevation_sources: []
     marker_font: Open Sans
 
+    # HSL: 0 (== 360) is red, 120 is green, 240 is blue
     color:
         background: [.97, .955, .94] #'#f0ebeb'
         earth: white

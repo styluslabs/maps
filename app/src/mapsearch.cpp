@@ -336,25 +336,26 @@ void MapsSearch::onMapEvent(MapEvent_t event)
       return;
     }
   }
-  bool zoomedin = map->getZoom() - prevZoom > 0.5f;
-  bool zoomedout = map->getZoom() - prevZoom < -0.5f;
+  float zoom = map->getZoom();
+  bool zoomedin = zoom - prevZoom > 0.5f;
+  bool zoomedout = zoom - prevZoom < -0.5f;
   bool mapmoved = lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude;
   // don't search until animation stops
   if(searchOnMapMove && !app->mapState.isAnimating() && (mapmoved || (moreMapResultsAvail && zoomedin))) {
     updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
-    prevZoom = map->getZoom();
+    prevZoom = zoom;
   }
   else if(!mapResults.empty() && (zoomedin || zoomedout)) {
     markers->onZoom();
-    prevZoom = map->getZoom();
+    prevZoom = zoom;
   }
   // any map pan or zoom can potentially affect ranking of list results
   if(mapmoved || zoomedin || zoomedout)
     retryBtn->setVisible(true);
 
   // make sure extra labels still hidden if scene reloaded or source changed
-  map->getScene()->hideExtraLabels = true;
+  map->getScene()->hideExtraLabels = zoom < app->config["search"]["min_poi_zoom"].as<float>(19);
 }
 
 void MapsSearch::updateMapResultBounds(LngLat lngLat00, LngLat lngLat11)
@@ -497,8 +498,9 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   if(!app->searchActive && phase == RETURN) {
     //map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
-    map->getScene()->hideExtraLabels = true;
-    app->mapsBookmarks->hideBookmarks();  // also hide tracks?
+    map->getScene()->hideExtraLabels = map->getZoom() < app->config["search"]["min_poi_zoom"].as<float>(19);
+    if(app->config["search"]["hide_bookmarks"].as<bool>(false))
+      app->mapsBookmarks->hideBookmarks();  // also hide tracks?
     app->searchActive = true;
   }
 }

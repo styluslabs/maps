@@ -1033,7 +1033,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   panelSplitter->setSplitSize(config["ui"]["split_size"].as<int>(350));
   panelSplitter->onSplitChanged = [this](real size){
     if(size == panelSplitter->minSize) {
-      showPanelContainer(false);  // minimize panel
+      if(panelHistory.back()->node->hasClass("can-minimize"))
+        showPanelContainer(false);  // minimize panel
+      else
+        while(!panelHistory.empty()) popPanel();
       panelSplitter->setSplitSize(std::max(panelSplitter->initialSize, panelSplitter->minSize + 40));
     }
   };
@@ -1200,8 +1203,11 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       sensorsEnabled = !sensorsEnabled;
       setSensorsEnabled(sensorsEnabled);
       recenterBtn->setIcon(MapsApp::uiIcon(sensorsEnabled ? "gps-location" : "gps-location-off"));
-      if(!sensorsEnabled)
+      hasLocation = false;  // if enabling, still need to wait for GPS status update
+      if(!sensorsEnabled) {
         gpsStatusBtn->setVisible(false);
+        updateLocMarker();
+      }
     }
     else
       return false;
@@ -1389,6 +1395,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
   }
 
   Widget* panel = createColumn();
+  if(canMinimize) panel->node->addClass("can-minimize");
   panel->node->setAttribute("box-anchor", "fill");
   panel->addWidget(header);
   if(fixedContent)
