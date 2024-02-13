@@ -674,72 +674,90 @@ Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int
   return row;
 }
 
-
-class Pager : public Widget
-{
-public:
-  Pager(SvgNode* n);
-
-  //int currPage = 0;
-  Widget* currPage = NULL;
-  Widget* nextPage = NULL;
-  real xoffset = 0;
-  uint32_t initialTime;
-
-  Point initialPos;
-
-  std::function<void(Widget*)> onPageChanged;
-
-};
-
 Pager::Pager(SvgNode* _node) : Widget(_node)
 {
-  addHandler([=](SvgGui* gui, SDL_Event* event){
+  behaveAsStack = true;
 
+  onPrepareLayout = [this](){
+    if(nextPage) {
+      currPage->setLayoutTransform(Transform2D());  // reset transforms before layout
+      nextPage->setLayoutTransform(Transform2D());
+    }
+    return Rect();  // return invalid Rect to continue w/ normal layout
+  };
+
+  onApplyLayout = [this](const Rect& src, const Rect& dest){
+    if(!nextPage) return false;
+    real w = (xoffset < 0 ? 1 : -1)*initialBounds.width();
+    if(xoffset >= 0 || !behaveAsStack) currPage->setLayoutTransform(Transform2D::translating(xoffset, 0));
+    if(xoffset <= 0 || !behaveAsStack) nextPage->setLayoutTransform(Transform2D::translating(xoffset + w, 0));
+    return true;
+  };
+
+  eventFilter = [=](SvgGui* gui, Widget* widget, SDL_Event* event){
     if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
       initialPos = Point(event->tfinger.x, event->tfinger.y);
       initialTime = event->tfinger.timestamp;
+      initialBounds = node->bounds();
+      gui->pressedWidget = this;
       nextPage = NULL;  // shouldn't be necessary
     }
-    else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == this) {
+    else if(event->type == SDL_FINGERMOTION && gui->pressedWidget && gui->pressedWidget->isDescendantOf(this)) {
       xoffset = event->tfinger.x - initialPos.x;
-      real xc = node->bounds().center().x;
+      real xc = initialBounds.center().x;
       bool left = initialPos.x > xc;
       if(left != (xoffset < 0)) xoffset = 0;
 
       if(!nextPage) {
         uint32_t dt = event->tfinger.timestamp - initialTime;
         if(std::abs(xoffset) > 60 && std::abs(event->tfinger.y - initialPos.y) < 20 && dt < 400) {
-          auto& children = containerNode()->children();
-          auto it = std::find_if(children.begin(), children.begin(), [](SvgNode* n){
-            return n->hasExt() && static_cast<Widget*>(n->ext())->isVisible();
-          });
-          if(it == children.end()) return false;
-          currPage = static_cast<Widget*>((*it)->ext());
 
-          if(xoffset > 0 && !left && it-- != children.begin())  // swiping right
-            nextPage = static_cast<Widget*>((*it)->ext(false));
-          else if(xoffset < 0 && left && ++it != children.end())  // swiping left
-            nextPage = static_cast<Widget*>((*it)->ext(false));
+          if(getNextPage)
+            getNextPage(!left);
+          else {
+            auto& children = containerNode()->children();
+            auto it = std::find_if(children.begin(), children.begin(), [](SvgNode* n){
+              return n->hasExt() && static_cast<Widget*>(n->ext())->isVisible();
+            });
+            if(it == children.end()) return false;
+            currPage = static_cast<Widget*>((*it)->ext());
+            if(xoffset > 0 && !left && it-- != children.begin())  // swiping right
+              nextPage = static_cast<Widget*>((*it)->ext(false));
+            else if(xoffset < 0 && left && ++it != children.end())  // swiping left
+              nextPage = static_cast<Widget*>((*it)->ext(false));
+          }
 
           if(nextPage) {
-            gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, this);
-            gui->setPressed(this);
+            if(gui->pressedWidget && gui->pressedWidget != this)
+              gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, this);
+            gui->pressedWidget = this;
+            nextPage->setVisible(true);
           }
         }
       }
 
       if(nextPage) {
-        real w = node->bounds().width();
-        currPage->m_layoutTransform = Transform2D::translating(xoffset, 0);  // * child->m_layoutTransform;
-        nextPage->m_layoutTransform = Transform2D::translating(xoffset + (left ? w : -w), 0);  // * child->m_layoutTransform;
+        real w = (xoffset < 0 ? 1 : -1)*initialBounds.width();
         // setLayoutTransform will set bounds dirty and trigger layout; instead, we only want to dirty pixels
+        if(xoffset >= 0 || !behaveAsStack) currPage->setLayoutTransform(Transform2D::translating(xoffset, 0));  // * child->m_layoutTransform;
+        if(xoffset <= 0 || !behaveAsStack) nextPage->setLayoutTransform(Transform2D::translating(xoffset + w, 0));  // * child->m_layoutTransform;
+        currPage->node->invalidateBounds(true);
+        nextPage->node->invalidateBounds(true);
         redraw();
       }
     }
-    else if((event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED) && nextPage) {
-      real w = node->bounds().width();
-      if(std::abs(xoffset) > w/2) {
+    else if(event->type == SDL_FINGERUP && nextPage) {
+      gui->sendEvent(window(), this, event);
+      return true;
+    }
+    return nextPage != NULL;  // swallow all events if active
+  };
+
+  addHandler([this](SvgGui* gui, SDL_Event* event){
+    if((event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED) && nextPage) {
+      currPage->setLayoutTransform(Transform2D());
+      nextPage->setLayoutTransform(Transform2D());
+      if(std::abs(xoffset) > initialBounds.width()/2) {
         currPage->setVisible(false);
         currPage = nextPage;
         if(onPageChanged)
@@ -748,12 +766,10 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
       else {
         nextPage->setVisible(false);
       }
-      currPage->m_layoutTransform.reset();
-      nextPage->m_layoutTransform.reset();
       nextPage = NULL;
       redraw();
       return true;
     }
-    return nextPage != NULL;  // swallow all events if active
+    return false;
   });
 }

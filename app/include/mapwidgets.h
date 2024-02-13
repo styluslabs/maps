@@ -77,6 +77,23 @@ public:
   std::function<void(Color)> onColor;
 };
 
+class Pager : public Widget
+{
+public:
+  Pager(SvgNode* n);
+
+  Widget* currPage = NULL;
+  Widget* nextPage = NULL;
+  real xoffset = 0;
+  Rect initialBounds;
+  uint32_t initialTime;
+  Point initialPos;
+  bool behaveAsStack = false; // stack (next page slides over prev) or reel (prev slides out, next slides in)?
+
+  std::function<void(Widget*)> onPageChanged;
+  std::function<void(bool)> getNextPage;  // this should set nextPage (and currPage)
+};
+
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);

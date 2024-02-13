@@ -1026,7 +1026,22 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win->sdlWindow = sdlWin;
   win->isFocusable = true;  // top level window should always be focusable
 
-  panelContent = new Widget(loadSVGFragment("<g id='panel-content' box-anchor='fill' layout='box'></g>"));
+  panelContent = new Pager(loadSVGFragment("<g id='panel-content' box-anchor='fill' layout='box'></g>"));
+  panelContent->getNextPage = [this](bool left) {
+    for(size_t ii = 0; ii < panelPages.size(); ++ii) {
+      if(panelPages[ii] == panelHistory.front()) {
+        if(left ? ii > 0 : ii < panelPages.size() - 1) {
+          panelContent->currPage = panelHistory.back();  //panelPages[ii];
+          panelContent->nextPage = panelPages[left ? (ii-1) : (ii+1)];
+        }
+        return;
+      }
+    }
+  };
+  panelContent->onPageChanged = [this](Widget* page){
+    showPanel(page);
+  };
+
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
   panelSplitter = new Splitter(winnode->selectFirst(".panel-splitter"),
           winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 200);
@@ -1066,10 +1081,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // toolbar w/ buttons for search, bookmarks, tracks, sources
   mainToolbar = createMenubar();  //createToolbar();
   mainToolbar->selectFirst(".child-container")->node->setAttribute("justify-content", "space-between");
-  Button* tracksBtn = mapsTracks->createPanel();
   Button* searchBtn = mapsSearch->createPanel();
-  Button* sourcesBtn = mapsSources->createPanel();
   Button* bkmkBtn = mapsBookmarks->createPanel();
+  Button* tracksBtn = mapsTracks->createPanel();
+  Button* sourcesBtn = mapsSources->createPanel();
   Button* pluginBtn = pluginManager->createPanel();
 
   //mainToolbar->autoClose = true;
@@ -1364,10 +1379,11 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widge
     btn->setIcon(icon);
     btn->setTitle(title);
     setupTooltip(btn, title);
+    panelPages.push_back(panel);
   }
 
   panel->addHandler([=](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SvgGui::VISIBLE)
+    if(event->type == MapsApp::PANEL_OPENED)
       btn->setChecked(true);
     else if(event->type == MapsApp::PANEL_CLOSED)
       btn->setChecked(false);

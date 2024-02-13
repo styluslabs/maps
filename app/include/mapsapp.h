@@ -23,6 +23,7 @@ class Toolbar;
 class Menubar;
 class MapsWidget;
 class ScaleBarWidget;
+class Pager;
 class SvgNode;
 class Color;
 class Painter;
@@ -119,7 +120,7 @@ public:
   Splitter* panelSplitter = NULL;
   Widget* panelSeparator = NULL;
   Widget* panelContainer = NULL;
-  Widget* panelContent = NULL;
+  Pager* panelContent = NULL;
   Widget* mainTbContainer = NULL;
   Widget* infoPanel = NULL;
   Widget* infoContent = NULL;
@@ -133,6 +134,7 @@ public:
   Widget* legendContainer = NULL;
   ScaleBarWidget* scaleBar;
   std::vector<Widget*> panelHistory;
+  std::vector<Widget*> panelPages;
 
   std::atomic_int_fast64_t storageTotal = {0};
   std::atomic_int_fast64_t storageOffline = {0};
