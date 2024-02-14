@@ -160,21 +160,22 @@ landuseKeys = { school="school", university="school", kindergarten="school", col
     grassland="grass", grass="grass", meadow="grass", allotments="grass",
     park="park", garden="park", recreation_ground="park", village_green="park", golf_course="golf_course" }
 
--- POI key/value pairs: based on https://github.com/openmaptiles/openmaptiles/blob/master/layers/poi/mapping.yaml
+-- POIs: moving toward including all values for key except common unwanted values
 poiMinZoom = 14
 poiTags = { aerialway = Set { "station" },
           -- all amenity values with count > 1000 (as of Jan 2024) we wish to exclude
           amenity = { [12] = Set { "bus_station" }, [poiMinZoom] = Set { "__EXCLUDE", "bus_station", "parking_space", "bench", "shelter", "waste_basket", "bicycle_parking", "recycling", "hunting_stand", "vending_machine", "post_box", "parking_entrance", "telephone", "bbq", "motorcycle_parking", "grit_bin", "clock", "letter_box", "watering_place", "loading_dock", "payment_terminal", "mobile_money_agent", "trolley_bay", "ticket_validator", "lounger", "feeding_place", "vacuum_cleaner", "game_feeding", "smoking_area", "photo_booth", "kneipp_water_cure", "table", "fixme", "office", "chair" } },
           barrier = Set { "bollard", "border_control", "cycle_barrier", "gate", "lift_gate", "sally_port", "stile", "toll_booth" },
           building = Set { "dormitory" },
-          highway = { [12] = Set { "bus_stop" }, [poiMinZoom] = Set { "traffic_signals" } },
-          historic = Set { "monument", "castle", "ruins" },
+          highway = { [12] = Set { "bus_stop", "trailhead" }, [poiMinZoom] = Set { "traffic_signals" } },
+          historic = Set { "monument", "castle", "ruins", "fort" },
+          archaeological_site = Set { "__EXCLUDE", "tumulus", "fortification", "megalith", "mineral_extraction", "petroglyph", "cairn" },
           landuse = Set { "basin", "brownfield", "cemetery", "reservoir", "winter_sports" },
-          leisure = Set { "dog_park", "escape_game", "fitness_centre", "garden", "golf_course", "ice_rink", "hackerspace", "marina", "miniature_golf", "park", "pitch", "playground", "sports_centre", "stadium", "swimming_area", "swimming_pool", "water_park" },
+          leisure = Set { "__EXCLUDE", "fitness_station", "picnic_table", "slipway", "outdoor_seating", "firepit", "bleachers", "common", "yes" },
           railway = { [12] = Set { "halt", "station", "tram_stop" }, [poiMinZoom] = Set { "subway_entrance", "train_station_entrance" } },
           shop = {},
           sport = {},
-          tourism = { [12] = Set { "attraction", "viewpoint", "museum" }, [poiMinZoom] = Set { "alpine_hut", "aquarium", "artwork", "bed_and_breakfast", "camp_site", "caravan_site", "chalet", "gallery", "guest_house", "hostel", "hotel", "information", "motel","picnic_site", "theme_park", "zoo" } },
+          tourism = { [12] = Set { "attraction", "viewpoint", "museum" }, [poiMinZoom] = Set { "__EXCLUDE", "attraction", "viewpoint", "museum", "yes"} },
           waterway = Set { "dock" } }
 
 waterwayClasses = Set { "stream", "river", "canal", "drain", "ditch" }
@@ -394,6 +395,11 @@ function way_function(way)
         way:Attribute("surface", "paved")
       elseif unpavedValues[surface] then
         way:Attribute("surface", "unpaved")
+      end
+
+      local trailvis = way:Find("trail_visibility")
+      if trailvis ~= "" and trailvis ~= "good" and trailvis ~= "excellent" then
+        way:Attribute("trail_visibility", trailvis)
       end
 
       if highway == "path" and way:Find("golf") ~= "" then

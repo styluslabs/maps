@@ -149,7 +149,9 @@ global:
         district_CN: 9.5
         neighborhood: 15
         park: 21
-        forest: 22
+        golf: 22
+        cemetery: 23
+        forest: 24
         # road labels
         motorway_ref: 25
         motorway_name: 26
@@ -564,9 +566,13 @@ layers:
             unpaved:
                 enabled: global.show_trails
                 filter:
-                    - highway: false  # highway=path in OSM
+                    - highway: false  # for old schema
+                    - highway: path
                     - { highway: footway, surface: unpaved }
                 draw: { lines: { color: '#B06000', width: [[10, 1px], [18, 3px]] } }
+            poor:
+                filter: { trail_visibility: [ bad, very_bad, horrible, no, none, poor ] }
+                draw: { lines: { style: dashed-bike } }
 
         tracks:
             filter: { class: track }
@@ -1075,43 +1081,51 @@ layers:
                     max_lines: 2
                     font:
                         family: Open Sans
-                        size: 1.2em
+                        size: 12px
                         fill: global.color.default_label
                         stroke: { color: global.color.default_halo, width: 3 }
+
         parks:
             exclusive: true
             priority: 1
             filter:
-                name: true
-                any:
-                    - { leisure: [park, golf_course] }
-                    - { amenity: [grave_yard] }
-                    - { landuse: [cemetery] }
+                - { leisure: [park, golf_course], name: true }
+                - { amenity: grave_yard }
+                - { landuse: cemetery }
+                - { tourism: zoo, name: true }
             draw:
                 points:
                     visible: false
-                    sprite: tree
                     color: global.poi_color.outdoor
-                    priority: global.priority.park
                     text:
                         font:
-                            size: 10pt
+                            size: 13px
                             style: italic
                             fill: global.color.park_name
                             stroke: { color: global.color.park_halo, width: 3 }
+            park:
+                filter:
+                    - { leisure: park }
+                    - { tourism: zoo }
+                draw:
+                    points:
+                        sprite: tree
+                        priority: global.priority.park
+                        text: { font: { size: 14px } }
+            golf:
+                filter: { leisure: golf_course }
+                draw: { points: { sprite: golf, priority: global.priority.golf } }
+            cemetery:
+                filter:
+                    - { amenity: grave_yard }
+                    - { landuse: cemetery }
+                draw: { points: { sprite: cemetery, priority: global.priority.cemetery } }
             show:
                 filter:
+                    - { leisure: park, $zoom: { min: 14 }, area: { min: 1500px2 } }
                     - { $zoom: { min: 17 } }
                     - { area: { min: 2000px2 } }
                 draw: { points: { visible: true } }
-            golf:
-                filter: { leisure: golf_course }
-                draw: { points: { sprite: golf } }
-            cemetery:
-                filter:
-                    - { amenity: [grave_yard] }
-                    - { landuse: [cemetery] }
-                draw: { points: { sprite: cemetery } }
 
         forest:
             exclusive: true
@@ -1127,7 +1141,7 @@ layers:
                 text:
                     priority: global.priority.forest
                     font:
-                        size: 9pt
+                        size: 13px
                         style: italic
                         fill: global.color.park_name
                         stroke: { color: global.color.park_halo, width: 3 }
@@ -1150,8 +1164,6 @@ layers:
                     text:
                         visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
                         optional: 'function() { return !global.show_transit; }'
-                        font:
-                            size: 12px
             tram:
                 filter:
                     - railway: tram_stop

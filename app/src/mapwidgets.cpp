@@ -392,14 +392,16 @@ Menubar::Menubar(SvgNode* n) : Toolbar(n)
   addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::OUTSIDE_PRESSED) {
       // close unless button up over parent (assumed to include opening button)
-      if(!isDescendent(static_cast<Widget*>(event->user.data2), this))
+      Widget* target = static_cast<Widget*>(event->user.data2);
+      if(!target || !target->isDescendantOf(this))
         gui->closeMenus();  // close entire menu tree
       return true;
     }
     if(event->type == SvgGui::OUTSIDE_MODAL) {
+      Widget* target = static_cast<Widget*>(event->user.data2);
       gui->closeMenus();  // close entire menu tree
       // swallow event (i.e. return true) if click was within menu's parent to prevent reopening
-      return isDescendent(static_cast<Widget*>(event->user.data2), this);
+      return target && target->isDescendantOf(this);
     }
     return false;
   });
@@ -676,8 +678,7 @@ Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int
 
 Pager::Pager(SvgNode* _node) : Widget(_node)
 {
-  behaveAsStack = true;
-
+  //behaveAsStack = true;
   onPrepareLayout = [this](){
     if(nextPage) {
       currPage->setLayoutTransform(Transform2D());  // reset transforms before layout

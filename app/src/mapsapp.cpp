@@ -407,7 +407,7 @@ void MapsApp::tapEvent(float x, float y)
   map->pickLabelAt(x, y, [this](const Tangram::LabelPickResult* result) {
     auto& props = result->touchItem.properties;
     LOGD("Picked label: %s", result ? props->getAsString("name").c_str() : "none");
-    if (!result) return;
+    if(!result) return;
     std::string itemId = props->getAsString("id");
     std::string osmType = props->getAsString("osm_type");
     if(itemId.empty())
@@ -961,10 +961,10 @@ void MapsApp::setWindowLayout(int fbWidth)
       }
     }
 
-    //SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
-    //auto minbtns = panelContent->select(".//-btn");
-    //for(Widget* btn : minbtns)
-    //  static_cast<Button*>(btn)->setIcon(minicon);
+    SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
+    auto minbtns = panelContent->select(".minimize-btn");
+    for(Widget* btn : minbtns)
+      static_cast<Button*>(btn)->setIcon(minicon);
   }
 }
 

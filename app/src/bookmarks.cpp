@@ -198,7 +198,6 @@ void MapsBookmarks::populateLists(bool archived)
       auto it1 = bkmkMarkers.find(rowid);
       if(it1 != bkmkMarkers.end()) {
         bool vis = it1->second->defaultVis;
-        bkmkMarkers.erase(it1);
         if(vis)
           populateBkmks(rowid, false);
       }
@@ -312,15 +311,20 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 
   MarkerGroup* markerGroup = NULL;
   auto it = bkmkMarkers.find(list_id);
-  if(it == bkmkMarkers.end()) {
+  if(it != bkmkMarkers.end()) {
+    it->second->setVisible(true);
+    if(it->second->commonProps.getString("color") != color) {
+      markerGroup = it->second.get();
+      markerGroup->reset();
+    }
+  }
+  else {
     auto mg = std::make_unique<MarkerGroup>(app->map.get(),
         "layers.bookmark-marker.draw.marker", "layers.bookmark-dot.draw.marker");
     markerGroup = bkmkMarkers.emplace(list_id, std::move(mg)).first->second.get();
     markerGroup->defaultVis = !createUI;
     markerGroup->commonProps = {{{"color", color}}};
   }
-  else
-    it->second->setVisible(true);
 
   searchRankOrigin = app->currLocation.lngLat();
   std::string srt = app->config["bookmarks"]["sort"].as<std::string>("date");
@@ -652,10 +656,7 @@ Button* MapsBookmarks::createPanel()
       app->popPanel();
       app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
     }
-    // rebuild makers in case color changed
-    auto it1 = bkmkMarkers.find(listid);
-    if(it1 != bkmkMarkers.end())
-      bkmkMarkers.erase(it1);
+    // update title and rebuild makers if color changed
     populateBkmks(listid, true);
   };
   auto editListContent = createInlineDialog({editListRow}, "Apply", onAcceptListEdit);
