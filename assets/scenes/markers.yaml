@@ -69,20 +69,11 @@ textures:
               <circle cx="0" cy="0" r="5.5" fill="#FF0000"/>
             </svg>
 
-    pick-marker:
+    pin-marker:
         density: 2
         url: |
             data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12pt" height="18pt" viewBox="4 0 16 24">
-              <g fill="#CF513D" stroke="#000" stroke-opacity="0.2" stroke-width="1" stroke-alignment="inner">
-                <path d="M5 8c0-3.517 3.271-6.602 7-6.602s7 3.085 7 6.602c0 3.455-2.563 7.543-7 14.527-4.489-7.073-7-11.072-7-14.527"/>
-              </g>
-            </svg>
-
-    bookmark-marker:
-        density: 2
-        url: |
-            data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12pt" height="18pt" viewBox="4 0 16 24">
-              <g fill="#FF0000" stroke="none" stroke-opacity="0.2" stroke-width="1" stroke-alignment="inner">
+              <g fill="#FF0000" stroke="#00FF00" stroke-width="0.5" stroke-alignment="inner">
                 <path d="M5 8c0-3.517 3.271-6.602 7-6.602s7 3.085 7 6.602c0 3.455-2.563 7.543-7 14.527-4.489-7.073-7-11.072-7-14.527"/>
               </g>
             </svg>
@@ -97,8 +88,11 @@ styles:
         base: points
         # make sure this is drawn over search dots
         blend_order: 1
+        draw:
+            outline:
+                color: white
         shaders:
-            #defines: { DEST_COLOR: vec3(0.812,0.318,0.239) } # #CF513D
+            # maps red in texture to point color, green to point outline color
             blocks:  # see core/shaders/point.fs to see how this is used
                 global: |
                     #ifdef TANGRAM_FRAGMENT_SHADER
@@ -108,7 +102,7 @@ styles:
                       vec4 tex = texture2D(u_tex, v_texcoords);
                       float bg = tex.r;
                       float icon = tex.g;
-                      vec4 color = icon*vec4(1.0) + (1.0-icon)*(bg*v_color);  //icon*v_outline_color?
+                      vec4 color = icon*v_outline_color + (1.0-icon)*(bg*v_color);
                       color.a *= v_alpha;
                       gl_FragColor = color;
                     }
@@ -119,10 +113,12 @@ layers:
     pick-marker:
         draw:
             marker:
-                style: points
-                texture: pick-marker
+                style: poi-points
+                texture: pin-marker
                 size: [22px, 33px]
                 interactive: true
+                color: "#CF513D"
+                outline: { color: black }
                 #collide: false
                 # this indicates all colliding labels should be hidden immediately (see labelManager.cpp)
                 transition: { selected: { time: 1s } }
@@ -146,12 +142,13 @@ layers:
         draw:
             marker:
                 style: poi-points
-                texture: bookmark-marker
+                texture: pin-marker
                 size: [18px, 27px]
                 interactive: true
                 collide: true
                 color: function() { return feature.color || '#12B5CB'; }
-                priority: 'function() { return (1+feature.priority)/1E6; }'
+                outline: { color: black }
+                priority: 'function() { return 1 + (1+feature.priority)/1E6; }'
                 offset: [0px, -11px]
                 text:
                     text_source: name
@@ -223,8 +220,7 @@ layers:
                 interactive: true
                 collide: false
                 size: 32px
-                angle: |
-                    function() { return feature.angle; }
+                angle: 'function() { return feature.angle; }'
                 color: |
                     function() { return feature.selected ? '#CF513D' : (feature.hasfix ? '#0000FF' : '#909090'); }
                 priority: -1000
@@ -236,12 +232,13 @@ layers:
         draw:
             marker:
                 style: poi-points
-                texture: bookmark-marker
+                texture: pin-marker
                 size: [16px, 24px]
                 interactive: true
                 collide: true
                 color: function() { return feature.color || '#12B5CB'; }
-                priority: 'function() { return (1+feature.priority)/1E6; }'
+                outline: { color: black }
+                priority: 'function() { return 2 + (1+feature.priority)/1E6; }'
                 offset: [0px, -11px]
                 text:
                     text_source: name

@@ -91,7 +91,7 @@ global:
         #runway_16: '#fff'
         #runway_casing: orange
 
-    # z-order for polygons and lines (higher z-order draws over lower)
+    # z-order for polygons and lines (higher z-order draws over lower); order > 1000 is reserved by mapsapp
     order:
         landuse: 1
         parks: 2
@@ -271,17 +271,18 @@ cameras:
 
 
 styles:
+    # blend_order -1000 to draw buildings just above other geometry; blend_order -110 to -100 reserved by app
     heightglow:
         base: polygons
         blend: translucent
-        blend_order: -2
+        blend_order: -1000
         lighting: vertex
         shaders:
             blocks:
                 color: "color.rgb += vec3(worldPosition().z / 800.);"
     heightglowline:
         base: lines
-        blend_order: -1
+        blend_order: -999
         mix: heightglow
     unlit-lines:
         base: lines
@@ -581,7 +582,7 @@ layers:
                     order: global.order.path
                     style: dashed-track
                     color: global.color.path
-                    width: [[14, 1px], [15, 2px], [18, 4px]]
+                    width: [[13, 0px], [14, 1px], [15, 2px], [18, 4px]]
 
         # unpaved road: dashed w/ outline?  track: same as unpaved road if motor_vehicle: yes, otherwise like path
         rail:
@@ -993,14 +994,14 @@ layers:
                 order: global.order.bldg
                 color: global.color.bldg
 
-        # extrude 3d buildings
+        # extrude 3d buildings ... change to min_height and height attrs once tiles updated
         extruded:
             filter: { $zoom: { min: 15 } }
             draw:
                 polygons:
                     # JS call much slower than extruding geometry
                     #extrude: function () { return feature.render_height > 20 || $zoom >= 16; }
-                    extrude: true
+                    extrude: ["render_min_height", "render_height"]
                     color: global.color.bldg_3d
                     order: global.order.bldg_3d
                 lines:
@@ -1008,7 +1009,7 @@ layers:
                     width: 2px
                     color: global.color.bldg_3d_line
                     order: global.order.bldg_3d_line
-                    extrude: true
+                    extrude: ["render_min_height", "render_height"]
 
 
     housenumber:
@@ -1174,6 +1175,8 @@ layers:
                         priority: global.priority.station_tram
                         size: [[13, 10px], [15, 16px]]
                         visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
+                        text:
+                            visible: 'function() { return $zoom >= (global.show_transit ? 16 : 18); }'
 
         bus_stop:
             exclusive: true

@@ -60,15 +60,18 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     // if cache file is not explicitly specified, use key since it is guaranteed to be unique
     if(!src["cache"] || src["cache"].Scalar() != "false")
       updates.emplace_back("+sources." + rasterN + ".cache", key);
-    // separate style is required for each overlay layer; overlay layers are always drawn over opaque layers
-    //  text and points are drawn as overlays w/ blend_order -1, so use blend_order < -1 to place rasters
-    //  under vector map text
+    // separate style is required for each overlay layer
+    //  use translucent instead of overlay so that depth test can place proxy tiles underneath other tiles
+    //  text and points are drawn w/ blend_order -1, so use blend_order < -1 to place rasters underneath
+    // note that lines and polygons are normally drawn w/ opaque blend mode, which ignores blend_order and is
+    //  drawn before all other blend modes; default raster style uses opaque!
     if(order > 0)
-      updates.emplace_back("+styles." + rasterN, fstring("{base: raster, blend: overlay, blend_order: %d}", order-10));
+      updates.emplace_back("+styles." + rasterN, fstring("{base: raster, blend: translucent, blend_order: %d}", order-100));
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order > 0 ? rasterN : "raster");
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string(order++));
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string(1000 + order));
+    ++order;
   }
   else if(src["scene"]) {  // vector map
     imports.push_back(src["scene"].Scalar());
@@ -184,9 +187,9 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     }
   }
 
-  builder.updates = currUpdates;
   for(auto& src : currLayers)
     builder.addLayer(src);
+  builder.updates.insert(builder.updates.end(), currUpdates.begin(), currUpdates.end());
 
   if(!builder.imports.empty() || !builder.updates.empty()) {
     // we need this to be persistent for scene reloading (e.g., on scene variable change)
@@ -248,11 +251,9 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
         layers.push_back(YAML::Load("{source: " + src + "}"));
     }
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
-    for(const SceneUpdate& upd : app->sceneUpdates) {
-      // we only want updates from explicit scene var changes
-      if(upd.path[0] != '+')
-        updates[upd.path] = upd.value;
-    }
+    // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
+    for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
+      updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;
   }
 
   saveSources();
@@ -435,11 +436,17 @@ void MapsSources::onMapEvent(MapEvent_t event)
   }
 }
 
+static void replaceSceneVar(std::vector<SceneUpdate>& vars, const std::string& path, const std::string& newval)
+{
+  vars.erase(std::remove_if(vars.begin(), vars.end(),
+      [&](const SceneUpdate& s){ return s.path == path; }), vars.end());
+  vars.push_back(SceneUpdate{path, newval});
+}
+
 void MapsSources::updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload)
 {
-  app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
-      [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
-  app->sceneUpdates.push_back(SceneUpdate{path, newval});
+  replaceSceneVar(app->sceneUpdates, path, newval);
+  replaceSceneVar(currUpdates, path, newval);
   sourceModified();
 
   if(!onchange.empty()) {

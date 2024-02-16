@@ -67,6 +67,9 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
   // value set in UI (and stored in DB) takes precedence
   if(gpxname[0] && track->title.empty()) track->title = gpxname;
   if(gpxdesc[0]) track->desc = gpxdesc;
+  pugi::xml_node extnode = gpx.child("extensions").child("sl:gpx");
+  if(extnode)
+    track->style = extnode.attribute("style").as_string();
 
   pugi::xml_node wpt = gpx.child("wpt");
   while(wpt) {

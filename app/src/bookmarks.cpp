@@ -596,10 +596,15 @@ Button* MapsBookmarks::createPanel()
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem("Import bookmarks", [=](){
     MapsApp::openFileDialog({{"GPX files", "gpx"}}, [=](const char* filename){
-      GpxFile gpx;
-      loadGPX(&gpx, filename);
+      GpxFile gpx("", "", filename);
+      loadGPX(&gpx);
+      if(gpx.waypoints.empty()) {
+        MapsApp::messageBox("Import bookmarks", fstring("No bookmarks found in %s", filename), {"OK"});
+        return;
+      }
       const char* style = gpx.style.empty() ? "#00FFFF" : gpx.style.c_str();
-      SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(gpx.title, style).exec();
+      std::string title = gpx.title.empty() ? FSPath(filename).baseName() : gpx.title;
+      SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(title, style).exec();
       int64_t list_id = sqlite3_last_insert_rowid(app->bkmkDB);
       //if(timestamp <= 0) timestamp = int(mSecSinceEpoch()/1000);
       const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";

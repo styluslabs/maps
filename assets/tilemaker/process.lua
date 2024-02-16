@@ -745,6 +745,9 @@ function SetBuildingHeightAttributes(way)
     renderHeight = renderHeight + renderMinHeight
   end
 
+  way:AttributeNumeric("height", renderHeight)
+  way:AttributeNumeric("min_height", renderMinHeight)
+  -- TODO: remove these
   way:AttributeNumeric("render_height", renderHeight)
   way:AttributeNumeric("render_min_height", renderMinHeight)
 end
