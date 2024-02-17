@@ -83,4 +83,5 @@ private:
   Button* cancelBtn = NULL;
   Button* retryBtn = NULL;
   TextEdit* queryText = NULL;
+  TextBox* resultCountText = NULL;
 };

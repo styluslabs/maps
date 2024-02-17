@@ -3,7 +3,7 @@
 //addUIElement("file_picker", "Input file:", "file");  addUIElement("text_input", "List:", "list");  ...
 //createPluginUI('<g class="horz_layout"><g id="file" class="file_picker"/><g id="list" class="text_input"/></g>');
 
-// importGooglePlaces(file:///home/mwhite/maps/Reviews.json, "Reviews")
+// importGooglePlaces("file:///home/mwhite/maps/Reviews.json", "Reviews")
 
 function importGooglePlaces(url, list)
 {

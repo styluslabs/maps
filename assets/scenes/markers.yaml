@@ -12,7 +12,7 @@ global:
           "fast_food": "restaurant", "food_court": "restaurant", "ice_cream": "restaurant", "cafe": "cafe",
           "pharmacy": "pharmacy", "bar": "bar", "pub": "bar", "nightclub": "bar", "library": "library",
           "cinema": "theatre", "theatre": "theatre", "concert_hall": "theatre", "arts_centre": "theatre",
-          "place_of_worship": "church", "bank": "bank", "hospital": "hospital", "clinic": "doctor",
+          "place_of_worship": "religious", "bank": "bank", "hospital": "hospital", "clinic": "doctor",
           "doctors": "doctor", "fuel": "fuel", "dentist": "dentist", "toilets": "toilet",
           "drinking_water": "drinking_water", "water_point": "drinking_water" }
         shop: { "beverages": "cafe", "confectionery": "cafe", "bakery": "bakery", "pastry": "bakery",
@@ -24,8 +24,9 @@ global:
           "dry_cleaning": "laundry", "hairdresser": "scissor", "beauty": "scissor" }
         railway: { "station": "train", "tram_stop": "tram" }
         station: { "light_rail": "tram" }
+        religion: { "christian": "christian", "muslim": "muslim", "buddhist": "buddhist", "hindu": "hindu", "shinto": "shinto", "jewish": "jewish" }
 
-    poi_type: { "viewpoint": "public", "campground": "public", "information": "public", "parking": "public", "toilet": "public", "drinking_water": "public", "artwork": "culture", "museum": "culture", "attraction": "culture", "university": "culture", "library": "culture", "theatre": "culture", "church": "culture", "shop": "shop", "bike_shop": "shop", "pharmacy": "shop", "fuel": "shop", "grocery": "shop", "convenience": "shop", "liquor": "shop", "clothes": "shop", "hardware": "shop", "gym": "service", "bank": "service", "dentist": "service", "auto_repair": "service", "laundry": "service", "scissor": "service", "restaurant": "food", "cafe": "food", "bar": "food", "bakery": "food", "hospital": "medical", "doctor": "medical", "hotel": "lodging", "tree": "outdoor", "golf": "outdoor" }
+    poi_type: { "viewpoint": "public", "campground": "public", "information": "public", "parking": "public", "toilet": "public", "drinking_water": "public", "artwork": "culture", "museum": "culture", "attraction": "culture", "university": "culture", "library": "culture", "theatre": "culture", "religious": "culture", "shop": "shop", "bike_shop": "shop", "pharmacy": "shop", "fuel": "shop", "grocery": "shop", "convenience": "shop", "liquor": "shop", "clothes": "shop", "hardware": "shop", "gym": "service", "bank": "service", "dentist": "service", "auto_repair": "service", "laundry": "service", "scissor": "service", "restaurant": "food", "cafe": "food", "bar": "food", "bakery": "food", "hospital": "medical", "doctor": "medical", "hotel": "lodging", "tree": "outdoor", "golf": "outdoor", "christian": "culture", "muslim": "culture", "buddhist": "culture", "hindu": "culture", "shinto": "culture", "jewish": "culture" }
 
     poi_color:
         public: "#1A73E8"
@@ -43,8 +44,9 @@ global:
     poi_sprite_fn: |
         function() {
           const t = global.poi_icons;
-          return t.tourism[feature.tourism] || t.leisure[feature.leisure] || t.amenity[feature.amenity] ||
-              t.historic[feature.historic] || t.shop[feature.shop] || (feature.shop ? "shop" : "");
+          return t.tourism[feature.tourism] || t.leisure[feature.leisure] || t.religion[feature.religion]
+              || t.amenity[feature.amenity] || t.historic[feature.historic] || t.shop[feature.shop]
+              || (feature.shop ? "shop" : "");
         }
 
 
@@ -172,9 +174,8 @@ layers:
                 size: 6px
                 color: function() { return feature.color || '#12B5CB'; }
                 outline:
-                    width: 1px
-                    color: function() { return feature.color || '#12B5CB'; }
-                    alpha: 0.50
+                    width: 0.5px
+                    color: black  #function() { return feature.color || '#12B5CB'; }
 
     search-marker:
         draw:

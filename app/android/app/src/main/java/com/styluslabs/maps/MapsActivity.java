@@ -167,7 +167,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
     // - see https://developer.android.com/training/location/request-updates
     if(canGetLocation()) {
-      String provider = locationManager.hasProvider("fused") ? "fused" : LocationManager.GPS_PROVIDER;
+      String provider = locationManager.getProvider("fused") != null ? "fused" : LocationManager.GPS_PROVIDER;
       Log.v("Tangram", "Using location provider: " + provider);
       onLocationChanged(locationManager.getLastKnownLocation(provider));
       // min GPS dt = 0 (ms), dr = 1 (meters)

@@ -176,4 +176,5 @@ private:
   bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool flyToPickResult = false;
   bool sensorsEnabled = true;
+  int shuffleSeed = 0;
 };

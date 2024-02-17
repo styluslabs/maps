@@ -471,6 +471,8 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   }
   // sceneFile will be used iff sceneYaml is empty
   Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition, sceneUpdates);  //, updates};
+  options.updates.push_back(SceneUpdate{"global.metric_units", metricUnits ? "true" : "false"});
+  options.updates.push_back(SceneUpdate{"global.shuffle_seed", std::to_string(shuffleSeed)});
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
   options.preserveMarkers = true;
@@ -1541,6 +1543,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   metricUnits = config["metric_units"].as<bool>(true);
   // Google Maps and Apple Maps use opposite scaling for this gesture, so definitely needs to be configurable
   touchHandler->dblTapDragScale = config["gestures"]["dbl_tap_drag_scale"].as<float>(1.0f);
+  shuffleSeed = config["random_shuffle_seed"].as<bool>(true) ? std::rand() : 0;
 
   initResources(baseDir.c_str());
 

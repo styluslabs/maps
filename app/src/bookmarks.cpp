@@ -44,7 +44,7 @@ int MapsBookmarks::getListId(const char* listname, bool create)
   int list_id = -1;
   SQLiteStmt(app->bkmkDB, "SELECT id FROM lists WHERE title = ?;").bind(listname).onerow(list_id);
   if(list_id < 0 && create) {
-    SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(listname, "#FF0000").exec();
+    SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(listname, "#00FFFF").exec();
     list_id = sqlite3_last_insert_rowid(app->bkmkDB);
   }
   return list_id;
@@ -57,6 +57,7 @@ static Widget* createNewListWidget(std::function<void(int, std::string)> callbac
   Widget* newListRow = createRow();
   newListRow->addWidget(newListTitle);
   newListRow->addWidget(newListColor);
+  newListColor->node->setAttribute("box-anchor", "bottom");
   auto onCreateList = [=](){
     char colorstr[64];
     SvgWriter::serializeColor(colorstr, newListColor->color());
@@ -87,6 +88,7 @@ static Widget* createNewListWidget(std::function<void(int, std::string)> callbac
       }
       newListColor->setColor(MapsApp::markerColors[(minidx + ncolors/2 - 1)%ncolors]);
       newListTitle->setText("");
+      gui->setFocused(newListTitle);
     }
     return false;
   });
@@ -323,8 +325,9 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
         "layers.bookmark-marker.draw.marker", "layers.bookmark-dot.draw.marker");
     markerGroup = bkmkMarkers.emplace(list_id, std::move(mg)).first->second.get();
     markerGroup->defaultVis = !createUI;
-    markerGroup->commonProps = {{{"color", color}}};
   }
+  if(markerGroup)
+    markerGroup->commonProps = {{{"color", color}}};
 
   searchRankOrigin = app->currLocation.lngLat();
   std::string srt = app->config["bookmarks"]["sort"].as<std::string>("date");
@@ -649,6 +652,7 @@ Button* MapsBookmarks::createPanel()
   Widget* editListRow = createRow();
   editListRow->addWidget(listTitle);
   editListRow->addWidget(listColor);
+  listColor->node->setAttribute("box-anchor", "bottom");
   auto onAcceptListEdit = [=](){
     char colorstr[64];
     SvgWriter::serializeColor(colorstr, listColor->color());
@@ -676,6 +680,8 @@ Button* MapsBookmarks::createPanel()
       SQLiteStmt(app->bkmkDB, query).bind(activeListId).exec([&](const char* title, const char* colorstr){
         listTitle->setText(title);
         listColor->setColor(parseColor(colorstr, Color::CYAN));
+        MapsApp::gui->setFocused(listTitle);
+        listTitle->selectAll();
       });
       showInlineDialogModal(editListContent);
     }

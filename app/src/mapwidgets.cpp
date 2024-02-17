@@ -499,18 +499,25 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
   titleLabel->setText(title);
   TextLabel* noteLabel = new TextLabel(item->containerNode()->selectFirst(".detail-text"));
   if(note && note[0]) {
-    titleLabel->node->setAttribute("margin", "0 10 5 10");
+    titleLabel->node->setAttribute("margin", "0 10 6 10");
     noteLabel->setText(note);
   }
   return item;
 }
 
-// if we wanted something like a titled row, we can use textEditInnerNode() to make a custom widget
-// - an alternative would be title in smaller font embedded at upper left in border (move title text
-//  from the box to the border when focused?)
 TextEdit* createTitledTextEdit(const char* title, const char* text)
 {
   static const char* titledTextEditSVG = R"#(
+    <g id="textedit" class="inputbox textbox" layout="flex" flex-direction="column">
+      <text class="inputbox-title" font-size="14" box-anchor="left" margin="2 2"></text>
+
+      <g class="textbox-wrapper" box-anchor="fill" layout="box">
+        <rect class="min-width-rect" width="150" height="36" fill="none"/>
+        <rect class="inputbox-bg" box-anchor="fill" width="20" height="20"/>
+      </g>
+    </g>
+  )#";
+  /*static const char* titledTextEditSVG = R"#(
     <g id="textedit" class="inputbox textbox" layout="box">
       <!-- invisible rect to set minimum width -->
       <rect class="min-width-rect" width="150" height="46" fill="none"/>
@@ -524,7 +531,7 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
       <g class="textbox-wrapper" box-anchor="fill" layout="box" margin="10 0 0 0">
       </g>
     </g>
-  )#";
+  )#";*/
   static std::unique_ptr<SvgNode> proto;
   if(!proto)
     proto.reset(loadSVGFragment(titledTextEditSVG));
@@ -547,9 +554,9 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel)
 {
   static const char* inlineDialogSVG = R"#(
-    <g class="col-layout" box-anchor="hfill" layout="flex" flex-direction="column">
+    <g class="col-layout" box-anchor="hfill" layout="flex" flex-direction="column" margin="2 5">
       <g class="child-container" box-anchor="hfill" layout="flex" flex-direction="column"></g>
-      <g class="button-container dialog-buttons" margin="2 4" box-anchor="hfill" layout="flex" flex-direction="row"></g>
+      <g class="button-container dialog-buttons" margin="4 0" box-anchor="hfill" layout="flex" flex-direction="row"></g>
     </g>
   )#";
   static std::unique_ptr<SvgNode> proto;

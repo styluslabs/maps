@@ -248,6 +248,7 @@ void MapsSearch::clearSearchResults()
 {
   app->pluginManager->cancelRequests(PluginManager::SEARCH);  // cancel any outstanding search requests
   app->gui->deleteContents(resultsContent, ".listitem");
+  resultCountText->setText("");
   mapResults.clear();
   listResults.clear();
   markers->reset();
@@ -381,6 +382,8 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 void MapsSearch::resultsUpdated(int flags)
 {
   populateResults(listResults);
+  resultCountText->setText(mapResults.size() < 1000 ?
+      fstring("%d results", mapResults.size()).c_str() : "over 1000 results");
 
   // zoom out if necessary to show first 5 results
   if(flags & FLY_TO) {
@@ -558,36 +561,54 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
 
 Button* MapsSearch::createPanel()
 {
-  static const char* searchBoxSVG = R"#(
-    <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
-      <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
-      <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
-      <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
-        <g class="toolbutton search-btn" layout="box">
-          <rect class="background" box-anchor="hfill" width="36" height="34"/>
-          <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#search"/>
+  static const char* searchHeaderSVG = R"#(
+    <g box-anchor="hfill" layout="flex" flex-direction="column">
+      <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
+        <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
+        <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
+        <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
+          <g class="toolbutton search-btn" layout="box">
+            <rect class="background" box-anchor="hfill" width="36" height="34"/>
+            <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#search"/>
+          </g>
+          <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
+            <rect class="min-width-rect" fill="none" width="150" height="36"/>
+          </g>
+          <g class="toolbutton retry-btn" display="none" layout="box">
+            <rect class="background" box-anchor="hfill" width="36" height="34"/>
+            <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#retry"/>
+          </g>
+          <g class="toolbutton cancel-btn" display="none" layout="box">
+            <rect class="background" box-anchor="hfill" width="36" height="34"/>
+            <use class="icon" width="26" height="26" xlink:href=":/ui-icons.svg#circle-x"/>
+          </g>
         </g>
-        <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
-          <rect class="min-width-rect" fill="none" width="150" height="36"/>
-        </g>
-        <g class="toolbutton retry-btn" display="none" layout="box">
-          <rect class="background" box-anchor="hfill" width="36" height="34"/>
-          <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#retry"/>
-        </g>
-        <g class="toolbutton cancel-btn" display="none" layout="box">
-          <rect class="background" box-anchor="hfill" width="36" height="34"/>
-          <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#circle-x"/>
-        </g>
+        <rect class="noquery-overlay" display='none' fill='none' box-anchor='fill' width='20' height='20'/>
       </g>
-      <rect class="noquery-overlay" display='none' fill='none' box-anchor='fill' width='20' height='20'/>
+      <g box-anchor="hfill" layout="box">
+        <rect class="separator" width="20" height="26" box-anchor="hfill"/>
+        <text class="result-count-text" box-anchor="left" margin="0 5" font-size="12"></text>
+      </g>
     </g>
   )#";
 
-  SvgG* searchBoxNode = static_cast<SvgG*>(loadSVGFragment(searchBoxSVG));
+  SvgG* searchHeaderNode = static_cast<SvgG*>(loadSVGFragment(searchHeaderSVG));
+  SvgG* searchBoxNode = static_cast<SvgG*>(searchHeaderNode->selectFirst("#searchbox"));
   SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
   textEditNode->addChild(textEditInnerNode());
   queryText = new TextEdit(textEditNode);
   setMinWidth(queryText, 100);
+
+  Widget* searchBox = new Widget(searchBoxNode);
+  searchBox->isFocusable = true;
+  queryText->isFocusable = false;
+  searchBox->addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(SvgGui::isFocusedWidgetEvent(event))
+      return queryText->sdlEvent(gui, event);
+    return false;
+  });
+
+  resultCountText = new TextBox(searchHeaderNode->selectFirst(".result-count-text"));
 
   SvgNode* overlayNode = searchBoxNode->selectFirst(".noquery-overlay");
   Button* textEditOverlay = new Button(overlayNode);
@@ -708,7 +729,7 @@ Button* MapsSearch::createPanel()
   searchTb->addWidget(sortBtn);
 
   resultsContent = createColumn();
-  searchPanel = app->createMapPanel(searchTb, resultsContent, new Widget(searchBoxNode));
+  searchPanel = app->createMapPanel(searchTb, resultsContent, new Widget(searchHeaderNode));
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_OPENED) {

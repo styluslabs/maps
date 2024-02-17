@@ -60,6 +60,7 @@ static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
 .legend text { fill: inherit; }
 .panel-container { fill: var(--dark); }
+.menu { fill: var(--window); }  /* same color as menuitem to eliminate dividers */
 )#";
 
 static const char* moreWidgetSVG = R"#(

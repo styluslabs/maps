@@ -142,6 +142,7 @@ global:
     names_two_lines: |
         function() { return global.show_name_en && feature.name_en && feature.name ? feature.name_en + "\n" + feature.name : feature.name; }
 
+    shuffle_seed: 58987
     # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
     priority:
         boundary: 0
@@ -174,18 +175,18 @@ global:
         housenumber: 350
         # POIs - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
         # - looks like it's faster to let Tangram convert string to number instead of using Number() in JS fn
-        poi_default:     function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_viewpoint:   function() { return  '31.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_toilet:      function() { return  '32.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_university:  function() { return  '33.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_grocery:     function() { return  '34.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_culture:     function() { return  '41.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_restaurant:  function() { return  '43.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_cafe:        function() { return  '44.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_convenience: function() { return  '51.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_school:      function() { return  '52.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_religion:    function() { return '101.' + feature.osm_id.substring(feature.osm_id.length - 6); }
-        poi_parking:     function() { return '102.' + feature.osm_id.substring(feature.osm_id.length - 6); }
+        poi_default:     function() { return 101 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_viewpoint:   function() { return  31 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_toilet:      function() { return  32 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_university:  function() { return  33 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_grocery:     function() { return  34 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_culture:     function() { return  41 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_restaurant:  function() { return  43 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_cafe:        function() { return  44 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_convenience: function() { return  51 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_school:      function() { return  52 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_religion:    function() { return 101 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_parking:     function() { return 102 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         # cities, states, countries
         place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
         place_fn: |

@@ -196,7 +196,6 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     app->sceneYaml = builder.getSceneYaml(baseUrl);
     app->sceneFile = baseUrl + "__GUI_SOURCES__";
     app->sceneUpdates = std::move(builder.updates);  //.clear();
-    app->sceneUpdates.push_back(SceneUpdate{"global.metric_units", app->metricUnits ? "true" : "false"});
     app->loadSceneFile(async);
     sceneVarsLoaded = false;
     legendsLoaded = false;
@@ -473,9 +472,9 @@ Widget* MapsSources::processUniformVar(const std::string& stylename, const std::
             auto spinBox = createTextSpinBox(uniform.second.get<float>(), 1, -INFINITY, INFINITY, "%.2f");
             spinBox->onValueChanged = [=, &uniform](real val){
               std::string path = "styles." + stylename + ".shaders.uniforms." + name;
-              app->sceneUpdates.erase(std::remove_if(app->sceneUpdates.begin(), app->sceneUpdates.end(),
-                  [&](const SceneUpdate& s){ return s.path == path; }), app->sceneUpdates.end());
-              app->sceneUpdates.push_back(SceneUpdate{path, std::to_string(val)});
+              std::string newval = std::to_string(val);
+              replaceSceneVar(app->sceneUpdates, path, newval);
+              replaceSceneVar(currUpdates, path, newval);
               uniform.second.set<float>(val);
               app->platform->requestRender();
               sourceModified();

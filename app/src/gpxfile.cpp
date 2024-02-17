@@ -47,7 +47,7 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
       wpt.routed = slroute.attribute("routed").as_bool(wpt.routed);
     pugi::xml_node slprops = extnode.child("sl:props");
     if(slprops)
-      wpt.props = extnode.child_value();
+      wpt.props = slprops.child_value();
   }
   return wpt;
 }
