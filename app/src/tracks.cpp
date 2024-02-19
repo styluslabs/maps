@@ -90,23 +90,14 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
   if(!track->loaded && !track->filename.empty())
     loadGPX(track);
 
-  std::vector<LngLat> pts;
-  GpxWay* way = track->activeWay();
-  if(way) {
-    for(const Waypoint& wp : way->pts)
-      pts.push_back(wp.loc.lngLat());
-  }
-
-  if(track->marker <= 0) {
-    track->marker = app->map->markerAdd();
-    app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  //styling);
-  }
-  if(pts.size() > 1) {
-    app->map->markerSetPolyline(track->marker, pts.data(), pts.size());
+  if(!track->marker)
+    track->marker = std::make_unique<TrackMarker>(app->map.get(), "layers.track.draw.track");
+  if(track->activeWay()->pts.size() > 1) {
     if(!track->style.empty())
-      app->map->markerSetProperties(track->marker, {{{"color", track->style}}});
+      track->marker->markerProps = {{{"color", track->style}}};
+    track->marker->setTrack(track->activeWay());
   }
-  app->map->markerSetVisible(track->marker, pts.size() > 1);
+  track->marker->setVisible(track->activeWay()->pts.size() > 1);
 
   for(Waypoint& wp : track->waypoints) {
     if(wp.marker <= 0) {
@@ -122,11 +113,11 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
 
 void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
 {
-  if(track->marker <= 0) {
+  if(!track->marker) {
     if(!show) return;
     updateTrackMarker(track);
   }
-  app->map->markerSetVisible(track->marker, show && track->activeWay() && track->activeWay()->pts.size() > 1);
+  track->marker->setVisible(show && track->activeWay() && track->activeWay()->pts.size() > 1);
   for(Waypoint& wp : track->waypoints)
     app->map->markerSetVisible(wp.marker, show);
 }
@@ -179,10 +170,9 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
     char buff[64];
     SvgWriter::serializeColor(buff, color);
     track->style = buff;
-    if(track->marker > 0) {
-      app->map->markerSetProperties(track->marker, {{{"color", buff}}});
-      app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  // force refresh
-    }
+    if(track->marker)
+      track->marker->setProperties({{{"color", buff}}});
+      //app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  // force refresh
     if(track->rowid >= 0)
       SQLiteStmt(app->bkmkDB, "UPDATE tracks SET style = ? WHERE rowid = ?;").bind(buff, track->rowid).exec();
   };
@@ -293,7 +283,7 @@ void MapsTracks::populateStats(GpxFile* track)
   pauseRecordBtn->setVisible(isRecTrack);
   stopRecordBtn->setVisible(isRecTrack);
   if(!isRecTrack)
-    app->map->markerSetStylingFromPath(track->marker, "layers.selected-track.draw.track");
+    track->marker->setStylePath("layers.selected-track.draw.track");
 
   if(track->activeWay())
     updateStats(track->activeWay()->pts);  // has to be done before TrackPlot::setTrack()
@@ -541,9 +531,8 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
 
 void MapsTracks::removeTrackMarkers(GpxFile* track)
 {
-  if(track->marker > 0)
-    app->map->markerRemove(track->marker);
-  track->marker = 0;
+  if(track->marker)
+    track->marker.reset();
   for(auto& wpt: track->waypoints) {
     if(wpt.marker > 0)
       app->map->markerRemove(wpt.marker);
@@ -755,7 +744,7 @@ void MapsTracks::populateWaypoints(GpxFile* track)
     activeTrack = track;
     insertionWpt.clear();
     viewEntireTrack(track);
-    app->map->markerSetStylingFromPath(track->marker, "layers.selected-track.draw.track");
+    track->marker->setStylePath("layers.selected-track.draw.track");
     setRouteMode(activeTrack->routeMode);
     if(!track->routes.empty())
       updateStats(track->routes.back().pts);  // spark stats
@@ -817,7 +806,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->setPickResult(trackHoverLoc.lngLat(), "", "");  //activeTrack->title + " waypoint"
       app->pickedMarkerId = 0;
     }
-    else if(activeTrack && app->pickedMarkerId == activeTrack->marker) {
+    else if(activeTrack && activeTrack->marker && activeTrack->marker->onPicked(app->pickedMarkerId)) {
       if(statsPanel->isVisible()) {
         // find the track point closest to chosen position
         double mindist = DBL_MAX;
@@ -1371,8 +1360,7 @@ Button* MapsTracks::createPanel()
       recordedTrack.loaded = true;
       recordedTrack.tracks.emplace_back();
       recordedTrack.tracks.back().pts.push_back(app->currLocation);
-      recordedTrack.marker = app->map->markerAdd();
-      app->map->markerSetStylingFromPath(recordedTrack.marker, "layers.recording-track.draw.track");
+      recordedTrack.marker = std::make_unique<TrackMarker>(app->map.get(), "layers.recording-track.draw.track");
       tracksDirty = true;
       populateStats(&recordedTrack);
       saveTitle->setText(recordedTrack.title.c_str());
@@ -1394,7 +1382,7 @@ Button* MapsTracks::createPanel()
       app->map->markerSetVisible(trackHoverMarker, false);
       if(activeTrack && app->panelHistory.back() != wayptPanel) {
         if(activeTrack != &recordedTrack)
-          app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
+          activeTrack->marker->setStylePath("layers.track.draw.track");
         if(!activeTrack->visible)
           showTrack(activeTrack, false);
         activeTrack = NULL;
@@ -1614,7 +1602,7 @@ Button* MapsTracks::createPanel()
         if(activeTrack->modified)
           activeTrack->modified = !saveGPX(activeTrack);
         if(activeTrack != &recordedTrack)
-          app->map->markerSetStylingFromPath(activeTrack->marker, "layers.track.draw.track");
+          activeTrack->marker->setStylePath("layers.track.draw.track");
         if(!activeTrack->visible)
           showTrack(activeTrack, false);
         activeTrack = NULL;

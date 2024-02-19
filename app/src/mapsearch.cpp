@@ -382,8 +382,8 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 void MapsSearch::resultsUpdated(int flags)
 {
   populateResults(listResults);
-  resultCountText->setText(mapResults.size() < 1000 ?
-      fstring("%d results", mapResults.size()).c_str() : "over 1000 results");
+  resultCountText->setText(
+      fstring("%s%d results", moreMapResultsAvail ? "over " : "" , mapResults.size()).c_str());
 
   // zoom out if necessary to show first 5 results
   if(flags & FLY_TO) {
@@ -563,7 +563,7 @@ Button* MapsSearch::createPanel()
 {
   static const char* searchHeaderSVG = R"#(
     <g box-anchor="hfill" layout="flex" flex-direction="column">
-      <g id="searchbox" class="inputbox toolbar" box-anchor="hfill" layout="box">
+      <g class="searchbox inputbox toolbar" box-anchor="hfill" layout="box">
         <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
         <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
         <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
@@ -586,14 +586,14 @@ Button* MapsSearch::createPanel()
         <rect class="noquery-overlay" display='none' fill='none' box-anchor='fill' width='20' height='20'/>
       </g>
       <g box-anchor="hfill" layout="box">
-        <rect class="separator" width="20" height="26" box-anchor="hfill"/>
-        <text class="result-count-text" box-anchor="left" margin="0 5" font-size="12"></text>
+        <rect class="separator" width="20" height="22" box-anchor="hfill"/>
+        <text class="result-count-text" box-anchor="right" margin="0 5" font-size="12"></text>
       </g>
     </g>
   )#";
 
   SvgG* searchHeaderNode = static_cast<SvgG*>(loadSVGFragment(searchHeaderSVG));
-  SvgG* searchBoxNode = static_cast<SvgG*>(searchHeaderNode->selectFirst("#searchbox"));
+  SvgG* searchBoxNode = static_cast<SvgG*>(searchHeaderNode->selectFirst(".searchbox"));
   SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
   textEditNode->addChild(textEditInnerNode());
   queryText = new TextEdit(textEditNode);

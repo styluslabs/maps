@@ -461,6 +461,7 @@ bool MapsOffline::cancelDownload(int mapid)
   return true;
 }
 
+// run on offline worker thread - so we expect bkmkDB and searchDB to be in serialized mode
 static void deleteOfflineMap(int mapid)
 {
   int64_t dtotal = 0;
@@ -469,33 +470,37 @@ static void deleteOfflineMap(int mapid)
   FSPath cachedir(MapsApp::baseDir, "cache");
   for(auto& file : lsDirectory(cachedir)) {
     //for(auto& src : mapSources) ... this doesn't work because cache file may be specified in scene yaml
-    //std::string cachename = src.second["cache"] ? src.second["cache"].Scalar() : src.first.Scalar();
-    //std::string cachefile = app->baseDir + "cache/" + cachename + ".mbtiles";
-    //if(cachename == "false" || !FSPath(cachefile).exists()) continue;
     FSPath cachefile = cachedir.child(file);
     if(cachefile.extension() != "mbtiles") continue;
-    auto mbtiles = std::make_unique<Tangram::MBTilesDataSource>(
-        *MapsApp::platform, cachefile.baseName(), cachefile.path, "", true);
-    int64_t dsize = mbtiles->getOfflineSize();
-    mbtiles->deleteOfflineMap(mapid, purge);
-    dsize -= mbtiles->getOfflineSize();
-    dtotal += dsize;
-    mbtiles.reset();  // close DB before potentially queueing VACUUM
+    SQLiteDB mbtiles;
+    if(sqlite3_open_v2(cachefile.c_str(), &mbtiles.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) continue;
+    int64_t dsize = 0;
+    mbtiles.stmt("SELECT sum(length(tile_data)) FROM images WHERE tile_id IN (SELECT tile_id FROM offline_tiles"
+        " WHERE offline_id = ?1 AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?1));")
+      .bind(mapid).onerow(dsize);
+    if(dsize == 0) continue;
+    if(purge) {
+      // this can be quite slow
+      mbtiles.stmt("DELETE FROM images WHERE tile_id IN (SELECT tile_id FROM offline_tiles WHERE"
+          " offline_id = ?1 AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?1));")
+        .bind(mapid).exec();
+    }
+    mbtiles.stmt("DELETE FROM offline_tiles WHERE offline_id = ?;").bind(mapid).exec();
     if(purge && storageShrinkMax > 0 && dsize > 8*1024*1024)
-      MapsOffline::queueOfflineTask(0, [=](){ MapsOffline::runSQL(cachefile.path, "VACUUM;"); });
+      mbtiles.stmt("VACUUM");  // also slow, obviously
+    dtotal += dsize;
   }
-  MapsApp::platform->notifyStorage(0, -dtotal);  // this can trigger cache shrink, so wait until all sources processed
   MapsSearch::onDelOfflineMap(mapid);
-
   SQLiteStmt(MapsApp::bkmkDB, "DELETE FROM offlinemaps WHERE mapid = ?;").bind(mapid).exec();
+  MapsApp::platform->notifyStorage(0, -dtotal);  // this can trigger cache shrink, so wait until all sources processed
 }
 
 void MapsOffline::downloadCompleted(int id, bool canceled)
 {
   if(!id) return;
   if(canceled)
-    deleteOfflineMap(id);
-  else
+    MapsOffline::queueOfflineTask(-1, [=](){ deleteOfflineMap(id); });
+  else if(id > 0)
     SQLiteStmt(MapsApp::bkmkDB, "UPDATE offlinemaps SET done = 1 WHERE mapid = ?;").bind(id).exec();
   populateOffline();
 }
@@ -651,8 +656,9 @@ void MapsOffline::populateOffline()
       if(rectMarker)
         app->map->markerSetVisible(rectMarker, false);
       if(cancelDownload(mapid)) {
-        deleteOfflineMap(mapid);
-        populateOffline();
+        MapsOffline::queueOfflineTask(-1, [=](){ deleteOfflineMap(mapid); });
+        item->selectFirst(".detail-text")->setText("Deleting...");
+        //populateOffline();
       }
       else
         updateProgress();

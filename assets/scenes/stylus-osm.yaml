@@ -57,7 +57,7 @@ global:
         road_halo: white
         ferry_name: '#8db3ce'
         ferry_halo: white
-        border: '#777'  #wheat
+        border: '#888'  #wheat
         border_country: '#666'  #[0.824, 0.651, 0.329, 1.00]
         city_point: white
         city_point_halo: black

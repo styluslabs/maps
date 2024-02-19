@@ -683,6 +683,14 @@ Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int
   return row;
 }
 
+Widget* createBoxLayout(const char* anchor)
+{
+  SvgG* box = new SvgG;
+  box->setAttribute("box-anchor", anchor);
+  box->setAttribute("layout", "box");
+  return new Widget(box);
+}
+
 Pager::Pager(SvgNode* _node) : Widget(_node)
 {
   //behaveAsStack = true;

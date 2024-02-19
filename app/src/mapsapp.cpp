@@ -978,7 +978,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
         <rect class="statusbar-bg toolbar" display="none" box-anchor="hfill" x="0" y="0" width="20" height="30" />
         <g class="maps-container" box-anchor="fill" layout="box"></g>
         <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
-        <g class="panel-container" display="none" box-anchor="hfill" layout="box">
+        <g class="panel-container panel-container-narrow" display="none" box-anchor="hfill" layout="box">
           <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
           <rect class="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
         </g>
@@ -992,7 +992,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
             <rect class="background" fill="none" x="0" y="0" width="360" height="1"/>
           </g>
           <rect class="panel-separator" class="hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
-          <g class="panel-container" display="none" box-anchor="hfill" layout="box">
+          <g class="panel-container panel-container-wide" display="none" box-anchor="hfill" layout="box">
             <rect class="background" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
           </g>
         </g>
@@ -1028,19 +1028,21 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win->sdlWindow = sdlWin;
   win->isFocusable = true;  // top level window should always be focusable
 
-  panelContent = new Pager(loadSVGFragment("<g id='panel-content' box-anchor='fill' layout='box'></g>"));
-  panelContent->getNextPage = [this](bool left) {
+  panelContent = createBoxLayout();
+
+  Pager* panelPager = new Pager(winnode->selectFirst(".panel-container-narrow"));
+  panelPager->getNextPage = [=](bool left) {
     for(size_t ii = 0; ii < panelPages.size(); ++ii) {
       if(panelPages[ii] == panelHistory.front()) {
         if(left ? ii > 0 : ii < panelPages.size() - 1) {
-          panelContent->currPage = panelHistory.back();  //panelPages[ii];
-          panelContent->nextPage = panelPages[left ? (ii-1) : (ii+1)];
+          panelPager->currPage = panelHistory.back();  //panelPages[ii];
+          panelPager->nextPage = panelPages[left ? (ii-1) : (ii+1)];
         }
         return;
       }
     }
   };
-  panelContent->onPageChanged = [this](Widget* page){
+  panelPager->onPageChanged = [this](Widget* page){
     showPanel(page);
   };
 
@@ -1163,6 +1165,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     camera.tilt = 0;
     camera.rotation = 0;
     map->setCameraPositionEased(camera, 1.0);
+    prevCamPos = {};  // make sure follow mode gets disabled
   };
   reorientBtn->setVisible(false);
 

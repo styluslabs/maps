@@ -27,7 +27,8 @@ const categories = {
   "hotel": ["motel", "hostel", "guest + house"],
   "motel": ["hotel", "hostel", "guest + house"],
   "accomodation": ["hotel", "motel", "hostel", "guest + house", "apartment", "chalet"],
-  "lodging": ["hotel", "motel", "hostel", "guest + house", "apartment", "chalet"]
+  "lodging": ["hotel", "motel", "hostel", "guest + house", "apartment", "chalet"],
+  "park": "park NOT parking"
 };
 
 const replacements = {

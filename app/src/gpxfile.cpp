@@ -194,3 +194,94 @@ bool saveGPX(GpxFile* track)
   }
   return doc.save_file(track->filename.c_str(), "  ");
 }
+
+// Tangram stores marker coords normalized to marker extent (max of bbox width, height) and line width is in
+//  same coords, so for large marker (e.g. route), width becomes too small (passed as round(float * 4096))
+//  and gets rounded to zero, so marker isn't drawn.  For even larger markers, use of floats instead of
+//  doubles could become an issue.
+// This is a known issue: github.com/tangrams/tangram-es/issues/994 , issues/1655 , issues/1463
+// For now, we'll split large polyline markers into multiple markers
+// Other potential solutions are to use ClientDataSource (generates tiles ... too slow?), change to float
+//  for polyline width, or apply width after model transform
+// Modifying Tangram to support arbitrarily large markers (e.g. by splitting into multiple polylines) looked
+//  like it would be messy
+
+#include "tangram.h"
+#include "util/geom.h"
+#include "util/mapProjection.h"
+
+using Tangram::MapProjection;
+
+TrackMarker::~TrackMarker()
+{
+  for(MarkerID id : markers) map->markerRemove(id);
+}
+
+void TrackMarker::setVisible(bool vis) { for(MarkerID id : markers) map->markerSetVisible(id, vis); }
+
+void TrackMarker::setStylePath(const char* style)
+{
+  stylePath = style;
+  for(MarkerID id : markers)
+    map->markerSetStylingFromPath(id, style);
+}
+
+void TrackMarker::setProperties(Properties&& props)
+{
+  markerProps = std::move(props);
+  for(MarkerID id : markers)
+    map->markerSetProperties(id, Properties(markerProps));
+}
+
+bool TrackMarker::onPicked(MarkerID picked)
+{
+  for(MarkerID id : markers) {
+    if(id == picked) return true;
+  }
+  return false;
+}
+
+void TrackMarker::setTrack(GpxWay* way)
+{
+  auto meters0 = MapProjection::lngLatToProjectedMeters(way->pts[0].lngLat());
+  Tangram::BoundingBox bounds = {meters0, meters0};
+
+  size_t nmarkers = 0;
+  std::vector<LngLat> pts;
+  for(size_t ii = 1; ii < way->pts.size();) {
+    const Waypoint& wp = way->pts[ii];
+    auto meters = MapProjection::lngLatToProjectedMeters(wp.lngLat());
+    auto b0 = bounds;
+    bounds.expand(meters.x, meters.y);
+    if(bounds.width() > maxExtent || bounds.height() > maxExtent || ++ii == way->pts.size()) {
+      double slope = (meters.y - meters0.y)/(meters.x - meters0.x);
+      auto clip = meters;
+      if(clip.x < b0.min.x) clip.x = std::max(clip.x, b0.max.x - maxExtent);
+      else if(clip.x > b0.max.x) clip.x = std::min(clip.x, b0.min.x + maxExtent);
+      clip.y = meters0.y + (clip.x - meters0.x)*slope;
+
+      if(clip.y < b0.min.y) clip.y = std::max(clip.y, b0.max.y - maxExtent);
+      else if(clip.y > b0.max.y) clip.y = std::min(clip.y, b0.min.y + maxExtent);
+      clip.x = meters0.x + (clip.y - meters0.y)/slope;
+
+      pts.push_back(MapProjection::projectedMetersToLngLat(clip));
+
+      if(++nmarkers >= markers.size()) {
+        MarkerID id = map->markerAdd();
+        markers.push_back(id);
+        map->markerSetStylingFromPath(id, stylePath.c_str());
+      }
+      map->markerSetPolyline(markers[nmarkers-1], pts.data(), pts.size());
+      map->markerSetProperties(markers[nmarkers-1], Properties(markerProps));
+      pts = {pts.back()};
+      bounds = {clip, clip};
+      continue;  // repeat current point (i.e. segment from clip to meters)
+    }
+    pts.push_back(wp.loc.lngLat());
+    meters0 = meters;
+  }
+
+  for(size_t ii = nmarkers; ii < markers.size(); ++ii)
+    map->markerRemove(markers[ii]);
+  markers.resize(nmarkers);
+}

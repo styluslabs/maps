@@ -32,13 +32,31 @@ struct GpxWay
   GpxWay(const std::string& _title, const std::string& _desc) : title(_title), desc(_desc) {}
 };
 
+class TrackMarker
+{
+public:
+  Map* map;
+  std::vector<MarkerID> markers;
+  std::string stylePath;
+  Properties markerProps;
+  double maxExtent = 1000;  // meters
+
+  TrackMarker(Map* _map, const char* style) : map(_map), stylePath(style) {}
+  ~TrackMarker();
+  void setVisible(bool vis);
+  void setStylePath(const char* style);
+  void setProperties(Properties&& props);
+  void setTrack(GpxWay* way);
+  bool onPicked(MarkerID picked);
+};
+
 struct GpxFile {
   std::string title;
   std::string desc;
   std::string filename;
   std::string style;
   std::string routeMode = "direct";  // "walk", "bike", "drive"
-  MarkerID marker = 0;
+  std::unique_ptr<TrackMarker> marker;
 
   std::vector<Waypoint> waypoints;
   std::vector<GpxWay> routes;

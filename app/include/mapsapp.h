@@ -23,7 +23,6 @@ class Toolbar;
 class Menubar;
 class MapsWidget;
 class ScaleBarWidget;
-class Pager;
 class SvgNode;
 class Color;
 class Painter;
@@ -120,7 +119,7 @@ public:
   Splitter* panelSplitter = NULL;
   Widget* panelSeparator = NULL;
   Widget* panelContainer = NULL;
-  Pager* panelContent = NULL;
+  Widget* panelContent = NULL;
   Widget* mainTbContainer = NULL;
   Widget* infoPanel = NULL;
   Widget* infoContent = NULL;
