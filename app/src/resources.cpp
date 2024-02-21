@@ -76,7 +76,7 @@ static const char* moreWidgetSVG = R"#(
 
   <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
     <use class="panel-icon icon" width="36" height="36" xlink:href="" />
-    <text class="panel-title" box-anchor="hfill" margin="0 9"></text>
+    <text class="panel-title" box-anchor="hfill" margin="0 0"></text>
   </g>
 
   <g id="toolbutton" class="toolbutton" layout="box">
@@ -86,6 +86,11 @@ static const char* moreWidgetSVG = R"#(
       <use class="icon" width="32" height="32" xlink:href="" />
       <text class="title" display="none" margin="0 9"></text>
     </g>
+  </g>
+
+  <g id="colorbutton" class="color_preview previewbtn">
+    <rect fill="none" width="42" height="42"/>
+    <circle class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" cx="21" cy="21" r="15.5" />
   </g>
 </svg>
 )#";

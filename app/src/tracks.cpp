@@ -92,12 +92,30 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
 
   if(!track->marker)
     track->marker = std::make_unique<TrackMarker>(app->map.get(), "layers.track.draw.track");
-  if(track->activeWay()->pts.size() > 1) {
+  if(track->activeWay() && track->activeWay()->pts.size() > 1) {
     if(!track->style.empty())
       track->marker->markerProps = {{{"color", track->style}}};
     track->marker->setTrack(track->activeWay());
+    track->marker->setVisible(true);
   }
-  track->marker->setVisible(track->activeWay()->pts.size() > 1);
+  else
+    track->marker->setVisible(false);
+
+  if(!track->routes.empty() && track->routeMode != "direct") {
+    auto& pts = track->routes.back().pts;
+    for(size_t ii = 1; ii < pts.size(); ++ii) {
+      Waypoint& wp = pts[ii];
+      if(wp.loc.time > pts[ii-1].loc.time) {
+        if(wp.marker <= 0) {
+          wp.marker = app->map->markerAdd();
+          app->map->markerSetStylingFromPath(wp.marker, "layers.route-step.draw.marker");
+          app->map->markerSetPoint(wp.marker, wp.loc.lngLat());
+          // use marker number as unique id for priority
+          app->map->markerSetProperties(wp.marker, {{{"color", track->style}, {"priority", wp.marker}}});
+        }
+      }
+    }
+  }
 
   for(Waypoint& wp : track->waypoints) {
     if(wp.marker <= 0) {
@@ -167,14 +185,12 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 
   ColorPicker* colorBtn = createColorPicker(app->markerColors, parseColor(track->style, Color::BLUE));
   colorBtn->onColor = [this, track](Color color){
-    char buff[64];
-    SvgWriter::serializeColor(buff, color);
-    track->style = buff;
+    std::string colorstr = colorToStr(color);
+    track->style = colorstr;
     if(track->marker)
-      track->marker->setProperties({{{"color", buff}}});
-      //app->map->markerSetStylingFromPath(track->marker, "layers.track.draw.track");  // force refresh
+      track->marker->setProperties({{{"color", colorstr}}});
     if(track->rowid >= 0)
-      SQLiteStmt(app->bkmkDB, "UPDATE tracks SET style = ? WHERE rowid = ?;").bind(buff, track->rowid).exec();
+      SQLiteStmt(app->bkmkDB, "UPDATE tracks SET style = ? WHERE rowid = ?;").bind(colorstr, track->rowid).exec();
   };
   container->addWidget(colorBtn);
 
@@ -193,7 +209,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       SQLiteStmt(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?").bind(track->rowid).exec();
       for(auto it = tracks.begin(); it != tracks.end(); ++it) {
         if(it->rowid == track->rowid) {
-          removeTrackMarkers(track);
+          //removeTrackMarkers(track);
           yamlRemove(app->config["tracks"]["visible"], track->rowid);
           tracks.erase(it);
           break;
@@ -516,8 +532,8 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   auto it = track->findWaypoint(uid);
   if(it == track->waypoints.end()) return;  // also should never happen
   bool routed = it->routed;
-  if(it->marker > 0)
-    app->map->markerRemove(it->marker);
+  //if(it->marker > 0)  -- Waypoint now handles removing marker
+  //  app->map->markerRemove(it->marker);
   if(track == activeTrack && it->uid == insertionWpt)
     insertionWpt.clear();
   track->waypoints.erase(it);
@@ -529,7 +545,7 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   wayptContent->deleteItem(uid);
 }
 
-void MapsTracks::removeTrackMarkers(GpxFile* track)
+/*void MapsTracks::removeTrackMarkers(GpxFile* track)
 {
   if(track->marker)
     track->marker.reset();
@@ -538,7 +554,7 @@ void MapsTracks::removeTrackMarkers(GpxFile* track)
       app->map->markerRemove(wpt.marker);
     wpt.marker = 0;
   }
-}
+}*/
 
 // cut and paste from bookmarks
 void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
@@ -877,7 +893,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     routeBtn->onClicked = [=](){
       LngLat r1 = app->currLocation.lngLat(), r2 = app->pickResultCoord;
       double km = lngLatDist(r1, r2);
-      removeTrackMarkers(&navRoute);
+      navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Navigation";
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
       navRoute.waypoints.clear();
@@ -893,7 +909,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
 
     Button* measureBtn = createToolbutton(MapsApp::uiIcon("measure"), "Directions");
     measureBtn->onClicked = [=](){
-      removeTrackMarkers(&navRoute);
+      navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Measurement";
       navRoute.routeMode = "direct";
       navRoute.routes.clear();

@@ -267,8 +267,8 @@ static int addSearchResult(duk_context* ctx)
   int flags = duk_to_number(ctx, 4);
   const char* json = duk_json_encode(ctx, 5);    // duktape obj -> string -> rapidjson obj ... not ideal
 
-  //std::lock_guard<std::mutex> lock(PluginManager::inst->app->mapsSearch->resultsMutex);
-  auto& ms = PluginManager::inst->app->mapsSearch;
+  //std::lock_guard<std::mutex> lock(MapsApp::inst->mapsSearch->resultsMutex);
+  auto& ms = MapsApp::inst->mapsSearch;
   if(flags & MapsSearch::MAP_SEARCH) {
     ms->addMapResult(osm_id, lng, lat, score, json);
     ms->moreMapResultsAvail = flags & MapsSearch::MORE_RESULTS;
@@ -288,7 +288,7 @@ static int addMapSource(duk_context* ctx)
   // accept string or JS object
   const char* yamlstr = duk_is_string(ctx, 1) ? duk_require_string(ctx, 1) : duk_json_encode(ctx, 1);
   try {
-    PluginManager::inst->app->mapsSources->addSource(keystr, YAML::Load(yamlstr, strlen(yamlstr)));
+    MapsApp::inst->mapsSources->addSource(keystr, YAML::Load(yamlstr, strlen(yamlstr)));
   } catch (std::exception& e) {
     LOGE("Error parsing map source YAML: %s", e.what());
   }
@@ -306,7 +306,7 @@ static int addBookmark(duk_context* ctx)  //list, 0, props, note, lnglat[0], lng
   double lat = duk_to_number(ctx, 6);
   int date = duk_to_number(ctx, 7);
 
-  auto& mb = PluginManager::inst->app->mapsBookmarks;
+  auto& mb = MapsApp::inst->mapsBookmarks;
   int list_id = mb->getListId(listname, true);
   mb->addBookmark(list_id, osm_id, name, props, notes, LngLat(lng, lat), date);
   return 0;
@@ -317,7 +317,7 @@ static int addPlaceInfo(duk_context* ctx)
   const char* icon = duk_require_string(ctx, 0);
   const char* title = duk_require_string(ctx, 1);
   const char* value = duk_require_string(ctx, 2);
-  PluginManager::inst->app->addPlaceInfo(icon, title, value);
+  MapsApp::inst->addPlaceInfo(icon, title, value);
   return 0;
 }
 
@@ -327,7 +327,7 @@ static int addRouteGPX(duk_context* ctx)
   GpxFile track;
   loadGPX(&track, gpx);
   for(auto& route : track.routes)
-    PluginManager::inst->app->mapsTracks->addRoute(std::move(route.pts));
+    MapsApp::inst->mapsTracks->addRoute(std::move(route.pts));
   return 0;
 }
 
@@ -336,7 +336,7 @@ static int addRoutePolyline(duk_context* ctx)
 {
   const char* str = duk_require_string(ctx, 0);
   auto route = MapsTracks::decodePolylineStr(str);
-  PluginManager::inst->app->mapsTracks->addRoute(std::move(route));
+  MapsApp::inst->mapsTracks->addRoute(std::move(route));
   return 0;
 }
 
@@ -345,18 +345,18 @@ static int notifyError(duk_context* ctx)
   std::string type = duk_require_string(ctx, 0);
   const char* msg = duk_require_string(ctx, 1);
   if(type == "search")
-    PluginManager::inst->app->mapsSearch->searchPluginError(msg);
+    MapsApp::inst->mapsSearch->searchPluginError(msg);
   else if(type == "place")
-    PluginManager::inst->app->placeInfoPluginError(msg);
+    MapsApp::inst->placeInfoPluginError(msg);
   else if(type == "route")
-    PluginManager::inst->app->mapsTracks->routePluginError(msg);
+    MapsApp::inst->mapsTracks->routePluginError(msg);
   return 0;
 }
 
 static int readSceneValue(duk_context* ctx)
 {
   std::string yamlPath = duk_require_string(ctx, 0);
-  YAML::Node yamlVal = PluginManager::inst->app->readSceneValue(yamlPath);
+  YAML::Node yamlVal = MapsApp::inst->readSceneValue(yamlPath);
   std::string jsonStr = yamlToStr(yamlVal, true);
   duk_push_string(ctx, jsonStr.c_str());
   if(!jsonStr.empty())

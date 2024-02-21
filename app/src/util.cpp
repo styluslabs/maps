@@ -4,6 +4,7 @@
 #include "sqlite3/sqlite3.h"
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
+#include "usvg/svgwriter.h"
 
 #define PLATFORMUTIL_IMPLEMENTATION
 #include "ulib/platformutil.h"
@@ -178,6 +179,13 @@ std::string ftimestr(const char* fmt, int64_t msec_epoch)
   time_t t = msec_epoch <= 0 ? mSecSinceEpoch()/1000 : msec_epoch/1000;
   strftime(timestr, sizeof(timestr), fmt, localtime(&t));
   return std::string(timestr);
+}
+
+std::string colorToStr(const Color& c)
+{
+  char buff[64];
+  SvgWriter::serializeColor(buff, c);
+  return std::string(buff);
 }
 
 // note that indices for sqlite3_column_* start from 0 while indices for sqlite3_bind_* start from 1

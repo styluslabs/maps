@@ -202,41 +202,76 @@ ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialCo
   if(!menuNode)
     menuNode.reset(loadSVGFragment(menuSVG));
 
-  static const char* colorBtnSVG = R"#(
-    <g class="color_preview previewbtn">
-      <!-- pattern id="checkerboard" x="0" y="0" width="18" height="18"
-          patternUnits="userSpaceOnUse" patternContentUnits="userSpaceOnUse">
-        <rect fill="black" fill-opacity="0.1" x="0" y="0" width="9" height="9"/>
-        <rect fill="black" fill-opacity="0.1" x="9" y="9" width="9" height="9"/>
-      </pattern -->
-
-      <!-- rect fill="white" x="1" y="1" width="35" height="35" / -->
-      <!-- rect fill="url(#checkerboard)" x="1" y="1" width="35" height="35" / -->
-      <!-- rect class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" x="1" y="1" width="35" height="35" / -->
-      <rect fill="none" width="42" height="42"/>
-      <circle class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" cx="21" cy="21" r="15.5" />
-    </g>
-  )#";
-  static std::unique_ptr<SvgNode> colorBtnNode;
-  if(!colorBtnNode)
-    colorBtnNode.reset(loadSVGFragment(colorBtnSVG));
-
   Menu* menu = new Menu(menuNode->clone(), Menu::VERT_LEFT);
-  ColorPicker* widget = new ColorPicker(colorBtnNode->clone());
+  ColorPicker* widget = new ColorPicker(createColorBtn());  //widgetNode("#colorbutton"));
   widget->containerNode()->selectFirst(".btn-color")->addClass("current-color");
   widget->setColor(initialColor.color);
   widget->setMenu(menu);
 
   for(size_t ii = 0; ii < colors.size(); ++ii) {
     Color color = colors[ii];
-    Button* btn = new Button(colorBtnNode->clone());
+    Button* btn = new Button(widgetNode("#colorbutton"));
     btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
     if(ii > 0 && ii % 4 == 0)
       btn->node->setAttribute("flex-break", "before");
     btn->onClicked = [=](){ widget->updateColor(color.color); };
     menu->addItem(btn);  //addWidget(btn);  // use addItem() to support press-drag-release?
   }
+
+  widget->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(event->type = SvgGui::VISIBLE) {
+      gui->deleteContents(menu->selectFirst(".child-container"));
+      menu->sele
+    }
+    return false;
+  });
+
+
+
+
   return widget;
+}
+
+class SharedMenu : public Menu
+{
+public:
+  using Menu::Menu;
+  void show(Widget* _host) { host = _host; window()->gui()->showMenu(this); window()->gui()->setPressed(this); }
+  Point calcOffset(const Rect& pb) const override { return calcOffset(host ? host->node->bounds() : pb); }
+
+  Widget* host = NULL;
+};
+
+void createColorPickerMenu()
+{
+  static const char* menuSVG = R"#(
+    <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
+      <rect box-anchor="fill" width="20" height="20"/>
+      <g class="child-container" box-anchor="fill"
+          layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
+      </g>
+    </g>
+  )#";
+
+  SharedMenu* menu = new SharedMenu(loadSVGFragment(menuSVG), Menu::VERT_LEFT);
+
+  for(size_t ii = 0; ii < std::min(15, markerColors.size()); ++ii) {
+    Color color = markerColors[ii];
+    Button* btn = new Button(widgetNode("#colorbutton"));
+    btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
+    if(ii > 0 && ii % 4 == 0)
+      btn->node->setAttribute("flex-break", "before");
+    btn->onClicked = [=](){ static_cast<ColorPicker*>(menu->host)->updateColor(color.color); };
+    menu->addItem(btn);
+  }
+
+  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"));
+  overflowBtn->onClicked = [=](){
+    app->customizeColors(widget->color(), [=](Color color){ widget->updateColor(color.color); });
+  };
+  menu->addItem(overflowBtn);
+
+
 }
 
 DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)

@@ -32,6 +32,7 @@
 #error "One of DEBUG or NDEBUG must be defined!"
 #endif
 
+MapsApp* MapsApp::inst = NULL;
 Platform* MapsApp::platform = NULL;
 std::string MapsApp::baseDir;
 YAML::Node MapsApp::config;
@@ -933,41 +934,45 @@ int MapsApp::getPanelWidth() const
 void MapsApp::setWindowLayout(int fbWidth)
 {
   bool narrow = fbWidth/gui->paintScale < 700;
-  if(!currLayout || narrow != currLayout->node->hasClass("window-layout-narrow")) {
-    if(currLayout) currLayout->setVisible(false);
-    currLayout = win->selectFirst(narrow ? ".window-layout-narrow" : ".window-layout-wide");
-    currLayout->setVisible(true);
+  if(currLayout && narrow == currLayout->node->hasClass("window-layout-narrow")) return;
 
-    panelSplitter->setEnabled(narrow);
-    panelSeparator = currLayout->selectFirst(".panel-separator");  // may be NULL
-    panelContainer = currLayout->selectFirst(".panel-container");
-    mainTbContainer = currLayout->selectFirst(".main-tb-container");
+  if(currLayout) currLayout->setVisible(false);
+  currLayout = win->selectFirst(narrow ? ".window-layout-narrow" : ".window-layout-wide");
+  currLayout->setVisible(true);
 
-    mainToolbar->removeFromParent();
-    mainTbContainer->addWidget(mainToolbar);
+  panelSplitter->setEnabled(narrow);
+  panelSeparator = currLayout->selectFirst(".panel-separator");  // may be NULL
+  panelContainer = currLayout->selectFirst(".panel-container");
+  mainTbContainer = currLayout->selectFirst(".main-tb-container");
 
-    panelContent->removeFromParent();
-    panelContainer->addWidget(panelContent);
+  mainToolbar->removeFromParent();
+  mainTbContainer->addWidget(mainToolbar);
 
-    mapsContent->removeFromParent();
-    currLayout->selectFirst(".maps-container")->addWidget(mapsContent);
+  panelContent->removeFromParent();
+  panelContainer->addWidget(panelContent);
 
-    // adjust menu alignment
-    auto menubtns = mainToolbar->select(".toolbutton");
-    for(Widget* btn : menubtns) {
-      Menu* menu = static_cast<Button*>(btn)->mMenu;
-      if(menu) {
-        menu->setAlign(narrow ? (menu->mAlign | Menu::ABOVE) : (menu->mAlign & ~Menu::ABOVE));
-        // first menu item always closest to opening button (anchor point)
-        menu->selectFirst(".child-container")->node->setAttribute("flex-direction", narrow ? "column-reverse" : "column");
-      }
+  mapsContent->removeFromParent();
+  currLayout->selectFirst(".maps-container")->addWidget(mapsContent);
+
+  // adjust menu alignment
+  auto menubtns = mainToolbar->select(".toolbutton");
+  for(Widget* btn : menubtns) {
+    Menu* menu = static_cast<Button*>(btn)->mMenu;
+    if(menu) {
+      menu->setAlign(narrow ? (menu->mAlign | Menu::ABOVE) : (menu->mAlign & ~Menu::ABOVE));
+      // first menu item always closest to opening button (anchor point)
+      menu->selectFirst(".child-container")->node->setAttribute("flex-direction", narrow ? "column-reverse" : "column");
     }
-
-    SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
-    auto minbtns = panelContent->select(".minimize-btn");
-    for(Widget* btn : minbtns)
-      static_cast<Button*>(btn)->setIcon(minicon);
   }
+
+  SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
+  auto minbtns = panelContent->select(".minimize-btn");
+  for(Widget* btn : minbtns)
+    static_cast<Button*>(btn)->setIcon(minicon);
+  // let's try hiding panel title icons if we also show the main toolbar w/ the same icon
+  auto panelicons = panelContent->select(".panel-icon");
+  for(Widget* btn : panelicons)
+    btn->setVisible(narrow);
 }
 
 void MapsApp::createGUI(SDL_Window* sdlWin)
@@ -1145,6 +1150,15 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // dump contents of tile in middle of screen
   debugMenu->addItem("Dump tile", [this](){
     dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
+  });
+  debugMenu->addItem("Set location", [this](){
+    if(!std::isnan(pickResultCoord.latitude)) {
+      currLocation.lng = pickResultCoord.longitude;
+      currLocation.lat = pickResultCoord.latitude;
+    }
+    else
+      map->getPosition(currLocation.lng, currLocation.lat);
+    updateLocation(currLocation);
   });
   overflowMenu->addSubmenu("Debug", debugMenu);
 
@@ -1340,8 +1354,10 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   backBtn->onClicked = [this](){ popPanel(); };
   toolbar->addWidget(backBtn);
   Widget* titleWidget = new Widget(widgetNode("#panel-header-title"));
+  // need widget to show/hide icon in setWindowLayout()
+  Widget* iconWidget = new Widget(titleWidget->containerNode()->selectFirst(".panel-icon"));
   if(icon)
-    static_cast<SvgUse*>(titleWidget->containerNode()->selectFirst(".icon"))->setTarget(icon);
+    static_cast<SvgUse*>(iconWidget->node)->setTarget(icon);
   TextLabel* titleLabel = new TextLabel(titleWidget->containerNode()->selectFirst(".panel-title"));
   titleLabel->setText(title);
   //static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
@@ -1541,6 +1557,7 @@ void MapsApp::setDpi(float dpi)
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
   TRACE_INIT();
+  inst = this;
   platform = _platform;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
@@ -1728,4 +1745,116 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   TRACE_END(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
   TRACE_FLUSH();
   return true;
+}
+
+
+#include "ugui/colorwidgets.h"
+
+// dialog with accept (optional) and cancel controls along top of dialog
+Dialog* MapsApp::createMobileDialog(const char* title, const char* acceptTitle)
+{
+  static const char* mobileDialogSVG = R"(
+    <svg id="dialog" class="window dialog" layout="box">
+      <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
+      <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
+        <g class="title-container" box-anchor="hfill" layout="box"></g>
+        <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
+        <g class="body-container" box-anchor="fill" layout="flex" flex-direction="column"></g>
+      </g>
+    </svg>
+  )";
+  static std::unique_ptr<SvgDocument> mobileDialogProto;
+  mobileDialogProto.reset(static_cast<SvgDocument*>(loadSVGFragment(mobileDialogSVG)));
+
+  Dialog* dialog = new Dialog( setupWindowNode(mobileDialogProto->clone()) );
+  Widget* content = createColumn();
+  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
+  TextBox* titleText = new TextBox(createTextNode(title));
+  Toolbar* titleTb = createToolbar();
+  titleTb->node->addClass("title-toolbar");
+  dialog->cancelBtn = createToolbutton(MapsApp::uiIcon("back"), "Cancel");
+  dialog->cancelBtn->onClicked = [=](){ dialog->finish(Dialog::CANCELLED); };
+  titleTb->addWidget(dialog->cancelBtn);
+  titleTb->addWidget(titleText);
+  titleTb->addWidget(createStretch());
+  if(acceptTitle) {
+    dialog->acceptBtn = createToolbutton(MapsApp::uiIcon("accept"), acceptTitle, true);
+    dialog->acceptBtn->onClicked = [=](){ dialog->finish(Dialog::ACCEPTED); };
+    titleTb->addWidget(dialog->acceptBtn);
+  }
+  dialog->selectFirst(".title-container")->addWidget(titleTb);
+  return dialog;
+}
+
+void MapsApp::customizeColors(Color initialColor, std::function<void(Color)> callback)  //int rowid)
+{
+  static const char* colorListSVG = R"#(
+    <g box-anchor="fill" layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
+    </g>
+  )#";
+
+  Widget* colorList = new Widget(loadSVGFragment(colorListSVG));
+  ColorEditBox* colorEditBox = createColorEditBox(false, false);
+  colorEditBox->setColor(initialColor);
+  // long press to show content menu w/ delete option? ... unnecessarily hides the action when we have plenty of screen space; select color then tap delete icon?
+  auto populateColorList = [=](){
+    gui->deleteContents(colorList);
+    for(size_t ii = 0; ii < markerColors.size(); ++ii) {
+      Color color = markerColors[ii];
+      Button* btn = createColorBtn();  //new Button(widgetNode("#colorbutton"));
+      btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
+      btn->onClicked = [=](){ colorEditBox->setColor(color); };
+      colorList->addWidget(btn);
+    }
+    bool issaved = std::find(markerColors.begin(), markerColors.end(), colorEditBox->color()) != markerColors.end();
+    saveBtn->setEnabled(!issaved);
+    deleteBtn->setEnabled(issaved);
+
+  };
+  populateColorList();
+
+  auto colorListChanged = [=](){
+    populateColorList();
+    config["colors"] = YAML::Node(YAML::NodeType::Sequence);
+    for(Color& color : markerColors)
+      config["colors"].push_back( colorToStr(color) );
+  };
+
+  Button* saveBtn = createToolbutton(NULL, "Save", true);
+  Button* deleteBtn = createToolbutton(NULL, "Delete", true);
+
+  saveBtn->onClicked = [=](){
+    markerColors.insert(markerColors.begin(), colorEditBox->color());
+    colorListChanged();
+  };
+
+  deleteBtn->onClicked = [=](){
+    markerColors.erase(std::remove(markerColors.begin(), markerColors.end(), colorEditBox->color()));
+    colorListChanged();
+  };
+
+
+  colorEditBox->onColorChanged = [=](Color c){
+    saveBtn->setEnabled(true);
+    deleteBtn->setEnabled(false);
+  };
+
+  Widget* toolbar = createToolbar();
+  toolbar->addWidget(colorEditBox);
+  toolbar->addWidget(saveBtn);
+  toolbar->addWidget(deleteBtn);
+
+  Widget* content = createColumn();
+  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
+  content->addWidget(toolbar);
+  content->addWidget(colorList);
+
+  Dialog* dialog = createMobileDialog("Colors", "Accept");
+  Widget* dialogBody = dialog->selectFirst(".body-container");
+  //dialogBody->addWidget(newListContent);
+  //auto scrollWidget = new ScrollWidget(new SvgDocument(), colorList);
+  //scrollWidget->node->setAttribute("box-anchor", "fill");
+  dialogBody->addWidget(content);
+
+  showModalCentered(dialog, MapsApp::gui);
 }

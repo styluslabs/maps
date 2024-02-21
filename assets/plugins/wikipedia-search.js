@@ -15,7 +15,7 @@ function wikipediaSearch(query, bounds, flags)
   const lat = (bounds[1] + bounds[3])/2;
 
   if(radkm <= 10) {
-    // much faster than sparql query but limited to 10km radius
+    // much faster than sparql query but limited to 10km radius; seems returned dist is sometime a bit off
     const url = "https://en.wikipedia.org/w/api.php?action=query&format=json&list=geosearch&gslimit=500&gsradius="
         + (radkm*1000).toFixed(0) + "&gscoord=" + lat + '|' + lng;
 
@@ -38,10 +38,12 @@ function wikipediaSearch(query, bounds, flags)
   } else {
     // some wikidata entries have multiple entries for P625 (coordinates); GROUP_CONCAT instead of SAMPLE
     //  breaks ordering by dist; queries attempting to extract numerical lng, lat timed out
+    // seems wikidata does not store wikipedia pageid, only title and URL
     const url = 'https://query.wikidata.org/sparql?query=' + encodeURI(
-      'SELECT ?item ?itemLabel (SAMPLE(?where) AS ?lnglat) (SAMPLE(?dists) AS ?dist) ?url WHERE {' +
-      '  ?url schema:about ?item; schema:inLanguage "en" .' +
-      '  FILTER (STRSTARTS(str(?url), "https://en.wikipedia.org/")).' +
+      'SELECT ?item ?itemLabel (SAMPLE(?wikiTitle) AS ?wikiTitle)' +
+      '    (SAMPLE(?where) AS ?lnglat) (SAMPLE(?dists) AS ?dist) ?url WHERE {' +
+      '  ?url schema:about ?item; schema:name ?wikiTitle; schema:inLanguage "en";' +
+      '      schema:isPartOf <https://en.wikipedia.org/>.' +
       '  SERVICE wikibase:around {' +
       '      ?item wdt:P625 ?where .' +
       '      bd:serviceParam wikibase:center "Point(' + lng + ' ' + lat + ')"^^geo:wktLiteral.' +
@@ -61,7 +63,7 @@ function wikipediaSearch(query, bounds, flags)
         const url_info = {"icon": "wikipedia", "title": "Wikipedia",
             "value": "<a href='" + r.url.value + "'><text>" + r.itemLabel.value + "</text></a>"};
         const tags = {"name": r.itemLabel.value,
-            "wiki": encodeURI(r.itemLabel.value), "place_info": [url_info], "tourism": "wikipedia"};
+            "wiki": encodeURI(r.wikiTitle.value), "place_info": [url_info], "tourism": "wikipedia"};
         const lnglat = r.lnglat.value.substr(6, r.lnglat.value.length-7).split(" ");  // parse WKT "Point(<lng> <lat>)"
         const lng = Number(lnglat[0]), lat = Number(lnglat[1]);
         if(ii == data.length - 1) { flags = flags | 0x4000; } // MapSearch::UPDATE_RESULTS flag

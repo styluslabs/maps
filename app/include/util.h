@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ulib/stringutil.h"
-//#include "ulib/threadutil.h"
+#include "ulib/painter.h"
 #include "rapidjson/fwd.h"
 
 #include "tangram.h"
@@ -28,6 +28,7 @@ Tangram::Properties jsonToProps(const char* json);
 Tangram::Properties jsonToProps(const rapidjson::Document& tags);
 
 std::string ftimestr(const char* fmt, int64_t msec_epoch = 0);
+std::string colorToStr(const Color& c);
 
 struct sqlite3_stmt;
 struct sqlite3;

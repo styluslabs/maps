@@ -19,6 +19,7 @@ struct Waypoint
   Waypoint(const LngLat& _r, const std::string& _name = "", const std::string& _desc = "")
       : loc({0, _r.latitude, _r.longitude, 0, 0, 0, 0, 0, 0, 0}), name(_name), desc(_desc) {}
   Waypoint(const Location& _loc, double _dist) : loc(_loc), dist(_dist) {}
+  ~Waypoint();
   LngLat lngLat() const { return loc.lngLat(); }
 };
 

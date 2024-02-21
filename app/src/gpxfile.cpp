@@ -285,3 +285,12 @@ void TrackMarker::setTrack(GpxWay* way)
     map->markerRemove(markers[ii]);
   markers.resize(nmarkers);
 }
+
+// here we're using MapsApp::inst, while for TrackMarker we store Map* ... we should pick one way or the other
+#include "mapsapp.h"
+
+Waypoint::~Waypoint()
+{
+  if(marker > 0)
+    MapsApp::inst->map->markerRemove(marker);
+}

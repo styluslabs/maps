@@ -12,7 +12,6 @@
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
-#include "usvg/svgwriter.h"
 #include "usvg/svgparser.h"
 #include "mapwidgets.h"
 #include "gpxfile.h"
@@ -59,8 +58,7 @@ static Widget* createNewListWidget(std::function<void(int, std::string)> callbac
   newListRow->addWidget(newListColor);
   newListColor->node->setAttribute("box-anchor", "bottom");
   auto onCreateList = [=](){
-    char colorstr[64];
-    SvgWriter::serializeColor(colorstr, newListColor->color());
+    std::string colorstr = colorToStr(newListColor->color());
     std::string listname = newListTitle->text();
     if(listname.empty()) return;
     SQLiteStmt(MapsApp::bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(listname, colorstr).exec();
@@ -194,9 +192,8 @@ void MapsBookmarks::populateLists(bool archived)
     ColorPicker* colorBtn = createColorPicker(app->markerColors, parseColor(color.c_str(), Color::CYAN));
     container->addWidget(colorBtn);
     colorBtn->onColor = [=](Color newcolor){
-      char buff[64];
-      SvgWriter::serializeColor(buff, newcolor);
-      SQLiteStmt(app->bkmkDB, "UPDATE lists SET color = ? WHERE id = ?;").bind(buff, rowid).exec();
+      std::string colorstr = colorToStr(newcolor);
+      SQLiteStmt(app->bkmkDB, "UPDATE lists SET color = ? WHERE id = ?;").bind(colorstr, rowid).exec();
       auto it1 = bkmkMarkers.find(rowid);
       if(it1 != bkmkMarkers.end()) {
         bool vis = it1->second->defaultVis;
@@ -654,10 +651,8 @@ Button* MapsBookmarks::createPanel()
   editListRow->addWidget(listColor);
   listColor->node->setAttribute("box-anchor", "bottom");
   auto onAcceptListEdit = [=](){
-    char colorstr[64];
-    SvgWriter::serializeColor(colorstr, listColor->color());
     SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(
-        listTitle->text(), colorstr, activeListId).exec();
+        listTitle->text(), colorToStr(listColor->color()), activeListId).exec();
     listsDirty = archiveDirty = true;
     // if bookmark list opened from place info, need to update list title there
     int listid = activeListId;
@@ -742,7 +737,7 @@ Button* MapsBookmarks::createPanel()
       gui->deleteContents(bkmkMenu->selectFirst(".child-container"));
       int uiWidth = app->getPanelWidth();
       const char* query = "SELECT b.title, b.props, b.lng, b.lat FROM bookmarks AS b JOIN lists ON "
-          "lists.id = b.list_id WHERE lists.archived = 0 AND b.title <> '' ORDER BY timestamp DESC LIMIT 8;";
+          "lists.id = b.list_id WHERE lists.archived = 0 AND b.title <> '' ORDER BY timestamp DESC LIMIT 10;";
       SQLiteStmt(app->bkmkDB, query).exec([&](std::string name, std::string props, double lng, double lat){
         Button* item = bkmkMenu->addItem(name.c_str(), MapsApp::uiIcon("pin"),
             [=](){ app->setPickResult(LngLat(lng, lat), name, props); });
