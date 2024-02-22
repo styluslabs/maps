@@ -20,3 +20,6 @@
 [submodule "deps/nfd"]
 	path = deps/nfd
 	url = https://github.com/btzy/nativefiledialog-extended.git
+[submodule "tangram-es"]
+	path = tangram-es
+	url = https://github.com/pbsurf/maps
