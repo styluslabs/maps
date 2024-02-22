@@ -1,0 +1,15 @@
+[submodule "deps/usvg"]
+	path = deps/usvg
+	url = https://github.com/styluslabs/usvg
+[submodule "deps/ugui"]
+	path = deps/ugui
+	url = https://github.com/styluslabs/ugui
+[submodule "deps/ulib"]
+	path = deps/ulib
+	url = https://github.com/styluslabs/ulib
+[submodule "deps/nanovgXC"]
+	path = deps/nanovgXC
+	url = https://github.com/styluslabs/nanovgXC
+[submodule "deps/pugixml"]
+	path = deps/pugixml
+	url = https://github.com/zeux/pugixml
