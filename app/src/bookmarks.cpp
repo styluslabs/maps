@@ -49,10 +49,10 @@ int MapsBookmarks::getListId(const char* listname, bool create)
   return list_id;
 }
 
-static Widget* createNewListWidget(std::function<void(int, std::string)> callback)
+Widget* MapsBookmarks::createNewListWidget(std::function<void(int, std::string)> callback)
 {
   TextEdit* newListTitle = createTitledTextEdit("Title");
-  ColorPicker* newListColor = createColorPicker(MapsApp::markerColors, Color::CYAN);
+  ColorPicker* newListColor = createColorPicker(app->colorPickerMenu, Color::CYAN);
   Widget* newListRow = createRow();
   newListRow->addWidget(newListTitle);
   newListRow->addWidget(newListColor);
@@ -95,49 +95,36 @@ static Widget* createNewListWidget(std::function<void(int, std::string)> callbac
 
 void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> callback)  //int rowid)
 {
-  Dialog* dialog = new Dialog( setupWindowNode(chooseListProto->clone()) );
+  chooseListDialog.reset(createMobileDialog("Bookmark List", NULL));  //new Dialog( setupWindowNode(chooseListProto->clone()) );
   Widget* content = createColumn();
   content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
 
   Widget* newListContent = createNewListWidget([=](int id, std::string name){
-    dialog->finish(Dialog::ACCEPTED);
+    chooseListDialog->finish(Dialog::ACCEPTED);
     callback(id, name);
   });
   Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
   newListBtn->onClicked = [=](){ newListContent->setVisible(!newListContent->isVisible()); };
 
-  Button* cancelBtn = createToolbutton(MapsApp::uiIcon("back"), "Cancel");
-  cancelBtn->onClicked = [=](){
-    dialog->finish(Dialog::CANCELLED);
-  };
+  Toolbar* titleTb = static_cast<Toolbar*>(chooseListDialog->selectFirst(".title-toolbar"));
+  titleTb->addWidget(newListBtn);
 
   const char* query = "SELECT id, title FROM lists WHERE archived = 0 ORDER BY id;";
   SQLiteStmt(app->bkmkDB, query).exec([&](int rowid, std::string listname){
     Button* item = createListItem(MapsApp::uiIcon("folder"), listname.c_str());  //new Button(listSelectProto->clone());
     item->onClicked = [=](){
-      dialog->finish(Dialog::ACCEPTED);
+      chooseListDialog->finish(Dialog::ACCEPTED);
       callback(rowid, listname);
     };
     content->addWidget(item);
   });
 
-  TextBox* titleText = new TextBox(createTextNode("Bookmark List"));
-  Toolbar* titleTb = createToolbar();
-  titleTb->addWidget(cancelBtn);
-  titleTb->addWidget(titleText);
-  titleTb->addWidget(createStretch());
-  titleTb->addWidget(newListBtn);
-  dialog->selectFirst(".title-container")->addWidget(titleTb);
-
-  Widget* dialogBody = dialog->selectFirst(".body-container");
+  Widget* dialogBody = chooseListDialog->selectFirst(".body-container");
   dialogBody->addWidget(newListContent);
   auto scrollWidget = new ScrollWidget(new SvgDocument(), content);
   scrollWidget->node->setAttribute("box-anchor", "fill");
   dialogBody->addWidget(scrollWidget);
-
-  //dialog->setWinBounds(Rect::ltwh(400,400,500,700));
-  //app->gui->showModal(dialog, app->gui->windows.front()->modalOrSelf());
-  showModalCentered(dialog, MapsApp::gui);
+  showModalCentered(chooseListDialog.get(), MapsApp::gui);
 }
 
 void MapsBookmarks::populateLists(bool archived)
@@ -189,7 +176,7 @@ void MapsBookmarks::populateLists(bool archived)
       }
     };
 
-    ColorPicker* colorBtn = createColorPicker(app->markerColors, parseColor(color.c_str(), Color::CYAN));
+    ColorPicker* colorBtn = createColorPicker(app->colorPickerMenu, parseColor(color.c_str(), Color::CYAN));
     container->addWidget(colorBtn);
     colorBtn->onColor = [=](Color newcolor){
       std::string colorstr = colorToStr(newcolor);
@@ -557,7 +544,7 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
 
 Button* MapsBookmarks::createPanel()
 {
-  static const char* chooseListProtoSVG = R"(
+  /*static const char* chooseListProtoSVG = R"(
     <svg id="dialog" class="window dialog" layout="box">
       <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
       <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
@@ -567,7 +554,7 @@ Button* MapsBookmarks::createPanel()
       </g>
     </svg>
   )";
-  chooseListProto.reset(static_cast<SvgDocument*>(loadSVGFragment(chooseListProtoSVG)));
+  chooseListProto.reset(static_cast<SvgDocument*>(loadSVGFragment(chooseListProtoSVG)));*/
 
   // DB setup
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY, title TEXT NOT NULL,"
@@ -645,7 +632,7 @@ Button* MapsBookmarks::createPanel()
   // Bookmarks panel
   bkmkContent = createColumn();
   TextEdit* listTitle = createTitledTextEdit("Title");
-  ColorPicker* listColor = createColorPicker(app->markerColors, Color::CYAN);
+  ColorPicker* listColor = createColorPicker(app->colorPickerMenu, Color::CYAN);
   Widget* editListRow = createRow();
   editListRow->addWidget(listTitle);
   editListRow->addWidget(listColor);

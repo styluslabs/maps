@@ -24,6 +24,7 @@ private:
   void populateBkmks(int list_id, bool createUI);
   void populateLists(bool archived);
   Widget* getPlaceInfoSubSection(int rowid, int listid, std::string namestr, std::string notestr);
+  Widget* createNewListWidget(std::function<void(int, std::string)> callback);
   void chooseBookmarkList(std::function<void(int, std::string)> callback);
   void deleteBookmark(int listid, int rowid);
 
@@ -39,6 +40,7 @@ private:
   int activeListId = -1;
 
   std::unique_ptr<SvgNode> placeInfoSectionProto;
-  std::unique_ptr<SvgDocument> chooseListProto;
+  //std::unique_ptr<SvgDocument> chooseListProto;
+  std::unique_ptr<Dialog> chooseListDialog;
 };
 

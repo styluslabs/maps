@@ -17,6 +17,42 @@ Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t
   return menu;
 }
 
+// dialog with accept (optional) and cancel controls along top of dialog
+Dialog* createMobileDialog(const char* title, const char* acceptTitle)
+{
+  static const char* mobileDialogSVG = R"(
+    <svg id="dialog" class="window dialog" layout="box">
+      <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
+      <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
+        <g class="title-container" box-anchor="hfill" layout="box"></g>
+        <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
+        <g class="body-container" box-anchor="fill" layout="flex" flex-direction="column"></g>
+      </g>
+    </svg>
+  )";
+  static std::unique_ptr<SvgDocument> mobileDialogProto;
+  mobileDialogProto.reset(static_cast<SvgDocument*>(loadSVGFragment(mobileDialogSVG)));
+
+  Dialog* dialog = new Dialog( setupWindowNode(mobileDialogProto->clone()) );
+  Widget* content = createColumn();
+  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
+  TextBox* titleText = new TextBox(createTextNode(title));
+  Toolbar* titleTb = createToolbar();
+  titleTb->node->addClass("title-toolbar");
+  dialog->cancelBtn = createToolbutton(SvgGui::useFile(":/ui-icons.svg")->namedNode("back"), "Cancel");
+  dialog->cancelBtn->onClicked = [=](){ dialog->finish(Dialog::CANCELLED); };
+  titleTb->addWidget(dialog->cancelBtn);
+  titleTb->addWidget(titleText);
+  titleTb->addWidget(createStretch());
+  if(acceptTitle) {
+    dialog->acceptBtn = createToolbutton(SvgGui::useFile(":/ui-icons.svg")->namedNode("accept"), acceptTitle, true);
+    dialog->acceptBtn->onClicked = [=](){ dialog->finish(Dialog::ACCEPTED); };
+    titleTb->addWidget(dialog->acceptBtn);
+  }
+  dialog->selectFirst(".title-container")->addWidget(titleTb);
+  return dialog;
+}
+
 SelectDialog::SelectDialog(SvgDocument* n, const std::vector<std::string>& _items) : Dialog(setupWindowNode(n))
 {
   content = createColumn();
@@ -178,6 +214,18 @@ SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std
   return widget;
 }
 
+SharedMenu::SharedMenu(SvgNode* n, int align) : Menu(n, align)
+{
+  addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(!host) {}
+    else if(event->type == SvgGui::VISIBLE)
+      host->node->addClass("pressed");
+    else if(event->type == SvgGui::INVISIBLE)
+      host->node->removeClass("pressed");
+    return false;
+  });
+}
+
 Color ColorPicker::color() const
 {
   return selectFirst(".current-color")->node->getColorAttr("fill");
@@ -188,90 +236,13 @@ void ColorPicker::setColor(Color c)
   selectFirst(".current-color")->node->setAttr<color_t>("fill", c.color);
 }
 
-ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialColor)
+ColorPicker* createColorPicker(SharedMenu* menu, Color initialColor) //const std::vector<Color>& colors, Color initialColor)
 {
-  static const char* menuSVG = R"#(
-    <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
-      <rect box-anchor="fill" width="20" height="20"/>
-      <g class="child-container" box-anchor="fill"
-          layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
-      </g>
-    </g>
-  )#";
-  static std::unique_ptr<SvgNode> menuNode;
-  if(!menuNode)
-    menuNode.reset(loadSVGFragment(menuSVG));
-
-  Menu* menu = new Menu(menuNode->clone(), Menu::VERT_LEFT);
-  ColorPicker* widget = new ColorPicker(createColorBtn());  //widgetNode("#colorbutton"));
+  ColorPicker* widget = new ColorPicker(widgetNode("#colorbutton"));
   widget->containerNode()->selectFirst(".btn-color")->addClass("current-color");
   widget->setColor(initialColor.color);
-  widget->setMenu(menu);
-
-  for(size_t ii = 0; ii < colors.size(); ++ii) {
-    Color color = colors[ii];
-    Button* btn = new Button(widgetNode("#colorbutton"));
-    btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
-    if(ii > 0 && ii % 4 == 0)
-      btn->node->setAttribute("flex-break", "before");
-    btn->onClicked = [=](){ widget->updateColor(color.color); };
-    menu->addItem(btn);  //addWidget(btn);  // use addItem() to support press-drag-release?
-  }
-
-  widget->addHandler([=](SvgGui* gui, SDL_Event* event){
-    if(event->type = SvgGui::VISIBLE) {
-      gui->deleteContents(menu->selectFirst(".child-container"));
-      menu->sele
-    }
-    return false;
-  });
-
-
-
-
+  widget->onPressed = [=](){ menu->show(widget); };
   return widget;
-}
-
-class SharedMenu : public Menu
-{
-public:
-  using Menu::Menu;
-  void show(Widget* _host) { host = _host; window()->gui()->showMenu(this); window()->gui()->setPressed(this); }
-  Point calcOffset(const Rect& pb) const override { return calcOffset(host ? host->node->bounds() : pb); }
-
-  Widget* host = NULL;
-};
-
-void createColorPickerMenu()
-{
-  static const char* menuSVG = R"#(
-    <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
-      <rect box-anchor="fill" width="20" height="20"/>
-      <g class="child-container" box-anchor="fill"
-          layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
-      </g>
-    </g>
-  )#";
-
-  SharedMenu* menu = new SharedMenu(loadSVGFragment(menuSVG), Menu::VERT_LEFT);
-
-  for(size_t ii = 0; ii < std::min(15, markerColors.size()); ++ii) {
-    Color color = markerColors[ii];
-    Button* btn = new Button(widgetNode("#colorbutton"));
-    btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
-    if(ii > 0 && ii % 4 == 0)
-      btn->node->setAttribute("flex-break", "before");
-    btn->onClicked = [=](){ static_cast<ColorPicker*>(menu->host)->updateColor(color.color); };
-    menu->addItem(btn);
-  }
-
-  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"));
-  overflowBtn->onClicked = [=](){
-    app->customizeColors(widget->color(), [=](Color color){ widget->updateColor(color.color); });
-  };
-  menu->addItem(overflowBtn);
-
-
 }
 
 DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)

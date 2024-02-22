@@ -32,6 +32,7 @@ class Toolbar;
 class TextEdit;
 class TextBox;
 class Menu;
+class Dialog;
 
 enum MapEvent_t { MAP_CHANGE, LOC_UPDATE, MARKER_PICKED, SUSPEND };
 

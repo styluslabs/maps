@@ -183,7 +183,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
   showBtn->setChecked(track->visible);
   container->addWidget(showBtn);
 
-  ColorPicker* colorBtn = createColorPicker(app->markerColors, parseColor(track->style, Color::BLUE));
+  ColorPicker* colorBtn = createColorPicker(app->colorPickerMenu, parseColor(track->style, Color::BLUE));
   colorBtn->onColor = [this, track](Color color){
     std::string colorstr = colorToStr(color);
     track->style = colorstr;

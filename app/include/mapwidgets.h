@@ -67,6 +67,16 @@ public:
   bool autoClose = false;
 };
 
+class SharedMenu : public Menu
+{
+public:
+  SharedMenu(SvgNode* n, int align);
+  void show(Widget* _host) { host = _host; window()->gui()->showMenu(this); window()->gui()->setPressed(this); }
+  Point calcOffset(const Rect& pb) const override { return Menu::calcOffset(host ? host->node->bounds() : pb); }
+
+  Widget* host = NULL;
+};
+
 class ColorPicker : public Button
 {
 public:
@@ -98,7 +108,7 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
 Menubar* createMenubar();
-ColorPicker* createColorPicker(const std::vector<Color>& colors, Color initialColor);
+ColorPicker* createColorPicker(SharedMenu* menu, Color initialColor);
 Button* createListItem(SvgNode* icon, const char* title, const char* note = NULL);
 TextEdit* createTitledTextEdit(const char* title, const char* text = NULL);
 Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
@@ -108,3 +118,4 @@ void showModalCentered(Window* modal, SvgGui* gui);
 void sendKeyPress(SvgGui* gui, Widget* widget, int sdlkey, int mods = 0);
 Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int year, int month, int day)> onChange);
 Widget* createBoxLayout(const char* anchor = "fill");
+Dialog* createMobileDialog(const char* title, const char* acceptTitle);

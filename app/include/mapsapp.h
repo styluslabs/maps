@@ -21,6 +21,7 @@ class Button;
 class Window;
 class Toolbar;
 class Menubar;
+class SharedMenu;
 class MapsWidget;
 class ScaleBarWidget;
 class SvgNode;
@@ -131,7 +132,8 @@ public:
   Widget* gpsStatusBtn = NULL;
   Widget* crossHair = NULL;
   Widget* legendContainer = NULL;
-  ScaleBarWidget* scaleBar;
+  ScaleBarWidget* scaleBar = NULL;
+  SharedMenu* colorPickerMenu = NULL;
   std::vector<Widget*> panelHistory;
   std::vector<Widget*> panelPages;
 
@@ -172,6 +174,9 @@ private:
   void showPanelContainer(bool show);
   void clearPickResult();
   void updateLocMarker();
+
+  void populateColorPickerMenu();
+  void customizeColors(Color initialColor, std::function<void(Color)> callback);
 
   bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool flyToPickResult = false;

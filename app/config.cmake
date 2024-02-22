@@ -16,6 +16,7 @@ add_library(maps-app
   app/styluslabs/ugui/svggui.cpp
   app/styluslabs/ugui/widgets.cpp
   app/styluslabs/ugui/textedit.cpp
+  app/styluslabs/ugui/colorwidgets.cpp
   app/styluslabs/ulib/geom.cpp
   app/styluslabs/ulib/image.cpp
   app/styluslabs/ulib/path2d.cpp
