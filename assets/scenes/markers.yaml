@@ -303,8 +303,8 @@ layers:
             marker:
                 style: points
                 collide: false
-                size: 16px
+                size: 8px
                 color: white
                 outline:
-                    width: 0.5px
+                    width: 1px
                     color: black

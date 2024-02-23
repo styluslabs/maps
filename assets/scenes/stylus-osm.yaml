@@ -16,8 +16,8 @@ global:
 
     # HSL: 0 (== 360) is red, 120 is green, 240 is blue
     color:
-        background: [.97, .955, .94] #'#f0ebeb'
-        earth: white
+        #background: [.97, .955, .94] #'#f0ebeb'
+        #earth: white
         default_label: black
         default_halo: white
         landuse: honeydew
@@ -61,7 +61,7 @@ global:
         border_country: '#666'  #[0.824, 0.651, 0.329, 1.00]
         city_point: white
         city_point_halo: black
-        place_name: [0, 0, 0, .8]
+        place_name: rgba(0, 0, 0, 0.8)
         place_halo: white
         hood_name: rgba(136, 45, 23, 0.9)
         hood_halo: white
@@ -256,7 +256,7 @@ fonts:
 
 scene:
     background:
-        color: global.color.background
+        color: global.earth_color  #global.color.background
 
 
 cameras:

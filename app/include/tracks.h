@@ -16,6 +16,7 @@ public:
   void updateLocation(const Location& loc);
   void onMapEvent(MapEvent_t event);
   void addRoute(std::vector<Waypoint>&& route);
+  void addRouteStep(const char* instr, int rteptidx);
   bool onPickResult();
   bool tapEvent(LngLat location);
   void routePluginError(const char* err);

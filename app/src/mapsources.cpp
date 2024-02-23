@@ -70,7 +70,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order > 0 ? rasterN : "raster");
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string(1000 + order));
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", order > 0 ? std::to_string(1000 + order) : "0");
     ++order;
   }
   else if(src["scene"]) {  // vector map

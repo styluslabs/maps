@@ -8,8 +8,17 @@ else()
   set(STYLUSLABS_DEPS "deps")
 endif()
 
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+  add_definitions(-DDEBUG)
+  add_definitions(-DLOG_LEVEL=3)
+else()
+  add_definitions(-DNDEBUG)
+  add_definitions(-DLOG_LEVEL=2)
+endif()
+
 # tangram library
 add_subdirectory(tangram-es)
+target_include_directories(tangram-core PRIVATE "${STYLUSLABS_DEPS}/nanovgXC/src")
 # app library
 include("app/config.cmake")
 # executable

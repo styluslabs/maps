@@ -85,6 +85,17 @@ void MapsTracks::updateLocation(const Location& loc)
   }
 }
 
+static void addRouteStepMarker(Map* map, Waypoint& wp, GpxFile* track)
+{
+  if(wp.marker <= 0)
+    wp.marker = map->markerAdd();
+  map->markerSetStylingFromPath(wp.marker, "layers.route-step.draw.marker");
+  map->markerSetPoint(wp.marker, wp.loc.lngLat());
+  // use marker number as unique id for priority
+  map->markerSetProperties(wp.marker,
+      {{{"name", wp.desc}, {"color", track->style}, {"priority", wp.marker}}});
+}
+
 void MapsTracks::updateTrackMarker(GpxFile* track)
 {
   if(!track->loaded && !track->filename.empty())
@@ -105,15 +116,8 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
     auto& pts = track->routes.back().pts;
     for(size_t ii = 1; ii < pts.size(); ++ii) {
       Waypoint& wp = pts[ii];
-      if(wp.loc.time > pts[ii-1].loc.time) {
-        if(wp.marker <= 0) {
-          wp.marker = app->map->markerAdd();
-          app->map->markerSetStylingFromPath(wp.marker, "layers.route-step.draw.marker");
-          app->map->markerSetPoint(wp.marker, wp.loc.lngLat());
-          // use marker number as unique id for priority
-          app->map->markerSetProperties(wp.marker, {{{"color", track->style}, {"priority", wp.marker}}});
-        }
-      }
+      if(!wp.desc.empty() && wp.marker <= 0)
+        addRouteStepMarker(app->map.get(), wp, track);
     }
   }
 
@@ -138,6 +142,13 @@ void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
   track->marker->setVisible(show && track->activeWay() && track->activeWay()->pts.size() > 1);
   for(Waypoint& wp : track->waypoints)
     app->map->markerSetVisible(wp.marker, show);
+
+  for(GpxWay& route : track->routes) {
+    for(Waypoint& wp : route.pts) {
+      if(wp.marker > 0)
+        app->map->markerSetVisible(wp.marker, show);
+    }
+  }
 }
 
 void MapsTracks::setTrackVisible(GpxFile* track, bool visible)
@@ -519,6 +530,15 @@ void MapsTracks::addRoute(std::vector<Waypoint>&& route)
   updateStats(activeTrack->routes.back().pts);
   updateDistances();
   updateTrackMarker(activeTrack);
+}
+
+// in the future, we can add support for lat,lng instead of wayptidx and find the nearest route pt
+void MapsTracks::addRouteStep(const char* instr, int rteptidx)
+{
+  if(!activeTrack || activeTrack->routes.empty() || activeTrack->routes[0].pts.size() <= rteptidx || rteptidx < 0) return;
+  Waypoint& wp = activeTrack->routes[0].pts[rteptidx];
+  wp.desc = instr;
+  addRouteStepMarker(app->map.get(), wp, activeTrack);
 }
 
 void MapsTracks::routePluginError(const char* err)

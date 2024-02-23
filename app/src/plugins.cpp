@@ -326,8 +326,11 @@ static int addRouteGPX(duk_context* ctx)
   const char* gpx = duk_require_string(ctx, 0);
   GpxFile track;
   loadGPX(&track, gpx);
-  for(auto& route : track.routes)
+  for(auto& route : track.routes) {
+    // desc is used for route steps - must be set explicitly with addRouteStep
+    for(auto & wpt : route.pts) wpt.desc.clear();
     MapsApp::inst->mapsTracks->addRoute(std::move(route.pts));
+  }
   return 0;
 }
 
@@ -337,6 +340,14 @@ static int addRoutePolyline(duk_context* ctx)
   const char* str = duk_require_string(ctx, 0);
   auto route = MapsTracks::decodePolylineStr(str);
   MapsApp::inst->mapsTracks->addRoute(std::move(route));
+  return 0;
+}
+
+static int addRouteStep(duk_context* ctx)
+{
+  const char* instr = duk_require_string(ctx, 0);
+  int rteptidx = duk_to_int(ctx, 1);
+  MapsApp::inst->mapsTracks->addRouteStep(instr, rteptidx);
   return 0;
 }
 
@@ -364,6 +375,13 @@ static int readSceneValue(duk_context* ctx)
   return 1;
 }
 
+static int consoleLog(duk_context* ctx)
+{
+  const char* msg = duk_require_string(ctx, 0);
+  logMsg("PLUGIN LOG: %s\n", msg);
+  return 0;
+}
+
 void PluginManager::createFns(duk_context* ctx)
 {
   // create C functions
@@ -385,8 +403,15 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addRouteGPX");
   duk_push_c_function(ctx, addRoutePolyline, 1);
   duk_put_global_string(ctx, "addRoutePolyline");
+  duk_push_c_function(ctx, addRouteStep, 2);
+  duk_put_global_string(ctx, "addRouteStep");
   duk_push_c_function(ctx, readSceneValue, 1);
   duk_put_global_string(ctx, "readSceneValue");
+  // console.log
+  duk_idx_t consoleObj = duk_push_object(ctx);
+  duk_push_c_function(ctx, consoleLog, 1);
+  duk_put_prop_string(ctx, consoleObj, "log");
+  duk_put_global_string(ctx, "console");
 }
 
 // for now, we need somewhere to put TextEdit for entering JS commands; probably would be opened from

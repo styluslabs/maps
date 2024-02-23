@@ -26,7 +26,12 @@ add_definitions(-DTANGRAM_LINUX)
 set(OpenGL_GL_PREFERENCE GLVND)
 find_package(OpenGL REQUIRED)
 
-include(cmake/glfw.cmake)
+#include(tangram-es/cmake/glfw.cmake)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "Build the GLFW example programs")
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "Build the GLFW test programs")
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "Build the GLFW documentation")
+set(GLFW_INSTALL OFF CACHE BOOL "Generate installation target")
+add_subdirectory(tangram-es/platforms/common/glfw)
 
 # System font config
 include(FindPkgConfig)
@@ -35,25 +40,25 @@ pkg_check_modules(FONTCONFIG REQUIRED "fontconfig")
 find_package(CURL REQUIRED)
 
 add_executable(tangram
-  platforms/linux/src/linuxPlatform.cpp
-  platforms/common/platform_gl.cpp
-  platforms/common/urlClient.cpp
-  platforms/common/linuxSystemFontHelper.cpp
+  tangram-es/platforms/linux/src/linuxPlatform.cpp
+  tangram-es/platforms/common/platform_gl.cpp
+  tangram-es/platforms/common/urlClient.cpp
+  tangram-es/platforms/common/linuxSystemFontHelper.cpp
   app/src/glfwmain.cpp
-  app/styluslabs/ugui/example/glfwSDL.c
+  ${STYLUSLABS_DEPS}/ugui/example/glfwSDL.c
 )
 
 target_include_directories(tangram
   PRIVATE
-  platforms/common
+  tangram-es/platforms/common
+  tangram-es/core/deps
+  tangram-es/core/deps/stb
+  tangram-es/core/deps/yaml-cpp/include
   app/include
-  app/styluslabs
-  core/deps
-  core/deps/stb
-  core/deps/yaml-cpp/include
-  app/styluslabs/nanovg-2/src
-  app/styluslabs/pugixml/src
-  app/styluslabs/SDL/include
+  ${STYLUSLABS_DEPS}
+  ${STYLUSLABS_DEPS}/nanovg-2/src
+  ${STYLUSLABS_DEPS}/pugixml/src
+  ${STYLUSLABS_DEPS}/SDL/include
   ${FONTCONFIG_INCLUDE_DIRS}
 )
 
@@ -85,13 +90,8 @@ target_compile_options(tangram
   -Wmissing-field-initializers
 )
 
-# to be consistent w/ core
-#target_compile_definitions(tangram PRIVATE GLM_FORCE_CTOR_INIT)
-#target_compile_definitions(tangram PRIVATE PUGIXML_NO_XPATH)
-#target_compile_definitions(tangram PRIVATE PUGIXML_NO_EXCEPTIONS)
-
 #add_resources(tangram "${PROJECT_SOURCE_DIR}/scenes" "res")
 
 # native file dialogs library
-add_subdirectory(app/deps/nfd)
+add_subdirectory(deps/nfd)
 target_link_libraries(tangram PRIVATE nfd)
