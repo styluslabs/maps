@@ -91,7 +91,6 @@ static ThreadSafeQueue<std::unique_ptr<OfflineDownloader>> offlineDownloaders;
 
 static void offlineDLStep()
 {
-  Platform& platform = *MapsApp::platform;
   while(!offlinePending.empty()) {
     auto& olinfo = offlinePending.front();  // safe because only this thread can remove final item from offlinePending
     if(offlineDownloaders.empty()) {

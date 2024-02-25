@@ -1176,11 +1176,14 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // we could switch to different orientation modes (travel direction, compass direction) w/ multiple taps
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->onClicked = [this](){
-    CameraPosition camera = map->getCameraPosition();
-    camera.tilt = 0;
-    camera.rotation = 0;
-    map->setCameraPositionEased(camera, 1.0);
-    prevCamPos = {};  // make sure follow mode gets disabled
+    prevCamPos = map->getCameraPosition();
+    prevCamPos.tilt = 0;
+    prevCamPos.rotation = 0;
+    map->setCameraPositionEased(prevCamPos, 1.0);
+    if(followState != NO_FOLLOW) {
+      followState = NO_FOLLOW;
+      recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
+    }
   };
   reorientBtn->setVisible(false);
 

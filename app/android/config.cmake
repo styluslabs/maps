@@ -2,29 +2,29 @@ add_definitions(-DTANGRAM_ANDROID)
 
 add_library(droidmaps SHARED
   app/android/app/src/main/cpp/androidApp.cpp
-  platforms/common/platform_gl.cpp
-  platforms/android/tangram/src/main/cpp/JniHelpers.cpp
-  platforms/android/tangram/src/main/cpp/AndroidPlatform.cpp
+  tangram-es/platforms/common/platform_gl.cpp
+  tangram-es/platforms/android/tangram/src/main/cpp/JniHelpers.cpp
+  tangram-es/platforms/android/tangram/src/main/cpp/AndroidPlatform.cpp
 )
 
 target_include_directories(droidmaps PRIVATE
-  platforms/android/tangram/src/main/cpp
-  platforms/common
-  core/deps
-  core/deps/glm
-  core/deps/yaml-cpp/include
-  core/deps/stb
-  app/styluslabs
-  app/styluslabs/nanovg-2/src
-  app/styluslabs/pugixml/src
-  app/styluslabs/SDL/include
+  tangram-es/platforms/android/tangram/src/main/cpp
+  tangram-es/platforms/common
+  tangram-es/core/deps
+  tangram-es/core/deps/glm
+  tangram-es/core/deps/yaml-cpp/include
+  tangram-es/core/deps/stb
+  ${STYLUSLABS_DEPS}
+  ${STYLUSLABS_DEPS}/nanovg-2/src
+  ${STYLUSLABS_DEPS}/pugixml/src
+  ${STYLUSLABS_DEPS}/SDL/include
 )
 
 #target_compile_definitions(droidmaps PRIVATE GLM_FORCE_CTOR_INIT)
 
 if(TANGRAM_MBTILES_DATASOURCE)
-  target_sources(droidmaps PRIVATE platforms/android/tangram/src/main/cpp/sqlite3ndk.cpp)
-  target_include_directories(droidmaps PRIVATE core/deps/sqlite3) # sqlite3ndk.cpp needs sqlite3.h
+  target_sources(droidmaps PRIVATE tangram-es/platforms/android/tangram/src/main/cpp/sqlite3ndk.cpp)
+  target_include_directories(droidmaps PRIVATE tangram-es/core/deps/sqlite3) # sqlite3ndk.cpp needs sqlite3.h
   target_compile_definitions(droidmaps PRIVATE TANGRAM_MBTILES_DATASOURCE=1)
 endif()
 

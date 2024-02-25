@@ -31,7 +31,7 @@ function valhallaOsmde(mode, waypoints)
       const steps = content.trip.legs[0].maneuvers;
       for(var ii = 0; ii < steps.length; ii++) {
         if(!steps[ii].instruction || steps[ii].type == 0 || steps[ii].type == 8) continue;
-        addRouteStep(steps[ii].instruction, steps[ii].begin_shape_index || -1);
+        addRouteStep(steps[ii].instruction, steps[ii].begin_shape_index);
       }
     }
   });
