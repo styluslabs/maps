@@ -124,14 +124,6 @@ int main(int argc, char* argv[])
   app->map->setupGL();
   app->createGUI((SDL_Window*)glfwWin);
 
-  // fake location updates to test track recording
-  auto locFn = [&](){
-    real lat = app->currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real lng = app->currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real alt = app->currLocation.alt + 10*std::rand()/real(RAND_MAX);
-    app->updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0});
-  };
-
   Timer* locTimer = NULL;
   app->win->addHandler([&](SvgGui*, SDL_Event* event){
     if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))

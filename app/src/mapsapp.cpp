@@ -1142,17 +1142,42 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     };
     debugMenu->addItem(debugCb);
   }
+  overflowMenu->addSubmenu("Tangram debug", debugMenu);
+
+  // fake location updates to test track recording
+  auto fakeLocFn = [this](){
+    real lat = currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real lng = currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real alt = currLocation.alt + 10*std::rand()/real(RAND_MAX);
+    updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0});
+  };
+
+  Menu* appDebugMenu = createMenu(Menu::HORZ);
   Button* offlineCb = createCheckBoxMenuItem("Offline");
   offlineCb->onClicked = [=](){
     offlineCb->setChecked(!offlineCb->isChecked());
     platform->isOffline = offlineCb->isChecked();
   };
-  debugMenu->addItem(offlineCb);
+  appDebugMenu->addItem(offlineCb);
+
+  Timer* fakeLocTimer = NULL;
+  Button* fakeLocCb = createCheckBoxMenuItem("Simulate motion");
+  fakeLocCb->onClicked = [=]() mutable {
+    fakeLocCb->setChecked(!fakeLocCb->isChecked());
+    if(fakeLocTimer) {
+      gui->removeTimer(fakeLocTimer);
+      fakeLocTimer = NULL;
+    }
+    if(fakeLocCb->isChecked())
+      fakeLocTimer = gui->setTimer(2000, win.get(), [&](){ MapsApp::runOnMainThread(fakeLocFn); return 2000; });
+  };
+  appDebugMenu->addItem(fakeLocCb);
+
   // dump contents of tile in middle of screen
-  debugMenu->addItem("Dump tile", [this](){
+  appDebugMenu->addItem("Dump tile", [this](){
     dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
   });
-  debugMenu->addItem("Set location", [this](){
+  appDebugMenu->addItem("Set location", [this](){
     if(!std::isnan(pickResultCoord.latitude)) {
       currLocation.lng = pickResultCoord.longitude;
       currLocation.lat = pickResultCoord.latitude;
@@ -1161,7 +1186,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       map->getPosition(currLocation.lng, currLocation.lat);
     updateLocation(currLocation);
   });
-  overflowMenu->addSubmenu("Debug", debugMenu);
+  overflowMenu->addSubmenu("App debug", appDebugMenu);
 
   mainToolbar->addButton(overflowBtn);
 

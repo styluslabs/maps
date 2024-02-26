@@ -1,4 +1,5 @@
 # Maps #
+Working name: "Explore"
 
 A cross-platform application for displaying vector and raster maps, built on [Tangram-ES](https://tangrams.readthedocs.io) and supporting [plugins](#plugin-system) for search, routing, map sources and more.  Includes a simple, customizable [style](#stylus-labs-osm-schema) for OpenStreetMap vector tiles.
 
@@ -6,20 +7,20 @@ Features include offline search, managing saved places, creating and editing tra
 
 Currently available for Android and Linux; iOS support coming soon.
 
-![Wikipedia Search](https://github.com/styluslabs/maps/assets/1332998/6bf64978-79fb-43d1-ad6e-713cbd44c54a)
-![Hiking style](https://github.com/styluslabs/maps/assets/1332998/c088c07e-00f3-492e-aad5-a0d335205538)
+<img alt="Wikipedia Search" src="https://github.com/styluslabs/maps/assets/1332998/6bf64978-79fb-43d1-ad6e-713cbd44c54a" width="400">
+<img alt="Hiking style" src="https://github.com/styluslabs/maps/assets/1332998/c088c07e-00f3-492e-aad5-a0d335205538" width="400">
 
 
 ## Quick start ##
 1. [Build](#building) or [download](https://github.com/styluslabs/maps/releases)
 1. Download OSM extracts and [generate tiles](#generating-tiles)
 1. [Add](#adding-map-sources) some online tile sources
-1. Submit bug reports, pull requests, feature suggestions, and plugin ideas!
+1. Submit [bug reports](https://github.com/styluslabs/maps/issues), [pull requests](https://github.com/styluslabs/maps/pulls), [feature suggestions](https://github.com/styluslabs/maps/discussions), and [plugin ideas](https://github.com/styluslabs/maps/discussions)!
 
 
 ### Building ###
 
-On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, then `cd maps && make linux` to generate `Release/tangram`.  To build and install for Android (on Linux w/ Android SDK and NDK installed), `cd maps/app/android && ./gradlew installRelease`
+On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, then ensure cmake is installed and `cd maps && make linux` to generate `Release/tangram`.  To build and install for Android (on Linux w/ Android SDK and NDK installed), `cd maps/app/android && ./gradlew installRelease`.
 
 
 ### Generating tiles ###
@@ -27,7 +28,7 @@ On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, t
 [scripts/tilemaker](scripts/tilemaker) contains the files necessary to generate tiles for the included vector map style [stylus-osm.yaml](assets/scenes/stylus-osm.yaml) using [Tilemaker](https://github.com/systemed/tilemaker).
 
 1. download a OpenStreetMap [extract](https://wiki.openstreetmap.org/wiki/Planet.osm#Country_and_area_extracts), e.g., from [geofabrik](https://download.geofabrik.de/) or [osmtoday](https://osmtoday.com/)
-1. [Setup](https://github.com/systemed/tilemaker/blob/master/README.md) and run tilemaker:
+1. [Setup tilemaker](https://github.com/systemed/tilemaker/blob/master/README.md) and run:
 ```
 tilemaker --config maps/scripts/tilemaker/config.json --process maps/scripts/tilemaker/process.lua <extract>.osm.pbf --output <output>.mbtiles
 ```
@@ -37,11 +38,32 @@ tilemaker --config maps/scripts/tilemaker/config.json --process maps/scripts/til
 
 ### Adding map sources ###
 
-New map sources can be added by combining existing sources (the "+" button on the toolbar), editing mapsources.yaml (with the application closed), editing mapsources.default.yaml and choosing Restore default sources from the overflow menu, or via "Import source" on the overflow menu, where a YAML fragment or map tile URL (e.g. `http://basemap.nationalmap.gov/ArcGIS/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}`) can be entered, or a YAML scene file chosen, for custom vector map styles.
+New map sources can be added by combining existing sources (the "+" button on the toolbar), editing mapsources.yaml (with the application closed), editing mapsources.default.yaml and choosing Restore default sources from the overflow menu, or via "Import source" on the overflow menu, where a YAML fragment or map tile URL (e.g. `https://some.tile.server/tiles/{z}/{x}/{y}.png`) can be entered, or a YAML scene file chosen, for custom vector map styles.
 
 To save online tiles for offline use, pan and zoom the view to show the desired region, tap the download button on the Offline maps toolbar, enter the maximum zoom level in include, then tap Download.  Tiles for all layers of the current map source will be downloaded.
 
 The default configuration includes [markers.yaml](assets/scenes/markers.yaml) for all maps to support the display of search results, saved places, tracks, routes, the location marker, and other markers.
+
+
+## Plugin system ##
+
+Plugins written in Javascript can add search providers, routing providers, map tile providers, and more.
+
+Files in `assets/plugins` with `.js` extension are executed at application startup.  To reload, tap the reload button on the Plugin Console toolbar.
+
+Currently uses Duktape, so support for features from ES2015 and later is limited.  On iOS, JavascriptCore will be used.
+
+The included plugins give a sample of what's possible:
+* [google-import.js](assets/plugins/google-import.js) - import list of places from GeoJSON exported by Google Maps; run from the plugin console
+* [nominatim-search.js](assets/plugins/nominatim-search.js) - search with nominatim service
+* [openroute.js](assets/plugins/openroute.js) - routing with OpenRouteService
+* [osm-place-info.js](assets/plugins/osm-place-info.js) - gather place information (website, opening hours, etc.) from OSM API and Wikipedia
+* [transform-query.js](assets/plugins/transform-query.js) - modify search query, e.g., for categorial searches
+* [valhalla-osmde.js](assets/plugins/valhalla-osmde.js) - routing with Valhalla provided by osm.de
+* [wikipedia-search.js](assets/plugins/wikipedia-search.js) - search for geotagged Wikipedia articles
+* [worldview.js](assets/plugins/worldview.js) - show daily worldwide satellite imagery from NASA Worldview, with date picker in GUI.
+
+If you have an idea for a plugin, I'm happy to help and to expose the necessary APIs.
 
 
 ## Vector Maps ##
@@ -51,7 +73,7 @@ Vector maps are styled using [Tangram YAML scene files](https://tangrams.readthe
 * `global.search_data` to define which features and tags should be indexed for offline search
 * `global.__legend` to define SVG images to be optionally displayed over the map
 * `$latitude` and `$longitude` for tile center are available for filters to make location-specific adjustments to styling
-* SVG images are supported
+* SVG images are supported for textures; sprites can be created automatically using SVG id attributes.
 
 Tangram styles can include custom shaders.  The hillshading, contour lines, and slope angle shading in the above screenshots are all calculated on-the-fly from elevation tiles in a shader - see [raster-contour.yaml](assets/scenes/raster-contour.yaml).
 
@@ -76,30 +98,9 @@ A vector tile schema specifies how to group features into layers, which features
 
 The included vector map style [stylus-osm.yaml](assets/scenes/stylus-osm.yaml) (seen in the above screenshots) uses a custom schema because none of the existing tile schemas satisfied all the requirements for the application.  For example, most other schemas define some mapping from OSM tags to feature attributes, but because of the complex and fluid state of OSM tagging this schema just uses unmodified OSM tags for feature attributes.
 
-The schema aims to include more information for transit and for outdoor activities, such as bike and trail features at lower zoom levels and the common trail_visibility tag.  The schema layers are: place, boundary, poi, transportation, transit, building, water, landuse.
+The schema aims to include more information for transit and for outdoor activities, such as bike and trail features at lower zoom levels and the common trail_visibility tag.  The schema layers are: place, boundary, poi, transportation, transit, building, water, and landuse.
 
 The schema is a work-in-progress.  Suggestions and comments are welcome.
-
-
-## Plugin system ##
-
-Plugins written in Javascript can add search providers, routing providers, map tile providers, and more.
-
-Files in `assets/plugins` with `.js` extension are executed at application startup.  To reload, tap the reload button on the Plugin Console toolbar.
-
-Currently uses Duktape, so support for features from ES2015 and later is limited.  On iOS, JavascriptCore will be used.
-
-The included plugins give a sample of what's possible:
-* [google-import.js](assets/plugins/google-import.js) - import list of places from GeoJSON exported by Google Maps; run from the plugin console
-* [nominatim-search.js](assets/plugins/nominatim-search.js) - search with nominatim service
-* [openroute.js](assets/plugins/openroute.js) - routing with OpenRouteService
-* [osm-place-info.js](assets/plugins/osm-place-info.js) - gather place information (website, opening hours, etc.) from OSM API and Wikipedia
-* [transform-query.js](assets/plugins/transform-query.js) - modify search query, e.g., for categorial searches
-* [valhalla-osmde.js](assets/plugins/valhalla-osmde.js) - routing with Valhalla provided by osm.de
-* [wikipedia-search.js](assets/plugins/wikipedia-search.js) - search for geotagged Wikipedia articles
-* [worldview.js](assets/plugins/worldview.js) - show daily worldwide satellite imagery from NASA Worldview, with date picker in GUI.
-
-If you have an idea for a plugin, I'm happy to help and to expose the necessary APIs.
 
 
 ## More ##
@@ -136,7 +137,7 @@ Contents:
 
 ### GUI ###
 
-[styluslabs/ugui](https://github.com/styluslabs/ugui) is used for cross-platform GUI.  It is a work-in-progress also.  Suggestions and comments are welcome.
+[styluslabs/ugui](https://github.com/styluslabs/ugui) is used for cross-platform GUI.  It is a work-in-progress.  Suggestions and contributions are welcome.
 
 
 ### Major features ###

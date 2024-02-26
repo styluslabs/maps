@@ -601,7 +601,7 @@ void MapsSources::importSources(const std::string& src)
     key = createSource("", src);
   }
   else if(Tangram::NetworkDataSource::urlHasTilePattern(src)) {
-    key = createSource("", fstring("{type: Raster, title: 'New Source', url: %s}", src.c_str()));
+    key = createSource("", fstring("{title: 'New Source', url: %s}", src.c_str()));
   }
   else {
     // source name conflicts: skip, replace, rename, or cancel? dialog on first conflict?
@@ -610,9 +610,13 @@ void MapsSources::importSources(const std::string& src)
         MapsApp::messageBox("Import error", fstring("Unable to load '%s': %s", src.c_str(), response.error));
       else {
         try {
-          YAML::Node newsources = YAML::Load(response.content.data(), response.content.size());
-          for(auto& node : newsources)
-            mapSources[node.first.Scalar()] = node.second;
+          YAML::Node yml = YAML::Load(response.content.data(), response.content.size());
+          if(yml["global"] || yml["layers"] || yml["styles"] || yml["import"] || yml["sources"])
+            createSource("", fstring("{title: '%s', scene: %s}", FSPath(src).baseName().c_str(), src.c_str()));
+          else {
+            for(auto& node : yml)
+              mapSources[node.first.Scalar()] = node.second;
+          }
           saveSources();
           populateSources();
         } catch (std::exception& e) {
