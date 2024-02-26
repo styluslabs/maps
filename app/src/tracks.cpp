@@ -278,7 +278,7 @@ void MapsTracks::populateTracks()
   }
   Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived Tracks");
   item->onClicked = [this](){ app->showPanel(archivedPanel, true);  populateArchived(); };
-  tracksContent->addItem("archved", item);
+  tracksContent->addItem("archived", item);
   tracksContent->setOrder(order);
 }
 
