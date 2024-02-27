@@ -295,7 +295,7 @@ layers:
                 style: lines
                 interactive: true
                 color: function() { return feature.color || '#FF0000'; }
-                width: 4px
+                width: 3px
                 order: 5000
 
     route-step:

@@ -75,8 +75,8 @@ static const char* moreWidgetSVG = R"#(
   </g>
 
   <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
-    <use class="panel-icon icon" width="36" height="36" xlink:href="" />
-    <text class="panel-title" box-anchor="hfill" margin="0 0"></text>
+    <use class="panel-icon icon" width="36" height="36" margin="3 9 3 3" xlink:href="" />
+    <text class="panel-title" box-anchor="hfill"></text>
   </g>
 
   <g id="toolbutton" class="toolbutton" layout="box">

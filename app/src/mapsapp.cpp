@@ -564,7 +564,7 @@ void MapsApp::gotoCameraPos(const CameraPosition& campos)
   // if point is close enough, use simple ease instead of flyTo
   Point offset = scr - Point(w, h)/2;
   if(std::abs(offset.x) < 2*w && std::abs(offset.y) < 2*h)
-    map->setCameraPositionEased(campos, 1.0);
+    map->setCameraPositionEased(campos, std::max(0.2, std::min(offset.dist()/200, 1.0)));
   else
     map->flyTo(campos, 1.0);
 }

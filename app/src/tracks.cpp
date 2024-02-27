@@ -75,8 +75,10 @@ void MapsTracks::updateLocation(const Location& loc)
         locs.back().loc.spd = dist/dt;
       if(recordedTrack.visible)
         updateTrackMarker(&recordedTrack);  // rebuild marker
-      if(activeTrack == &recordedTrack)
-        populateStats(&recordedTrack);
+      if(activeTrack == &recordedTrack) {
+        updateStats(recordedTrack.tracks.back().pts);
+        trackPlot->setTrack(recordedTrack.tracks.back().pts, recordedTrack.waypoints);
+      }
       if(loc.time > recordLastSave + 60) {
         saveGPX(&recordedTrack);
         recordLastSave = loc.time;
@@ -205,9 +207,9 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
   };
   container->addWidget(colorBtn);
 
+  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
+  Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   if(track->rowid >= 0) {
-    Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
-    Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
     overflowMenu->addItem(track->archived ? "Unarchive" : "Archive", [=](){
       std::string q2 = fstring("UPDATE tracks SET archived = %d WHERE rowid = ?;", track->archived ? 0 : 1);
       SQLiteStmt(app->bkmkDB, q2).bind(track->rowid).exec();
@@ -228,9 +230,13 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       }
       app->gui->deleteWidget(item);  //populateTracks(archived);  // refresh
     });
-    overflowBtn->setMenu(overflowMenu);
-    container->addWidget(overflowBtn);
   }
+  else {
+    overflowMenu->addItem("Pause", [this](){ pauseRecordBtn->onClicked(); });
+    overflowMenu->addItem("Stop", [this](){ stopRecordBtn->onClicked(); });
+  }
+  overflowBtn->setMenu(overflowMenu);
+  container->addWidget(overflowBtn);
   return item;
 }
 
@@ -270,7 +276,7 @@ void MapsTracks::populateTracks()
   }
   tracksContent->clear();
 
-  if(recordTrack)
+  if(!recordedTrack.tracks.empty())
     tracksContent->addItem("rec", createTrackEntry(&recordedTrack));
   for(GpxFile& track : tracks) {
     if(!track.archived)
@@ -788,6 +794,8 @@ void MapsTracks::populateWaypoints(GpxFile* track)
   }
 
   wayptContent->clear();
+  if(track->waypoints.empty())
+    wayptContent->addItem("", new TextBox(createTextNode("No waypoints")));
   for(Waypoint& wp : track->waypoints) {
     if(!wp.name.empty() || showAllWaypts)
       addWaypointItem(wp);
@@ -1291,6 +1299,8 @@ Button* MapsTracks::createPanel()
 
   pauseRecordBtn->onClicked = [=](){
     recordTrack = !recordTrack;
+    recordedTrack.desc = recordTrack ? "Recording" : "Paused";
+    tracksDirty = true;
     pauseRecordBtn->setChecked(!recordTrack);  // should actually toggle between play and pause icons
     // show/hide track editing controls
     if(recordTrack && editTrackTb->isVisible())
@@ -1392,12 +1402,14 @@ Button* MapsTracks::createPanel()
       recordTrack = true;
       std::string timestr = ftimestr("%FT%H.%M.%S");
       FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
-      recordedTrack = GpxFile(timestr, "", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
+      recordedTrack = GpxFile(timestr, "Recording", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
       recordedTrack.loaded = true;
       recordedTrack.tracks.emplace_back();
       recordedTrack.tracks.back().pts.push_back(app->currLocation);
+      recordedTrack.style = "#FF6030";  // use color in marker style instead?
       recordedTrack.marker = std::make_unique<TrackMarker>(app->map.get(), "layers.recording-track.draw.track");
       tracksDirty = true;
+      setTrackVisible(&recordedTrack, true);
       populateStats(&recordedTrack);
       saveTitle->setText(recordedTrack.title.c_str());
       savePath->setText(recordedTrack.filename.c_str());

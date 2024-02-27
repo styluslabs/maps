@@ -1182,7 +1182,7 @@ layers:
         bus_stop:
             exclusive: true
             priority: 4
-            filter: { highway: bus_stop,  $zoom: { min: 16 } }  # [{ class: bus, subclass: bus_stop }, { class: bus_stop } ]
+            filter: { highway: bus_stop,  $zoom: { min: 16 } }
             draw:
                 points:
                     sprite: bus
@@ -1191,6 +1191,9 @@ layers:
                     visible: global.show_transit
                     priority: global.priority.bus_stop
                     text: { visible: false }
+            default:
+                filter: { $zoom: { min: 19 } }
+                draw: { points: { visible: true } }
 
         traffic_signals:
             exclusive: true

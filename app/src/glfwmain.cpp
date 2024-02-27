@@ -124,18 +124,9 @@ int main(int argc, char* argv[])
   app->map->setupGL();
   app->createGUI((SDL_Window*)glfwWin);
 
-  Timer* locTimer = NULL;
   app->win->addHandler([&](SvgGui*, SDL_Event* event){
     if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
       MapsApp::runApplication = false;
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_INSERT) {
-      if(locTimer) {
-        app->gui->removeTimer(locTimer);
-        locTimer = NULL;
-      }
-      else
-        locTimer = app->gui->setTimer(2000, app->win.get(), [&](){ MapsApp::runOnMainThread(locFn); return 2000; });
-    }
     else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
       app->pluginManager->reload(MapsApp::baseDir + "plugins");
       app->loadSceneFile();  // reload scene

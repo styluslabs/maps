@@ -17,10 +17,10 @@ public:
 
   Path2D altDistPlot, altTimePlot, spdDistPlot, spdTimePlot;
   std::vector<Waypoint> waypoints;
-  double minAlt, maxAlt;
-  float minSpd, maxSpd;
-  double minTime, maxTime;
-  double maxDist;
+  double minAlt = 0, maxAlt = 0;
+  float minSpd = 0, maxSpd = 0;
+  double minTime = 0, maxTime = 0;
+  double maxDist = 1;
   bool plotVsDist = true;
   bool plotAlt = true;
   bool plotSpd = false;
