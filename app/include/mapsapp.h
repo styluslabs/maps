@@ -24,6 +24,7 @@ class Menubar;
 class SharedMenu;
 class MapsWidget;
 class ScaleBarWidget;
+class ManageColorsDialog;
 class SvgNode;
 class Color;
 class Painter;
@@ -136,6 +137,7 @@ public:
   SharedMenu* colorPickerMenu = NULL;
   std::vector<Widget*> panelHistory;
   std::vector<Widget*> panelPages;
+  std::unique_ptr<ManageColorsDialog> customColorDialog;
 
   std::atomic_int_fast64_t storageTotal = {0};
   std::atomic_int_fast64_t storageOffline = {0};

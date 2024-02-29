@@ -794,8 +794,6 @@ void MapsTracks::populateWaypoints(GpxFile* track)
   }
 
   wayptContent->clear();
-  if(track->waypoints.empty())
-    wayptContent->addItem("", new TextBox(createTextNode("No waypoints")));
   for(Waypoint& wp : track->waypoints) {
     if(!wp.name.empty() || showAllWaypts)
       addWaypointItem(wp);

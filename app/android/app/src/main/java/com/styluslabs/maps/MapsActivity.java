@@ -162,6 +162,12 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     MapsLib.onResume();
   }
 
+  // refs:
+  // - https://github.com/streetcomplete/StreetComplete/blob/master/app/src/main/java/de/westnordost/streetcomplete/util/location/FineLocationManager.kt#L92
+  //  - rejecting newer but less accurate locations; using NETWORK_PROVIDER
+  // - https://github.com/barbeau/gpstest/blob/master/library/src/main/java/com/android/gpstest/library/data/SharedLocationManager.kt#L71
+  // - https://github.com/osmandapp/OsmAnd/blob/master/OsmAnd/src/net/osmand/plus/helpers/AndroidApiLocationServiceHelper.java#L58
+  // - https://github.com/organicmaps/organicmaps/blob/master/android/app/src/main/java/app/organicmaps/util/LocationUtils.java#L85
   public void startSensors()
   {
     // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
@@ -209,6 +215,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   @Override
   public void onLocationChanged(Location loc)
   {
+    if(loc == null) return;  // getLastKnownLocation() can return null
     float poserr = loc.getAccuracy();  // accuracy in meters
     double alt = loc.getAltitude();  // meters
     float dir = loc.getBearing();  // bearing (direction of travel) in degrees

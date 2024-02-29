@@ -931,6 +931,45 @@ int MapsApp::getPanelWidth() const
   return int(w->node->bounds().width() + 0.5);
 }
 
+void MapsApp::populateColorPickerMenu()
+{
+  static const char* menuSVG = R"#(
+    <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
+      <rect box-anchor="fill" width="20" height="20"/>
+      <g class="child-container" box-anchor="fill"
+          layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
+      </g>
+    </g>
+  )#";
+
+  if(!colorPickerMenu) {
+    colorPickerMenu = new SharedMenu(loadSVGFragment(menuSVG), Menu::VERT_LEFT);
+    win->addWidget(colorPickerMenu);
+  }
+  else
+    gui->deleteContents(colorPickerMenu->selectFirst(".child-container"));
+
+  for(size_t ii = 0; ii < std::min(size_t(15), markerColors.size()); ++ii) {
+    Color color = markerColors[ii];
+    Button* btn = new Button(widgetNode("#colorbutton"));
+    btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
+    if(ii > 0 && ii % 4 == 0)
+      btn->node->setAttribute("flex-break", "before");
+    btn->onClicked = [=](){ static_cast<ColorPicker*>(colorPickerMenu->host)->updateColor(color.color); };
+    colorPickerMenu->addItem(btn);
+  }
+
+  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"));
+  overflowBtn->onClicked = [this](){
+    auto* colorbtn = static_cast<ColorPicker*>(colorPickerMenu->host);
+    customColorDialog->setColor(colorbtn->color());
+    customColorDialog->onColorAccepted =
+        [=](Color c){ static_cast<ColorPicker*>(colorPickerMenu->host)->updateColor(c); };
+    showModalCentered(customColorDialog.get(), gui);
+  };
+  colorPickerMenu->addItem(overflowBtn);
+}
+
 void MapsApp::setWindowLayout(int fbWidth)
 {
   bool narrow = fbWidth/gui->paintScale < 700;
@@ -1077,6 +1116,13 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // adjust map center to account for sidebar
   //map->setPadding({200, 0, 0, 0});
 
+  customColorDialog.reset(new ManageColorsDialog(markerColors));
+  customColorDialog->onColorListChanged = [this](){
+    populateColorPickerMenu();
+    config["colors"] = YAML::Node(YAML::NodeType::Sequence);
+    for(Color& color : markerColors)
+      config["colors"].push_back( colorToStr(color) );
+  };
   populateColorPickerMenu();
 
   infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));
@@ -1774,125 +1820,4 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   TRACE_END(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
   TRACE_FLUSH();
   return true;
-}
-
-
-#include "ugui/colorwidgets.h"
-
-void MapsApp::populateColorPickerMenu()
-{
-  static const char* menuSVG = R"#(
-    <g class="menu" display="none" position="absolute" box-anchor="fill" layout="box">
-      <rect box-anchor="fill" width="20" height="20"/>
-      <g class="child-container" box-anchor="fill"
-          layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
-      </g>
-    </g>
-  )#";
-
-  if(!colorPickerMenu) {
-    colorPickerMenu = new SharedMenu(loadSVGFragment(menuSVG), Menu::VERT_LEFT);
-    win->addWidget(colorPickerMenu);
-  }
-  else
-    gui->deleteContents(colorPickerMenu->selectFirst(".child-container"));
-
-  for(size_t ii = 0; ii < std::min(size_t(15), markerColors.size()); ++ii) {
-    Color color = markerColors[ii];
-    Button* btn = new Button(widgetNode("#colorbutton"));
-    btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
-    if(ii > 0 && ii % 4 == 0)
-      btn->node->setAttribute("flex-break", "before");
-    btn->onClicked = [=](){ static_cast<ColorPicker*>(colorPickerMenu->host)->updateColor(color.color); };
-    colorPickerMenu->addItem(btn);
-  }
-
-  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"));
-  overflowBtn->onClicked = [this](){
-    auto* colorbtn = static_cast<ColorPicker*>(colorPickerMenu->host);
-    customizeColors(colorbtn->color(), [=](Color color){ colorbtn->updateColor(color.color); });
-  };
-  colorPickerMenu->addItem(overflowBtn);
-}
-
-void MapsApp::customizeColors(Color initialColor, std::function<void(Color)> callback)  //int rowid)
-{
-  static const char* colorListSVG = R"#(
-    <g box-anchor="fill" layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
-    </g>
-  )#";
-
-  Widget* colorList = new Widget(loadSVGFragment(colorListSVG));
-  ColorEditBox* colorEditBox = createColorEditBox(false, false);
-
-  Button* saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save", true);
-  Button* deleteBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete", true);
-
-  auto setSaveDelState = [=](){
-    bool issaved = std::find(markerColors.begin(), markerColors.end(), colorEditBox->color()) != markerColors.end();
-    saveBtn->setVisible(!issaved);
-    deleteBtn->setVisible(issaved);
-  };
-
-  colorEditBox->onColorChanged = [=](Color c){ setSaveDelState(); };
-
-  // long press to show content menu w/ delete option? ... unnecessarily hides the action when we have plenty of screen space; select color then tap delete icon?
-  auto populateColorList = [=](){
-    gui->deleteContents(colorList);
-    for(size_t ii = 0; ii < markerColors.size(); ++ii) {
-      Color color = markerColors[ii];
-      Button* btn = createColorBtn();  //new Button(widgetNode("#colorbutton"));
-      btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
-      btn->onClicked = [=](){ colorEditBox->setColor(color); setSaveDelState(); };
-      colorList->addWidget(btn);
-    }
-    setSaveDelState();
-  };
-
-  auto colorListChanged = [=](){
-    populateColorList();
-    populateColorPickerMenu();
-    config["colors"] = YAML::Node(YAML::NodeType::Sequence);
-    for(Color& color : markerColors)
-      config["colors"].push_back( colorToStr(color) );
-  };
-
-  saveBtn->onClicked = [=](){
-    markerColors.insert(markerColors.begin(), colorEditBox->color());
-    colorListChanged();
-  };
-
-  deleteBtn->onClicked = [=](){
-    markerColors.erase(std::remove(markerColors.begin(), markerColors.end(), colorEditBox->color()));
-    colorListChanged();
-  };
-
-  Toolbar* toolbar = createToolbar();
-  toolbar->addWidget(colorEditBox);
-  toolbar->addWidget(createStretch());
-  toolbar->addWidget(saveBtn);
-  toolbar->addWidget(deleteBtn);
-
-  Widget* content = createColumn();
-  content->node->setAttribute("box-anchor", "fill");
-  content->addWidget(toolbar);
-  content->addWidget(colorList);
-  content->addWidget(createStretch());
-
-  Dialog* dialog = createMobileDialog("Colors", "Accept");
-  dialog->onFinished = [=](int res){
-    if(res == Dialog::ACCEPTED) {
-      callback(colorEditBox->color());
-    }
-  };
-
-  Widget* dialogBody = dialog->selectFirst(".body-container");
-  //dialogBody->addWidget(newListContent);
-  //auto scrollWidget = new ScrollWidget(new SvgDocument(), colorList);
-  //scrollWidget->node->setAttribute("box-anchor", "fill");
-  dialogBody->addWidget(content);
-  colorEditBox->setColor(initialColor);  // cannot be done until ColorEditBox is added to Window
-  populateColorList();
-
-  showModalCentered(dialog, MapsApp::gui);
 }

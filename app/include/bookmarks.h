@@ -42,5 +42,6 @@ private:
   std::unique_ptr<SvgNode> placeInfoSectionProto;
   //std::unique_ptr<SvgDocument> chooseListProto;
   std::unique_ptr<Dialog> chooseListDialog;
+  std::vector< std::unique_ptr<Dialog> > editPlaceDialogs;
 };
 

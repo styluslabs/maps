@@ -1,5 +1,11 @@
 #include "mapwidgets.h"
 
+SvgNode* uiIcon(const char* id)
+{
+  SvgNode* res = SvgGui::useFile(":/ui-icons.svg")->namedNode(id);
+  ASSERT(res && "UI icon missing!");
+  return res;
+}
 
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial)
 {
@@ -17,8 +23,7 @@ Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t
   return menu;
 }
 
-// dialog with accept (optional) and cancel controls along top of dialog
-Dialog* createMobileDialog(const char* title, const char* acceptTitle)
+static SvgDocument* createMobileDialogNode()
 {
   static const char* mobileDialogSVG = R"(
     <svg id="dialog" class="window dialog" layout="box">
@@ -31,26 +36,40 @@ Dialog* createMobileDialog(const char* title, const char* acceptTitle)
     </svg>
   )";
   static std::unique_ptr<SvgDocument> mobileDialogProto;
-  mobileDialogProto.reset(static_cast<SvgDocument*>(loadSVGFragment(mobileDialogSVG)));
+  if(!mobileDialogProto)
+    mobileDialogProto.reset(static_cast<SvgDocument*>(loadSVGFragment(mobileDialogSVG)));
 
-  Dialog* dialog = new Dialog( setupWindowNode(mobileDialogProto->clone()) );
-  Widget* content = createColumn();
-  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
+  return setupWindowNode(mobileDialogProto->clone());
+}
+
+static Dialog* setupMobileDialog(Dialog* dialog, const char* title, const char* acceptTitle, Widget* content = NULL)
+{
+  Widget* col = createColumn();
+  col->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
   TextBox* titleText = new TextBox(createTextNode(title));
   Toolbar* titleTb = createToolbar();
   titleTb->node->addClass("title-toolbar");
-  dialog->cancelBtn = createToolbutton(SvgGui::useFile(":/ui-icons.svg")->namedNode("back"), "Cancel");
+  dialog->cancelBtn = createToolbutton(uiIcon("cancel"), "Cancel");
   dialog->cancelBtn->onClicked = [=](){ dialog->finish(Dialog::CANCELLED); };
   titleTb->addWidget(dialog->cancelBtn);
   titleTb->addWidget(titleText);
   titleTb->addWidget(createStretch());
   if(acceptTitle) {
-    dialog->acceptBtn = createToolbutton(SvgGui::useFile(":/ui-icons.svg")->namedNode("accept"), acceptTitle, true);
+    dialog->acceptBtn = createToolbutton(uiIcon("accept"), acceptTitle, true);
+    dialog->acceptBtn->node->addClass("accept-btn");
     dialog->acceptBtn->onClicked = [=](){ dialog->finish(Dialog::ACCEPTED); };
     titleTb->addWidget(dialog->acceptBtn);
   }
   dialog->selectFirst(".title-container")->addWidget(titleTb);
+  if(content)
+    dialog->selectFirst(".body-container")->addWidget(content);
   return dialog;
+}
+
+// dialog with accept (optional) and cancel controls along top of dialog
+Dialog* createMobileDialog(const char* title, const char* acceptTitle, Widget* content)
+{
+  return setupMobileDialog(new Dialog(createMobileDialogNode()), title, acceptTitle, content);
 }
 
 SelectDialog::SelectDialog(SvgDocument* n, const std::vector<std::string>& _items) : Dialog(setupWindowNode(n))
@@ -597,7 +616,7 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
         Widget* w = SvgGui::findNextFocusable(dialog,
             dialog->window()->focusedWidget, event->key.keysym.mod & KMOD_SHIFT);
         if(w)
-          gui->setFocused(w);
+          gui->setFocused(w, SvgGui::REASON_TAB);
       }
       else
         return false;
@@ -794,4 +813,122 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
     }
     return false;
   });
+}
+
+#include "ugui/colorwidgets.h"
+
+void ManageColorsDialog::setSaveDelState()
+{
+  bool issaved = std::find(colors.begin(), colors.end(), colorEditBox->color()) != colors.end();
+  saveBtn->setVisible(!issaved);
+  deleteBtn->setVisible(issaved);
+};
+
+void ManageColorsDialog::populateColorList()
+{
+  gui()->deleteContents(colorList);
+  for(size_t ii = 0; ii < colors.size(); ++ii) {
+    Color color = colors[ii];
+    Button* btn = createColorBtn();  //new Button(widgetNode("#colorbutton"));
+    btn->selectFirst(".btn-color")->node->setAttr<color_t>("fill", color.color);
+    btn->onClicked = [=](){ colorEditBox->setColor(color); setSaveDelState(); };
+    colorList->addWidget(btn);
+  }
+  setSaveDelState();
+}
+
+ManageColorsDialog::ManageColorsDialog(std::vector<Color>& _colors) : Dialog(createMobileDialogNode()), colors(_colors)
+{
+  static const char* colorListSVG = R"#(
+    <g box-anchor="fill" layout="flex" flex-direction="row" flex-wrap="wrap" justify-content="flex-start" margin="6 6">
+    </g>
+  )#";
+
+  colorList = new Widget(loadSVGFragment(colorListSVG));
+  colorEditBox = createColorEditBox(false, false);
+  colorEditBox->onColorChanged = [=](Color c){ setSaveDelState(); };
+
+  saveBtn = createToolbutton(uiIcon("save"), "Save", true);
+  deleteBtn = createToolbutton(uiIcon("discard"), "Delete", true);
+  saveBtn->onClicked = [=](){
+    colors.insert(colors.begin(), colorEditBox->color());
+    populateColorList();
+    if(onColorListChanged)
+      onColorListChanged();
+  };
+  deleteBtn->onClicked = [=](){
+    colors.erase(std::remove(colors.begin(), colors.end(), colorEditBox->color()));
+    populateColorList();
+    if(onColorListChanged)
+      onColorListChanged();
+  };
+
+  Toolbar* toolbar = createToolbar();
+  toolbar->addWidget(colorEditBox);
+  toolbar->addWidget(createStretch());
+  toolbar->addWidget(saveBtn);
+  toolbar->addWidget(deleteBtn);
+
+  Widget* content = createColumn();
+  content->node->setAttribute("box-anchor", "fill");
+  content->addWidget(toolbar);
+  content->addWidget(colorList);
+  content->addWidget(createStretch());
+
+  //auto scrollWidget = new ScrollWidget(new SvgDocument(), colorList);
+  setupMobileDialog(this, "Colors", "Accept", content);
+  onFinished = [=](int res){
+    if(res == Dialog::ACCEPTED && onColorAccepted) {
+      onColorAccepted(colorEditBox->color());
+    }
+  };
+}
+
+void ManageColorsDialog::setColor(Color initialColor)
+{
+  colorEditBox->setColor(initialColor);  // cannot be done until ColorEditBox is added to Window
+  populateColorList();
+}
+
+
+Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* title,
+    const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel)
+{
+  static const char* inlineDialogSVG = R"#(
+    <g class="col-layout" box-anchor="fill" layout="flex" flex-direction="column" margin="2 5">
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> proto;
+  if(!proto)
+    proto.reset(loadSVGFragment(inlineDialogSVG));
+
+  Widget* container = new Widget(proto->clone());
+  Dialog* dialog = createMobileDialog(title, acceptLabel, container);
+
+  for(Widget* child : widgets)
+    container->addWidget(child);
+  container->addWidget(createStretch());
+
+  container->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_KEYDOWN) {
+      if(event->key.keysym.sym == SDLK_TAB) {
+        Widget* w = SvgGui::findNextFocusable(dialog,
+            dialog->window()->focusedWidget, event->key.keysym.mod & KMOD_SHIFT);
+        if(w)
+          gui->setFocused(w, SvgGui::REASON_TAB);
+        return true;
+      }
+    }
+    return false;
+  });
+
+  dialog->onFinished = [=](int res){
+    if(res == Dialog::ACCEPTED) {
+      if(onAccept) onAccept();
+    }
+    else if(onCancel)
+      onCancel();
+  };
+
+  return dialog;
 }

@@ -386,6 +386,7 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   Widget* content = createColumn();
   content->node->setAttribute("box-anchor", "hfill");
   content->node->addClass("bkmk-content");
+  editPlaceDialogs.clear();
   // attempt lookup w/ osm_id if passed
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
   // - if this gives us too many false positives, we could add "Nearby bookmarks" title to section
@@ -439,12 +440,10 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     if(it != bkmkMarkers.end())
       it->second->updateMarker(rowid, {{{"name", title}}});
     app->setPickResult(app->pickResultCoord, title, app->pickResultProps);  // must be last (destroys widget)
-    //static_cast<TextLabel*>(app->infoPanel->selectFirst(".panel-title"))->setText(title.c_str());
-    //noteText->setText(noteEdit->text().c_str());
-    //noteText->setVisible(true);
   };
-  auto onCancelEdit = [=](){ noteText->setVisible(true); };
-  auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
+  //auto onCancelEdit = [=](){ noteText->setVisible(true); };
+  auto editPlaceDialog = createInputDialog({titleEdit, noteEdit}, "Edit Place", "Accept", onAcceptEdit);  //, onCancelEdit);
+  editPlaceDialogs.emplace_back(editPlaceDialog);
 
   Widget* toolRow = createRow();
   //Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), liststr.c_str(), true);
@@ -470,9 +469,10 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   //auto addNoteBtn = new Button(widget->containerNode()->selectFirst(".addnote-btn"));
   //addNoteBtn->setVisible(notestr.empty());
   addNoteBtn->onClicked = [=](){
-    noteText->setVisible(false);
-    showInlineDialogModal(editContent);
-    app->gui->setFocused(noteEdit);
+    //noteText->setVisible(false);
+    //showInlineDialogModal(editContent);
+    showModalCentered(editPlaceDialog, MapsApp::gui);
+    app->gui->setFocused(noteEdit, SvgGui::REASON_TAB);
   };
 
   auto setListFn = [=](int newlistid, std::string listname){
@@ -518,7 +518,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
 
   section->addWidget(toolRow);
   section->addWidget(noteText);
-  section->addWidget(editContent);
+  //section->addWidget(editContent);
 
   return section;
 }
@@ -662,8 +662,7 @@ Button* MapsBookmarks::createPanel()
       SQLiteStmt(app->bkmkDB, query).bind(activeListId).exec([&](const char* title, const char* colorstr){
         listTitle->setText(title);
         listColor->setColor(parseColor(colorstr, Color::CYAN));
-        MapsApp::gui->setFocused(listTitle);
-        listTitle->selectAll();
+        MapsApp::gui->setFocused(listTitle, SvgGui::REASON_TAB);
       });
       showInlineDialogModal(editListContent);
     }

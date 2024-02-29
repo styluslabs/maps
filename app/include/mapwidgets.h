@@ -104,6 +104,30 @@ public:
   std::function<void(bool)> getNextPage;  // this should set nextPage (and currPage)
 };
 
+class ColorEditBox;
+
+class ManageColorsDialog : public Dialog
+{
+public:
+  ManageColorsDialog(std::vector<Color>& _colors);
+  void setColor(Color initialColor);
+
+  std::function<void(Color)> onColorAccepted;
+  std::function<void()> onColorListChanged;
+
+private:
+  std::vector<Color>& colors;
+
+  Widget* colorList;
+  ColorEditBox* colorEditBox;
+  Button* saveBtn;
+  Button* deleteBtn;
+
+  void setSaveDelState();
+  void populateColorList();
+};
+
+SvgNode* uiIcon(const char* id);
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
@@ -118,4 +142,7 @@ void showModalCentered(Window* modal, SvgGui* gui);
 void sendKeyPress(SvgGui* gui, Widget* widget, int sdlkey, int mods = 0);
 Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int year, int month, int day)> onChange);
 Widget* createBoxLayout(const char* anchor = "fill");
-Dialog* createMobileDialog(const char* title, const char* acceptTitle);
+Dialog* createMobileDialog(const char* title, const char* acceptTitle, Widget* content = NULL);
+Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* title,
+    const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel = {});
+
