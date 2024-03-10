@@ -47,7 +47,7 @@ public:
   void setVisible(bool vis);
   void setStylePath(const char* style);
   void setProperties(Properties&& props);
-  void setTrack(GpxWay* way);
+  void setTrack(GpxWay* way, size_t nways = 1);
   bool onPicked(MarkerID picked);
 };
 
@@ -74,7 +74,7 @@ struct GpxFile {
   GpxFile(const std::string& _title, const std::string& _desc, const std::string& _file)
       : title(_title), desc(_desc), filename(_file) {}
 
-  GpxWay* activeWay() { return !routes.empty() ? &routes.front() : !tracks.empty()? &tracks.front() : NULL; }
+  GpxWay* activeWay() { return !routes.empty() ? &routes.back() : !tracks.empty()? &tracks.back() : NULL; }
 
   std::vector<Waypoint>::iterator findWaypoint(const std::string& uid);
   std::vector<Waypoint>::iterator addWaypoint(Waypoint wpt, const std::string& nextuid = {});

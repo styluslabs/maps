@@ -163,7 +163,9 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
   }
   else if(prevpoints > 0) {
-    if(tapState == DBL_TAP_DRAG_ACTIVE) {
+    if(app->drawOnMap)
+      app->fingerEvent(action, pt.x, pt.y);
+    else if(tapState == DBL_TAP_DRAG_ACTIVE) {
       float h = app->map->getViewportHeight();
       // alternative is to zoom from center of map instead of tap point - float cx = w/2, cy = h/2;
       map->handlePinchGesture(initCOM.x, initCOM.y, std::pow(2.0f, 4.0f*dblTapDragScale*(pt.y - prevCOM.y)/h), 0.f);
@@ -175,7 +177,10 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     prevCOM = pt;
   }
   else if(prevpoints == 0) {
-    map->handlePanGesture(0.0f, 0.0f, 0.0f, 0.0f);  // cancel any previous motion
+    if(app->drawOnMap)
+      app->fingerEvent(action, pt.x, pt.y);
+    else
+      map->handlePanGesture(0.0f, 0.0f, 0.0f, 0.0f);  // cancel any previous motion
     prevCOM = initCOM = pt;
   }
 }

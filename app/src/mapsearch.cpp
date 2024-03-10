@@ -488,12 +488,11 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   else {
     bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
+    resultCountText->setText("Searching...");
     if(unifiedSearch)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
-    else {
-      resultCountText->setText("Searching...");
+    else
       app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
-    }
   }
 
   if(phase == RETURN) {

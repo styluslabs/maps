@@ -268,23 +268,19 @@ function way_function(way)
 
   -- Boundaries within relations
   local admin_level = 11
-  local isBoundary = false
   while true do
     local rel = way:NextRelation()
     if not rel then break end
-    isBoundary = true
-    admin_level = math.min(admin_level, tonumber(way:FindInRelation("admin_level")) or 11)
+    local bndry = way:FindInRelation("boundary")
+    if bndry~="" then
+      boundary = bndry
+      admin_level = math.min(admin_level, tonumber(way:FindInRelation("admin_level")) or 11)
+    end
   end
 
-  -- Boundaries in ways
-  if boundary=="administrative" then
-    admin_level = math.min(admin_level, tonumber(way:Find("admin_level")) or 11)
-    isBoundary = true
-  end
-
-  -- Administrative boundaries
-  -- https://openmaptiles.org/schema/#boundary
-  if isBoundary and not (way:Find("maritime")=="yes") then
+  -- Write boundaries
+  if boundary=="administrative" or boundary=="disputed" and not (way:Find("maritime")=="yes") then
+    admin_level = math.min(admin_level, tonumber(way:Find("admin_level")) or 11)  -- for boundary w/o relation
     local mz = 0
     if     admin_level>=3 and admin_level<5 then mz=4
     elseif admin_level>=5 and admin_level<7 then mz=8
@@ -296,7 +292,7 @@ function way_function(way)
     way:AttributeNumeric("admin_level", admin_level)
     way:MinZoom(mz)
     SetNameAttributes(way)
-    if way:Find("disputed")=="yes" then way:AttributeNumeric("disputed", 1) end
+    if boundary=="disputed" or way:Find("disputed")=="yes" then way:AttributeNumeric("disputed", 1) end
   end
 
   -- Roads ('transportation' and 'transportation_name', plus 'transportation_name_detail')

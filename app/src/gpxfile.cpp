@@ -241,46 +241,47 @@ bool TrackMarker::onPicked(MarkerID picked)
   return false;
 }
 
-void TrackMarker::setTrack(GpxWay* way)
+void TrackMarker::setTrack(GpxWay* way, size_t nways)
 {
-  auto meters0 = MapProjection::lngLatToProjectedMeters(way->pts[0].lngLat());
-  Tangram::BoundingBox bounds = {meters0, meters0};
-
   size_t nmarkers = 0;
-  std::vector<LngLat> pts;
-  for(size_t ii = 1; ii < way->pts.size();) {
-    const Waypoint& wp = way->pts[ii];
-    auto meters = MapProjection::lngLatToProjectedMeters(wp.lngLat());
-    auto b0 = bounds;
-    bounds.expand(meters.x, meters.y);
-    if(bounds.width() > maxExtent || bounds.height() > maxExtent || ++ii == way->pts.size()) {
-      double slope = (meters.y - meters0.y)/(meters.x - meters0.x);
-      auto clip = meters;
-      if(clip.x < b0.min.x) clip.x = std::max(clip.x, b0.max.x - maxExtent);
-      else if(clip.x > b0.max.x) clip.x = std::min(clip.x, b0.min.x + maxExtent);
-      clip.y = meters0.y + (clip.x - meters0.x)*slope;
+  for(size_t jj = 0; jj < nways; ++jj) {
+    std::vector<LngLat> pts;
+    auto meters0 = MapProjection::lngLatToProjectedMeters(way->pts[0].lngLat());
+    Tangram::BoundingBox bounds = {meters0, meters0};
+    for(size_t ii = 0; ii < way->pts.size();) {
+      const Waypoint& wp = way->pts[ii];
+      auto meters = MapProjection::lngLatToProjectedMeters(wp.lngLat());
+      auto b0 = bounds;
+      bounds.expand(meters.x, meters.y);
+      if(bounds.width() > maxExtent || bounds.height() > maxExtent || ++ii == way->pts.size()) {
+        double slope = (meters.y - meters0.y)/(meters.x - meters0.x);
+        auto clip = meters;
+        if(clip.x < b0.min.x) clip.x = std::max(clip.x, b0.max.x - maxExtent);
+        else if(clip.x > b0.max.x) clip.x = std::min(clip.x, b0.min.x + maxExtent);
+        clip.y = meters0.y + (clip.x - meters0.x)*slope;
 
-      if(clip.y < b0.min.y) clip.y = std::max(clip.y, b0.max.y - maxExtent);
-      else if(clip.y > b0.max.y) clip.y = std::min(clip.y, b0.min.y + maxExtent);
-      clip.x = meters0.x + (clip.y - meters0.y)/slope;
+        if(clip.y < b0.min.y) clip.y = std::max(clip.y, b0.max.y - maxExtent);
+        else if(clip.y > b0.max.y) clip.y = std::min(clip.y, b0.min.y + maxExtent);
+        clip.x = meters0.x + (clip.y - meters0.y)/slope;
 
-      pts.push_back(MapProjection::projectedMetersToLngLat(clip));
+        pts.push_back(MapProjection::projectedMetersToLngLat(clip));
 
-      if(++nmarkers >= markers.size()) {
-        MarkerID id = map->markerAdd();
-        markers.push_back(id);
-        map->markerSetStylingFromPath(id, stylePath.c_str());
+        if(++nmarkers >= markers.size()) {
+          MarkerID id = map->markerAdd();
+          markers.push_back(id);
+          map->markerSetStylingFromPath(id, stylePath.c_str());
+        }
+        map->markerSetPolyline(markers[nmarkers-1], pts.data(), pts.size());
+        map->markerSetProperties(markers[nmarkers-1], Properties(markerProps));
+        pts = {pts.back()};
+        bounds = {clip, clip};
+        continue;  // repeat current point (i.e. segment from clip to meters)
       }
-      map->markerSetPolyline(markers[nmarkers-1], pts.data(), pts.size());
-      map->markerSetProperties(markers[nmarkers-1], Properties(markerProps));
-      pts = {pts.back()};
-      bounds = {clip, clip};
-      continue;  // repeat current point (i.e. segment from clip to meters)
+      pts.push_back(wp.loc.lngLat());
+      meters0 = meters;
     }
-    pts.push_back(wp.loc.lngLat());
-    meters0 = meters;
+    ++way;
   }
-
   for(size_t ii = nmarkers; ii < markers.size(); ++ii)
     map->markerRemove(markers[ii]);
   markers.resize(nmarkers);

@@ -105,10 +105,13 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
 
   if(!track->marker)
     track->marker = std::make_unique<TrackMarker>(app->map.get(), "layers.track.draw.track");
-  if(track->activeWay() && track->activeWay()->pts.size() > 1) {
+  if(track->activeWay() && (track->activeWay()->pts.size() > 1 || track->routes.size() > 1)) {
     if(!track->style.empty())
       track->marker->markerProps = {{{"color", track->style}}};
-    track->marker->setTrack(track->activeWay());
+    if(!track->routes.empty())
+      track->marker->setTrack(&track->routes.front(), track->routes.size());
+    else
+      track->marker->setTrack(&track->tracks.front(), track->tracks.size());
     track->marker->setVisible(true);
   }
   else
@@ -331,9 +334,8 @@ void MapsTracks::populateStats(GpxFile* track)
 void MapsTracks::updateStats(std::vector<Waypoint>& locs)
 {
   static const char* notime = u8"\u2014";  // emdash
-  //auto& locs = track->activeWay()->pts;
-  //if(!origLocs.empty())
-  locs.front().dist = 0;
+  if(!locs.empty())
+    locs.front().dist = 0;
   // how to calculate max speed?
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
   double currSpeed = 0, maxSpeed = 0;
@@ -364,7 +366,7 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
     locs[ii].dist = trackDist;
   }
 
-  const Location& loc = locs.back().loc;
+  const Location& loc = locs.empty() ? app->currLocation : locs.back().loc;
   //std::string posStr = fstring("%.6f, %.6f", loc.lat, loc.lng);
   //statsContent->selectFirst(".track-position")->setText(posStr.c_str());
   statsContent->selectFirst(".track-latitude")->setText(fstring("%.6f", loc.lat).c_str());
@@ -377,7 +379,7 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
   std::string speedStr = app->metricUnits ? fstring("%.2f km/h", currSpeed*3.6) : fstring("%.2f mph", currSpeed*2.23694);
   statsContent->selectFirst(".track-speed")->setText(speedStr.c_str());
 
-  double ttot = locs.back().loc.time - locs.front().loc.time;
+  double ttot = locs.empty() ? 0 : locs.back().loc.time - locs.front().loc.time;
   int hours = int(ttot/3600);
   int mins = int((ttot - hours*3600)/60);
   int secs = int(ttot - hours*3600 - mins*60);
@@ -433,7 +435,7 @@ static std::string distKmToStr(double distkm)
 
 void MapsTracks::updateDistances()
 {
-  if(activeTrack->routes.empty()) return;
+  if(!activeTrack || activeTrack->routes.empty()) return;
   auto& route = activeTrack->routes.back().pts;
   if(route.empty()) return;
   auto wayPtItems = wayptContent->select(".listitem");  //->content->containerNode()->children();
@@ -505,7 +507,8 @@ void MapsTracks::createRoute(GpxFile* track)
   retryBtn->setVisible(false);
   track->routes.clear();
   track->modified = true;
-  if(track->routeMode == "direct") {
+  if(track->routeMode == "draw") {}
+  else if(track->routeMode == "direct") {
     track->routes.emplace_back();
     for(Waypoint& wp : track->waypoints) {
       if(wp.routed)
@@ -721,6 +724,18 @@ bool MapsTracks::tapEvent(LngLat location)
   return true;
 }
 
+void MapsTracks::fingerEvent(int action, LngLat pos)
+{
+  if(!activeTrack) return;
+  if(action > 0 || activeTrack->routes.empty())
+    activeTrack->routes.emplace_back();
+  activeTrack->routes.back().pts.push_back(Waypoint(pos));
+
+  updateStats(activeTrack->routes.back().pts);
+  //updateDistances();
+  updateTrackMarker(activeTrack);
+}
+
 void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
 {
   std::string uid = wp.uid;
@@ -836,7 +851,16 @@ void MapsTracks::onMapEvent(MapEvent_t event)
         app->map->markerSetVisible(previewMarker, pix > 2);
       }
       previewRoute = pts;
-      previewDistText->setText(distKmToStr(distkm).c_str());
+      std::string pvstr = distKmToStr(distkm);
+      if(it != activeTrack->waypoints.begin() && distkm > 0) {
+        LngLat prevpt = (--it)->lngLat();
+        auto pm0 = MapProjection::lngLatToProjectedMeters(prevpt);
+        auto pm1 = MapProjection::lngLatToProjectedMeters(pts[0]);
+        auto pm2 = MapProjection::lngLatToProjectedMeters(pts[1]);
+        auto dr0 = glm::normalize(pm1 - pm0), dr1 = glm::normalize(pm2 - pm1);
+        pvstr += fstring(" | %.1f\u00B0", 180*std::acos(glm::dot(dr0, dr1))/M_PI);
+      }
+      previewDistText->setText(pvstr.c_str());
     }
   }
   else if(event == LOC_UPDATE) {
@@ -889,7 +913,8 @@ void MapsTracks::setRouteMode(const std::string& mode)
 {
   auto parts = splitStr<std::vector>(mode.c_str(), '-');
   const char* icon = "segment";
-  if(parts[0] == "walk") icon = "walk";
+  if(parts[0] == "draw") icon = "draw-track";
+  else if(parts[0] == "walk") icon = "walk";
   else if(parts[0] == "bike") icon = "bike";
   else if(parts[0] == "drive") icon = "car";
   routeModeBtn->setIcon(MapsApp::uiIcon(icon));
@@ -898,10 +923,20 @@ void MapsTracks::setRouteMode(const std::string& mode)
     onMapEvent(MAP_CHANGE);
   else
     app->map->markerSetVisible(previewMarker, false);
+  app->drawOnMap = mode == "draw";
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
   createRoute(activeTrack);
-};
+}
+
+void MapsTracks::toggleRouteEdit(bool show)
+{
+  routeEditBtn->setChecked(show);
+  routeEditTb->setVisible(show);
+  app->crossHair->setVisible(show);
+  directRoutePreview = show;
+  //setRouteMode(activeTrack->routeMode);  // update previewMarker
+}
 
 void MapsTracks::addPlaceActions(Toolbar* tb)
 {
@@ -922,12 +957,11 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Navigation";
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
-      navRoute.waypoints.clear();
-      navRoute.wayPtSerial = 0;
       if(km > 0.01)
         navRoute.addWaypoint({r1, "Start"});  //"Current location"
       navRoute.addWaypoint({r2, app->pickResultName});
       activeTrack = NULL;
+      toggleRouteEdit(false);
       createRoute(&navRoute);
       populateWaypoints(&navRoute);
     };
@@ -938,11 +972,10 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Measurement";
       navRoute.routeMode = "direct";
-      navRoute.routes.clear();
-      navRoute.waypoints.clear();
-      navRoute.wayPtSerial = 0;
       navRoute.addWaypoint({app->pickResultCoord, app->pickResultName});
       activeTrack = NULL;
+      toggleRouteEdit(true);
+      createRoute(&navRoute);
       populateWaypoints(&navRoute);
     };
     tb->addWidget(measureBtn);
@@ -1166,7 +1199,7 @@ Button* MapsTracks::createPanel()
 
   trackSliders->onStartHandleChanged = [=](){
     cropStart = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
-    Waypoint startloc = interpTrack(activeTrack->tracks.front().pts, cropStart);
+    Waypoint startloc = interpTrack(activeTrack->activeWay()->pts, cropStart);
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
       app->map->markerSetPoint(trackStartMarker, startloc.lngLat());  // must set geometry before properties
@@ -1180,7 +1213,7 @@ Button* MapsTracks::createPanel()
 
   trackSliders->onEndHandleChanged = [=](){
     cropEnd = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
-    Waypoint endloc = interpTrack(activeTrack->tracks.front().pts, cropEnd);
+    Waypoint endloc = interpTrack(activeTrack->activeWay()->pts, cropEnd);
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
       app->map->markerSetPoint(trackEndMarker, endloc.lngLat());  // must set geometry before properties
@@ -1194,15 +1227,15 @@ Button* MapsTracks::createPanel()
 
   Button* cropTrackBtn = createToolbutton(NULL, "Crop to segment", true);
   cropTrackBtn->onClicked = [=](){
-    if(origLocs.empty()) origLocs = activeTrack->tracks.front().pts;
-    auto& locs = activeTrack->tracks.front().pts;
+    if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
+    auto& locs = activeTrack->activeWay()->pts;
     std::vector<Waypoint> newlocs;
     size_t startidx, endidx;
     newlocs.push_back(interpTrack(locs, cropStart, &startidx));
     auto endloc = interpTrack(locs, cropEnd, &endidx);
     newlocs.insert(newlocs.end(), locs.begin() + startidx, locs.begin() + endidx);
     newlocs.push_back(endloc);
-    activeTrack->tracks.front().pts.swap(newlocs);
+    activeTrack->activeWay()->pts.swap(newlocs);
     trackSliders->setCropHandles(0, 1, TrackSliders::FORCE_UPDATE);
     updateTrackMarker(activeTrack);  // rebuild marker
     populateStats(activeTrack);
@@ -1210,8 +1243,8 @@ Button* MapsTracks::createPanel()
 
   Button* deleteSegmentBtn = createToolbutton(NULL, "Delete Segment", true);
   deleteSegmentBtn->onClicked = [=](){
-    if(origLocs.empty()) origLocs = activeTrack->tracks.front().pts;
-    auto& locs = activeTrack->tracks.front().pts;
+    if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
+    auto& locs = activeTrack->activeWay()->pts;
     std::vector<Waypoint> newlocs;
     size_t startidx, endidx;
     auto startloc = interpTrack(locs, cropStart, &startidx);
@@ -1236,8 +1269,8 @@ Button* MapsTracks::createPanel()
       selectTrackDialog->onSelected = [this](int idx){
         auto* way = tracks[idx].activeWay();
         if(!way) return;
-        if(origLocs.empty()) origLocs = activeTrack->tracks.front().pts;
-        auto& locs = activeTrack->tracks.front().pts;
+        if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
+        auto& locs = activeTrack->activeWay()->pts;
         locs.insert(locs.end(), way->pts.begin(), way->pts.end());
         updateTrackMarker(activeTrack);  // rebuild marker
         populateStats(activeTrack);
@@ -1252,8 +1285,8 @@ Button* MapsTracks::createPanel()
   });
 
   trackPlotOverflow->addItem("Reverse Track", [this](){
-    if(origLocs.empty()) origLocs = activeTrack->tracks.front().pts;
-    auto& locs = activeTrack->tracks.front().pts;
+    if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
+    auto& locs = activeTrack->activeWay()->pts;
     std::reverse(locs.begin(), locs.end());
     updateTrackMarker(activeTrack);  // rebuild marker
     populateStats(activeTrack);
@@ -1288,7 +1321,7 @@ Button* MapsTracks::createPanel()
       app->map->markerSetVisible(trackStartMarker, false);
       app->map->markerSetVisible(trackEndMarker, false);
       if(!origLocs.empty()) {
-        activeTrack->tracks.front().pts = std::move(origLocs);
+        activeTrack->activeWay()->pts = std::move(origLocs);
         updateTrackMarker(activeTrack);  // rebuild marker
         populateStats(activeTrack);
       }
@@ -1365,6 +1398,7 @@ Button* MapsTracks::createPanel()
   Widget* newTrackContent = createInlineDialog({newTrackTitle, newTrackFile}, "Create", [=](){
     tracks.emplace_back(newTrackTitle->text(), ftimestr("%F"), newTrackFile->text());
     updateDB(&tracks.back());
+    toggleRouteEdit(true);
     populateWaypoints(&tracks.back());
     drawTrackBtn->setChecked(false);
   }, [=](){ drawTrackBtn->setChecked(false); });
@@ -1519,6 +1553,7 @@ Button* MapsTracks::createPanel()
   routeModeBtn = createToolbutton(MapsApp::uiIcon("segment"), "Routing");
   Menu* routeModeMenu = createMenu(Menu::VERT_LEFT);
   routeModeMenu->addItem("Direct", MapsApp::uiIcon("segment"), [=](){ setRouteMode("direct"); });
+  routeModeMenu->addItem("Draw", MapsApp::uiIcon("scribble"), [=](){ setRouteMode("draw"); });
   routeModeMenu->addItem("Walk", MapsApp::uiIcon("walk"), [=](){ setRouteMode("walk"); });
   routeModeMenu->addItem("Cycle", MapsApp::uiIcon("bike"), [=](){ setRouteMode("bike"); });
   routeModeMenu->addItem("Drive", MapsApp::uiIcon("car"), [=](){ setRouteMode("drive"); });
@@ -1567,7 +1602,7 @@ Button* MapsTracks::createPanel()
   sparkStats->setVisible(false);  // will be shown when route has >1 point
 
   // I think this will eventually be a floating toolbar
-  Toolbar* routeEditTb = createToolbar();
+  routeEditTb = createToolbar();
 
   previewDistText = new TextBox(createTextNode(""));
 
@@ -1587,6 +1622,11 @@ Button* MapsTracks::createPanel()
   Button* rteEditOverflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
   Menu* rteEditOverflow = createMenu(Menu::VERT_LEFT);
   rteEditOverflowBtn->setMenu(rteEditOverflow);
+
+  rteEditOverflow->addItem("Clear route", [this](){
+    if(activeTrack && !activeTrack->routes.empty())
+      activeTrack->routes.pop_back();
+  });
 
   Button* tapToAddWayptBtn = createCheckBoxMenuItem("Tap to add waypoint");
   tapToAddWayptBtn->onClicked = [=](){
@@ -1610,20 +1650,16 @@ Button* MapsTracks::createPanel()
   wayptContainer->addWidget(sparkStats);
   wayptContainer->addWidget(wayptContent);
 
-  Button* showRouteEdit = createToolbutton(MapsApp::uiIcon("draw-track"), "Edit Route");
-  showRouteEdit->onClicked = [=](){
-    bool show = !showRouteEdit->isChecked();
-    showRouteEdit->setChecked(show);
-    routeEditTb->setVisible(show);
-    app->crossHair->setVisible(show);
-    directRoutePreview = show;
+  routeEditBtn = createToolbutton(MapsApp::uiIcon("draw-track"), "Edit Route");
+  routeEditBtn->onClicked = [=](){
+    toggleRouteEdit(!routeEditBtn->isChecked());
     setRouteMode(activeTrack->routeMode);  // update previewMarker
   };
   routeEditTb->setVisible(false);
 
   auto wayptsTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Waypoints");
   wayptsTb->addWidget(saveRouteBtn);
-  wayptsTb->addWidget(showRouteEdit);
+  wayptsTb->addWidget(routeEditBtn);
   wayptsTb->addWidget(routeModeBtn);
   wayptsTb->addWidget(routePluginBtn);
   wayptsTb->addWidget(wayptsOverflowBtn);
@@ -1639,6 +1675,7 @@ Button* MapsTracks::createPanel()
     }
     else if(event->type == SvgGui::INVISIBLE) {
       directRoutePreview = false;
+      app->drawOnMap = false;
       app->crossHair->setVisible(false);
       app->map->markerSetVisible(previewMarker, false);
     }
@@ -1687,7 +1724,7 @@ Button* MapsTracks::createPanel()
       if(tracksDirty)
         populateTracks();  // needed to get order
       auto items = tracksContent->getOrder();
-      for(size_t ii = 0; ii < recordTrack ? 9 : 10 && ii < items.size(); ++ii) {
+      for(size_t ii = 0; ii < (recordTrack ? 9 : 10) && ii < items.size(); ++ii) {
         for(size_t jj = 0; jj < tracks.size(); ++jj) {
           if(std::to_string(tracks[jj].rowid) == items[ii]) {
             Button* item = createCheckBoxMenuItem(tracks[jj].title.c_str());

@@ -140,8 +140,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   pickResultName = namestr;
   pickResultProps = propstr;
   pickResultOsmId = osmid;
+  bool wasCurrLoc = currLocPlaceInfo;
   currLocPlaceInfo = (locMarker > 0 && pickedMarkerId == locMarker);
   flyToPickResult = true;
+  if(wasCurrLoc != currLocPlaceInfo)
+    updateLocMarker();
   // allow pick result to be used as waypoint
   if(mapsTracks->onPickResult())
     return;
@@ -378,6 +381,14 @@ void MapsApp::longPressEvent(float x, float y)
 void MapsApp::doubleTapEvent(float x, float y)
 {
   map->handleDoubleTapGesture(x, y);
+}
+
+void MapsApp::fingerEvent(int action, float x, float y)
+{
+  LngLat pos;
+  map->screenPositionToLngLat(x, y, &pos.longitude, &pos.latitude);
+
+  mapsTracks->fingerEvent(action, pos);
 }
 
 void MapsApp::clearPickResult()

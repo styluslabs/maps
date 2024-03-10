@@ -255,10 +255,11 @@ void TrackPlot::draw(SvgPainter* svgp) const
 
 void TrackSparkline::setTrack(const std::vector<Waypoint>& locs)
 {
+  altDistPlot.clear();
+  if(locs.empty()) return;
   minAlt = FLT_MAX;
   maxAlt = -FLT_MAX;
   maxDist = locs.back().dist;
-  altDistPlot.clear();
   altDistPlot.addPoint(locs.front().dist, -1000);
   for(auto& wpt : locs) {
     const Location& tpt = wpt.loc;

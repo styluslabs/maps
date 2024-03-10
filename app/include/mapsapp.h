@@ -52,6 +52,7 @@ public:
   void doubleTapEvent(float x, float y);
   void longPressEvent(float x, float y);
   void hoverEvent(float x, float y);
+  void fingerEvent(int action, float x, float y);
 
   void loadSceneFile(bool async = true, bool setPosition = false);
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
@@ -84,6 +85,7 @@ public:
   int placeInfoProviderIdx = 0;
   bool hasLocation = false;
   bool glNeedsInit = true;
+  bool drawOnMap = false;
 
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;

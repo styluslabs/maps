@@ -478,7 +478,6 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   auto setListFn = [=](int newlistid, std::string listname){
     if(newlistid == listid) return;
     SQLiteStmt(app->bkmkDB, "UPDATE bookmarks SET list_id = ? WHERE rowid = ?;").bind(newlistid, rowid).exec();
-    chooseListBtn->setTitle(listname.c_str());
     // delete old marker
     auto oldit = bkmkMarkers.find(listid);
     if(oldit != bkmkMarkers.end())
@@ -495,6 +494,8 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     }
     bkmkPanelDirty = true;
     listsDirty = archiveDirty = true;
+    // rebuild place info (listid, captured in several places, has changed)
+    app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
   };
 
   //Button* chooseListBtn = new Button(widget->containerNode()->selectFirst(".combobox"));

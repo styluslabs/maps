@@ -19,6 +19,7 @@ public:
   void addRouteStep(const char* instr, int rteptidx);
   bool onPickResult();
   bool tapEvent(LngLat location);
+  void fingerEvent(int action, LngLat pos);
   void routePluginError(const char* err);
 
   MarkerID trackHoverMarker = 0;
@@ -48,6 +49,8 @@ public:
   TrackSparkline* trackSpark = NULL;
   Button* retryBtn = NULL;
   TrackSliders* trackSliders = NULL;
+  Button* routeEditBtn = NULL;
+  Toolbar* routeEditTb = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
@@ -78,6 +81,7 @@ private:
   void updateStats(std::vector<Waypoint>& locs);
   void updateDistances();
   bool findPickedWaypoint(GpxFile* track);
+  void toggleRouteEdit(bool show);
 
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;

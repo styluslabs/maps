@@ -351,14 +351,30 @@ void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props, in
     res.props.setValue(item.key, item.value);
   res.props.set("priority", places.size()-1);  //id < 0 ? places.size()-1 : id);
   bool collided = false;
+  LngLat other;
   if(!altStyling.empty()) {
-    double markerRadius = map->getZoom() >= 17 ? 25 : 50;
-    collider.intersect(markerAABB(map, res.pos, markerRadius),
-        [&](auto& a, auto& b) { collided = true; return false; });
+    float zoom = map->getZoom();
+    double markerRadius = zoom >= 17 ? 25 : 50;
+    collider.intersect(markerAABB(map, res.pos, markerRadius), [&](auto& a, auto& b) {
+      map->screenPositionToLngLat(b.getCentroid().x, b.getCentroid().y, &other.longitude, &other.latitude);
+      collided = true;
+      return false;
+    });
   }
   res.isAltMarker = collided;
-  if(collided)
+  if(collided) {
+    const double minSep = MapProjection::metersPerPixelAtZoom(20) * 30;
+    // ensure some separation between markers so they separate at sufficiently high zoom
+    auto pm0 = MapProjection::lngLatToProjectedMeters(other);
+    auto pm1 = MapProjection::lngLatToProjectedMeters(pos);
+    if(pm0 == pm1) {
+      float dir = (id%8) * (M_PI/4);
+      res.pos = MapProjection::projectedMetersToLngLat(pm0 + minSep*glm::dvec2(glm::cos(dir), glm::sin(dir)));
+    }
+    else if(glm::distance(pm0, pm1) < minSep)
+      res.pos = MapProjection::projectedMetersToLngLat(pm0 + minSep*glm::normalize(pm1 - pm0));
     res.altMarkerId = getMarker(res);
+  }
   else
     res.markerId = getMarker(res);
 }
