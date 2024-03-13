@@ -963,6 +963,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       activeTrack = NULL;
       toggleRouteEdit(false);
       createRoute(&navRoute);
+      // send PANEL_OPENED event to make the panel button checked
+      tracksPanel->sdlUserEvent(MapsApp::gui, MapsApp::PANEL_OPENED);
       populateWaypoints(&navRoute);
     };
     tb->addWidget(routeBtn);
@@ -976,6 +978,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       activeTrack = NULL;
       toggleRouteEdit(true);
       createRoute(&navRoute);
+      // send PANEL_OPENED event to make the panel button checked
+      tracksPanel->sdlUserEvent(MapsApp::gui, MapsApp::PANEL_OPENED);
       populateWaypoints(&navRoute);
     };
     tb->addWidget(measureBtn);

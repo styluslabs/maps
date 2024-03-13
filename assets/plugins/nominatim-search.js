@@ -1,7 +1,7 @@
 function nominatimSearch(query, bounds, flags)
 {
   // &bounded=1 limits results to viewbox; otherwise results outside are possible
-  const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&viewbox=" + bounds.join() + "&limit=50&q=" + query;
+  const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&viewbox=" + bounds.join() + "&limit=50&q=" + encodeURIComponent(query);
   httpRequest(url, "", function(_content, _error) {
     if(!_content) { notifyError("search", "Nominatim Search error"); return; }
     const content = JSON.parse(_content);

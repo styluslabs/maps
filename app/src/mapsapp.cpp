@@ -1370,6 +1370,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
 void MapsApp::showPanelContainer(bool show)
 {
+  if(!panelHistory.empty() && !show)
+    panelHistory.back()->setVisible(false);  // to send INVISIBLE event to panel
   panelContainer->setVisible(show);
   if(panelSeparator)
     panelSeparator->setVisible(show);
@@ -1377,6 +1379,8 @@ void MapsApp::showPanelContainer(bool show)
     panelSplitter->setVisible(show);
     mainTbContainer->setVisible(!show);
   }
+  if(!panelHistory.empty() && show)
+    panelHistory.back()->setVisible(true);  // to send VISIBLE event to panel
 }
 
 void MapsApp::showPanel(Widget* panel, bool isSubPanel)

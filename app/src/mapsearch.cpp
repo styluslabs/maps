@@ -287,6 +287,7 @@ void MapsSearch::searchPluginError(const char* err)
 {
   retryBtn->setIcon(MapsApp::uiIcon("retry"));
   retryBtn->setVisible(true);
+  resultCountText->setText("Search failed");
 }
 
 void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
@@ -668,6 +669,7 @@ Button* MapsSearch::createPanel()
   };
 
   retryBtn = new Button(searchBoxNode->selectFirst(".retry-btn"));
+  retryBtn->isFocusable = true;
   retryBtn->onClicked = [this](){
     if(!queryText->text().empty())
       searchText(queryText->text(), RETURN);

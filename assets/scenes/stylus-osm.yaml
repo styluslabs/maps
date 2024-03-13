@@ -907,7 +907,7 @@ layers:
             lines:
                 style: unlit-lines
                 color: '#008800'  #global.color.road
-                width: [[13, 2px], [14, 3px]]
+                width: [[13, 1.5px], [14, 2px]]
                 order: global.order.bicycle
         track:
             exclusive: true
@@ -1304,7 +1304,8 @@ layers:
                     exclusive: true
                     filter:
                         - amenity: [cinema, theatre, concert_hall, arts_centre, library]
-                        - tourism: museum
+                        - tourism: [museum, attraction, artwork]
+                        - historic: monument
                     draw: { points: { priority: global.priority.poi_culture } }
                 church:
                     exclusive: true
