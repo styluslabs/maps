@@ -21,6 +21,7 @@ global:
         bldg_3d_line: [.55, .55, .55, 0.5]
         # lines
         road: rgba(196, 196, 196, 0.4)
+        oneway_arrow: '#ddd'
         motorway: rgba(253, 226, 147, 0.4)
         motorway_link: rgba(253, 226, 147, 0.4)
         motorway_muted: rgba(255, 255, 255, 0.4)

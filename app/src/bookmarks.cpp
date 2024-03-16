@@ -506,6 +506,8 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   // long press to open list from a member
   chooseListBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(isLongPressOrRightClick(event)) {
+      app->showPanel(listsPanel);
+      app->panelToSkip = listsPanel;
       populateBkmks(listid, true);
       return true;
     }

@@ -176,9 +176,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
 
   item->selectFirst(".action-container")->addWidget(toolbar);
 
-  TextLabel* titlenode = static_cast<TextLabel*>(infoPanel->selectFirst(".panel-title"));
-  titlenode->setText(namestr.c_str());
-  //titlenode->setText(SvgPainter::breakText(titlenode->textNode, 250).c_str());
+  real titlewidth = getPanelWidth() - 60;  // must be done before setText!
+  TextLabel* titlelabel = static_cast<TextLabel*>(infoPanel->selectFirst(".panel-title"));
+  titlelabel->setText(namestr.c_str());
+  titlelabel->setText(SvgPainter::breakText(static_cast<SvgText*>(titlelabel->node), titlewidth).c_str());
 
   Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
   if(bkmkSection)
@@ -843,30 +844,6 @@ void MapsWidget::draw(SvgPainter* svgp) const
   //app->map->render();
 }
 
-class CrosshairWidget : public Widget
-{
-public:
-  CrosshairWidget() : Widget(new SvgCustomNode) {}
-  void draw(SvgPainter* svgp) const override;
-  Rect bounds(SvgPainter* svgp) const override;
-};
-
-Rect CrosshairWidget::bounds(SvgPainter* svgp) const
-{
-  return svgp->p->getTransform().mapRect(Rect::wh(40, 40));
-}
-
-void CrosshairWidget::draw(SvgPainter* svgp) const
-{
-  Painter* p = svgp->p;
-  Rect bbox = node->bounds();
-
-  p->setFillBrush(Color::NONE);
-  p->setStroke(Color::RED, 3);  //, Painter::FlatCap, Painter::BevelJoin);
-  p->drawLine(Point(0, bbox.height()/2), Point(bbox.width(), bbox.height()/2));
-  p->drawLine(Point(bbox.width()/2, 0), Point(bbox.width()/2, bbox.height()));
-}
-
 class ScaleBarWidget : public Widget
 {
 public:
@@ -1396,6 +1373,7 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
       for(Widget* w : panelHistory)
         w->sdlUserEvent(gui, PANEL_CLOSED);
       panelHistory.clear();
+      panelToSkip = NULL;
     }
     else  // remove previous instance from history (should only apply to place info panel)
       panelHistory.erase(std::remove(panelHistory.begin(), panelHistory.end(), panel), panelHistory.end());
@@ -1414,6 +1392,17 @@ bool MapsApp::popPanel()
   popped->setVisible(false);
   panelHistory.pop_back();
   popped->sdlUserEvent(gui, PANEL_CLOSED);
+
+  if(panelHistory.empty())
+    showPanelContainer(false);
+  else if(panelHistory.back() == panelToSkip) {
+    // hack to handle the few cases where we want to go directly to a subpanel (e.g. directions)
+    panelToSkip = NULL;
+    popPanel();
+  }
+  else
+    panelHistory.back()->setVisible(true);
+
   if(!panelHistory.empty())
     panelHistory.back()->setVisible(true);
   else
@@ -1820,6 +1809,8 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   scaleBarPainter->setsRGBAdjAlpha(true);
   scaleBarPainter->scale(gui->paintScale);  // beginFrame resets Painter state
   scaleBar->directDraw(scaleBarPainter.get());
+  if(crossHair->isVisible())
+    crossHair->directDraw(scaleBarPainter.get());
   scaleBarPainter->endFrame();
 
   if(painter->usesGPU())

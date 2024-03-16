@@ -228,6 +228,19 @@ function relation_function(relation)
     relation:Attribute("color", relation:Find("colour"))
     relation:Attribute("osm_id", relation:Id())
     relation:Attribute("osm_type", "relation")
+  elseif relation:Find("type")=="boundary" then
+    local admin_level = math.min(11, tonumber(relation:Attribute("admin_level")) or 11)
+    local mz = 0
+    if     admin_level>=3 and admin_level<5 then mz=4
+    elseif admin_level>=5 and admin_level<7 then mz=8
+    elseif admin_level==7 then mz=10
+    elseif admin_level>=8 then mz=12
+    end
+    relation:Layer("boundary",false)
+    relation:MinZoom(mz)
+    relation:AttributeNumeric("admin_level", admin_level)
+    SetNameAttributes(relation, mz, "relation")
+    if relation:Find("disputed")=="yes" then relation:AttributeNumeric("disputed", 1) end  --boundary=="disputed" or
   end
 end
 
@@ -266,31 +279,20 @@ function way_function(way)
   if landuse == "field" then landuse = "farmland" end
   if landuse == "meadow" and way:Find("meadow")=="agricultural" then landuse="farmland" end
 
-  -- Boundaries within relations
-  local admin_level = 11
-  while true do
-    local rel = way:NextRelation()
-    if not rel then break end
-    local bndry = way:FindInRelation("boundary")
-    if bndry~="" then
-      boundary = bndry
-      admin_level = math.min(admin_level, tonumber(way:FindInRelation("admin_level")) or 11)
-    end
-  end
-
-  -- Write boundaries
-  if boundary=="administrative" or boundary=="disputed" and not (way:Find("maritime")=="yes") then
-    admin_level = math.min(admin_level, tonumber(way:Find("admin_level")) or 11)  -- for boundary w/o relation
+  -- Boundaries
+  if boundary=="administrative" or boundary=="disputed" then
+    -- boundary relation will be handled in relation_function()
+    if way:NextRelation() or way:Find("maritime")=="yes" then return end
+    local admin_level = math.min(11, tonumber(way:Find("admin_level")) or 11)
     local mz = 0
     if     admin_level>=3 and admin_level<5 then mz=4
     elseif admin_level>=5 and admin_level<7 then mz=8
     elseif admin_level==7 then mz=10
     elseif admin_level>=8 then mz=12
     end
-
     way:Layer("boundary",false)
-    way:AttributeNumeric("admin_level", admin_level)
     way:MinZoom(mz)
+    way:AttributeNumeric("admin_level", admin_level)
     SetNameAttributes(way)
     if boundary=="disputed" or way:Find("disputed")=="yes" then way:AttributeNumeric("disputed", 1) end
   end

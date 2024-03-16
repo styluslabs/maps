@@ -1,4 +1,6 @@
 #include "mapwidgets.h"
+#include "usvg/svgpainter.h"
+
 
 SvgNode* uiIcon(const char* id)
 {
@@ -931,4 +933,25 @@ Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* ti
   };
 
   return dialog;
+}
+
+Rect CrosshairWidget::bounds(SvgPainter* svgp) const
+{
+  return svgp->p->getTransform().mapRect(Rect::wh(40, 40));
+}
+
+void CrosshairWidget::directDraw(Painter* p) const
+{
+  //Painter* p = svgp->p;
+  Rect bbox = node->bounds();
+  p->save();
+  p->translate(bbox.center());
+  bbox.translate(-bbox.center());
+  p->setFillBrush(Color::NONE);
+  p->setStroke(Color::RED, 3);  //, Painter::FlatCap, Painter::BevelJoin);
+  if(!routePreviewOrigin.isNaN())
+    p->drawLine(routePreviewOrigin, Point(0,0));
+  p->drawLine(Point(bbox.left, 0), Point(bbox.right, 0));
+  p->drawLine(Point(0, bbox.top), Point(0, bbox.bottom));
+  p->restore();
 }

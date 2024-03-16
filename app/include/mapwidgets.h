@@ -127,6 +127,17 @@ private:
   void populateColorList();
 };
 
+class CrosshairWidget : public Widget
+{
+public:
+  CrosshairWidget() : Widget(new SvgCustomNode) {}
+  void draw(SvgPainter* svgp) const override {}
+  Rect bounds(SvgPainter* svgp) const override;
+  void directDraw(Painter* p) const;
+
+  Point routePreviewOrigin;
+};
+
 SvgNode* uiIcon(const char* id);
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);

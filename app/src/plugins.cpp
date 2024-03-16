@@ -5,6 +5,7 @@
 #include "bookmarks.h"
 #include "tracks.h"
 #include "util.h"
+#include "util/yamlPath.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -267,7 +268,6 @@ static int addSearchResult(duk_context* ctx)
   int flags = duk_to_number(ctx, 4);
   const char* json = duk_json_encode(ctx, 5);    // duktape obj -> string -> rapidjson obj ... not ideal
 
-  //std::lock_guard<std::mutex> lock(MapsApp::inst->mapsSearch->resultsMutex);
   auto& ms = MapsApp::inst->mapsSearch;
   if(flags & MapsSearch::MAP_SEARCH) {
     ms->addMapResult(osm_id, lng, lat, score, json);
@@ -276,9 +276,9 @@ static int addSearchResult(duk_context* ctx)
   if(flags & MapsSearch::LIST_SEARCH) {
     ms->addListResult(osm_id, lng, lat, score, json);
     ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
+    if(flags & MapsSearch::UPDATE_RESULTS)  // flag set for final result
+      ms->resultsUpdated(flags);
   }
-  if(flags & MapsSearch::UPDATE_RESULTS)  // flag set for final result
-    ms->resultsUpdated(flags);
   return 0;
 }
 
@@ -367,12 +367,37 @@ static int notifyError(duk_context* ctx)
 static int readSceneValue(duk_context* ctx)
 {
   std::string yamlPath = duk_require_string(ctx, 0);
-  YAML::Node yamlVal = MapsApp::inst->readSceneValue(yamlPath);
+  YAML::Node yamlVal;
+  if(yamlPath.substr(0, 7) == "config.")
+    Tangram::YamlPath(yamlPath.substr(7)).get(MapsApp::config, yamlVal);
+  else
+    yamlVal = MapsApp::inst->readSceneValue(yamlPath);
   std::string jsonStr = yamlToStr(yamlVal, true);
   duk_push_string(ctx, jsonStr.c_str());
   if(!jsonStr.empty())
     duk_json_decode(ctx, -1);
   return 1;
+}
+
+static int writeSceneValue(duk_context* ctx)
+{
+  std::string yamlPath = duk_require_string(ctx, 0);
+  std::string strVal = duk_safe_to_string(ctx, 1);
+  if(yamlPath.substr(0, 7) == "config.") {
+    YAML::Node yamlVal;
+    YAML::Node node;
+    try {
+      yamlVal = YAML::Load(strVal);
+    } catch (const YAML::ParserException& e) {
+      LOGE("Parsing YAML string '%s' failed: %s", strVal.c_str(), e.what());
+      return 0;
+    }
+    Tangram::YamlPath("+" + yamlPath.substr(7)).get(MapsApp::config, node);
+    node = yamlVal;
+  }
+  else
+    MapsApp::inst->mapsSources->updateSceneVar(yamlPath, strVal, "", false);
+  return 0;
 }
 
 static int consoleLog(duk_context* ctx)
@@ -407,6 +432,8 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addRouteStep");
   duk_push_c_function(ctx, readSceneValue, 1);
   duk_put_global_string(ctx, "readSceneValue");
+  duk_push_c_function(ctx, writeSceneValue, 2);
+  duk_put_global_string(ctx, "writeSceneValue");
   // console.log
   duk_idx_t consoleObj = duk_push_object(ctx);
   duk_push_c_function(ctx, consoleLog, 1);

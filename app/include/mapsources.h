@@ -12,6 +12,7 @@ public:
   void addSource(const std::string& key, YAML::Node srcnode);
   void rebuildSource(const std::string& srcname = "", bool async = true);
   void onMapEvent(MapEvent_t event);
+  void updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload);
   Button* createPanel();
 
   std::string currSource;
@@ -20,7 +21,6 @@ public:
 private:
   std::string createSource(std::string savekey, const std::string& yamlStr = "");
   void populateSources();
-  void updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload);
   Widget* processUniformVar(const std::string& stylename, const std::string& name);
   void populateSceneVars();
   void populateSourceEdit(std::string key);

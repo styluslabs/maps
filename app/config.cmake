@@ -47,9 +47,9 @@ target_include_directories(maps-app
   ${STYLUSLABS_DEPS}
   ${STYLUSLABS_DEPS}/nanovg-2/src
   ${STYLUSLABS_DEPS}/pugixml/src
-  ${STYLUSLABS_DEPS}/SDL/include
 )
 
 target_compile_definitions(maps-app PUBLIC GLM_FORCE_CTOR_INIT)
 target_compile_definitions(maps-app PUBLIC PUGIXML_NO_XPATH)
 target_compile_definitions(maps-app PUBLIC PUGIXML_NO_EXCEPTIONS)
+target_compile_definitions(maps-app PUBLIC SVGGUI_NO_SDL)

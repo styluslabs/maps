@@ -568,7 +568,7 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   track->waypoints.erase(it);
   track->modified = true;
   if(track->waypoints.empty())
-    app->map->markerSetVisible(previewMarker, false);
+    app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
   if(routed)
     createRoute(track);
   wayptContent->deleteItem(uid);
@@ -838,25 +838,17 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     // update polyline marker in direct mode
     if(directRoutePreview && activeTrack->routeMode == "direct" && !activeTrack->waypoints.empty()) {
       auto it = insertionWpt.empty() ? activeTrack->waypoints.end() : activeTrack->findWaypoint(insertionWpt);
-      std::vector<LngLat> pts = {(--it)->lngLat(), app->getMapCenter()};
-      double distkm = lngLatDist(pts[0], pts[1]);
-      double pix = distkm*1000/MapProjection::metersPerPixelAtZoom(app->map->getZoom());
-      if(previewMarker <= 0) {
-        previewMarker = app->map->markerAdd();
-        app->map->markerSetStylingFromPath(previewMarker, "layers.track.draw.track");  //styling);
-      }
-      if(previewRoute.empty() || pts[0] != previewRoute[0] || pts[1] != previewRoute[1]) {
-        app->map->markerSetPolyline(previewMarker, pts.data(), 2);
-        app->map->markerSetProperties(previewMarker, {{{"color", "red"}}});
-        app->map->markerSetVisible(previewMarker, pix > 2);
-      }
-      previewRoute = pts;
+      LngLat mappos = (--it)->lngLat();
+      Point scrpos, mapcenter(app->map->getViewportWidth()/2, app->map->getViewportHeight()/2);
+      app->map->lngLatToScreenPosition(mappos.longitude, mappos.latitude, &scrpos.x, &scrpos.y);
+      app->crossHair->routePreviewOrigin = (scrpos - mapcenter)/MapsApp::gui->paintScale;
+      double distkm = lngLatDist(mappos, app->getMapCenter());
       std::string pvstr = distKmToStr(distkm);
       if(it != activeTrack->waypoints.begin() && distkm > 0) {
         LngLat prevpt = (--it)->lngLat();
         auto pm0 = MapProjection::lngLatToProjectedMeters(prevpt);
-        auto pm1 = MapProjection::lngLatToProjectedMeters(pts[0]);
-        auto pm2 = MapProjection::lngLatToProjectedMeters(pts[1]);
+        auto pm1 = MapProjection::lngLatToProjectedMeters(mappos);  //pts[0]);
+        auto pm2 = MapProjection::lngLatToProjectedMeters(app->getMapCenter());  //pts[1]);
         auto dr0 = glm::normalize(pm1 - pm0), dr1 = glm::normalize(pm2 - pm1);
         pvstr += fstring(" | %.1f\u00B0", 180*std::acos(glm::dot(dr0, dr1))/M_PI);
       }
@@ -918,11 +910,11 @@ void MapsTracks::setRouteMode(const std::string& mode)
   else if(parts[0] == "bike") icon = "bike";
   else if(parts[0] == "drive") icon = "car";
   routeModeBtn->setIcon(MapsApp::uiIcon(icon));
-  previewRoute.clear();
+  //previewRoute.clear();
   if(directRoutePreview && mode == "direct")
     onMapEvent(MAP_CHANGE);
   else
-    app->map->markerSetVisible(previewMarker, false);
+    app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
   app->drawOnMap = mode == "draw";
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
@@ -963,8 +955,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       activeTrack = NULL;
       toggleRouteEdit(false);
       createRoute(&navRoute);
-      // send PANEL_OPENED event to make the panel button checked
-      tracksPanel->sdlUserEvent(MapsApp::gui, MapsApp::PANEL_OPENED);
+      app->showPanel(tracksPanel);
+      app->panelToSkip = tracksPanel;
       populateWaypoints(&navRoute);
     };
     tb->addWidget(routeBtn);
@@ -978,8 +970,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       activeTrack = NULL;
       toggleRouteEdit(true);
       createRoute(&navRoute);
-      // send PANEL_OPENED event to make the panel button checked
-      tracksPanel->sdlUserEvent(MapsApp::gui, MapsApp::PANEL_OPENED);
+      app->showPanel(tracksPanel);
+      app->panelToSkip = tracksPanel;
       populateWaypoints(&navRoute);
     };
     tb->addWidget(measureBtn);
@@ -1681,7 +1673,7 @@ Button* MapsTracks::createPanel()
       directRoutePreview = false;
       app->drawOnMap = false;
       app->crossHair->setVisible(false);
-      app->map->markerSetVisible(previewMarker, false);
+      app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
     }
     else if(event->type == MapsApp::PANEL_CLOSED) {
       app->pluginManager->cancelRequests(PluginManager::ROUTE);

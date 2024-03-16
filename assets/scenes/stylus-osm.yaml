@@ -38,6 +38,7 @@ global:
         casing_18: '#aaa'
         tunnel: '#E3E3E3'
         tunnel_casing: '#A0A0A0'
+        oneway_arrow: '#888'
         motorway: '#FDE293'
         motorway_tunnel: '#CDB775'
         motorway_link: '#FDE293'  #'#aaa'
@@ -149,11 +150,12 @@ global:
         continent: 6
         district_CN: 9.5
         neighborhood: 15
-        park: 21
-        golf: 22
-        cemetery: 23
-        forest: 24
+        park: 20
+        golf: 21
+        cemetery: 22
+        forest: 23
         # road labels
+        oneway_arrow: 24
         motorway_ref: 25
         motorway_name: 26
         road_primary: 30
@@ -693,15 +695,20 @@ layers:
         road-icons:
             arrows:
                 # oneway arrows and shields are distinct groups!
-                exclusive: true
+                #exclusive: true
                 filter: { oneway: 1, $zoom: { min: 17 } }
                 draw:
                     points:
+                        #collide: false
+                        priority: global.priority.oneway_arrow
+                        style: poi-points
                         texture: pois
                         sprite: arrow
+                        color: global.color.oneway_arrow
                         flat: true
                         size: [[17, 18px], [18, 20px], [20, 32px]]
                         placement: spaced
+                        placement_min_length_ratio: 0.5
                         placement_spacing: [[17, 70px], [20, 175px]]
                         angle: auto
 
@@ -897,8 +904,8 @@ layers:
         data: { source: osm, layer: transportation }
         filter:
             any:
-                - { class: [track, path], bicycle: [designated, yes] }
-                - { class: track, highway: cycleway }
+                - bicycle: [designated, yes]
+                - highway: cycleway
                 - cycleway: true
                 - cycleway_right: true
                 - cycleway_left: true
@@ -914,8 +921,8 @@ layers:
             priority: 1
             filter:
                 any:
-                    - { class: [track, path], bicycle: [designated, yes] }
-                    - { class: track, highway: cycleway }
+                    - bicycle: [designated, yes]
+                    - highway: cycleway
                     - cycleway: [track, opposite_track]
                     - cycleway_left: [track, opposite_track]
                     - cycleway_right: [track, opposite_track]
@@ -1324,9 +1331,9 @@ layers:
 
     boundaries:
         data: { source: osm, layer: boundary }
+        filter: { admin_level: [2, 3, 4] }
         draw:
             lines:
-                visible: false
                 order: global.order.border
                 width: 1px
                 color: global.color.border
@@ -1348,7 +1355,6 @@ layers:
             filter: { admin_level: 2 }
             draw:
                 lines:
-                    visible: true
                     color: global.color.border_country
                     width: 1px
             disputed:
@@ -1357,10 +1363,7 @@ layers:
 
         region:
             filter: { admin_level: [3, 4] }
-            draw:
-                lines:
-                    visible: true
-                    style: dashed-border
+            draw: { lines: { style: dashed-border } }
 
     places:
         data: { source: osm, layer: place }
@@ -1498,7 +1501,7 @@ layers:
                     text:
                         visible: false
                         priority: global.priority.neighborhood
-                        #interactive: true
+                        interactive: false
                         font:
                             size: [[13, 11px], [14, 11px], [15, 13px]]
                             style: italic

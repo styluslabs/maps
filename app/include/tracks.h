@@ -25,7 +25,6 @@ public:
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;
   MarkerID trackEndMarker = 0;
-  MarkerID previewMarker = 0;
 
   std::vector<GpxFile> tracks;
   GpxFile recordedTrack;
@@ -85,7 +84,6 @@ private:
 
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;
-  std::vector<LngLat> previewRoute;
   std::string insertionWpt;
   Waypoint trackHoverLoc = LngLat{0, 0};
   double cropStart = 0;

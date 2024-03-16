@@ -58,7 +58,6 @@ target_include_directories(tangram
   ${STYLUSLABS_DEPS}
   ${STYLUSLABS_DEPS}/nanovg-2/src
   ${STYLUSLABS_DEPS}/pugixml/src
-  ${STYLUSLABS_DEPS}/SDL/include
   ${FONTCONFIG_INCLUDE_DIRS}
 )
 

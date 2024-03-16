@@ -24,6 +24,7 @@ class Menubar;
 class SharedMenu;
 class MapsWidget;
 class ScaleBarWidget;
+class CrosshairWidget;
 class ManageColorsDialog;
 class SvgNode;
 class Color;
@@ -133,13 +134,14 @@ public:
   Button* reorientBtn = NULL;
   Button* recenterBtn = NULL;
   Widget* gpsStatusBtn = NULL;
-  Widget* crossHair = NULL;
+  CrosshairWidget* crossHair = NULL;
   Widget* legendContainer = NULL;
   ScaleBarWidget* scaleBar = NULL;
   SharedMenu* colorPickerMenu = NULL;
   std::vector<Widget*> panelHistory;
   std::vector<Widget*> panelPages;
   std::unique_ptr<ManageColorsDialog> customColorDialog;
+  Widget* panelToSkip = NULL;
 
   std::atomic_int_fast64_t storageTotal = {0};
   std::atomic_int_fast64_t storageOffline = {0};

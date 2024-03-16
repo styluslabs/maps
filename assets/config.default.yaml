@@ -33,7 +33,15 @@ metric_units: true
 random_shuffle_seed: true
 
 # color choices for tracks and markers; from https://colorkit.co
-colors: ["#1abc9c","#16a085","#2ecc71","#27ae60","#3498db","#2980b9","#9b59b6","#8e44ad","#34495e","#2c3e50","#f1c40f","#f39c12","#e67e22","#d35400","#e74c3c","#c0392b"]
+# ["#1abc9c","#16a085","#2ecc71","#27ae60","#3498db","#2980b9","#9b59b6","#8e44ad","#34495e","#2c3e50","#f1c40f","#f39c12","#e67e22","#d35400","#e74c3c","#c0392b"]
+colors:
+  - "#1ABC9C"
+  - "#27AE60"
+  - "#2980B9"
+  - "#9B59B6"
+  - "#F1C40F"
+  - "#F39C12"
+  - "#D35400"
 
 # for debugging
 num_tile_workers: 2
