@@ -10,7 +10,7 @@ function getPlaceType(_props)
 {
   if(!_props) return "";
   const props = JSON.parse(_props);
-  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"];
+  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["place"] || props["railway"];
   if(!type) return "";
   type = type.replace(/_/g, " ");
   return type.charAt(0).toUpperCase() + type.slice(1);

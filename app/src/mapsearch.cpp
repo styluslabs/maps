@@ -248,6 +248,7 @@ void MapsSearch::clearSearchResults()
 {
   app->pluginManager->cancelRequests(PluginManager::SEARCH);  // cancel any outstanding search requests
   app->gui->deleteContents(resultsContent, ".listitem");
+  listResultOffset = 0;
   resultCountText->setText("");
   mapResults.clear();
   listResults.clear();
@@ -382,7 +383,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 
 void MapsSearch::resultsUpdated(int flags)
 {
-  populateResults(listResults);
+  populateResults();
   resultCountText->setText(
       fstring("%s%d results", moreMapResultsAvail ? "over " : "" , mapResults.size()).c_str());
 
@@ -534,18 +535,18 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
   }
 }
 
-void MapsSearch::populateResults(const std::vector<SearchResult>& results)
+void MapsSearch::populateResults()  //const std::vector<SearchResult>& results)
 {
-  for(size_t ii = 0; ii < results.size(); ++ii) {  //for(const auto& res : results)
-    const SearchResult& res = results[ii];
+  for(size_t ii = listResultOffset; ii < listResults.size(); ++ii) {  //for(const auto& res : results)
+    const SearchResult& res = listResults[ii];
     Properties props = jsonToProps(res.tags.c_str());
     std::string namestr = app->getPlaceTitle(props);
     std::string placetype = !res.tags.empty() ? app->pluginManager->jsCallFn("getPlaceType", res.tags) : "";
     if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
     if(namestr.empty()) continue;  // skip if nothing to show in list
     Button* item = createListItem(MapsApp::uiIcon("search"), namestr.c_str(), placetype.c_str());
-    item->onClicked = [this, &results, ii](){
-      app->setPickResult(results[ii].pos, "", results[ii].tags);
+    item->onClicked = [this, ii](){
+      app->setPickResult(listResults[ii].pos, "", listResults[ii].tags);
     };
     double distkm = lngLatDist(app->currLocation.lngLat(), res.pos);
     double dist = app->metricUnits ? distkm : distkm*0.621371;
@@ -559,6 +560,7 @@ void MapsSearch::populateResults(const std::vector<SearchResult>& results)
     item->node->setAttribute("__querytext", namestr.c_str());
     resultsContent->addWidget(item);
   }
+  listResultOffset = listResults.size();
 }
 
 Button* MapsSearch::createPanel()

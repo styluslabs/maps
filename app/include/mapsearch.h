@@ -77,11 +77,12 @@ private:
 
   // GUI
   void populateAutocomplete(const std::vector<std::string>& history);
-  void populateResults(const std::vector<SearchResult>& results);
+  void populateResults();  //const std::vector<SearchResult>& results);
 
   Widget* resultsContent = NULL;
   Button* cancelBtn = NULL;
   Button* retryBtn = NULL;
   TextEdit* queryText = NULL;
   TextBox* resultCountText = NULL;
+  size_t listResultOffset = 0;
 };

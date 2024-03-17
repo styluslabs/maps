@@ -193,8 +193,11 @@ otherRoutes = { road = 8, ferry = 9, bicycle = 10, hiking = 10, foot = 12, mtb =
 
 function relation_scan_function(relation)
   local reltype = relation:Find("type");
-  if reltype == "boundary" and relation:Find("boundary")=="administrative" then
-    relation:Accept()
+  if reltype == "boundary" then
+    local bndtype = relation:Find("boundary")
+    if bndtype=="administrative" or bndtype=="disputed" then
+      relation:Accept()
+    end
   elseif reltype == "route" then
     relation:Accept()
   end
@@ -228,19 +231,6 @@ function relation_function(relation)
     relation:Attribute("color", relation:Find("colour"))
     relation:Attribute("osm_id", relation:Id())
     relation:Attribute("osm_type", "relation")
-  elseif relation:Find("type")=="boundary" then
-    local admin_level = math.min(11, tonumber(relation:Attribute("admin_level")) or 11)
-    local mz = 0
-    if     admin_level>=3 and admin_level<5 then mz=4
-    elseif admin_level>=5 and admin_level<7 then mz=8
-    elseif admin_level==7 then mz=10
-    elseif admin_level>=8 then mz=12
-    end
-    relation:Layer("boundary",false)
-    relation:MinZoom(mz)
-    relation:AttributeNumeric("admin_level", admin_level)
-    SetNameAttributes(relation, mz, "relation")
-    if relation:Find("disputed")=="yes" then relation:AttributeNumeric("disputed", 1) end  --boundary=="disputed" or
   end
 end
 
@@ -280,21 +270,18 @@ function way_function(way)
   if landuse == "meadow" and way:Find("meadow")=="agricultural" then landuse="farmland" end
 
   -- Boundaries
-  if boundary=="administrative" or boundary=="disputed" then
-    -- boundary relation will be handled in relation_function()
-    if way:NextRelation() or way:Find("maritime")=="yes" then return end
-    local admin_level = math.min(11, tonumber(way:Find("admin_level")) or 11)
-    local mz = 0
-    if     admin_level>=3 and admin_level<5 then mz=4
-    elseif admin_level>=5 and admin_level<7 then mz=8
-    elseif admin_level==7 then mz=10
-    elseif admin_level>=8 then mz=12
+  while true do
+    local rel = way:NextRelation()
+    if not rel then break end
+    local bndry = way:FindInRelation("boundary")
+    if bndry=="administrative" or bndry=="disputed" then
+      WriteBoundary(bndry, way, rel)
+      boundary = ""  -- if way is part of boundary relation, do not write as standalone boundary
     end
-    way:Layer("boundary",false)
-    way:MinZoom(mz)
-    way:AttributeNumeric("admin_level", admin_level)
-    SetNameAttributes(way)
-    if boundary=="disputed" or way:Find("disputed")=="yes" then way:AttributeNumeric("disputed", 1) end
+  end
+
+  if boundary=="administrative" or boundary=="disputed" then
+    WriteBoundary(boundary, way, nil)
   end
 
   -- Roads ('transportation' and 'transportation_name', plus 'transportation_name_detail')
@@ -788,6 +775,40 @@ function SetZOrder(way)
   end
   zOrder = zOrder + hwClass
   way:ZOrder(zOrder)
+end
+
+function WriteBoundary(boundary, way, relation)
+  local adm = relation and way:FindInRelation("admin_level") or way:Find("admin_level")
+  local admin_level = math.min(11, tonumber(adm) or 11)
+  local mz = 0
+  if     admin_level>=3 and admin_level<5 then mz=4
+  elseif admin_level>=5 and admin_level<7 then mz=8
+  elseif admin_level==7 then mz=10
+  elseif admin_level>=8 then mz=12
+  end
+  way:Layer("boundary", false)
+  way:MinZoom(mz)
+  way:AttributeNumeric("admin_level", admin_level)
+  -- names
+  if relation then
+    local name = way:FindInRelation("name")
+    if name~="" then way:Attribute("name", name) end
+    for i,lang in ipairs(additional_languages) do
+      local iname = way:FindInRelation("name:"..lang)
+      if iname~="" and iname~=name then way:Attribute("name_"..lang, iname) end
+    end
+    way:Attribute("osm_id", relation[1])
+    way:Attribute("osm_type", "relation")
+  else
+    SetNameAttributes(way)
+  end
+  -- flags
+  if way:Find("maritime")=="yes" or (relation and way:FindInRelation("maritime")=="yes") then
+    way:AttributeNumeric("maritime", 1)
+  end
+  if boundary=="disputed" or way:Find("disputed")=="yes" or (relation and way:FindInRelation("disputed")=="yes")
+    way:AttributeNumeric("disputed", 1)
+  end
 end
 
 -- ==========================================================

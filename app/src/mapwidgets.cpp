@@ -742,7 +742,7 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
       initialPos = Point(event->tfinger.x, event->tfinger.y);
       initialTime = event->tfinger.timestamp;
       initialBounds = node->bounds();
-      gui->pressedWidget = this;
+      //gui->pressedWidget = this;
       nextPage = NULL;  // shouldn't be necessary
     }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget && gui->pressedWidget->isDescendantOf(this)) {
