@@ -1171,7 +1171,7 @@ layers:
                     color: global.poi_color.public
                     size: [[13, 12px], [15, 18px]]
                     text:
-                        visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
+                        #visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
                         optional: 'function() { return !global.show_transit; }'
             tram:
                 filter:

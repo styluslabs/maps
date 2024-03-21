@@ -741,6 +741,7 @@ JNI_FN(keyEvent)(JNIEnv* env, jclass, jint key, jint action)
   if(key == -1)
     event.type = SvgGui::KEYBOARD_HIDDEN;
   else {
+    //LOGW("Android key event: %d %d", key, action);
     event.key.type = action < 0 ? SDL_KEYUP : SDL_KEYDOWN;
     event.key.state = action < 0 ? SDL_RELEASED : SDL_PRESSED;
     event.key.repeat = 0;  //action == GLFW_REPEAT;

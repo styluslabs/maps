@@ -465,7 +465,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   // ref: SDL SDLActivity.java
   private void _showTextInput(int x, int y, int w, int h)
   {
-    Log.v("Tangram", "_showTextInput");
+    ///Log.v("Tangram", "_showTextInput");
     RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(w, h + 15);  //HEIGHT_PADDING);
     params.leftMargin = x;
     params.topMargin = y;
@@ -483,7 +483,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   private void _hideTextInput()
   {
-    Log.v("Tangram", "_hideTextInput");
+    ///Log.v("Tangram", "_hideTextInput");
     mTextEdit.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
     InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
     imm.hideSoftInputFromWindow(mTextEdit.getWindowToken(), 0);
@@ -493,7 +493,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     runOnUiThread(new Runnable() { @Override public void run() {
       if(mTextEdit.setImeText(text, selStart, selEnd)) {
-        Log.v("Tangram", "restartInput");
+        ///Log.v("Tangram", "restartInput");
         InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         imm.restartInput(mTextEdit);  // need to clear composing state of keyboard, etc.
       }
@@ -613,12 +613,12 @@ class MapsInputConnection extends BaseInputConnection
   public MapsInputConnection(DummyEdit targetView, boolean fullEditor) {
     super(targetView, fullEditor);
     mEditView = targetView;
-    Log.v("Tangram", "MapsInputConnection ctor " + toString());
+    ///Log.v("Tangram", "MapsInputConnection ctor " + toString());
   }
 
   @Override
   public void closeConnection() {
-    Log.v("Tangram", "closeConnection " + toString());
+    ///Log.v("Tangram", "closeConnection " + toString());
     super.closeConnection();
   }
 
@@ -638,6 +638,12 @@ class MapsInputConnection extends BaseInputConnection
     et.selectionEnd = Selection.getSelectionEnd(editable);
     et.flags = ExtractedText.FLAG_SINGLE_LINE;  //mSingleLine ? ExtractedText.FLAG_SINGLE_LINE : 0;
     return et;
+  }
+
+  @Override
+  public boolean performEditorAction(int actionCode) {
+    mEditView.onEditorAction(actionCode);
+    return true;
   }
 
   // override these 4 methods to call updateText() if not using EditText
@@ -662,6 +668,16 @@ class ProxyEdit extends EditText
   }
 
   @Override
+  public void onEditorAction(int actionCode) {
+    //super.onEditorAction(actionCode);
+    //Log.v("Tangram", "onEditorAction: " + actionCode);
+    if(actionCode == EditorInfo.IME_ACTION_DONE) {
+      MapsLib.keyEvent(KeyEvent.KEYCODE_ENTER, 1);
+      MapsLib.keyEvent(KeyEvent.KEYCODE_ENTER, -1);
+    }
+  }
+
+  @Override
   protected void onSelectionChanged(int selStart, int selEnd) {
     super.onSelectionChanged(selStart, selEnd);
     updateText();
@@ -676,7 +692,7 @@ class ProxyEdit extends EditText
   protected boolean updateText() {
     final Editable content = getEditableText();
     if (!enableUpdate || content == null) { return false; }
-    Log.v("Tangram", "updateText (Java -> C++): " + content.toString() + "; sel: " + Selection.getSelectionStart(content) + ", " + Selection.getSelectionEnd(content));
+    ///Log.v("Tangram", "updateText (Java -> C++): " + content.toString() + "; sel: " + Selection.getSelectionStart(content) + ", " + Selection.getSelectionEnd(content));
     MapsLib.imeTextUpdate(content.toString(),
         Selection.getSelectionStart(content), Selection.getSelectionEnd(content));
     return true;
@@ -704,13 +720,13 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
   public Editable getEditable() { return mEditText.getEditableText(); }
 
   public boolean setImeText(String text, int selStart, int selEnd) {
-    Log.v("Tangram", "setImeText (C++ -> Java): " + text + " sel: " + selStart + ", " + selEnd + " was: " + mEditText.getText());
+    ///Log.v("Tangram", "setImeText (C++ -> Java): " + text + " sel: " + selStart + ", " + selEnd + " was: " + mEditText.getText());
     mEditText.enableUpdate = false;
     try {  // prevent crash if text editing state gets messed up
       mEditText.setText(text);
       mEditText.setSelection(selStart, selEnd);
     } catch(Exception e) {
-      Log.v("Tangram setImeText", "Error: ", e);
+      ///Log.v("Tangram setImeText", "Error: ", e);
     }
     mEditText.enableUpdate = true;
     return isFocused();
@@ -718,7 +734,7 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
 
   @Override
   protected void onFocusChanged(boolean gainFocus, int direction, android.graphics.Rect previouslyFocusedRect) {
-    Log.v("Tangram", "Focus change: " + (gainFocus ? "true" : "false"));
+    ///Log.v("Tangram", "Focus change: " + (gainFocus ? "true" : "false"));
     super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
     if(!gainFocus)
       MapsLib.keyEvent(-1, -1);  // keyboard hidden
@@ -732,6 +748,9 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
 
   @Override
   public boolean onKeyUp(int keyCode, KeyEvent event) { return mEditText.onKeyUp(keyCode, event); }
+
+  //@Override
+  public void onEditorAction(int actionCode) { mEditText.onEditorAction(actionCode); }
 
   //@Override public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) {
 

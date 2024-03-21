@@ -797,7 +797,7 @@ function WriteBoundary(boundary, way, relation)
       local iname = way:FindInRelation("name:"..lang)
       if iname~="" and iname~=name then way:Attribute("name_"..lang, iname) end
     end
-    way:Attribute("osm_id", relation[1])
+    way:Attribute("osm_id", relation)  --[1])
     way:Attribute("osm_type", "relation")
   else
     SetNameAttributes(way)
@@ -806,7 +806,7 @@ function WriteBoundary(boundary, way, relation)
   if way:Find("maritime")=="yes" or (relation and way:FindInRelation("maritime")=="yes") then
     way:AttributeNumeric("maritime", 1)
   end
-  if boundary=="disputed" or way:Find("disputed")=="yes" or (relation and way:FindInRelation("disputed")=="yes")
+  if boundary=="disputed" or way:Find("disputed")=="yes" or (relation and way:FindInRelation("disputed")=="yes") then
     way:AttributeNumeric("disputed", 1)
   end
 end

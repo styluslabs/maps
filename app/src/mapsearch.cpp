@@ -664,9 +664,9 @@ Button* MapsSearch::createPanel()
 
   // this btn clears search text w/o closing panel (use back btn to close panel)
   cancelBtn = new Button(searchBoxNode->selectFirst(".cancel-btn"));
-  cancelBtn->onClicked = [this](){
+  cancelBtn->onClicked = [=](){
     clearSearch();
-    app->gui->setFocused(queryText);  // cancelBtn won't be visible if text input disabled
+    app->gui->setFocused(searchBox);  //queryText);  // cancelBtn won't be visible if text input disabled
     searchText("", EDITING);  // show history
   };
 
@@ -706,7 +706,7 @@ Button* MapsSearch::createPanel()
       static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
       app->config["search"]["plugin"] = providerIdx = ii;
       onSetProvider(ii);
-      app->gui->setFocused(queryText->isEnabled() ? (Widget*)queryText : (Widget*)textEditOverlay);
+      app->gui->setFocused(queryText->isEnabled() ? (Widget*)searchBox : (Widget*)textEditOverlay);
       if(queryText->isEnabled() && queryText->text().empty()) {
         clearSearch();
         searchText("", EDITING);  // show history
@@ -739,7 +739,7 @@ Button* MapsSearch::createPanel()
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_OPENED) {
       if(queryText->isEnabled()) {
-        app->gui->setFocused(queryText);
+        app->gui->setFocused(searchBox);
         searchText("", EDITING);  // show history
       }
     }
