@@ -176,6 +176,8 @@ static bool initSearch()
   return true;
 }
 
+MapsSearch::~MapsSearch() {}
+
 MapsSearch::MapsSearch(MapsApp* _app) : MapsComponent(_app)
 {
   initSearch();
@@ -384,7 +386,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 void MapsSearch::resultsUpdated(int flags)
 {
   populateResults();
-  resultCountText->setText(
+  resultCountText->setText(mapResults.size() == 1 ? "1 result" :
       fstring("%s%d results", moreMapResultsAvail ? "over " : "" , mapResults.size()).c_str());
 
   // zoom out if necessary to show first 5 results
@@ -413,6 +415,27 @@ void MapsSearch::resultsUpdated(int flags)
       }
     }
   }
+}
+
+// called externally, e.g., for geo: URIs
+void MapsSearch::doSearch(std::string query)
+{
+  if(query.substr(0, 4) == "geo:") {
+    Url uri(query);
+    query = uri.path();  // use lat,lng if no query string
+    if(uri.hasQuery()) {
+      auto qparams = splitStr<std::vector>(uri.query(), "&");
+      for(auto& qparam : qparams) {
+        if(qparam.substr(0,2) == "q=") {
+          query = Url::unEscapeReservedCharacters(qparam.substr(2));
+          break;
+        }
+      }
+    }
+  }
+  app->showPanel(searchPanel);
+  queryText->setText(query.c_str());
+  searchText(query, RETURN);
 }
 
 void MapsSearch::searchText(std::string query, SearchPhase phase)
@@ -664,6 +687,7 @@ Button* MapsSearch::createPanel()
 
   // this btn clears search text w/o closing panel (use back btn to close panel)
   cancelBtn = new Button(searchBoxNode->selectFirst(".cancel-btn"));
+  cancelBtn->isFocusable = true;
   cancelBtn->onClicked = [=](){
     clearSearch();
     app->gui->setFocused(searchBox);  //queryText);  // cancelBtn won't be visible if text input disabled

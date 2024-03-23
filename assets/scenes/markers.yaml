@@ -150,7 +150,7 @@ layers:
                 collide: true
                 color: function() { return feature.color || '#12B5CB'; }
                 outline: { color: black }
-                priority: 'function() { return 1 + (1+feature.priority)/1E6; }'
+                priority: 'function() { return 1 + (1+feature.priority)/65536; }'
                 offset: [0px, -11px]
                 text:
                     text_source: name
@@ -188,7 +188,7 @@ layers:
                 size: [[13, 16px], [16, 18px]]
                 interactive: true
                 collide: true
-                priority: 'function() { return (1+feature.priority)/1E6; }'
+                priority: 'function() { return (1+feature.priority)/65536; }'
                 text:
                     text_source: ['name_en', 'name']
                     anchor: [right, left, bottom, top]
@@ -239,7 +239,7 @@ layers:
                 collide: true
                 color: function() { return feature.color || '#12B5CB'; }
                 outline: { color: black }
-                priority: 'function() { return 2 + (1+feature.priority)/1E6; }'
+                priority: 'function() { return 2 + (1+feature.priority)/65536; }'
                 offset: [0px, -11px]
                 text:
                     text_source: name

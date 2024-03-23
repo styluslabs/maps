@@ -27,6 +27,9 @@ private:
   Widget* createNewListWidget(std::function<void(int, std::string)> callback);
   void chooseBookmarkList(std::function<void(int, std::string)> callback);
   void deleteBookmark(int listid, int rowid);
+  Color nextListColor();
+  void importGpx(const char* filename);
+  void importImages(int64_t list_id, const char* path);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;

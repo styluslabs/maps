@@ -1,13 +1,14 @@
 #pragma once
 
 #include "mapscomponent.h"
-#include "util.h"
+//#include "util.h"
 #include "yaml-cpp/yaml.h"
 #include "scene/filters.h"
 
 #include "ugui/svggui.h"
 
 using Tangram::TileTask;
+class MarkerGroup;
 
 struct SearchData {
   std::string layer;
@@ -27,32 +28,31 @@ class MapsSearch : public MapsComponent
 {
 public:
   MapsSearch(MapsApp* _app);
+  ~MapsSearch();  // to allow unique_ptr to incomplete class
   void clearSearch();
   bool indexMBTiles();
-
-  static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
-  static void onDelOfflineMap(int mapId);
-  static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
-
   void addListResult(int64_t id, double lng, double lat, float rank, const char* json);
   void addMapResult(int64_t id, double lng, double lat, float rank, const char* json);
   void searchPluginError(const char* err);
 
-  std::unique_ptr<MarkerGroup> markers;
+  enum SearchPhase { EDITING, RETURN, NEXTPAGE };
+  void searchText(std::string query, SearchPhase phase);
+  void onMapEvent(MapEvent_t event);
+  void resultsUpdated(int flags);
+  void doSearch(std::string query);
 
+  Button* createPanel();
+  Widget* searchPanel = NULL;
+  std::unique_ptr<MarkerGroup> markers;
   int providerIdx = 0;
   bool moreMapResultsAvail = false;
   bool moreListResultsAvail = false;
   // search flags
   enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, FLY_TO = 0x8, UPDATE_RESULTS = 0x4000, MORE_RESULTS = 0x8000 };
 
-  enum SearchPhase { EDITING, RETURN, NEXTPAGE };
-  void searchText(std::string query, SearchPhase phase);
-  void onMapEvent(MapEvent_t event);
-  void resultsUpdated(int flags);
-
-  Button* createPanel();
-  Widget* searchPanel = NULL;
+  static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
+  static void onDelOfflineMap(int mapId);
+  static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
 
 private:
   std::atomic_int tileCount;

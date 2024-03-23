@@ -112,6 +112,16 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     setEdgeToEdge();
     //setContentView(mMapsView);
     //mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
+    onNewIntent(getIntent());
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent)  // refs: Write MainActivity.java
+  {
+    if(intent.getAction().equals(Intent.ACTION_VIEW) && intent.getScheme().equals("geo"))
+      MapsLib.handleUri(intent.getDataString());
+    else
+      super.onNewIntent(intent);
   }
 
   @Override

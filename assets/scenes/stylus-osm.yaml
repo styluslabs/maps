@@ -145,6 +145,7 @@ global:
 
     shuffle_seed: 58987
     # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
+    # - priorities are now multiplied by 65536, so we just need priority*65536 to be an integer
     priority:
         boundary: 0
         continent: 6
@@ -154,6 +155,7 @@ global:
         golf: 21
         cemetery: 22
         forest: 23
+        peak: 30
         # road labels
         oneway_arrow: 24
         motorway_ref: 25
@@ -193,7 +195,8 @@ global:
         place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
         place_fn: |
             function() {
-                return (global.priority.place[feature.class] || 14) + 100.0/(100 + (feature.population || 1));
+                return (global.priority.place[feature.place] || 14) + Math.round(Math.sqrt(feature.population || 1))/65536;
+                //return (global.priority.place[feature.place] || 14) + 100.0/(100 + (feature.population || 1));
             }
 
     # bounds for country-specific filters
@@ -1050,12 +1053,12 @@ layers:
                 size: 14px
                 interactive: true
                 collide: true
-                priority: function() { return 30 + (1 - feature.ele/10000.0); }
+                priority: function() { return global.priority.peak + (1 - feature.ele/16384.0); }
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 text:
                     interactive: true
                     # give text same priority as icon
-                    priority: function() { return 30 + (1 - feature.ele/10000.0); }
+                    #priority: function() { return 30 + (1 - feature.ele/10000.0); }
                     text_source: |
                         function() {
                             const name = global.show_name_en && feature.name_en ? feature.name_en : feature.name;

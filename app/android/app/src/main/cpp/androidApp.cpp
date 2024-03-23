@@ -8,6 +8,7 @@
 #include "mapsapp.h"
 #include "offlinemaps.h"
 #include "mapsources.h"
+#include "mapsearch.h"
 #include "AndroidPlatform.h"
 #include "JniHelpers.h"
 #include "JniThreadBinding.h"
@@ -315,6 +316,7 @@ struct SDL_Window
 static MapsApp* app = NULL;
 static std::thread mainThread;
 static SDL_Window sdlWin = {0, 0, 0};
+static std::string initialQuery;
 
 static jobject mapsActivityRef = nullptr;
 static jmethodID showTextInputMID = nullptr;
@@ -577,6 +579,11 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
     SDL_GetWindowSize(&sdlWin, &fbWidth, &fbHeight);
     if(app->drawFrame(fbWidth, fbHeight))
       eglSwapBuffers(display, surface);
+    // app not fully initialized until after first frame
+    if(!initialQuery.empty()) {
+      app->mapsSearch->doSearch(initialQuery);
+      initialQuery.clear();
+    }
   }
   //LOGW("Stopping event loop");
   sdlWin = {0, 0};
@@ -773,6 +780,18 @@ JNI_FN(updateOrientation)(JNIEnv* env, jclass, jfloat azimuth, jfloat pitch, jfl
 JNI_FN(updateGpsStatus)(JNIEnv* env, jclass, int satsVisible, int satsUsed)
 {
   MapsApp::runOnMainThread([=](){ app->updateGpsStatus(satsVisible, satsUsed); });
+}
+
+JNI_FN(handleUri)(JNIEnv* env, jclass, jstring juri)
+{
+  const char* uri = env->GetStringUTFChars(juri, 0);
+  if(StringRef(uri).startsWith("geo:")) {
+    if(app)
+      app->mapsSearch->doSearch(uri);
+    else
+      initialQuery = uri;
+  }
+  env->ReleaseStringUTFChars(juri, uri);
 }
 
 JNI_FN(openFileDesc)(JNIEnv* env, jclass, jstring jfilename, jint jfd)

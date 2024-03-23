@@ -782,12 +782,13 @@ Button* MapsSources::createPanel()
         auto onClicked = [this, key](){
           if(key != currSource)
             rebuildSource(key);
-          if(sourceEditPanel->isVisible())
+          if(sourceEditPanel->isVisible() || key == currSource)
             populateSourceEdit(key);
         };
         std::string title = mapSources[key]["title"].Scalar();
         Button* item = sourcesMenu->addItem(title.c_str(), MapsApp::uiIcon("layers"), onClicked);
         SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
+        item->setChecked(key == currSource);
         if(++ii >= 10) break;
       }
     }

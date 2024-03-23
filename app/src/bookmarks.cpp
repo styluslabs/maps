@@ -7,6 +7,7 @@
 #include "rapidjson/document.h"
 #include "yaml-cpp/yaml.h"
 #include "util/yamlPath.h"
+#include "exif.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -15,6 +16,7 @@
 #include "usvg/svgparser.h"
 #include "mapwidgets.h"
 #include "gpxfile.h"
+#include "offlinemaps.h"
 
 // bookmarks (saved places)
 
@@ -43,10 +45,30 @@ int MapsBookmarks::getListId(const char* listname, bool create)
   int list_id = -1;
   SQLiteStmt(app->bkmkDB, "SELECT id FROM lists WHERE title = ?;").bind(listname).onerow(list_id);
   if(list_id < 0 && create) {
-    SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(listname, "#00FFFF").exec();
+    SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);")
+        .bind(listname, colorToStr(nextListColor())).exec();
     list_id = sqlite3_last_insert_rowid(app->bkmkDB);
   }
   return list_id;
+}
+
+Color MapsBookmarks::nextListColor()
+{
+  // choose color from markerColors most distant from color of newest list (using hue for now)
+  std::string prevcolor = "#12B5CB";
+  SQLiteStmt(MapsApp::bkmkDB, "SELECT color FROM lists ORDER BY rowid DESC LIMIT 1;").onerow(prevcolor);
+  float prevhue = ColorF(parseColor(prevcolor.c_str(), Color::CYAN)).hueHSV();
+  float mindist = 1e6;
+  size_t minidx = 0, ncolors = MapsApp::markerColors.size();
+  for(size_t ii = 0; ii < ncolors; ++ii) {
+    float d = std::abs(ColorF(MapsApp::markerColors[ii]).hueHSV() - prevhue);
+    d = std::min(d, 360 - d);
+    if(d < mindist) {
+      mindist = d;
+      minidx = ii;
+    }
+  }
+  return MapsApp::markerColors[(minidx + ncolors/2 - 1)%ncolors];
 }
 
 Widget* MapsBookmarks::createNewListWidget(std::function<void(int, std::string)> callback)
@@ -70,21 +92,7 @@ Widget* MapsBookmarks::createNewListWidget(std::function<void(int, std::string)>
   newListTitle->onChanged = [=](const char* s){ newListContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
   newListContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
-      // choose color from markerColors most distant from color of newest list (using hue for now)
-      std::string prevcolor = "#12B5CB";
-      SQLiteStmt(MapsApp::bkmkDB, "SELECT color FROM lists ORDER BY rowid DESC LIMIT 1;").onerow(prevcolor);
-      float prevhue = ColorF(parseColor(prevcolor.c_str(), Color::CYAN)).hueHSV();
-      float mindist = 1e6;
-      size_t minidx = 0, ncolors = MapsApp::markerColors.size();
-      for(size_t ii = 0; ii < ncolors; ++ii) {
-        float d = std::abs(ColorF(MapsApp::markerColors[ii]).hueHSV() - prevhue);
-        d = std::min(d, 360 - d);
-        if(d < mindist) {
-          mindist = d;
-          minidx = ii;
-        }
-      }
-      newListColor->setColor(MapsApp::markerColors[(minidx + ncolors/2 - 1)%ncolors]);
+      newListColor->setColor(nextListColor());
       newListTitle->setText("");
       gui->setFocused(newListTitle);
     }
@@ -545,20 +553,73 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
   tb->addWidget(createBkmkBtn);
 }
 
+void MapsBookmarks::importGpx(const char* filename)
+{
+  GpxFile gpx("", "", filename);
+  loadGPX(&gpx);
+  if(gpx.waypoints.empty()) {
+    MapsApp::messageBox("Import bookmarks", fstring("No bookmarks found in %s", filename), {"OK"});
+    return;
+  }
+  std::string style = gpx.style.empty() ? colorToStr(nextListColor()) : gpx.style;
+  std::string title = gpx.title.empty() ? FSPath(filename).baseName() : gpx.title;
+  SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(title, style).exec();
+  int64_t list_id = sqlite3_last_insert_rowid(app->bkmkDB);
+  //if(timestamp <= 0) timestamp = int(mSecSinceEpoch()/1000);
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
+  SQLiteStmt insbkmk(app->bkmkDB, query);
+  for(auto& wpt : gpx.waypoints) {
+    std::string osm_id = osmIdFromJson(strToJson(wpt.props.c_str()));
+    if(wpt.name.empty())
+      wpt.name = fstring("%.6f, %.6f", wpt.loc.lat, wpt.loc.lng);
+    insbkmk.bind(list_id, osm_id, wpt.name, wpt.props, wpt.desc, wpt.loc.lng, wpt.loc.lat, int64_t(wpt.loc.time)).exec();
+  }
+  populateLists(false);
+}
+
+void MapsBookmarks::importImages(int64_t list_id, const char* path)
+{
+  std::vector<uint8_t> buf(2048);
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
+  SQLiteStmt insbkmk(app->bkmkDB, query);
+  //sqlite3_exec(app->bkmkDB, "BEGIN TRANSACTION", NULL, NULL, NULL);  -- would this lock DB for all threads?
+  size_t nimages = 0;
+  auto files = lsDirectory(path);
+  for(auto& file : files) {
+    FSPath fpath(path, file);
+    auto ext = toLower(fpath.extension());
+    if(ext != "jpg" && ext != "jpeg") continue;
+    FileStream fs(fpath.c_str(), "rb");
+    size_t len = fs.read(buf.data(), buf.size());
+    easyexif::EXIFInfo exif;
+    if(exif.parseFrom(buf.data(), len) != 0) continue;
+    if(exif.GeoLocation.Latitude == 0 && exif.GeoLocation.Longitude == 0) continue;
+    std::string date = exif.DateTime;
+    // replace first three ':' with '-'
+    for(size_t idx = 0, nrepl = 0; idx < date.size() && nrepl < 3; ++idx) {
+      if(date[idx] == ':') { date[idx] = '-'; ++nrepl; }
+    }
+    std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'/>"}]})",
+        exif.GeoLocation.Altitude, fpath.c_str());
+    insbkmk.bind(list_id, 0, fpath.baseName(), props, "", exif.GeoLocation.Longitude, exif.GeoLocation.Latitude, date).exec();
+    ++nimages;
+  }
+  std::string pathstr(path);
+  MapsApp::runOnMainThread([=](){
+    if(!nimages)
+      MapsApp::messageBox("Import images", fstring("No geotagged images found in %s", pathstr.c_str()), {"OK"});
+    else {
+      listsDirty = true;
+      if(activeListId == list_id)
+        populateBkmks(activeListId, true);
+      else if(listsPanel->isVisible())
+        populateLists(false);
+    }
+  });
+}
+
 Button* MapsBookmarks::createPanel()
 {
-  /*static const char* chooseListProtoSVG = R"(
-    <svg id="dialog" class="window dialog" layout="box">
-      <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
-      <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
-        <g class="title-container" box-anchor="hfill" layout="box"></g>
-        <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
-        <g class="body-container" box-anchor="fill" layout="flex" flex-direction="column"></g>
-      </g>
-    </svg>
-  )";
-  chooseListProto.reset(static_cast<SvgDocument*>(loadSVGFragment(chooseListProtoSVG)));*/
-
   // DB setup
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY, title TEXT NOT NULL,"
       " notes TEXT DEFAULT '', color TEXT NOT NULL, archived INTEGER DEFAULT 0);");
@@ -585,27 +646,16 @@ Button* MapsBookmarks::createPanel()
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem("Import bookmarks", [=](){
-    MapsApp::openFileDialog({{"GPX files", "gpx"}}, [=](const char* filename){
-      GpxFile gpx("", "", filename);
-      loadGPX(&gpx);
-      if(gpx.waypoints.empty()) {
-        MapsApp::messageBox("Import bookmarks", fstring("No bookmarks found in %s", filename), {"OK"});
-        return;
-      }
-      const char* style = gpx.style.empty() ? "#00FFFF" : gpx.style.c_str();
-      std::string title = gpx.title.empty() ? FSPath(filename).baseName() : gpx.title;
-      SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(title, style).exec();
+    MapsApp::openFileDialog({{"GPX files", "gpx"}}, [this](const char* path){ importGpx(path); });
+  });
+  overflowMenu->addItem("Import photos", [=](){
+    MapsApp::pickFolderDialog([this](const char* path){
+      FSPath pathinfo(path);
+      SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);")
+          .bind(pathinfo.baseName(), colorToStr(nextListColor())).exec();
       int64_t list_id = sqlite3_last_insert_rowid(app->bkmkDB);
-      //if(timestamp <= 0) timestamp = int(mSecSinceEpoch()/1000);
-      const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
-      SQLiteStmt insbkmk(app->bkmkDB, query);
-      for(auto& wpt : gpx.waypoints) {
-        std::string osm_id = osmIdFromJson(strToJson(wpt.props.c_str()));
-        if(wpt.name.empty())
-          wpt.name = fstring("%.6f, %.6f", wpt.loc.lat, wpt.loc.lng);
-        insbkmk.bind(list_id, osm_id, wpt.name, wpt.props, wpt.desc, wpt.loc.lng, wpt.loc.lat, int64_t(wpt.loc.time)).exec();
-      }
       populateLists(false);
+      MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, path); });
     });
   });
   listHeader->addWidget(overflowBtn);

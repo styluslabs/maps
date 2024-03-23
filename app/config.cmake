@@ -29,6 +29,7 @@ add_library(maps-app
   ${STYLUSLABS_DEPS}/usvg/cssparser.cpp
   ${STYLUSLABS_DEPS}/nanovg-2/src/nanovg.c
   ${STYLUSLABS_DEPS}/pugixml/src/pugixml.cpp
+  deps/easyexif/exif.cpp
 )
 
 target_include_directories(maps-app
@@ -47,6 +48,7 @@ target_include_directories(maps-app
   ${STYLUSLABS_DEPS}
   ${STYLUSLABS_DEPS}/nanovg-2/src
   ${STYLUSLABS_DEPS}/pugixml/src
+  deps/easyexif
 )
 
 target_compile_definitions(maps-app PUBLIC GLM_FORCE_CTOR_INIT)
