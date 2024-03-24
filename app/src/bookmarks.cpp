@@ -580,23 +580,29 @@ void MapsBookmarks::importGpx(const char* filename)
 void MapsBookmarks::importImages(int64_t list_id, const char* path)
 {
   std::vector<uint8_t> buf(2048);
-  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) VALUES (?,?,?,?,?,?,?,?);";
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
+      "VALUES (?,?,?,?,?,?,?, CAST(strftime('%s', datetime(?)) AS INTEGER));";
   SQLiteStmt insbkmk(app->bkmkDB, query);
   //sqlite3_exec(app->bkmkDB, "BEGIN TRANSACTION", NULL, NULL, NULL);  -- would this lock DB for all threads?
+  easyexif::EXIFInfo exif;
   size_t nimages = 0;
   auto files = lsDirectory(path);
+  std::sort(files.begin(), files.end());  // not really necessary since bookmarks never sorted by rowid
   for(auto& file : files) {
     FSPath fpath(path, file);
     auto ext = toLower(fpath.extension());
     if(ext != "jpg" && ext != "jpeg") continue;
     FileStream fs(fpath.c_str(), "rb");
     size_t len = fs.read(buf.data(), buf.size());
-    easyexif::EXIFInfo exif;
-    if(exif.parseFrom(buf.data(), len) != 0) continue;
+    int res = exif.parseFrom(buf.data(), len);
+    if(res != 0) {
+       LOGW("Error reading EXIF from %s: %d", fpath.c_str(), res);
+       continue;
+    }
     if(exif.GeoLocation.Latitude == 0 && exif.GeoLocation.Longitude == 0) continue;
     std::string date = exif.DateTime;
-    // replace first three ':' with '-'
-    for(size_t idx = 0, nrepl = 0; idx < date.size() && nrepl < 3; ++idx) {
+    // replace first two ':' with '-' to get proper date format
+    for(size_t idx = 0, nrepl = 0; idx < date.size() && nrepl < 2; ++idx) {
       if(date[idx] == ':') { date[idx] = '-'; ++nrepl; }
     }
     std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'/>"}]})",
@@ -655,7 +661,7 @@ Button* MapsBookmarks::createPanel()
           .bind(pathinfo.baseName(), colorToStr(nextListColor())).exec();
       int64_t list_id = sqlite3_last_insert_rowid(app->bkmkDB);
       populateLists(false);
-      MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, path); });
+      MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, pathinfo.c_str()); });
     });
   });
   listHeader->addWidget(overflowBtn);

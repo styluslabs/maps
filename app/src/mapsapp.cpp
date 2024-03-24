@@ -328,6 +328,17 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         node = wrapper;
       }
     }
+
+    else if(node->type() == SvgNode::IMAGE) {
+      // this will be revisited when we have multiple images for display
+      auto* imgnode = static_cast<SvgImage*>(node);
+      Button* b = new Button(node);
+      b->onClicked = [imgnode](){
+        MapsApp::openURL(imgnode->m_linkStr.c_str()); //b->node->getStringAttr("href", b->node->getStringAttr("xlink:href")));
+      };
+      imgnode->setSize(Rect::wh(200, 0));  //getPanelWidth() - 20, 0));
+    }
+
     else if(node->type() == SvgNode::TEXT) {
       SvgText* textnode = static_cast<SvgText*>(node);
       int textw = getPanelWidth() - (icon[0] ? 20 : 70);

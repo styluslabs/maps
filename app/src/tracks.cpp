@@ -727,11 +727,25 @@ bool MapsTracks::tapEvent(LngLat location)
 void MapsTracks::fingerEvent(int action, LngLat pos)
 {
   if(!activeTrack) return;
-  if(action > 0 || activeTrack->routes.empty())
-    activeTrack->routes.emplace_back();
-  activeTrack->routes.back().pts.push_back(Waypoint(pos));
-
-  updateStats(activeTrack->routes.back().pts);
+  if(action < -1) {
+    if(!activeTrack->routes.empty())
+      activeTrack->routes.pop_back();
+  }
+  else {
+    if(action > 0 || activeTrack->routes.empty())
+      activeTrack->routes.emplace_back();
+    activeTrack->routes.back().pts.push_back(Waypoint(pos));
+    // request elevation for point
+    size_t rteidx = activeTrack->routes.size() - 1;
+    size_t ptidx = activeTrack->routes.back().pts.size()-1;
+    app->getElevation(pos, [this, rteidx, ptidx, track = activeTrack](double ele){
+      if(activeTrack != track || track->routes.size() <= rteidx || track->routes[rteidx].pts.size() <= ptidx) return;
+      track->routes[rteidx].pts[ptidx].loc.alt = ele;
+      updateStats(activeTrack->routes.back().pts);
+    });
+  }
+  if(!activeTrack->routes.empty() && !activeTrack->routes.back().pts.empty())
+    updateStats(activeTrack->routes.back().pts);
   //updateDistances();
   updateTrackMarker(activeTrack);
 }
@@ -905,7 +919,7 @@ void MapsTracks::setRouteMode(const std::string& mode)
 {
   auto parts = splitStr<std::vector>(mode.c_str(), '-');
   const char* icon = "segment";
-  if(parts[0] == "draw") icon = "draw-track";
+  if(parts[0] == "draw") icon = "scribble";
   else if(parts[0] == "walk") icon = "walk";
   else if(parts[0] == "bike") icon = "bike";
   else if(parts[0] == "drive") icon = "car";
@@ -915,7 +929,7 @@ void MapsTracks::setRouteMode(const std::string& mode)
     onMapEvent(MAP_CHANGE);
   else
     app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
-  app->drawOnMap = mode == "draw";
+  app->drawOnMap = routeEditTb->isVisible() && mode == "draw";
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
   createRoute(activeTrack);
@@ -927,6 +941,7 @@ void MapsTracks::toggleRouteEdit(bool show)
   routeEditTb->setVisible(show);
   app->crossHair->setVisible(show);
   directRoutePreview = show;
+  app->drawOnMap = show && activeTrack->routeMode == "draw";
   //setRouteMode(activeTrack->routeMode);  // update previewMarker
 }
 
@@ -1601,6 +1616,7 @@ Button* MapsTracks::createPanel()
   routeEditTb = createToolbar();
 
   previewDistText = new TextBox(createTextNode(""));
+  previewDistText->setMargins(6, 10);
 
   retryBtn = createToolbutton(MapsApp::uiIcon("retry"), "Retry");
   retryBtn->onClicked = [=](){ createRoute(activeTrack); };
@@ -1622,6 +1638,9 @@ Button* MapsTracks::createPanel()
   rteEditOverflow->addItem("Clear route", [this](){
     if(activeTrack && !activeTrack->routes.empty())
       activeTrack->routes.pop_back();
+    if(!activeTrack->routes.empty())
+      updateStats(activeTrack->routes.back().pts);
+    updateTrackMarker(activeTrack);
   });
 
   Button* tapToAddWayptBtn = createCheckBoxMenuItem("Tap to add waypoint");
