@@ -42,6 +42,7 @@ sqlite3* MapsApp::bkmkDB = NULL;
 std::vector<Color> MapsApp::markerColors;
 SvgGui* MapsApp::gui = NULL;
 bool MapsApp::runApplication = true;
+bool MapsApp::simulateTouch = false;
 ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
@@ -328,17 +329,15 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         node = wrapper;
       }
     }
-
     else if(node->type() == SvgNode::IMAGE) {
       // this will be revisited when we have multiple images for display
       auto* imgnode = static_cast<SvgImage*>(node);
       Button* b = new Button(node);
       b->onClicked = [imgnode](){
-        MapsApp::openURL(imgnode->m_linkStr.c_str()); //b->node->getStringAttr("href", b->node->getStringAttr("xlink:href")));
+        MapsApp::openURL(imgnode->m_linkStr.c_str());
       };
-      imgnode->setSize(Rect::wh(200, 0));  //getPanelWidth() - 20, 0));
+      imgnode->setSize(Rect::wh(getPanelWidth() - 20, 0));
     }
-
     else if(node->type() == SvgNode::TEXT) {
       SvgText* textnode = static_cast<SvgText*>(node);
       int textw = getPanelWidth() - (icon[0] ? 20 : 70);
@@ -926,8 +925,8 @@ void ScaleBarWidget::directDraw(Painter* p) const
 
 int MapsApp::getPanelWidth() const
 {
-  Widget* w = panelContainer->isVisible() ? panelContainer : mainTbContainer;
-  return int(w->node->bounds().width() + 0.5);
+  //Widget* w = panelContainer->isVisible() ? panelContainer : mainTbContainer;
+  return int(mainTbContainer->node->bounds().width() + 0.5);
 }
 
 void MapsApp::populateColorPickerMenu()
@@ -1198,6 +1197,14 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   };
 
   Menu* appDebugMenu = createMenu(Menu::HORZ);
+#if PLATFORM_DESKTOP
+  Button* simTouchCb = createCheckBoxMenuItem("Simulate touch");
+  simTouchCb->onClicked = [=](){
+    simTouchCb->setChecked(!simTouchCb->isChecked());
+    MapsApp::simulateTouch = simTouchCb->isChecked();
+  };
+  appDebugMenu->addItem(simTouchCb);
+#endif
   Button* offlineCb = createCheckBoxMenuItem("Offline");
   offlineCb->onClicked = [=](){
     offlineCb->setChecked(!offlineCb->isChecked());

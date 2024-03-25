@@ -683,17 +683,20 @@ layers:
                         outline:
                             color: global.color.piste_halo
                             width: [[13, 0px], [14, 2px]]
+                default:
+                    filter: { $zoom: { min: 12 } }
+                    draw: { lines: { visible: true } }
+            piste_names:
+                enabled: global.show_trails
+                filter: { $geometry: line, $zoom: { min: 13 } }
+                draw:
                     text:
-                        visible: global.show_trails
                         text_source: global.piste_name_fn
                         font:
                             family: Open Sans
                             fill: global.piste_color_fn
                             stroke: { color: global.color.piste_halo, width: 3 }
                             size: 12px
-                default:
-                    filter: { $zoom: { min: 12 } }
-                    draw: { lines: { visible: true } }
 
         road-icons:
             arrows:

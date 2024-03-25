@@ -220,30 +220,6 @@ void MapsBookmarks::populateLists(bool archived)
       app->gui->deleteWidget(item);
     });
 
-    overflowMenu->addItem("Clear", [=](){
-      SQLiteStmt(app->bkmkDB, "DELETE FROM bookmarks WHERE list_id = ?;").bind(rowid).exec();
-      auto it1 = bkmkMarkers.find(rowid);
-      if(it1 != bkmkMarkers.end())
-        it1->second->reset();
-      populateLists(archived);
-    });
-
-    overflowMenu->addItem("Export", [=](){
-      // on Android, callback would be called with temp filename, then Android share dialog shown
-      // ... should we saveFileDialog pass callback an IOStream instead of a filename?
-      MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}}, list, [=](const char* filename){
-        GpxFile gpx(list, "", filename);
-        gpx.style = color;
-        const char* q = "SELECT rowid, title, props, notes, lng, lat, timestamp FROM bookmarks WHERE list_id = ? ORDER BY timestamp DESC;";
-        SQLiteStmt(app->bkmkDB, q).bind(rowid).exec([&](int id, std::string namestr,
-            std::string propstr, const char* notestr, double lng, double lat, int64_t timestamp){
-          gpx.waypoints.push_back(Waypoint(Location{double(timestamp), lat, lng, 0,0,0,0,0,0,0}, namestr, notestr));
-          gpx.waypoints.back().props = propstr;
-        });
-        saveGPX(&gpx);
-      });
-    });
-
     if(archived)
       archivedContent->addWidget(item);
     else
@@ -301,6 +277,8 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
     if(activeListId < 0)
       hideBookmarks(list_id);
     activeListId = list_id;
+    activeListTitle = listname;
+    activeListColor = color;
   }
 
   MarkerGroup* markerGroup = NULL;
@@ -706,26 +684,13 @@ Button* MapsBookmarks::createPanel()
       app->popPanel();
       app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
     }
-    // update title and rebuild makers if color changed
+    // update title and rebuild markers if color changed
     populateBkmks(listid, true);
   };
   auto editListContent = createInlineDialog({editListRow}, "Apply", onAcceptListEdit);
   bkmkContent->addWidget(editListContent);
 
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("folder"), "");
-  Button* editListBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit List");
-  editListBtn->onClicked = [=](){
-    bool show = !editListContent->isVisible();
-    if(show) {
-      const char* query = "SELECT title, color FROM lists WHERE id = ?;";
-      SQLiteStmt(app->bkmkDB, query).bind(activeListId).exec([&](const char* title, const char* colorstr){
-        listTitle->setText(title);
-        listColor->setColor(parseColor(colorstr, Color::CYAN));
-        MapsApp::gui->setFocused(listTitle, SvgGui::REASON_TAB);
-      });
-      showInlineDialogModal(editListContent);
-    }
-  };
 
   static const char* bkmkSortKeys[] = {"name", "date", "dist"};
   std::string initSort = app->config["bookmarks"]["sort"].as<std::string>("date");
@@ -749,9 +714,50 @@ Button* MapsBookmarks::createPanel()
         item->setVisible(true);
     }
   };
+
+  Button* listOverflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
+  Menu* listOverflowMenu = createMenu(Menu::VERT_LEFT, false);
+  listOverflowBtn->setMenu(listOverflowMenu);
+  listOverflowMenu->addItem("Edit", [=](){
+    bool show = !editListContent->isVisible();
+    if(show) {
+      listTitle->setText(activeListTitle.c_str());
+      listColor->setColor(parseColor(activeListColor, Color::CYAN));
+      MapsApp::gui->setFocused(listTitle, SvgGui::REASON_TAB);
+      showInlineDialogModal(editListContent);
+    }
+  });
+
+  overflowMenu->addItem("Clear", [=](){
+    SQLiteStmt(app->bkmkDB, "DELETE FROM bookmarks WHERE list_id = ?;").bind(activeListId).exec();
+    auto it1 = bkmkMarkers.find(activeListId);
+    if(it1 != bkmkMarkers.end())
+      it1->second->reset();
+    populateBkmks(activeListId, true);
+  });
+
+  auto exportListFn = [this](const char* filename){
+    GpxFile gpx(activeListTitle, "", filename);
+    gpx.style = activeListColor;
+    const char* q = "SELECT rowid, title, props, notes, lng, lat, timestamp FROM bookmarks WHERE list_id = ? ORDER BY timestamp DESC;";
+    SQLiteStmt(app->bkmkDB, q).bind(activeListId).exec([&](int id, std::string namestr,
+        std::string propstr, const char* notestr, double lng, double lat, int64_t timestamp){
+      gpx.waypoints.push_back(Waypoint(Location{double(timestamp), lat, lng, 0,0,0,0,0,0,0}, namestr, notestr));
+      gpx.waypoints.back().props = propstr;
+    });
+    saveGPX(&gpx);
+  };
+  listOverflowMenu->addItem("Export", [=](){
+    // on Android, callback would be called with temp filename, then Android share dialog shown
+    // ... should we saveFileDialog pass callback an IOStream instead of a filename?
+    MapsApp::saveFileDialog(
+        {{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}}, activeListTitle, exportListFn);
+  });
+
+
   toolbar->addWidget(sortBtn);
-  toolbar->addWidget(editListBtn);
   toolbar->addWidget(mapAreaBkmksBtn);
+  toolbar->addWidget(listOverflowBtn);
   bkmkPanel = app->createMapPanel(toolbar, bkmkContent);
 
   // depending on how minimize behavior is implemented, we may need something like this:

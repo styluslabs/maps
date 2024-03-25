@@ -26,6 +26,10 @@ void PLATFORM_setImeText(const char* text, int selStart, int selEnd) {}
 void glfwSDLEvent(SDL_Event* event)
 {
   event->common.timestamp = SDL_GetTicks();
+  if(MapsApp::simulateTouch && (event->type == SDL_FINGERDOWN ||  event->type == SDL_FINGERMOTION
+      || event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL) && event->tfinger.touchId == SDL_TOUCH_MOUSEID) {
+    event->tfinger.touchId = 0;
+  }
   //LOGW("%s", sdlEventLog(event).c_str());
   if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
     SvgGui::debugLayout = true;

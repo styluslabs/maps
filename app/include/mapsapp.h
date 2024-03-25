@@ -174,6 +174,7 @@ public:
   static ThreadSafeQueue< std::function<void()> > taskQueue;
   static std::thread::id mainThreadId;
   static bool runApplication;
+  static bool simulateTouch;
 
 private:
   void saveConfig();

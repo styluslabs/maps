@@ -41,6 +41,8 @@ private:
   bool listsDirty = true;
   bool archiveDirty = false;
   int activeListId = -1;
+  std::string activeListTitle;
+  std::string activeListColor;
 
   std::unique_ptr<SvgNode> placeInfoSectionProto;
   //std::unique_ptr<SvgDocument> chooseListProto;
