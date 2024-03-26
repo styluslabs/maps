@@ -12,6 +12,7 @@ import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.FileProvider;
+import android.provider.DocumentsContract;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Build;
@@ -400,6 +401,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   private static final int ID_OPEN_DOCUMENT = 2;
+  private static final int ID_PICK_FOLDER = 3;
 
   public void openFile()  //Uri pickerInitialUri)
   {
@@ -410,9 +412,31 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     startActivityForResult(intent, ID_OPEN_DOCUMENT);
   }
 
+  public void pickFolder()
+  {
+    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    startActivityForResult(intent, ID_PICK_FOLDER);
+  }
+
   @Override
-  public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
-    if(requestCode == ID_OPEN_DOCUMENT) {
+  public void onActivityResult(int requestCode, int resultCode, Intent resultData)
+  {
+    if(requestCode == ID_PICK_FOLDER) {
+      if(resultCode == Activity.RESULT_OK && resultData != null) {
+        try {
+          // ref: https://android.googlesource.com/platform/frameworks/support/+/a9ac247af2afd4115c3eb6d16c05bc92737d6305/documentfile/src/main/java/androidx/documentfile/provider/DocumentFile.java
+          Uri treeUri = resultData.getData();
+          Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
+          ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
+          MapsLib.openFileDesc(uri.getPath(), pfd.getFd());
+          pfd.close();
+        } catch(Exception e) {
+          Log.v("Tangram", "Error opening directory: " + resultData.getData().toString(), e);
+        }
+      }
+    }
+    else if(requestCode == ID_OPEN_DOCUMENT) {
       if(resultCode == Activity.RESULT_OK && resultData != null) {
         if(resultData.getData().toString().startsWith("content://")) {
           try {
@@ -426,7 +450,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
             MapsLib.openFileDesc(resultData.getData().getPath(), pfd.getFd());
             pfd.close();
           } catch(Exception e) {
-            Log.v("onActivityResult", "Error opening document: " + resultData.getData().toString(), e);
+            Log.v("Tangram", "Error opening document: " + resultData.getData().toString(), e);
           }
         }
         //else

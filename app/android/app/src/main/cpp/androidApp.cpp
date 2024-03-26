@@ -324,6 +324,7 @@ static jmethodID hideTextInputMID = nullptr;
 static jmethodID getClipboardMID = nullptr;
 static jmethodID setClipboardMID = nullptr;
 static jmethodID openFileMID = nullptr;
+static jmethodID pickFolderMID = nullptr;
 static jmethodID openUrlMID = nullptr;
 static jmethodID setImeTextMID = nullptr;
 static jmethodID shareFileMID = nullptr;
@@ -347,6 +348,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   getClipboardMID = jniEnv->GetMethodID(cls, "getClipboard", "()Ljava/lang/String;");
   setClipboardMID = jniEnv->GetMethodID(cls, "setClipboard", "(Ljava/lang/String;)V");
   openFileMID = jniEnv->GetMethodID(cls, "openFile", "()V");
+  pickFolderMID = jniEnv->GetMethodID(cls, "pickFolder", "()V");
   openUrlMID = jniEnv->GetMethodID(cls, "openUrl", "(Ljava/lang/String;)V");
   setImeTextMID = jniEnv->GetMethodID(cls, "setImeText", "(Ljava/lang/String;II)V");
   shareFileMID = jniEnv->GetMethodID(cls, "shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
@@ -464,6 +466,13 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, OpenFileFn_t callb
   openFileCallback = callback;
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jniEnv->CallVoidMethod(mapsActivityRef, openFileMID);
+}
+
+void MapsApp::pickFolderDialog(OpenFileFn_t callback)
+{
+  openFileCallback = callback;
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, pickFolderMID);
 }
 
 void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback)
@@ -807,7 +816,7 @@ JNI_FN(openFileDesc)(JNIEnv* env, jclass, jstring jfilename, jint jfd)
     size_t pos = s.find("/mnt/user/0/");
     if(pos != std::string::npos)
       s.replace(pos, sizeof("/mnt/user/0/") - 1, "/storage/");
-    //PLATFORM_LOG("readlink returned: %s\n", buff);
+    PLATFORM_LOG("readlink returned: %s\n", buff);
     //const char* filename = env->GetStringUTFChars(jfilename, 0);
     if(openFileCallback)
       MapsApp::runOnMainThread([s, cb=std::move(openFileCallback)](){ cb(s.c_str()); });

@@ -563,6 +563,7 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
   SQLiteStmt insbkmk(app->bkmkDB, query);
   //sqlite3_exec(app->bkmkDB, "BEGIN TRANSACTION", NULL, NULL, NULL);  -- would this lock DB for all threads?
   easyexif::EXIFInfo exif;
+  exif.acceptTruncated = true;
   size_t nimages = 0;
   auto files = lsDirectory(path);
   std::sort(files.begin(), files.end());  // not really necessary since bookmarks never sorted by rowid
@@ -574,7 +575,7 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
     size_t len = fs.read(buf.data(), buf.size());
     int res = exif.parseFrom(buf.data(), len);
     if(res != 0) {
-       LOGW("Error reading EXIF from %s: %d", fpath.c_str(), res);
+       LOGW("Error reading EXIF from %s (%d bytes): %d", fpath.c_str(), int(len), res);
        continue;
     }
     if(exif.GeoLocation.Latitude == 0 && exif.GeoLocation.Longitude == 0) continue;
@@ -728,7 +729,7 @@ Button* MapsBookmarks::createPanel()
     }
   });
 
-  overflowMenu->addItem("Clear", [=](){
+  listOverflowMenu->addItem("Clear", [=](){
     SQLiteStmt(app->bkmkDB, "DELETE FROM bookmarks WHERE list_id = ?;").bind(activeListId).exec();
     auto it1 = bkmkMarkers.find(activeListId);
     if(it1 != bkmkMarkers.end())
