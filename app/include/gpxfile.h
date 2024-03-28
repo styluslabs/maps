@@ -81,4 +81,4 @@ struct GpxFile {
 };
 
 bool loadGPX(GpxFile* track, const char* gpxSrc = NULL);
-bool saveGPX(GpxFile* track);
+bool saveGPX(GpxFile* track, const char* filename = NULL);

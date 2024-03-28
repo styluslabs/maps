@@ -65,11 +65,14 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     //  text and points are drawn w/ blend_order -1, so use blend_order < -1 to place rasters underneath
     // note that lines and polygons are normally drawn w/ opaque blend mode, which ignores blend_order and is
     //  drawn before all other blend modes; default raster style uses opaque!
-    if(order > 0)
-      updates.emplace_back("+styles." + rasterN, fstring("{base: raster, blend: translucent, blend_order: %d}", order-100));
+    if(order > 0) {
+      updates.emplace_back("+styles." + rasterN,
+          fstring("{base: raster, lighting: false, blend: translucent, blend_order: %d}", order-100));
+    }
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order > 0 ? rasterN : "raster");
+    //updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", alphastr);  -- this is how to do opacity
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", order > 0 ? std::to_string(1000 + order) : "0");
     ++order;
   }
@@ -780,10 +783,10 @@ Button* MapsSources::createPanel()
         auto src = mapSources[key];
         if(!src || src["layer"].as<bool>(false)) continue;
         auto onClicked = [this, key](){
-          if(key != currSource)
-            rebuildSource(key);
           if(sourceEditPanel->isVisible() || key == currSource)
             populateSourceEdit(key);
+          else
+            rebuildSource(key);
         };
         std::string title = mapSources[key]["title"].Scalar();
         Button* item = sourcesMenu->addItem(title.c_str(), MapsApp::uiIcon("layers"), onClicked);

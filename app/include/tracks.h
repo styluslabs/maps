@@ -81,6 +81,7 @@ private:
   void updateDistances();
   bool findPickedWaypoint(GpxFile* track);
   void toggleRouteEdit(bool show);
+  Widget* createEditDialog(Button* editTrackBtn);
 
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;

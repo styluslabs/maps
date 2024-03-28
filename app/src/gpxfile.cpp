@@ -160,7 +160,7 @@ static void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
   }
 }
 
-bool saveGPX(GpxFile* track)
+bool saveGPX(GpxFile* track, const char* filename)
 {
   // saving track
   pugi::xml_document doc;
@@ -192,7 +192,7 @@ bool saveGPX(GpxFile* track)
     for(const Waypoint& wpt : t.pts)
       saveWaypoint(seg.append_child("trkpt"), wpt);
   }
-  return doc.save_file(track->filename.c_str(), "  ");
+  return doc.save_file(filename ? filename : track->filename.c_str(), "  ");
 }
 
 // Tangram stores marker coords normalized to marker extent (max of bbox width, height) and line width is in

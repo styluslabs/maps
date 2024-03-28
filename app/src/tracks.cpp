@@ -968,11 +968,11 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
         navRoute.addWaypoint({r1, "Start"});  //"Current location"
       navRoute.addWaypoint({r2, app->pickResultName});
       activeTrack = NULL;
-      toggleRouteEdit(false);
       createRoute(&navRoute);
       app->showPanel(tracksPanel);
       app->panelToSkip = tracksPanel;
       populateWaypoints(&navRoute);
+      toggleRouteEdit(false);
     };
     tb->addWidget(routeBtn);
 
@@ -983,11 +983,11 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       navRoute.routeMode = "direct";
       navRoute.addWaypoint({app->pickResultCoord, app->pickResultName});
       activeTrack = NULL;
-      toggleRouteEdit(true);
       createRoute(&navRoute);
       app->showPanel(tracksPanel);
       app->panelToSkip = tracksPanel;
       populateWaypoints(&navRoute);
+      toggleRouteEdit(true);
     };
     tb->addWidget(measureBtn);
   }
@@ -1068,68 +1068,75 @@ void MapsTracks::updateDB(GpxFile* track)
     track->filename = file.path;
   }
   if(track->rowid < 0) {
-    SQLiteStmt(app->bkmkDB, "INSERT INTO tracks (title,filename) VALUES (?,?);")
-        .bind(track->title, track->filename).exec();
+    SQLiteStmt(app->bkmkDB, "INSERT INTO tracks (title, style, filename) VALUES (?,?);")
+        .bind(track->title, track->style, track->filename).exec();
     track->rowid = sqlite3_last_insert_rowid(app->bkmkDB);
   }
   else
-    SQLiteStmt(app->bkmkDB, "UPDATE tracks SET title = ?, filename = ? WHERE rowid = ?;")
-        .bind(track->title, track->filename, track->rowid).exec();
+    SQLiteStmt(app->bkmkDB, "UPDATE tracks SET title = ?, style = ?, filename = ? WHERE rowid = ?;")
+        .bind(track->title, track->style, track->filename, track->rowid).exec();
   track->loaded = true;
   tracksDirty = true;
+}
+
+// currently, we need to create separate widgets for stats and waypoints panels
+Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
+{
+  TextEdit* editTrackTitle = createTitledTextEdit("Title");
+  ColorPicker* editTrackColor = createColorPicker(app->colorPickerMenu, Color::BLUE);
+  CheckBox* editTrackCopyCb = createCheckBox("Save as copy", false);
+  Widget* editTrackRow = createRow();
+  editTrackRow->addWidget(editTrackTitle);
+  editTrackRow->addWidget(editTrackColor);
+  Widget* saveTrackContent = createInlineDialog({editTrackRow, editTrackCopyCb}, "Save", [=](){
+    auto title = editTrackTitle->text();
+    bool sametitle = title == activeTrack->title;
+    activeTrack->title = title;
+    activeTrack->style = colorToStr(editTrackColor->color());
+    if(activeTrack->marker)
+      activeTrack->marker->setProperties({{{"color", activeTrack->style}}});
+    Widget* titleWidget = app->panelHistory.back()->selectFirst(".panel-title");
+    if(titleWidget)
+      static_cast<TextLabel*>(titleWidget)->setText(activeTrack->title.c_str());
+    if(activeTrack->rowid >= 0 || activeTrack == &recordedTrack) {
+      if(editTrackCopyCb->isChecked()) {
+        activeTrack->rowid = -1;
+        activeTrack->filename.clear();
+        if(sametitle)
+          activeTrack->title.append(" Copy");
+      }
+      updateDB(activeTrack);
+      saveGPX(activeTrack);
+      origLocs.clear();
+      tracksDirty = true;
+    }
+    if(editTrackBtn && editTrackBtn->isChecked())
+      editTrackBtn->onClicked();  // close edit track view
+  }, [=](){ if(editTrackBtn && editTrackBtn->isChecked()) editTrackBtn->onClicked(); });
+  editTrackTitle->onChanged = [=](const char* s){ saveTrackContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
+  saveTrackContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SvgGui::VISIBLE) {
+      editTrackTitle->setText(activeTrack->title.c_str());
+      editTrackColor->setColor(parseColor(activeTrack->style, Color::BLUE));
+      editTrackCopyCb->setChecked(false);
+      editTrackCopyCb->setVisible(activeTrack->rowid >= 0);
+    }
+    return false;
+  });
+  return saveTrackContent;
 }
 
 Button* MapsTracks::createPanel()
 {
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks(title TEXT, filename TEXT, style TEXT,"
       " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)), archived INTEGER DEFAULT 0);");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks_state(track_id INTEGER, ordering INTEGER, visible INTEGER);");
+  //DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks_state(track_id INTEGER, ordering INTEGER, visible INTEGER);");
 
   // Stats panel
   statsContent = createColumn();
 
   Button* editTrackBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit Track");
-
-  TextEdit* saveTitle = createTitledTextEdit("Title");
-  TextEdit* savePath = createTitledTextEdit("Path");
-  CheckBox* replaceTrackCb = createCheckBox("Replace track", false);
-
-  auto onSaveTrackCancel = [=](){ if(!recordTrack) editTrackBtn->onClicked(); };
-  auto onSaveTrack = [=](){
-    std::string prevFile = activeTrack->filename;
-    activeTrack->title = saveTitle->text();
-    activeTrack->filename = savePath->text();
-    if(saveGPX(activeTrack)) {
-      bool replace = replaceTrackCb->isChecked();
-      if(activeTrack->rowid >= 0)
-        updateDB(activeTrack);
-      if(replace && !prevFile.empty() && prevFile != activeTrack->filename)
-        removeFile(prevFile);
-      origLocs.clear();
-      if(!recordTrack)
-        editTrackBtn->onClicked();  // close edit track view
-    }
-    else
-      activeTrack->filename = prevFile;
-    tracksDirty = true;
-  };
-
-  Widget* saveTrackContent = createInlineDialog(
-      {saveTitle, savePath, replaceTrackCb}, "Apply", onSaveTrack, onSaveTrackCancel);
-  Button* saveTrackBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
-
-  savePath->onChanged = [=](const char* path){
-    bool newfile = path != activeTrack->filename;
-    replaceTrackCb->setEnabled(newfile);
-    if(newfile) {
-      bool pathexists = FSPath(path).exists();
-      //fileExistsMsg->setVisible(pathexists);
-      saveTrackBtn->setEnabled(!pathexists);
-    }
-    else
-      replaceTrackCb->setChecked(false);
-  };
-
+  Widget* saveTrackContent = createEditDialog(editTrackBtn);
   statsContent->addWidget(saveTrackContent);
 
   // bearing? direction (of travel)?
@@ -1351,7 +1358,7 @@ Button* MapsTracks::createPanel()
 
   stopRecordBtn->onClicked = [=](){
     saveGPX(&recordedTrack);
-    updateDB(&recordedTrack);
+    //updateDB(&recordedTrack);
     tracks.push_back(std::move(recordedTrack));
     recordedTrack = GpxFile();
     recordTrack = false;
@@ -1365,13 +1372,8 @@ Button* MapsTracks::createPanel()
     bool show = !editTrackBtn->isChecked();
     editTrackBtn->setChecked(show);
     saveTrackContent->setVisible(show);
-    if(!recordTrack)
+    if(activeTrack != &recordedTrack)
       setTrackEdit(show);
-    if(show) {
-      saveTitle->setText(activeTrack->title.c_str());
-      savePath->setText(activeTrack->filename.c_str());
-      saveTrackBtn->setEnabled(false);
-    }
   };
 
   auto hoverFn = [this](real s){
@@ -1454,17 +1456,25 @@ Button* MapsTracks::createPanel()
       tracksDirty = true;
       setTrackVisible(&recordedTrack, true);
       populateStats(&recordedTrack);
-      saveTitle->setText(recordedTrack.title.c_str());
-      savePath->setText(recordedTrack.filename.c_str());
       saveTrackContent->setVisible(true);
     }
   };
+
+  Button* statsOverflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
+  Menu* statsOverflow = createMenu(Menu::VERT_LEFT);
+  statsOverflowBtn->setMenu(statsOverflow);
+  statsOverflow->addItem("Export", [=](){
+    MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}},
+        activeTrack->title, [this](const char* s){ saveGPX(activeTrack, s); });
+  });
 
   auto statsTb = app->createPanelHeader(MapsApp::uiIcon("graph-line"), "");
   statsTb->addWidget(pauseRecordBtn);
   statsTb->addWidget(stopRecordBtn);
   statsTb->addWidget(statsWayptsBtn);
   statsTb->addWidget(editTrackBtn);
+  statsTb->addWidget(statsOverflowBtn);
+
   statsPanel = app->createMapPanel(statsTb, statsContent);
   statsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_CLOSED) {
@@ -1504,26 +1514,6 @@ Button* MapsTracks::createPanel()
   Widget* wayptContainer = createColumn();
   wayptContainer->node->setAttribute("box-anchor", "fill");
   wayptContent = new DragDropList;
-
-  TextEdit* editRouteTitle = createTitledTextEdit("Title");
-  Widget* editRouteContent = createInlineDialog({editRouteTitle}, "Save", [=](){
-    activeTrack->title = editRouteTitle->text();
-    updateDB(activeTrack);
-    populateWaypoints(activeTrack);
-  });
-  editRouteTitle->onChanged = [=](const char* s){ editRouteContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
-
-  //TextEdit* saveRouteTitle = createTitledTextEdit("Title");
-  //TextEdit* saveRouteFile = createTitledTextEdit("File");
-  //Widget* saveRouteContent = createInlineDialog({saveRouteTitle, saveRouteFile}, "Create", [=](){
-  //  tracks.push_back(std::move(navRoute));
-  //  tracks.back().title = saveRouteTitle->text();
-  //  tracks.back().desc = ftimestr("%F");
-  //  tracks.back().filename = saveRouteFile->text();
-  //  updateDB(&tracks.back());
-  //  populateWaypoints(&tracks.back());
-  //});
-  //saveRouteTitle->onChanged = [=](const char* s){ saveRouteContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
 
   Button* saveRouteBtn = createToolbutton(MapsApp::uiIcon("save"), "Save");
   saveRouteBtn->onClicked = [=](){
@@ -1584,9 +1574,12 @@ Button* MapsTracks::createPanel()
   showAllWptsBtn->setChecked(showAllWaypts);
   wayptsOverflow->addItem(showAllWptsBtn);
 
-  wayptsOverflow->addItem("Rename", [=](){
-    showInlineDialogModal(editRouteContent);
-    editRouteTitle->setText(activeTrack->title.c_str());
+  Widget* editRouteContent = createEditDialog(NULL);
+  wayptsOverflow->addItem("Edit", [=](){ showInlineDialogModal(editRouteContent); });
+
+  wayptsOverflow->addItem("Export", [=](){
+    MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}},
+        activeTrack->title, [this](const char* s){ saveGPX(activeTrack, s); });
   });
 
   // stats preview for route
