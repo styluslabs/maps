@@ -42,7 +42,9 @@ public:
   TrackPlot* trackPlot = NULL;
   Button* pauseRecordBtn = NULL;
   Button* stopRecordBtn = NULL;
+  Button* saveRouteBtn = NULL;
   Button* routeModeBtn = NULL;
+  Button* routePluginBtn = NULL;
   TextBox* previewDistText = NULL;
   Button* sparkStats = NULL;
   TrackSparkline* trackSpark = NULL;

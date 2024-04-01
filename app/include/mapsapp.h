@@ -162,6 +162,8 @@ public:
   static void setSensorsEnabled(bool enabled);
   static void sdlEvent(SDL_Event* event);
 
+  static std::string elevToStr(double meters);
+
   static MapsApp* inst;
   static Platform* platform;
   static std::string baseDir;

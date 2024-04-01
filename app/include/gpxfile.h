@@ -21,6 +21,11 @@ struct Waypoint
   Waypoint(const Location& _loc, double _dist) : loc(_loc), dist(_dist) {}
   ~Waypoint();
   LngLat lngLat() const { return loc.lngLat(); }
+
+  Waypoint(Waypoint&& other) = default;
+  Waypoint& operator=(Waypoint&& obj) = default;
+private:
+  Waypoint(const Waypoint& other) = default;
 };
 
 struct GpxWay
@@ -56,7 +61,7 @@ struct GpxFile {
   std::string desc;
   std::string filename;
   std::string style;
-  std::string routeMode = "direct";  // "walk", "bike", "drive"
+  std::string routeMode;
   std::unique_ptr<TrackMarker> marker;
 
   std::vector<Waypoint> waypoints;

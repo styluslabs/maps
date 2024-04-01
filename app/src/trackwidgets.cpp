@@ -269,9 +269,9 @@ void TrackSparkline::setTrack(const std::vector<Waypoint>& locs)
   }
   altDistPlot.addPoint(locs.back().dist, -1000);
 
-  real elev = maxAlt - minAlt;
-  minAlt -= 0.05*elev;
-  maxAlt += 0.05*elev;
+  //real elev = maxAlt - minAlt;
+  //minAlt -= 0.05*elev;
+  //maxAlt += 0.05*elev;
 }
 
 void TrackSparkline::draw(SvgPainter* svgp) const
@@ -284,15 +284,27 @@ void TrackSparkline::draw(SvgPainter* svgp) const
   p->fillRect(Rect::wh(w, h), Color::WHITE);
 
   // plot
+  real elev = maxAlt - minAlt;
   int plotw = w;
   int ploth = h;
   p->clipRect(Rect::ltrb(0, 0, w, h));  // clip plot to axes
-  p->scale(plotw/maxDist, -ploth/(maxAlt - minAlt));
+  p->save();
+  p->scale(plotw/maxDist, -ploth/(maxAlt - minAlt + 0.1*elev));
 
-  p->translate(0, -maxAlt);  // + minAlt);
+  p->translate(0, -(maxAlt + 0.05*elev));  // + minAlt);
   p->setFillBrush(Color(0, 0, 255, 128));
   p->setStroke(Color::NONE);
   p->drawPath(altDistPlot);
+  p->restore();
+
+  // vertical scale
+  p->setStroke(Color::WHITE, 2);
+  p->setStrokeAlign(Painter::StrokeOuter);
+  p->setFillBrush(Color::BLACK);
+  p->setFontSize(12);
+  p->setTextAlign(Painter::AlignLeft | Painter::AlignVCenter);
+  p->drawText(2, 8, MapsApp::elevToStr(maxAlt).c_str());
+  p->drawText(2, ploth - 8, MapsApp::elevToStr(minAlt).c_str());
 }
 
 // TrackSliders
@@ -329,8 +341,8 @@ TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
     sliderOnApplyLayout(src, dest);
     if(src.toSize() != dest.toSize()) {
       Rect rect = sliderBg->node->bounds();
-      startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
-      endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
+      startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos + 6, 0));
+      endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos + 6, 0));
     }
     return false;  // we do not replace the normal layout (although that should be a no-op)
   };
@@ -344,13 +356,13 @@ void TrackSliders::setCropHandles(real start, real end, int update)
   Rect rect = sliderBg->node->bounds();
   if(startHandlePos != start || update > 1) {
     startHandlePos = start;
-    startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos, 0));
+    startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos + 6, 0));
     if(update > 0 && onStartHandleChanged)
       onStartHandleChanged();
   }
   if(endHandlePos != end || update > 1) {
     endHandlePos = end;
-    endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos, 0));
+    endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos + 6, 0));
     if(update > 0 && onEndHandleChanged)
       onEndHandleChanged();
   }
@@ -367,7 +379,7 @@ TrackSliders* createTrackSliders()
 {
   static const char* slidersSVG = R"#(
     <g id="slider" class="slider" box-anchor="hfill" layout="box">
-      <rect class="slider-bg background" box-anchor="hfill" fill="blue" width="200" height="4"/>
+      <rect class="slider-bg background" box-anchor="hfill" margin="0 6" fill="blue" width="200" height="4"/>
       <g class="slider-handle-container" box-anchor="left">
         <!-- invisible rect to set left edge of box so slider-handle can move freely -->
         <rect width="1" height="16" fill="none"/>

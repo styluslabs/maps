@@ -327,8 +327,14 @@ static int addRouteGPX(duk_context* ctx)
   GpxFile track;
   loadGPX(&track, gpx);
   for(auto& route : track.routes) {
-    // desc is used for route steps - must be set explicitly with addRouteStep
-    for(auto & wpt : route.pts) wpt.desc.clear();
+    // temporary hack until we switch to JSON endpoint for openrouteservice
+    auto prevdesc = route.pts.empty() ? "" : route.pts.front().desc;
+    for(size_t ii = 1; ii < route.pts.size(); ++ii) {
+      if(route.pts[ii].desc == prevdesc)
+        route.pts[ii].desc.clear();
+      else
+        prevdesc = route.pts[ii].desc;
+    }
     MapsApp::inst->mapsTracks->addRoute(std::move(route.pts));
   }
   return 0;

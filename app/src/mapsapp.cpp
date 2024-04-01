@@ -214,7 +214,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
    auto elevFn = [this](double elev){
     Widget* elevWidget = infoContent->selectFirst(".elevation-text");
     if(elevWidget) {
-      elevWidget->setText(fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? elev : elev*3.28084).c_str());
+      elevWidget->setText(elevToStr(elev).c_str());
       infoContent->selectFirst(".elevation-icon")->setVisible(true);  //elevWidget->setVisible(true);
     }
   };
@@ -636,7 +636,7 @@ void MapsApp::updateLocation(const Location& _loc)
     SvgText* elevnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".currloc-elevation-text"));
     double elev = currLocation.alt;
     if(elevnode)
-      elevnode->setText(fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? elev : elev*3.28084).c_str());
+      elevnode->setText(elevToStr(elev).c_str());
   }
 
   sendMapEvent(LOC_UPDATE);
@@ -749,6 +749,11 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
       }
     }
   }
+}
+
+std::string MapsApp::elevToStr(double meters)
+{
+  return fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? meters : meters*3.28084);
 }
 
 void MapsApp::dumpTileContents(float x, float y)

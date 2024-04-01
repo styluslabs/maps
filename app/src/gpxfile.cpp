@@ -25,10 +25,7 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
 {
   double lat = trkpt.attribute("lat").as_double();
   double lng = trkpt.attribute("lon").as_double();
-  //track.emplace_back(lng, lat);
-  pugi::xml_node elenode = trkpt.child("ele");
-  double ele = atof(elenode.child_value());
-  //activeTrack.push_back({track.back(), dist, atof(ele.child_value())});
+  double ele = atof(trkpt.child_value("ele"));
   double time = 0;
   pugi::xml_node timenode = trkpt.child("time");
   if(timenode) {
@@ -37,8 +34,7 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
     time = mktime(&tmb);
   }
 
-  Waypoint wpt({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0},
-      trkpt.child("name").child_value(), trkpt.child("desc").child_value());
+  Waypoint wpt({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0}, trkpt.child_value("name"), trkpt.child_value("desc"));
   pugi::xml_node extnode = trkpt.child("extensions");
   if(extnode) {
     //wpt.visible = extnode.attribute("visible").as_bool(wpt.visible);
@@ -62,8 +58,8 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
   pugi::xml_node gpx = doc.child("gpx");
   if(!gpx)
     return false;
-  const char* gpxname = gpx.child("name").child_value();
-  const char* gpxdesc = gpx.child("desc").child_value();
+  const char* gpxname = gpx.child_value("name");
+  const char* gpxdesc = gpx.child_value("desc");
   // value set in UI (and stored in DB) takes precedence
   if(gpxname[0] && track->title.empty()) track->title = gpxname;
   if(gpxdesc[0]) track->desc = gpxdesc;
@@ -81,9 +77,9 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
   while(rte) {
     int rtestep = -1;
     double ttot = 0;
-    track->routes.emplace_back(rte.child("name").child_value(), rte.child("desc").child_value());
-    if(track->routeMode.empty())
-      track->routeMode = rte.child("type").child_value();
+    track->routes.emplace_back(rte.child_value("name"), rte.child_value("desc"));
+    //if(track->routeMode.empty())
+    track->routeMode = rte.child_value("type");
     pugi::xml_node rtept = rte.child("rtept");
     while(rtept) {
       track->routes.back().pts.push_back(loadWaypoint(rtept));
@@ -91,8 +87,8 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
       // handle openrouteservice extensions (other common/useful extensions to be added later)
       pugi::xml_node extnode = rtept.child("extensions");
       if(extnode) {
-        const char* stepstr = extnode.child("step").child_value();
-        const char* durstr = extnode.child("duration").child_value();
+        const char* stepstr = extnode.child_value("step");
+        const char* durstr = extnode.child_value("duration");
         if(stepstr[0] && durstr[0]) {
           int step = atoi(stepstr);
           track->routes.back().pts.back().loc.time = ttot;
@@ -110,7 +106,7 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
   pugi::xml_node trk = gpx.child("trk");
   //if(!trk) logMsg("Error loading %s\n", gpxfile);
   while(trk) {
-    track->tracks.emplace_back(trk.child("name").child_value(), trk.child("desc").child_value());
+    track->tracks.emplace_back(trk.child_value("name"), trk.child_value("desc"));
     pugi::xml_node trkseg = trk.child("trkseg");
     while(trkseg) {
       //std::vector<LngLat> track;
