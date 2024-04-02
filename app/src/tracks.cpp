@@ -89,10 +89,11 @@ void MapsTracks::updateLocation(const Location& loc)
 
 static void addRouteStepMarker(Map* map, Waypoint& wp, GpxFile* track)
 {
-  if(wp.marker <= 0)
+  if(wp.marker <= 0) {
     wp.marker = map->markerAdd();
-  map->markerSetStylingFromPath(wp.marker, "layers.route-step.draw.marker");
-  map->markerSetPoint(wp.marker, wp.loc.lngLat());
+    map->markerSetStylingFromPath(wp.marker, "layers.route-step.draw.marker");
+    map->markerSetPoint(wp.marker, wp.loc.lngLat());
+  }
   // use marker number as unique id for priority
   map->markerSetProperties(wp.marker,
       {{{"name", wp.desc}, {"color", track->style}, {"priority", wp.marker}}});
@@ -120,9 +121,8 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
   if(!track->routes.empty() && track->routeMode != "direct") {
     auto& pts = track->routes.back().pts;
     for(size_t ii = 1; ii < pts.size(); ++ii) {
-      Waypoint& wp = pts[ii];
-      if(!wp.desc.empty() && wp.marker <= 0)
-        addRouteStepMarker(app->map.get(), wp, track);
+      if(!pts[ii].desc.empty())  // && wp.marker <= 0)
+        addRouteStepMarker(app->map.get(), pts[ii], track);
     }
   }
 
@@ -131,10 +131,10 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
       wp.marker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(wp.marker, "layers.waypoint.draw.marker");
       app->map->markerSetPoint(wp.marker, wp.loc.lngLat());
-      // use marker number as unique id for priority
-      app->map->markerSetProperties(wp.marker,
-          {{{"name", wp.name}, {"color", track->style}, {"priority", wp.marker}}});
     }
+    // use marker number as unique id for priority
+    app->map->markerSetProperties(wp.marker,
+        {{{"name", wp.name}, {"color", track->style}, {"priority", wp.marker}}});
   }
 }
 
@@ -203,8 +203,10 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
   colorBtn->onColor = [this, track](Color color){
     std::string colorstr = colorToStr(color);
     track->style = colorstr;
-    if(track->marker)
-      track->marker->setProperties({{{"color", colorstr}}});
+    if(track->marker) {
+      updateTrackMarker(track);
+      showTrack(track, track->visible);
+    }
     if(track->rowid >= 0)
       SQLiteStmt(app->bkmkDB, "UPDATE tracks SET style = ? WHERE rowid = ?;").bind(colorstr, track->rowid).exec();
   };
@@ -212,7 +214,11 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
-  if(track->rowid >= 0) {
+  if(track == &recordedTrack) {  //->rowid >= 0) {
+    overflowMenu->addItem("Pause", [this](){ pauseRecordBtn->onClicked(); });
+    overflowMenu->addItem("Stop", [this](){ stopRecordBtn->onClicked(); });
+  }
+  else {
     overflowMenu->addItem(track->archived ? "Unarchive" : "Archive", [=](){
       std::string q2 = fstring("UPDATE tracks SET archived = %d WHERE rowid = ?;", track->archived ? 0 : 1);
       SQLiteStmt(app->bkmkDB, q2).bind(track->rowid).exec();
@@ -225,18 +231,15 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       SQLiteStmt(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?").bind(track->rowid).exec();
       for(auto it = tracks.begin(); it != tracks.end(); ++it) {
         if(it->rowid == track->rowid) {
-          //removeTrackMarkers(track);
+          bool archived = track->archived;
           yamlRemove(app->config["tracks"]["visible"], track->rowid);
           tracks.erase(it);
+          // touching tracks vector invalidates all the pointers saved with each list item
+          archived ? populateArchived() : populateTracks();  //app->gui->deleteWidget(item);
           break;
         }
       }
-      app->gui->deleteWidget(item);  //populateTracks(archived);  // refresh
     });
-  }
-  else {
-    overflowMenu->addItem("Pause", [this](){ pauseRecordBtn->onClicked(); });
-    overflowMenu->addItem("Stop", [this](){ stopRecordBtn->onClicked(); });
   }
   overflowBtn->setMenu(overflowMenu);
   container->addWidget(overflowBtn);
@@ -333,6 +336,14 @@ void MapsTracks::populateStats(GpxFile* track)
   trackPlot->setTrack(track->activeWay()->pts, track->waypoints);
 }
 
+static std::string durationToStr(double totsecs)
+{
+  int hours = int(totsecs/3600);
+  int mins = int((totsecs - hours*3600)/60);
+  int secs = int(totsecs - hours*3600 - mins*60);
+  return fstring("%02d:%02d:%02d", hours, mins, secs);  //fstring("%dh %02dm %02ds", hours, mins, secs);
+}
+
 void MapsTracks::updateStats(std::vector<Waypoint>& locs)
 {
   static const char* notime = u8"\u2014";  // emdash
@@ -382,18 +393,10 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
   statsContent->selectFirst(".track-speed")->setText(speedStr.c_str());
 
   double ttot = locs.empty() ? 0 : locs.back().loc.time - locs.front().loc.time;
-  int hours = int(ttot/3600);
-  int mins = int((ttot - hours*3600)/60);
-  int secs = int(ttot - hours*3600 - mins*60);
-  std::string timeStr = fstring("%dh %02dm %02ds", hours, mins, secs);
+  auto timeStr = durationToStr(ttot);
   statsContent->selectFirst(".track-time")->setText(timeStr.c_str());
   sparkStats->selectFirst(".spark-time")->setText(timeStr.c_str());
-
-  ttot = movingTime;
-  hours = int(ttot/3600);
-  mins = int((ttot - hours*3600)/60);
-  secs = int(ttot - hours*3600 - mins*60);
-  statsContent->selectFirst(".track-moving-time")->setText(fstring("%dh %02dm %02ds", hours, mins, secs).c_str());
+  statsContent->selectFirst(".track-moving-time")->setText(durationToStr(movingTime).c_str());
 
   double distUser = app->metricUnits ? trackDist/1000 : trackDist*0.000621371;
   std::string distStr = fstring(app->metricUnits ? "%.2f km" : "%.2f mi", distUser);
@@ -401,7 +404,7 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
   sparkStats->selectFirst(".spark-dist")->setText(distStr.c_str());
 
   std::string avgSpeedStr = fstring(app->metricUnits ? "%.2f km/h" : "%.2f mph", distUser/(movingTime/3600));
-  statsContent->selectFirst(".track-avg-speed")->setText(ttot > 0 ? avgSpeedStr.c_str() : notime);
+  statsContent->selectFirst(".track-avg-speed")->setText(movingTime > 0 ? avgSpeedStr.c_str() : notime);
 
   std::string ascentStr = app->elevToStr(trackAscent);
   statsContent->selectFirst(".track-ascent")->setText(ascentStr.c_str());
@@ -419,10 +422,8 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
       : fstring("%.0f ft/h", (trackDescent*3.28084)/(descentTime/3600));
   statsContent->selectFirst(".track-descent-speed")->setText(descentTime > 0 ? descentSpdStr.c_str() : notime);
 
-  if(wayptPanel->isVisible()) {
-    sparkStats->setVisible(locs.size() > 1);
-    trackSpark->setTrack(locs);
-  }
+  sparkStats->setVisible(locs.size() > 1);
+  trackSpark->setTrack(locs);
 }
 
 static std::string distKmToStr(double distkm)
@@ -577,6 +578,12 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   wayptContent->deleteItem(uid);
 }
 
+void MapsTracks::refreshWayptPlaceInfo(GpxFile* track, const Waypoint& wpt)
+{
+  app->setPickResult(app->pickResultCoord, wpt.name, app->pickResultProps);
+  setPlaceInfoSection(track, wpt);
+}
+
 // cut and paste from bookmarks
 void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
 {
@@ -602,10 +609,8 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
           {{{"name", it->name}, {"color", track->style}, {"priority", it->marker}}});
     }
     waypointsDirty = true;
-    app->setPickResult(app->pickResultCoord, it->name, app->pickResultProps);  // must be called last
-    //static_cast<TextLabel*>(app->infoPanel->selectFirst(".panel-title"))->setText(titleEdit->text().c_str());
-    //noteText->setText(noteEdit->text().c_str());
-    //noteText->setVisible(true);
+    // hack around problem of setPickResult destroying this closure
+    refreshWayptPlaceInfo(track, *it);
   };
   auto onCancelEdit = [=](){ noteText->setVisible(true); };
   auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
@@ -695,6 +700,8 @@ Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
   }
   if(it->routed)
     createRoute(activeTrack);
+  if(it->marker <= 0)
+    updateTrackMarker(activeTrack);  // create marker for waypoint if it hasn't been yet
   return &(*it);
 }
 
@@ -760,7 +767,7 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
     else {
       auto it = activeTrack->findWaypoint(uid);
       bool wasTapToAdd = std::exchange(tapToAddWaypt, false);
-      app->setPickResult(it->lngLat(), it->name, "");
+      app->setPickResult(it->lngLat(), it->name, it->props);
       tapToAddWaypt = wasTapToAdd;
       setPlaceInfoSection(activeTrack, *it);
     }
@@ -838,7 +845,7 @@ bool MapsTracks::findPickedWaypoint(GpxFile* track)
   for(auto& wpt : track->waypoints) {
     if(app->pickedMarkerId == wpt.marker) {
       bool wasTapToAdd = std::exchange(tapToAddWaypt, false);
-      app->setPickResult(wpt.lngLat(), wpt.name, "");
+      app->setPickResult(wpt.lngLat(), wpt.name, wpt.props);
       tapToAddWaypt = wasTapToAdd;
       setPlaceInfoSection(track, wpt);
       app->pickedMarkerId = 0;
@@ -954,7 +961,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   if(activeTrack) {
     Button* addWptBtn = createToolbutton(MapsApp::uiIcon("waypoint"), "Add waypoint");
     addWptBtn->onClicked = [=](){
-      Waypoint* wpt = addWaypoint({app->pickResultCoord, app->pickResultOsmId.empty() ? "" : app->pickResultName});
+      Waypoint* wpt = addWaypoint({app->pickResultCoord,
+          app->pickResultOsmId.empty() ? "" : app->pickResultName, "", app->pickResultProps});
       if(wpt)
         setPlaceInfoSection(activeTrack, *wpt);
     };
@@ -1067,8 +1075,9 @@ void MapsTracks::updateDB(GpxFile* track)
 {
   if(track->filename.empty()) {
     FSPath file(MapsApp::baseDir, "tracks/" + track->title + ".gpx");
+    std::string basepath = file.basePath();
     for(int ii = 1; file.exists(); ++ii)
-      file = file.basePath() + fstring(" (%d).gpx", ii);
+      file = basepath + fstring(" (%d).gpx", ii);
     track->filename = file.path;
   }
   if(track->rowid < 0) {
@@ -1097,10 +1106,16 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
   Widget* saveTrackContent = createInlineDialog({editTrackRow, editTrackCopyCb}, "Save", [=](){
     auto title = editTrackTitle->text();
     bool sametitle = title == activeTrack->title;
+    // add entry for original track if making copy
+    if(activeTrack->rowid >= 0 && editTrackCopyCb->isChecked()) {
+      tracks.emplace_back(activeTrack->title, activeTrack->desc, activeTrack->filename,
+          activeTrack->style, activeTrack->rowid, activeTrack->archived);
+    }
     activeTrack->title = title;
     activeTrack->style = colorToStr(editTrackColor->color());
-    if(activeTrack->marker)
-      activeTrack->marker->setProperties({{{"color", activeTrack->style}}});
+    //if(activeTrack->marker)
+    updateTrackMarker(activeTrack);  // apply (potentially) new color to markers
+    tracksDirty = true;
     Widget* titleWidget = app->panelHistory.back()->selectFirst(".panel-title");
     if(titleWidget)
       static_cast<TextLabel*>(titleWidget)->setText(activeTrack->title.c_str());
@@ -1114,7 +1129,6 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
       updateDB(activeTrack);
       saveGPX(activeTrack);
       origLocs.clear();
-      tracksDirty = true;
     }
     if(editTrackBtn && editTrackBtn->isChecked())
       editTrackBtn->onClicked();  // close edit track view
@@ -1323,16 +1337,11 @@ Button* MapsTracks::createPanel()
   editTrackTb->setVisible(false);
   statsContent->addWidget(editTrackTb);
 
-  //Toolbar* trackOptionsTb = createToolbar();
-  //trackOptionsTb->addWidget(createBkmkBtn);
-  //trackOptionsTb->setVisible(false);
-  //statsContent->addWidget(trackOptionsTb);
-
   pauseRecordBtn = createToolbutton(MapsApp::uiIcon("pause"), "Pause");
   stopRecordBtn = createToolbutton(MapsApp::uiIcon("stop"), "Stop");
 
   Button* statsWayptsBtn = createToolbutton(MapsApp::uiIcon("waypoint"), "Edit Waypoints");
-  statsWayptsBtn->onClicked = [=](){ GpxFile* t = activeTrack; app->popPanel(); populateWaypoints(t); };
+  statsWayptsBtn->onClicked = [=](){ populateWaypoints(activeTrack); };
 
   auto setTrackEdit = [=](bool show){
     editTrackTb->setVisible(show);
@@ -1364,9 +1373,11 @@ Button* MapsTracks::createPanel()
   stopRecordBtn->onClicked = [=](){
     saveGPX(&recordedTrack);
     //updateDB(&recordedTrack);
+    recordedTrack.desc = ftimestr("%F");
     tracks.push_back(std::move(recordedTrack));
     recordedTrack = GpxFile();
     recordTrack = false;
+    tracksDirty = true;
     pauseRecordBtn->setChecked(false);
     pauseRecordBtn->setVisible(false);
     stopRecordBtn->setVisible(false);
@@ -1416,8 +1427,8 @@ Button* MapsTracks::createPanel()
   Widget* newTrackContent = createInlineDialog({newTrackTitle}, "Create", [=](){
     tracks.emplace_back(newTrackTitle->text(), ftimestr("%F"), "");
     updateDB(&tracks.back());
-    toggleRouteEdit(true);
     populateWaypoints(&tracks.back());
+    toggleRouteEdit(true);
     drawTrackBtn->setChecked(false);
   }, [=](){ drawTrackBtn->setChecked(false); });
   newTrackTitle->onChanged = [=](const char* s){ newTrackContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
@@ -1431,14 +1442,14 @@ Button* MapsTracks::createPanel()
   };
 
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
-  auto loadTrackFn = [=](const char* outPath){
-    tracks.emplace_back("", "", outPath);
-    loadGPX(&tracks.back());
-    if(tracks.back().waypoints.empty() && !tracks.back().activeWay()) {
-      PLATFORM_LOG("Error loading track!");
-      tracks.pop_back();
+  auto loadTrackFn = [=](const char* filename){
+    GpxFile track("", "", filename);
+    loadGPX(&track);
+    if(track.waypoints.empty() && !track.activeWay()) {
+      MapsApp::messageBox("Load track", fstring("Error reading %s", filename), {"OK"});
       return;
     }
+    tracks.push_back(std::move(track));
     updateDB(&tracks.back());
     populateStats(&tracks.back());
   };
@@ -1694,9 +1705,9 @@ Button* MapsTracks::createPanel()
     }
     else if(event->type == MapsApp::PANEL_CLOSED) {
       app->pluginManager->cancelRequests(PluginManager::ROUTE);
-      if(activeTrack) {
-        if(activeTrack->modified)
-          activeTrack->modified = !saveGPX(activeTrack);
+      if(activeTrack && activeTrack->modified)
+        activeTrack->modified = !saveGPX(activeTrack);
+      if(activeTrack && app->panelHistory.back() != statsPanel) {
         if(activeTrack != &recordedTrack)
           activeTrack->marker->setStylePath("layers.track.draw.track");
         if(!activeTrack->visible)

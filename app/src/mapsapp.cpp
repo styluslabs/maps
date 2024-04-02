@@ -698,9 +698,10 @@ static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
   if(ox < 0 || ox > 1 || oy < 0 || oy > 1)
     LOGE("Elevation tile position out of range");
   // ... seems this work correctly w/o accounting for vertical flip of texture
-  double x0 = ox*tex->width(), y0 = oy*tex->height();
-  int ix0 = std::floor(x0), iy0 = std::floor(y0);
-  int ix1 = std::ceil(x0), iy1 = std::ceil(y0);
+  double x0 = ox*tex->width() - 0.5, y0 = oy*tex->height() - 0.5;  // -0.5 to adjust for pixel centers
+  // we should extrapolate at edges instead of clamping - see shader in raster_contour.yaml
+  int ix0 = std::max(0, int(std::floor(x0))), iy0 = std::max(0, int(std::floor(y0)));
+  int ix1 = std::min(int(std::ceil(x0)), tex->width()-1), iy1 = std::min(int(std::ceil(y0)), tex->height()-1);
   double fx = x0 - ix0, fy = y0 - iy0;
   double t00 = readElevTex(tex, ix0, iy0);
   double t01 = readElevTex(tex, ix0, iy1);
@@ -1389,6 +1390,10 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
     if(panelHistory.back() == panel) {
       panel->setVisible(true);
       showPanelContainer(true);
+      return;
+    }
+    if(panelHistory.size() > 1 && panelHistory[panelHistory.size() - 2] == panel) {
+      popPanel();
       return;
     }
     panelHistory.back()->setVisible(false);

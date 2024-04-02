@@ -100,17 +100,17 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
     plotVsDist = true;
 
   // rounding for altitude range
-  real elev = maxAlt - minAlt;
+  real elev = std::max(1.0, maxAlt - minAlt);
   real expnt = std::pow(10, std::floor(std::log10(elev)));
   real lead = elev/expnt;
   real quant = lead > 5 ? expnt : lead > 2 ? expnt/2 : expnt/5;
   minAlt = std::floor(minAlt/quant)*quant;  //-= 0.05*elev;
   maxAlt = std::ceil(maxAlt/quant)*quant;  //+= 0.05*elev;
   maxZoom = locs.size()/8;  // min 8 points in view
-  // exclude first, last, and unnamed waypoints
+  // exclude first and last waypoints and waypoints missing name or distance along path
   waypoints.clear();
-  for(int ii = 1; ii < int(wpts.size()) - 1; ++ii) {
-    if(!wpts[ii].name.empty())
+  for(size_t ii = 1; ii+1 < wpts.size(); ++ii) {
+    if(!wpts[ii].name.empty() && wpts[ii].dist > 0)
       waypoints.push_back(wpts[ii]);
   }
 }
