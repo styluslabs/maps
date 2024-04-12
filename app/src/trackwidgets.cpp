@@ -156,17 +156,15 @@ void TrackPlot::draw(SvgPainter* svgp) const
     real xMin = -zoomOffset/1000;
     real xMax = xMin + maxDist/1000/zoomScale;
     real dx = xMax - xMin;
-    real anch = fewestSigDigits(xMin, xMax);
+    //real anch = fewestSigDigits(xMin, xMax);
     real dw = dx/4;
     int prec = 0;
     while(dw > 10) { dw /= 10; ++prec; }
     while(dw < 1) { dw *= 10; --prec; }
     dw = (dw > 5 ? 5 : dw > 2 ? 2 : 1) * std::pow(10, prec);
     prec = std::max(0, -prec);
-    // for n labels, find step size between 1/(n-1) and 1/n of dx
-    //real dw = fewestSigDigits(dx/nhorz, dx/(nhorz - 1));
-    //int prec = std::max(0, -int(std::floor(std::log10(dw))));
     //while(anch - dw > xMin) anch -= dw;
+    real anch = std::ceil(xMin/dw)*dw;
     real dxlbl = dw*plotw/dx;
     real anchlbl = (anch - xMin)*(plotw/dx) + labelw + 10;
     for(int ii = 0; anch + ii*dw < xMax; ++ii)

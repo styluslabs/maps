@@ -89,6 +89,10 @@ target_compile_options(tangram
   -Wmissing-field-initializers
 )
 
+if(CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
+  target_compile_definitions(tangram-core PRIVATE TANGRAM_JS_TRACING=1)
+endif()
+
 #add_resources(tangram "${PROJECT_SOURCE_DIR}/scenes" "res")
 
 # native file dialogs library

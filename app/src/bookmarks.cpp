@@ -191,9 +191,10 @@ void MapsBookmarks::populateLists(bool archived)
       SQLiteStmt(app->bkmkDB, "UPDATE lists SET color = ? WHERE id = ?;").bind(colorstr, rowid).exec();
       auto it1 = bkmkMarkers.find(rowid);
       if(it1 != bkmkMarkers.end()) {
-        bool vis = it1->second->defaultVis;
-        if(vis)
+        if(it1->second->defaultVis)
           populateBkmks(rowid, false);
+        else
+          bkmkMarkers.erase(it1);  // force recreation of markers with updated color
       }
     };
 

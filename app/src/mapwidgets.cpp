@@ -497,6 +497,16 @@ Button* Menubar::addAction(Action* action)
 Menubar* createMenubar() { return new Menubar(widgetNode("#toolbar")); }
 //Menubar* createVertMenubar() { return new Menubar(widgetNode("#vert-toolbar")); }
 
+void SharedMenu::show(Widget* _host)
+{
+  SvgGui* gui = window()->gui();
+  if(gui->lastClosedMenu == this && host == _host)
+    return;
+  host = _host;
+  gui->showMenu(this);
+  gui->setPressed(this);
+}
+
 Button* createListItem(SvgNode* icon, const char* title, const char* note)
 {
   // previously used margin="0 5", but I think any margin should be on container

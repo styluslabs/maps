@@ -82,7 +82,7 @@ private:
 };
 
 static MapsOffline* mapsOfflineInst = NULL;  // for updateProgress()
-static int maxOfflineDownloads = 4;
+static int maxOfflineDownloads = 8;
 static int currTilesTotal = 0;
 static std::atomic<Timestamp> prevProgressUpdate(0);
 static ThreadSafeQueue<OfflineTask, std::list> offlinePending;
@@ -673,6 +673,7 @@ void MapsOffline::populateOffline()
 Widget* MapsOffline::createPanel()
 {
   mapsOfflineInst = this;
+  maxOfflineDownloads = MapsApp::config["storage"]["offline_download_rate"].as<int>(8);
   // should we include zoom? total bytes?
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER PRIMARY KEY,"
       " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, maxzoom INTEGER, source TEXT, title TEXT,"
@@ -724,9 +725,6 @@ Widget* MapsOffline::createPanel()
 
   Button* saveBtn = createToolbutton(MapsApp::uiIcon("download"), "Save Offline Map");
   saveBtn->onClicked = [=](){
-    titleEdit->setText(ftimestr("%FT%H.%M.%S").c_str());
-    titleEdit->selectAll();
-
     int maxZoom = 0;
     auto& tileSources = app->map->getScene()->tileSources();
     for(auto& src : tileSources)
@@ -735,6 +733,8 @@ Widget* MapsOffline::createPanel()
     if(maxZoomSpin->value() > maxZoom)
       maxZoomSpin->setValue(maxZoom);
 
+    titleEdit->setText(ftimestr("%FT%H.%M.%S").c_str());
+    MapsApp::gui->setFocused(titleEdit, SvgGui::REASON_TAB);
     showInlineDialogModal(downloadPanel);
   };
 

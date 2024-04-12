@@ -71,7 +71,7 @@ class SharedMenu : public Menu
 {
 public:
   SharedMenu(SvgNode* n, int align);
-  void show(Widget* _host) { host = _host; window()->gui()->showMenu(this); window()->gui()->setPressed(this); }
+  void show(Widget* _host);
   Point calcOffset(const Rect& pb) const override { return Menu::calcOffset(host ? host->node->bounds() : pb); }
 
   Widget* host = NULL;

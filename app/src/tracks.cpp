@@ -183,6 +183,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
     // make sure track is loaded so we can decide between stats and waypoints
     if(track->marker <= 0)
       updateTrackMarker(track);
+    trackSliders->setValue(0);  // reset track slider for new track
     if(!track->routes.empty() || track->tracks.empty())
       populateWaypoints(track);
     else
@@ -565,8 +566,7 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   auto it = track->findWaypoint(uid);
   if(it == track->waypoints.end()) return;  // also should never happen
   bool routed = it->routed;
-  //if(it->marker > 0)  -- Waypoint now handles removing marker
-  //  app->map->markerRemove(it->marker);
+  wayptContent->deleteItem(uid);
   if(track == activeTrack && it->uid == insertionWpt)
     insertionWpt.clear();
   track->waypoints.erase(it);
@@ -575,7 +575,6 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
     app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
   if(routed)
     createRoute(track);
-  wayptContent->deleteItem(uid);
 }
 
 void MapsTracks::refreshWayptPlaceInfo(GpxFile* track, const Waypoint& wpt)
@@ -634,7 +633,7 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   };
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
-  Menu* overflowMenu = createMenu(Menu::VERT_LEFT);
+  Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
 
   overflowMenu->addItem("Add waypoints before", [=](){

@@ -272,6 +272,12 @@ void MapsSearch::clearSearch()
 
 void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, const char* json)
 {
+  // for online searches, we don't want to clear previous results until we get new results
+  if(newMapSearch) {
+    mapResults.clear();
+    markers->reset();
+    newMapSearch = false;
+  }
   size_t idx = mapResults.size();
   mapResults.push_back({id, {lng, lat}, rank, json});
   auto onPicked = [this, idx](){
@@ -375,8 +381,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 {
   updateMapResultBounds(lngLat00, lngLat11);
   // should we do clearJsSearch() to prevent duplicate results?
-  mapResults.clear();
-  markers->reset();
+  newMapSearch = true;
   if(providerIdx > 0)
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, flags);
   else

@@ -18,6 +18,8 @@ storage:
   shrink_to: 400
   # immediately delete tiles when deleting offline map?
   purge_offline: true
+  # max number of simultaneous download requests
+  offline_download_rate: 20
 
 view:
   lng: -122.434668

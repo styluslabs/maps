@@ -562,11 +562,9 @@ void MapsSources::populateSourceEdit(std::string key)
 {
   if(currSource != key)
     rebuildSource(key);
-  std::string title = mapSources[key] ? mapSources[key]["title"].Scalar() : "Untitled";
-
-  titleEdit->setText(title.c_str());
+  if(mapSources[key])
+    titleEdit->setText(mapSources[key]["title"].Scalar().c_str());
   app->showPanel(sourceEditPanel, true);
-  //sourceEditPanel->selectFirst(".panel-title")->setText(mapSources[key]["title"].Scalar().c_str());
   app->gui->deleteContents(layersContent);
 
   for(auto& src : currLayers) {
@@ -675,11 +673,9 @@ Button* MapsSources::createPanel()
 
   Button* createBtn = createToolbutton(MapsApp::uiIcon("add"), "New Source");
   createBtn->onClicked = [=](){
-    // ensure at least the first two layer selects are visible
-    //layerRows[0]->setVisible(true);
-    //layerRows[1]->setVisible(true);
     currSource = "";
     populateSourceEdit("");  // so user can edit title
+    titleEdit->setText("Untitled");
   };
 
   saveBtn->onClicked = [=](){

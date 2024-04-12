@@ -47,6 +47,36 @@ ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
 
+struct JSCallInfo { int ncalls = 0; double secs = 0; };
+static std::vector<JSCallInfo> jsCallStats;
+static std::mutex jsStatsMutex;
+
+namespace Tangram {
+void reportJSTrace(uint32_t _id, double secs)
+{
+  std::lock_guard<std::mutex> lock(jsStatsMutex);
+  if(jsCallStats.size() <= _id)
+    jsCallStats.resize(_id+1);
+  jsCallStats[_id].ncalls += 1;
+  jsCallStats[_id].secs += secs;
+}
+}
+
+static void dumpJSStats(Tangram::Scene* scene)
+{
+  std::lock_guard<std::mutex> lock(jsStatsMutex);
+  if(scene) {
+    auto& fns = scene->functions();
+    for(size_t ii = 0; ii < fns.size() && ii < jsCallStats.size(); ++ii) {
+      if(jsCallStats[ii].ncalls == 0) continue;
+      std::string snip = fns[ii].substr(0, 150);
+      std::replace(snip.begin(), snip.end(), '\n', ' ');
+      Tangram::logMsg("JS: %10.3f us (%5d calls) for %s\n", jsCallStats[ii].secs*1E6, jsCallStats[ii].ncalls, snip.c_str());
+    }
+  }
+  jsCallStats.clear();
+}
+
 void MapsApp::runOnMainThread(std::function<void()> fn)
 {
   if(std::this_thread::get_id() == mainThreadId)
@@ -509,6 +539,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
+  dumpJSStats(NULL);  // reset stats
   map->loadScene(std::move(options), async);
 }
 
@@ -1235,6 +1266,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   appDebugMenu->addItem("Dump tile", [this](){
     dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
   });
+  appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
   appDebugMenu->addItem("Set location", [this](){
     if(!std::isnan(pickResultCoord.latitude)) {
       currLocation.lng = pickResultCoord.longitude;
