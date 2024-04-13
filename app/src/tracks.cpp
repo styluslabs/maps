@@ -710,7 +710,7 @@ bool MapsTracks::onPickResult()
   if(!activeTrack || !(tapToAddWaypt || stealPickResult || replaceWaypt))
     return false;
   // make lat,lng markers nameless so they can be hidden easily
-  addWaypoint({app->pickResultCoord, app->pickResultOsmId.empty() ? "" : app->pickResultName});
+  addWaypoint({app->pickResultCoord, app->pickResultName, "", app->pickResultProps});
   while(app->panelHistory.back() != wayptPanel && app->popPanel()) {}
   return true;
 }
@@ -752,7 +752,7 @@ void MapsTracks::fingerEvent(int action, LngLat pos)
 void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
 {
   std::string uid = wp.uid;
-  std::string wpname = wp.name.empty() ? fstring("%.6f, %.6f", wp.loc.lat, wp.loc.lng) : wp.name;
+  std::string wpname = wp.name.empty() ? lngLatToStr(wp.lngLat()) : wp.name;
   const char* desc = wp.desc.empty() ? " " : wp.desc.c_str();  // make sure detail text is non-empty
   Button* item = createListItem(MapsApp::uiIcon("waypoint"), wpname.c_str(), desc);
   Widget* container = item->selectFirst(".child-container");
@@ -960,8 +960,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   if(activeTrack) {
     Button* addWptBtn = createToolbutton(MapsApp::uiIcon("waypoint"), "Add waypoint");
     addWptBtn->onClicked = [=](){
-      Waypoint* wpt = addWaypoint({app->pickResultCoord,
-          app->pickResultOsmId.empty() ? "" : app->pickResultName, "", app->pickResultProps});
+      Waypoint* wpt = addWaypoint({app->pickResultCoord, app->pickResultName, "", app->pickResultProps});
       if(wpt)
         setPlaceInfoSection(activeTrack, *wpt);
     };
@@ -977,7 +976,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
       if(km > 0.01)
         navRoute.addWaypoint({r1, "Start"});  //"Current location"
-      navRoute.addWaypoint({r2, app->pickResultName});
+      navRoute.addWaypoint({r2, app->pickResultName, "", app->pickResultProps});
       activeTrack = NULL;
       createRoute(&navRoute);
       app->showPanel(tracksPanel);
@@ -992,7 +991,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Measurement";
       navRoute.routeMode = "direct";
-      navRoute.addWaypoint({app->pickResultCoord, app->pickResultName});
+      navRoute.addWaypoint({app->pickResultCoord, app->pickResultName, "", app->pickResultProps});
       activeTrack = NULL;
       createRoute(&navRoute);
       app->showPanel(tracksPanel);

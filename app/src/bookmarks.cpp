@@ -515,20 +515,17 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
 
 void MapsBookmarks::addPlaceActions(Toolbar* tb)
 {
-  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Add bookmark");
+  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Save place");
   //createBkmkBtn->node->setAttribute("box-anchor", "left");
 
   auto createBkmkFn = [=](int list_id, std::string listname){
-    int rowid = addBookmark(list_id, app->pickResultOsmId,
-        app->pickResultName, app->pickResultProps, "", app->pickResultCoord);
-    Widget* section = getPlaceInfoSubSection(rowid, list_id, app->pickResultName, "");
+    std::string namestr = !app->pickResultName.empty() ? app->pickResultName : lngLatToStr(app->pickResultCoord);
+    int rowid = addBookmark(list_id, app->pickResultOsmId, namestr, app->pickResultProps, "", app->pickResultCoord);
+    Widget* section = getPlaceInfoSubSection(rowid, list_id, namestr, "");
     app->infoContent->selectFirst(".bkmk-content")->addWidget(section);
   };
 
-  createBkmkBtn->onClicked = [=](){
-    chooseBookmarkList(createBkmkFn);  //rowid);
-  };
-
+  createBkmkBtn->onClicked = [=](){ chooseBookmarkList(createBkmkFn); };
   tb->addWidget(createBkmkBtn);
 }
 
@@ -537,7 +534,7 @@ void MapsBookmarks::importGpx(const char* filename)
   GpxFile gpx("", "", filename);
   loadGPX(&gpx);
   if(gpx.waypoints.empty()) {
-    MapsApp::messageBox("Import bookmarks", fstring("No bookmarks found in %s", filename), {"OK"});
+    MapsApp::messageBox("Import places", fstring("No bookmarks found in %s", filename), {"OK"});
     return;
   }
   std::string style = gpx.style.empty() ? colorToStr(nextListColor()) : gpx.style;
@@ -550,7 +547,7 @@ void MapsBookmarks::importGpx(const char* filename)
   for(auto& wpt : gpx.waypoints) {
     std::string osm_id = osmIdFromJson(strToJson(wpt.props.c_str()));
     if(wpt.name.empty())
-      wpt.name = fstring("%.6f, %.6f", wpt.loc.lat, wpt.loc.lng);
+      wpt.name = lngLatToStr(wpt.lngLat());
     insbkmk.bind(list_id, osm_id, wpt.name, wpt.props, wpt.desc, wpt.loc.lng, wpt.loc.lat, int64_t(wpt.loc.time)).exec();
   }
   populateLists(false);
@@ -625,13 +622,13 @@ Button* MapsBookmarks::createPanel()
   listsCol->node->setAttribute("box-anchor", "fill");  // ancestors of ScrollWidget must use fill, not vfill
   listsCol->addWidget(newListContent);
   listsCol->addWidget(listsContent);
-  auto listHeader = app->createPanelHeader(MapsApp::uiIcon("pin"), "Bookmark Lists");
+  auto listHeader = app->createPanelHeader(MapsApp::uiIcon("pin"), "Saved Places");  //"Bookmark Lists");
   listHeader->addWidget(newListBtn);
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
-  overflowMenu->addItem("Import bookmarks", [=](){
+  overflowMenu->addItem("Import places", [=](){
     MapsApp::openFileDialog({{"GPX files", "gpx"}}, [this](const char* path){ importGpx(path); });
   });
   overflowMenu->addItem("Import photos", [=](){
@@ -682,7 +679,7 @@ Button* MapsBookmarks::createPanel()
     listsDirty = archiveDirty = true;
     // if bookmark list opened from place info, need to update list title there
     int listid = activeListId;
-    if(!app->pickResultName.empty()) {
+    if(!std::isnan(app->pickResultCoord.latitude)) {
       app->popPanel();
       app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
     }

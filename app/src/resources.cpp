@@ -56,11 +56,52 @@ const char* getResource(const std::string& name)
 
 static std::string uiIconStr;
 
+const char* mapsColorsCSS = R"#(
+svg.window  /* dark theme */
+{
+  --dark: #101010;
+  --window: #303030;
+  --light: #505050;
+  --base: #202020;
+  --button: #555555;
+  --hovered: #32809C;
+  --pressed: #32809C;
+  --checked: #0000C0;
+  --title: #2EA3CF;
+  --text: #F2F2F2;
+  --text-weak: #A0A0A0;
+  --text-bg: #000000;
+  --icon: #CDCDCD;
+  --icon-disabled: #808080;
+}
+
+svg.window.light  /* light theme */
+{
+  --dark: #F0F0F0;
+  --window: #EEEEEE;  /* was #DDDDDD */
+  --light: #CCCCCC;
+  --base: #FFFFFF;
+  --button: #D0D0D0;
+  --hovered: #B8D8F9;
+  --pressed: #B8D8F9;
+  --checked: #A2CAEF;
+  --title: #2EA3CF;
+  --text: #000000;
+  --text-weak: #606060;
+  --text-bg: #F2F2F2;
+  --icon: #505050;  /* was #303030 */
+  --icon-disabled: #A0A0A0;
+}
+)#";
+
 static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
 .legend text { fill: inherit; }
 .panel-container { fill: var(--dark); }
 .menu { fill: var(--window); }  /* same color as menuitem to eliminate dividers */
+.toolbar { fill: var(--base); }
+.roundbutton { fill: var(--base); }
+.inputbox-bg { stroke: var(--light); }  /* show low-contrast border by default for input boxes */
 )#";
 
 static const char* moreWidgetSVG = R"#(
@@ -86,6 +127,11 @@ static const char* moreWidgetSVG = R"#(
       <use class="icon" width="32" height="32" xlink:href="" />
       <text class="title" display="none" margin="0 9"></text>
     </g>
+  </g>
+
+  <g id="roundbutton" class="toolbutton roundbutton" layout="box">
+    <circle class="background" cx="21" cy="21" r="21"/>
+    <use class="icon" margin="5 5" width="32" height="32" xlink:href="" />
   </g>
 
   <g id="colorbutton" class="color_preview previewbtn">
@@ -129,7 +175,7 @@ void initResources(const char* baseDir)
   addStringResources({{"ui-icons.svg", uiIconStr.c_str()}});
 
   SvgCssStylesheet* styleSheet = new SvgCssStylesheet;
-  styleSheet->parse_stylesheet(defaultColorsCSS);
+  styleSheet->parse_stylesheet(mapsColorsCSS);  //defaultColorsCSS
   styleSheet->parse_stylesheet(defaultStyleCSS);
   styleSheet->parse_stylesheet(moreCSS);
   styleSheet->sort_rules();

@@ -87,6 +87,11 @@ LngLat parseLngLat(const char* s)
   return *end || lat < -90 || lat > 90 || lng < -180 || lng > 180 ? LngLat(NAN, NAN) : LngLat(lng, lat);
 }
 
+std::string lngLatToStr(LngLat ll)
+{
+  return fstring("%.6f, %.6f", ll.latitude, ll.longitude);
+}
+
 // segfault if GLM_FORCE_CTOR_INIT is defined for some units and not others!!!
 #ifndef GLM_FORCE_CTOR_INIT
 #error "GLM_FORCE_CTOR_INIT is not defined!"

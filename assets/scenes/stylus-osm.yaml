@@ -21,8 +21,13 @@ global:
         default_label: black
         default_halo: white
         landuse: honeydew
-        parks: '#bddec5'
-        park_detail: hsl(134.5, 21%, 72%)  #'#9dbea5'
+        parks: hsl(135, 33%, 81%)  #'#bddec5'
+        forest: hsl(135, 33%, 75%)  # darker
+        scrub: hsl(135, 33%, 87%)  # lighter
+        farmland: hsl(105, 33%, 81%)  # decr hue -> more yellow
+        grass: hsl(120, 33%, 75%)
+        wetland: hsl(150, 33%, 81%)  # incr hue -> more blue
+        park_detail: hsl(134.5, 21%, 72%)
         golf: hsl(124, 83%, 88%)  #'#C8FACC'
         industry: '#C0CDCD'
         retail: '#FEF0D0'
@@ -342,25 +347,45 @@ layers:
                 style: global.earth_style
                 order: global.order.landcover
                 color: global.color.landuse
-        green:
-            filter: { class: [forest, grass, farmland, wetland] }
-            draw: { polygons: { visible: true, color: global.color.parks } }
-        # golf course can be inside park, so make sure it is drawn on top
-        golf:
-            filter: { class: golf_course }
-            draw: { polygons: { visible: true, order: global.order.golf, color: global.color.golf } }
-        park:
-            filter: { class: park }
-            draw: { polygons: { visible: true, order: global.order.parks, color: global.color.parks } }
+        forest:
+            filter: [ { class: forest }, { landuse: forest }, { natural: wood } ]
+            draw: { polygons: { visible: true, color: global.color.forest } }
+        scrub:
+            filter: { natural: [scrub, fell, heath] }
+            draw: { polygons: { visible: true, color: global.color.scrub } }
+        grass:
+            filter:
+                - class: grass
+                - landuse: [grass, allotments, meadow]
+                - natural: [grassland, grass]
+            draw: { polygons: { visible: true, color: global.color.grass } }
+        wetland:
+            filter: [ { class: wetland }, { natural: wetland } ]
+            draw: { polygons: { visible: true, color: global.color.wetland } }
         beach:
-            filter: { class: sand }
+            filter: [ { class: sand }, { natural: [beach, sand] } ]
             draw: { polygons: { visible: true, color: global.color.beach } }
         ice:
-            filter: { class: ice }
+            filter: [ { class: ice }, { natural: glacier } ]
             draw: { polygons: { visible: true, color: global.color.ice } }
         rock:
-            filter: { class: rock }
+            filter: [ { class: rock }, { natural: [bare_rock, scree] } ]
             draw: { polygons: { visible: true, color: global.color.rock } }
+        farmland:
+            filter:
+                - class: farmland
+                - landuse: [farmland, farmyard, farm, orchard, vineyard, plant_nursery, greenhouse_horticulture]
+            draw: { polygons: { visible: true, color: global.color.farmland } }
+        # golf course can be inside park, so make sure it is drawn on top
+        golf:
+            filter: [ { class: golf_course }, { leisure: golf_course } ]
+            draw: { polygons: { visible: true, order: global.order.golf, color: global.color.golf } }
+        park:
+            filter:
+                - class: park
+                - landuse: [recreation_ground, village_green]
+                - leisure: [park, garden]
+            draw: { polygons: { visible: true, order: global.order.parks, color: global.color.parks } }
 
     landuse:
         data: { source: osm, layer: landuse }
@@ -1045,10 +1070,10 @@ layers:
         data: { source: osm, layer: poi }
         enabled: global.show_trails
         filter:
-            class: [peak, volcano]
-            #rank: 1.0  # only the highest peak in each tile
+            any:
+                - natural: [peak, volcano]
+                - class: [peak, volcano]
             ele: true
-            #$zoom: { max: 13 }
         draw:
             points:
                 texture: pois

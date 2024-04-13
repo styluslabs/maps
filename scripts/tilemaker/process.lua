@@ -113,8 +113,6 @@ function node_function(node)
   end
 
   -- Write 'poi'
-  --local rank, class, subclass = GetPOIRank(node)
-  --if rank then WritePOI(node,class,subclass,rank) end
   NewWritePOI(node, 0, "node")
 
   -- Write 'mountain_peak' and 'water_name'
@@ -122,8 +120,7 @@ function node_function(node)
   if natural == "peak" or natural == "volcano" then
     node:Layer("mountain_peak", false)
     SetEleAttributes(node)
-    --node:AttributeNumeric("rank", 1)
-    node:Attribute("class", natural)
+    node:Attribute("natural", natural)
     SetNameAttributes(node, 0, "node")
     return
   end
@@ -148,17 +145,12 @@ constructionValues = Set { "primary", "secondary", "tertiary", "motorway", "serv
 pavedValues = Set { "paved", "asphalt", "cobblestone", "concrete", "concrete:lanes", "concrete:plates", "metal", "paving_stones", "sett", "unhewn_cobblestone", "wood" }
 unpavedValues = Set { "unpaved", "compacted", "dirt", "earth", "fine_gravel", "grass", "grass_paver", "gravel", "gravel_turf", "ground", "ice", "mud", "pebblestone", "salt", "sand", "snow", "woodchips" }
 
-aerowayBuildings = Set { "terminal", "gate", "tower" }
 parkValues = Set { "protected_area", "national_park" }
-landuseKeys = { school="school", university="school", kindergarten="school", college="school", library="library",
-    hospital="hospital", railway="railway", bus_station="bus_station", cemetery="cemetery",
-    military="military", residential="residential", commercial="commercial", industrial="industrial",
-    retail="retail", stadium="stadium", pitch="pitch", playground="playground", theme_park="theme_park", zoo="zoo",
-    -- previous landcover list
-    wood="forest", forest="forest", wetland="wetland", beach="sand", sand="sand", glacier="ice", ice_shelf="ice",
-    farmland="farmland", farm="farmland", orchard="farmland", vineyard="farmland", plant_nursery="farmland",
-    grassland="grass", grass="grass", meadow="grass", allotments="grass",
-    park="park", garden="park", recreation_ground="park", village_green="park", golf_course="golf_course" }
+landuseAreas = Set { "retail", "military", "residential", "commercial", "industrial", "railway", "cemetery", "forest", "grass", "allotments", "meadow", "recreation_ground", "village_green", "landfill", "farmland", "farmyard", "orchard", "vineyard", "plant_nursery", "greenhouse_horticulture", "farm" }
+naturalAreas = Set { "wood", "grassland", "grass", "scrub", "fell", "heath", "wetland", "glacier", "beach", "sand", "bare_rock", "scree" }
+leisureAreas = Set { "pitch", "park", "garden", "playground", "golf_course", "stadium" }
+amenityAreas = Set { "school", "university", "kindergarten", "college", "library", "hospital", "bus_station", "marketplace" }
+tourismAreas = Set { "zoo", "theme_park", "aquarium" }
 
 -- POIs: moving toward including all values for key except common unwanted values
 poiMinZoom = 14
@@ -172,6 +164,7 @@ poiTags = { aerialway = Set { "station" },
           archaeological_site = Set { "__EXCLUDE", "tumulus", "fortification", "megalith", "mineral_extraction", "petroglyph", "cairn" },
           landuse = Set { "basin", "brownfield", "cemetery", "reservoir", "winter_sports" },
           leisure = Set { "__EXCLUDE", "fitness_station", "picnic_table", "slipway", "outdoor_seating", "firepit", "bleachers", "common", "yes" },
+          natural = { [13] = Set { "spring", "hot_spring", "sinkhole", "cave_entrance" } },
           railway = { [12] = Set { "halt", "station", "tram_stop" }, [poiMinZoom] = Set { "subway_entrance", "train_station_entrance" } },
           shop = {},
           sport = {},
@@ -184,6 +177,7 @@ waterLanduse    = Set { "reservoir", "basin", "salt_pond" }
 noNameWater     = Set { "river", "basin", "wastewater", "canal", "stream", "ditch", "drain" }
 manMadeClasses  = Set { "pier", "breakwater", "groyne" }  -- "storage_tank", "water_tap", "dyke", "lighthouse"
 aerowayClasses  = Set { "taxiway", "hangar", "runway", "helipad", "aerodrome", "airstrip", "tower" }
+aerowayBuildings = Set { "terminal", "gate", "tower" }
 
 transitRoutes = { train = 8, subway = 10, tram = 12, share_taxi = 12, light_rail = 12, bus = 14, trolleybus = 14 }
 otherRoutes = { road = 8, ferry = 9, bicycle = 10, hiking = 10, foot = 12, mtb = 10, ski = 12 }  --piste = 12,
@@ -566,22 +560,16 @@ function way_function(way)
   --"landcover":        { "minzoom":  0, "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "landuse" },
   --"park":             { "minzoom": 11, "maxzoom": 14 },
   local landuse_poi = false
-  local l = landuse
-  if l=="" then l=natural end
-  if l=="" then l=leisure end
-  if l=="" then l=amenity end
-  if l=="" then l=tourism end
-  if landuseKeys[l] then
+  if landuseAreas[landuse] or naturalAreas[natural] or leisureAreas[leisure] or amenityAreas[amenity] or tourismAreas[tourism] then
     way:Layer("landuse", true)
-    way:Attribute("class", landuseKeys[l])
     SetMinZoomByArea(way)
+    --way:Attribute("class", landuseKeys[l])
     --if landuse=="residential" and way:Area()<ZRES8^2 then way:MinZoom(8) else SetMinZoomByArea(way) end
-    if landuse~="" then way:Attribute("landuse", landuse)
-    elseif natural~="" then way:Attribute("natural", natural)
-    elseif leisure~="" then way:Attribute("leisure", leisure)
-    elseif amenity~="" then way:Attribute("amenity", amenity)
-    elseif tourism~="" then way:Attribute("tourism", tourism) end
-
+    if landuse~="" then way:Attribute("landuse", landuse) end
+    if natural~="" then way:Attribute("natural", natural) end
+    if leisure~="" then way:Attribute("leisure", leisure) end
+    if amenity~="" then way:Attribute("amenity", amenity) end
+    if tourism~="" then way:Attribute("tourism", tourism) end
     if natural=="wetland" then way:Attribute("wetland", way:Find("wetland")) end
     landuse_poi = true
   end

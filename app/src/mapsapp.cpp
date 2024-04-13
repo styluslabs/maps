@@ -164,7 +164,6 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   std::string placetype = !propstr.empty() ? pluginManager->jsCallFn("getPlaceType", propstr) : "";
   if(namestr.empty()) namestr = getPlaceTitle(props);
   if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
-  if(namestr.empty()) namestr = fstring("%.6f, %.6f", pos.latitude, pos.longitude);
 
   std::string osmid = osmIdFromJson(json);
   pickResultCoord = pos;
@@ -179,6 +178,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   // allow pick result to be used as waypoint
   if(mapsTracks->onPickResult())
     return;
+  // leave pickResultName empty if no real name
+  if(namestr.empty()) namestr = lngLatToStr(pos);
 
   // show marker
   if(pickResultMarker == 0)
@@ -655,7 +656,7 @@ void MapsApp::updateLocation(const Location& _loc)
 
   if(currLocPlaceInfo) {
     SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
-    std::string locstr = fstring("%.6f, %.6f", currLocation.lat, currLocation.lng);
+    std::string locstr = lngLatToStr(currLocation.lngLat());
     if(currLocation.poserr > 0)
       locstr += fstring(" (\u00B1%.0f m)", currLocation.poserr);
     // m/s -> kph or mph
@@ -1070,7 +1071,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
           <g class="main-tb-container" box-anchor="hfill" layout="box">
             <rect class="background" fill="none" x="0" y="0" width="360" height="1"/>
           </g>
-          <rect class="panel-separator" class="hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
+          <rect class="panel-separator hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
           <g class="panel-container panel-container-wide" display="none" box-anchor="hfill" layout="box">
             <rect class="background" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
           </g>
@@ -1080,8 +1081,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   )#";
 
   static const char* gpsStatusSVG = R"#(
-    <g class="gps-status-button" layout="box" box-anchor="hfill">
-      <rect class="background" box-anchor="hfill" width="36" height="22"/>
+    <g class="gps-status-button toolbutton roundbutton" layout="box" box-anchor="hfill">
+      <rect class="background" box-anchor="hfill" width="36" height="22" rx="5" ry="5"/>
       <g layout="flex" flex-direction="row" box-anchor="fill">
         <g class="image-container" margin="1 2">
           <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#satellite"/>
@@ -1092,8 +1093,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   )#";
 
   static const char* reorientSVG = R"#(
-    <g class="reorient-btn toolbutton" layout="box">
-      <rect class="background" width="42" height="42"/>
+    <g class="reorient-btn toolbutton roundbutton" layout="box">
+      <circle class="background" cx="21" cy="21" r="21"/>
       <g margin="0 0" box-anchor="fill" layout="box">
         <use class="icon" width="28" height="28" xlink:href=":/ui-icons.svg#compass" />
       </g>
@@ -1287,9 +1288,11 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsContent->addWidget(mapsWidget);
 
   // recenter, reorient btns
-  Toolbar* floatToolbar = createVertToolbar();
+  //Toolbar* floatToolbar = createVertToolbar();
+  Widget* floatToolbar = createColumn();
   // we could switch to different orientation modes (travel direction, compass direction) w/ multiple taps
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
+  reorientBtn->setMargins(0, 0, 6, 0);
   reorientBtn->onClicked = [this](){
     prevCamPos = map->getCameraPosition();
     prevCamPos.tilt = 0;
@@ -1302,7 +1305,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   };
   reorientBtn->setVisible(false);
 
-  recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
+  //recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
+  recenterBtn = new Button(widgetNode("#roundbutton"));
+  recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
   recenterBtn->onClicked = [=](){
     if(!sensorsEnabled) {
       setSensorsEnabled(true);
@@ -1371,6 +1376,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   });
 
   gpsStatusBtn = new Widget(loadSVGFragment(gpsStatusSVG));
+  gpsStatusBtn->setMargins(0, 0, 6, 0);
   gpsStatusBtn->setVisible(false);
 
   floatToolbar->addWidget(gpsStatusBtn);
@@ -1574,6 +1580,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
   if(canMinimize) panel->node->addClass("can-minimize");
   panel->node->setAttribute("box-anchor", "fill");
   panel->addWidget(header);
+  panel->addWidget(createHRule());
   if(fixedContent)
     panel->addWidget(fixedContent);
   if(content) {

@@ -17,6 +17,7 @@ double lngLatBearing(LngLat r1, LngLat r2);
 TileID lngLatTile(LngLat ll, int z);
 LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord);
 LngLat parseLngLat(const char* s);
+std::string lngLatToStr(LngLat ll);
 
 std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false);
 template<typename T>

@@ -17,6 +17,8 @@
 #include "ugui/svggui_util.h"  // sdlEventLog for debugging
 
 
+static bool debugHovered = false;
+
 void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
 void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
 
@@ -35,10 +37,14 @@ void glfwSDLEvent(SDL_Event* event)
     }
   }
   //LOGW("%s", sdlEventLog(event).c_str());
-  if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN)
-    SvgGui::debugLayout = true;
-  else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F12)
-    SvgGui::debugDirty = !SvgGui::debugDirty;
+  if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN) {
+    if(event->key.keysym.mod & KMOD_CTRL)
+      SvgGui::debugDirty = !SvgGui::debugDirty;
+    else if(event->key.keysym.mod & KMOD_ALT)
+      debugHovered = true;
+    else
+      SvgGui::debugLayout = true;
+  }
   else if(std::this_thread::get_id() != MapsApp::mainThreadId)
     MapsApp::runOnMainThread([_event = *event](){ glfwSDLEvent((SDL_Event*)&_event); });
   else
@@ -169,7 +175,7 @@ int main(int argc, char* argv[])
 
   // Alamo square
   app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, 0, 0, 0, 0});
-  app->updateGpsStatus(10,10);  // turn location maker blue
+  app->updateGpsStatus(10, 10);  // turn location maker blue
   app->updateOrientation(M_PI/2, 0, 0);
 
   while(MapsApp::runApplication) {
@@ -181,6 +187,16 @@ int main(int argc, char* argv[])
     if(app->drawFrame(fbWidth, fbHeight))
       glfwSwapBuffers(glfwWin);
 
+    if(debugHovered && MapsApp::gui->hoveredWidget) {
+      XmlStreamWriter xmlwriter;
+      SvgWriter::DEBUG_CSS_STYLE = true;
+      SvgWriter(xmlwriter).serialize(MapsApp::gui->hoveredWidget->node);
+      SvgWriter::DEBUG_CSS_STYLE = false;
+      MemStream buff;
+      xmlwriter.save(buff);
+      PLATFORM_LOG("%s:\n%s\n", SvgNode::nodePath(MapsApp::gui->hoveredWidget->node).c_str(), buff.data());
+      debugHovered = false;
+    }
     if(SvgGui::debugLayout) {
       XmlStreamWriter xmlwriter;
       SvgWriter::DEBUG_CSS_STYLE = true;
