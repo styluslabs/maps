@@ -395,8 +395,8 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
           content->addWidget(getPlaceInfoSubSection(rowid, listid, namestr, notestr));
     });
   }
-  //if(content->containerNode()->children().empty())
-  //  content->addWidget(getPlaceInfoSubSection(-1, -1, "", ""));  // for adding to bookmark list
+  if(!content->containerNode()->children().empty())
+    content->containerNode()->addChild(createHRule(2, "0 6")->node, content->containerNode()->children().front());
   return content;
 }
 

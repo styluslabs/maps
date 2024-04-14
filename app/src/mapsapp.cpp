@@ -214,12 +214,9 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   titlelabel->setText(namestr.c_str());
   titlelabel->setText(SvgPainter::breakText(static_cast<SvgText*>(titlelabel->node), titlewidth).c_str());
 
-  Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
-  if(bkmkSection) {
-    if(!bkmkSection->containerNode()->children().empty())
-      item->selectFirst(".bkmk-section")->addWidget(createHRule(2, "0 6"));
-    item->selectFirst(".bkmk-section")->addWidget(bkmkSection);
-  }
+  Widget* bkmkContent = mapsBookmarks->getPlaceInfoSection(osmid, pos);
+  if(bkmkContent)
+    item->selectFirst(".bkmk-section")->addWidget(bkmkContent);
 
   if(currLocPlaceInfo) {
     item->selectFirst(".place-info-row")->setVisible(false);
@@ -310,6 +307,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
 {
   static const char* rowProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
+      <rect box-anchor="hfill" fill="none" width="48" height="42"/>
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
