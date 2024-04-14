@@ -73,11 +73,13 @@ svg.window  /* dark theme */
   --text-bg: #000000;
   --icon: #CDCDCD;
   --icon-disabled: #808080;
+  --text-sel: #F2F2F2;
+  --text-sel-bg: #2E7183;
 }
 
 svg.window.light  /* light theme */
 {
-  --dark: #F0F0F0;
+  --dark: #FFFFFF;  /* was #F0F0F0; */
   --window: #EEEEEE;  /* was #DDDDDD */
   --light: #CCCCCC;
   --base: #FFFFFF;
@@ -89,8 +91,10 @@ svg.window.light  /* light theme */
   --text: #000000;
   --text-weak: #606060;
   --text-bg: #F2F2F2;
-  --icon: #505050;  /* was #303030 */
+  --icon: #404040;  /* was #303030 */
   --icon-disabled: #A0A0A0;
+  --text-sel: #FFFFFF;
+  --text-sel-bg: #0078D7;
 }
 )#";
 
@@ -99,15 +103,21 @@ static const char* moreCSS = R"#(
 .legend text { fill: inherit; }
 .panel-container { fill: var(--dark); }
 .menu { fill: var(--window); }  /* same color as menuitem to eliminate dividers */
-.toolbar { fill: var(--base); }
+.splitter { fill: var(--window); }
+/* .toolbar { fill: var(--base); } */
 .roundbutton { fill: var(--base); }
+.roundbutton .background { stroke: var(--light); stroke-width: 0.5 }
 .inputbox-bg { stroke: var(--light); }  /* show low-contrast border by default for input boxes */
+tspan.text-selection { fill: var(--text-sel); }
+.text-selection-bg { fill: var(--text-sel-bg); }
+.checkmark { color: #0078D7; }
+.scroll-handle { fill: #808080; }  /* make scroll handle grey since it's currently not draggable */
 )#";
 
 static const char* moreWidgetSVG = R"#(
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <g id="listitem-icon" class="image-container" margin="2 5">
-    <use class="listitem-icon icon" width="36" height="36" xlink:href=""/>
+    <use class="listitem-icon icon" width="30" height="30" xlink:href=""/>
   </g>
 
   <g id="listitem-text-2" layout="box" box-anchor="fill">
@@ -116,7 +126,7 @@ static const char* moreWidgetSVG = R"#(
   </g>
 
   <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
-    <use class="panel-icon icon" width="36" height="36" margin="3 9 3 3" xlink:href="" />
+    <use class="panel-icon icon" width="32" height="32" margin="3 9 3 3" xlink:href="" />
     <text class="panel-title" box-anchor="hfill"></text>
   </g>
 
@@ -124,14 +134,14 @@ static const char* moreWidgetSVG = R"#(
     <rect class="background" box-anchor="hfill" width="36" height="42"/>
     <rect class="checkmark" box-anchor="bottom hfill" margin="0 2" fill="none" width="36" height="3"/>
     <g margin="0 5" box-anchor="fill" layout="flex" flex-direction="row">
-      <use class="icon" width="32" height="32" xlink:href="" />
+      <use class="icon" width="30" height="30" xlink:href="" />
       <text class="title" display="none" margin="0 9"></text>
     </g>
   </g>
 
   <g id="roundbutton" class="toolbutton roundbutton" layout="box">
     <circle class="background" cx="21" cy="21" r="21"/>
-    <use class="icon" margin="5 5" width="32" height="32" xlink:href="" />
+    <use class="icon" margin="5 5" width="30" height="30" xlink:href="" />
   </g>
 
   <g id="colorbutton" class="color_preview previewbtn">

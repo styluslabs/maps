@@ -146,6 +146,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
         <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
         <text class="currloc-elevation-text" margin="0 6" font-size="14"></text>
       </g>
+      <rect class="separator" margin="0 6" box-anchor="hfill" width="20" height="2"/>
       <g class="action-container" layout="box" box-anchor="hfill" margin="0 3"></g>
       <g class="waypt-section" layout="box" box-anchor="hfill"></g>
       <g class="bkmk-section" layout="box" box-anchor="hfill"></g>
@@ -214,8 +215,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   titlelabel->setText(SvgPainter::breakText(static_cast<SvgText*>(titlelabel->node), titlewidth).c_str());
 
   Widget* bkmkSection = mapsBookmarks->getPlaceInfoSection(osmid, pos);
-  if(bkmkSection)
+  if(bkmkSection) {
+    if(!bkmkSection->containerNode()->children().empty())
+      item->selectFirst(".bkmk-section")->addWidget(createHRule(2, "0 6"));
     item->selectFirst(".bkmk-section")->addWidget(bkmkSection);
+  }
 
   if(currLocPlaceInfo) {
     item->selectFirst(".place-info-row")->setVisible(false);
@@ -274,6 +278,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     providerRow->addWidget(new TextBox(createTextNode("Information from ")));
     providerRow->addWidget(createStretch());
     providerRow->addWidget(providerSel);
+    infoContent->selectFirst(".info-section")->addWidget(createHRule(2, "0 6"));
     infoContent->selectFirst(".info-section")->addWidget(providerRow);
     //infoContent->selectFirst(".info-section")->addWidget(createTitledRow("Information from ", providerSel));
     providerSel->onChanged("");
@@ -308,10 +313,11 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="36" height="36" xlink:href=""/>
+          <use class="icon" width="30" height="30" xlink:href=""/>
         </g>
         <g class="value-container" box-anchor="hfill" layout="box" margin="0 10"></g>
       </g>
+      <rect class="listitem-separator separator" margin="0 2 0 2" box-anchor="bottom hfill" width="20" height="1"/>
     </g>
   )";
   static std::unique_ptr<SvgNode> rowProto;
@@ -1209,6 +1215,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   themeCb->onClicked = [=](){
     themeCb->setChecked(!themeCb->checked());
     themeCb->checked() ? win->node->addClass("light") : win->node->removeClass("light");
+    setWindowXmlClass(themeCb->checked() ? "light" : "");
   };
   overflowMenu->addItem(themeCb);
 
@@ -1480,7 +1487,7 @@ void MapsApp::maximizePanel(bool maximize)
 {
   if(currLayout->node->hasClass("window-layout-narrow") && !panelHistory.empty()) {
     currLayout->selectFirst(".maps-container")->setVisible(!maximize);
-    currLayout->selectFirst(".statusbar-bg")->setVisible(maximize);
+    currLayout->selectFirst(".statusbar-bg")->setVisible(PLATFORM_MOBILE && maximize);
     panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
     panelSplitter->setEnabled(!maximize);
     notifyStatusBarBG(maximize ?

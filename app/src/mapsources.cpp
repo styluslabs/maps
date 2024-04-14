@@ -507,6 +507,8 @@ void MapsSources::populateSceneVars()
     std::string onchange = var.second["onchange"].as<std::string>("");
     std::string stylename = var.second["style"].as<std::string>("");
     bool reload = var.second["reload"].as<std::string>("") != "false";
+    if(!varsContent->containerNode()->children().empty())
+      varsContent->addWidget(createHRule(1));
     if(!stylename.empty()) {  // shader uniform
       Widget* uwidget = processUniformVar(stylename, name);
       if(uwidget)
@@ -556,6 +558,7 @@ void MapsSources::populateSceneVars()
       }
     }
   }
+  varsSeparator->setVisible(!varsContent->containerNode()->children().empty());
 }
 
 void MapsSources::populateSourceEdit(std::string key)
@@ -643,6 +646,7 @@ Button* MapsSources::createPanel()
   titleEdit->node->setAttribute("box-anchor", "hfill");
   saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save Source");
   //discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete Source");
+  saveBtn->node->setAttribute("box-anchor", "bottom");
   sourceTb->node->setAttribute("margin", "0 3");
   sourceTb->addWidget(titleEdit);
   sourceTb->addWidget(saveBtn);
@@ -699,10 +703,15 @@ Button* MapsSources::createPanel()
   Widget* srcEditContent = createColumn();
   varsContent = createColumn();
   varsContent->node->setAttribute("box-anchor", "hfill");
-  varsContent->node->setAttribute("margin", "0 3");
+  varsContent->node->setAttribute("margin", "0 10");
   layersContent = createColumn();
   layersContent->node->setAttribute("box-anchor", "hfill");
+  varsSeparator = createHRule(2, "2 6 0 6");
+  varsSeparator->setVisible(false);
+  srcEditContent->addWidget(sourceTb);
+  srcEditContent->addWidget(createHRule(2, "8 6 0 6"));
   srcEditContent->addWidget(varsContent);
+  srcEditContent->addWidget(varsSeparator);
   srcEditContent->addWidget(layersContent);
 
   Widget* offlineBtn = app->mapsOffline->createPanel();
@@ -763,7 +772,7 @@ Button* MapsSources::createPanel()
   });
 
   auto editHeader = app->createPanelHeader(MapsApp::uiIcon("edit"), "Edit Source");
-  sourceEditPanel = app->createMapPanel(editHeader, srcEditContent, sourceTb);
+  sourceEditPanel = app->createMapPanel(editHeader, srcEditContent);  //, sourceTb);
 
   // main toolbar button
   Menu* sourcesMenu = createMenu(Menu::VERT);

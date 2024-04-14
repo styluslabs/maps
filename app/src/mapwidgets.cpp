@@ -340,6 +340,9 @@ void DragDropList::addItem(KeyType key, Widget* item, KeyType nextkey)
   //content->addWidget(item);
   item->node->setAttr("__sortkey", key.c_str());
 
+  SvgNode* dragInd = item->containerNode()->selectFirst(".drag-indicator");
+  if(dragInd)
+    dragInd->setDisplayMode(SvgNode::BlockMode);
   Button* dragBtn = new Button(item->containerNode()->selectFirst(".drag-btn"));
   dragBtn->node->addClass("draggable");
   dragBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
@@ -512,16 +515,16 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
   // previously used margin="0 5", but I think any margin should be on container
   static const char* listItemProtoSVG = R"(
     <g class="listitem" margin="0 0" layout="box" box-anchor="hfill">
-      <rect box-anchor="fill" width="48" height="48"/>
+      <rect box-anchor="hfill" width="48" height="42"/>
+      <use class="drag-indicator icon" display="none" box-anchor="left" opacity="0.7" width="8" height="32" xlink:href=":/ui-icons.svg#drag-indicator"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
-        <g class="toolbutton drag-btn" margin="2 5">
-          <use class="listitem-icon icon" width="32" height="32" xlink:href=""/>
+        <g class="toolbutton drag-btn" margin="2 3 2 7">
+          <use class="listitem-icon icon" width="30" height="30" xlink:href=""/>
         </g>
         <g layout="box" box-anchor="fill">
           <text class="title-text" box-anchor="hfill" margin="0 10 0 10"></text>
           <text class="detail-text weak" box-anchor="hfill bottom" margin="0 10 2 10" font-size="12"></text>
         </g>
-
       </g>
       <rect class="listitem-separator separator" margin="0 0 0 48" box-anchor="bottom hfill" width="20" height="1"/>
     </g>

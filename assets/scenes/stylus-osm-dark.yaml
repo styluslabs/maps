@@ -8,9 +8,14 @@ global:
         # polygons
         #earth: '#404040'
         water: '#004080'
-        parks: '#385038'
-        park_detail: '#006000'
-        golf: '#183818'
+        parks: hsl(135, 33%, 27%)  #was '#385038'
+        forest: hsl(135, 33%, 35%)
+        scrub: hsl(135, 33%, 22%)
+        farmland: hsl(105, 33%, 27%)
+        grass: hsl(120, 33%, 35%)
+        wetland: hsl(150, 33%, 27%)
+        park_detail: hsl(134.5, 21%, 35%)  #was '#006000'
+        golf: hsl(120, 40%, 22%)  #was '#183818'
         beach: '#606000'
         industry: '#385858'
         retail: '#585830'

@@ -194,6 +194,7 @@ int main(int argc, char* argv[])
       SvgWriter::DEBUG_CSS_STYLE = false;
       MemStream buff;
       xmlwriter.save(buff);
+      buff.write("", 1);  // write null terminator
       PLATFORM_LOG("%s:\n%s\n", SvgNode::nodePath(MapsApp::gui->hoveredWidget->node).c_str(), buff.data());
       debugHovered = false;
     }

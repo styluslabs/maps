@@ -46,6 +46,7 @@ private:
   TextEdit* titleEdit = NULL;
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
+  Widget* varsSeparator = NULL;
   bool legendsLoaded = false;
   bool sourcesDirty = true;
   bool saveSourcesNeeded = false;

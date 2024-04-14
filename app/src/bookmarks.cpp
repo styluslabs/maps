@@ -522,7 +522,10 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
     std::string namestr = !app->pickResultName.empty() ? app->pickResultName : lngLatToStr(app->pickResultCoord);
     int rowid = addBookmark(list_id, app->pickResultOsmId, namestr, app->pickResultProps, "", app->pickResultCoord);
     Widget* section = getPlaceInfoSubSection(rowid, list_id, namestr, "");
-    app->infoContent->selectFirst(".bkmk-content")->addWidget(section);
+    Widget* bkmks = app->infoContent->selectFirst(".bkmk-content");
+    if(bkmks->containerNode()->children().empty())
+      bkmks->addWidget(createHRule(2, "0 6"));
+    bkmks->addWidget(section);
   };
 
   createBkmkBtn->onClicked = [=](){ chooseBookmarkList(createBkmkFn); };
