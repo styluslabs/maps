@@ -159,7 +159,7 @@ void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
 void MapsTracks::setTrackVisible(GpxFile* track, bool visible)
 {
   track->visible = visible;
-  if(visible)
+  if(visible && track->rowid >= 0)
     app->config["tracks"]["visible"].push_back(track->rowid);
   else
     yamlRemove(app->config["tracks"]["visible"], track->rowid);
@@ -986,7 +986,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     };
     tb->addWidget(routeBtn);
 
-    Button* measureBtn = createToolbutton(MapsApp::uiIcon("measure"), "Directions");
+    Button* measureBtn = createToolbutton(MapsApp::uiIcon("measure"), "Measure");
     measureBtn->onClicked = [=](){
       navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Measurement";

@@ -315,7 +315,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         </g>
         <g class="value-container" box-anchor="hfill" layout="box" margin="0 10"></g>
       </g>
-      <rect class="listitem-separator separator" margin="0 2 0 2" box-anchor="bottom hfill" width="20" height="1"/>
+      <rect class="listitem-separator separator" margin="0 2 0 2" box-anchor="top hfill" width="20" height="1"/>
     </g>
   )";
   static std::unique_ptr<SvgNode> rowProto;

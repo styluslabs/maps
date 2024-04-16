@@ -1,5 +1,6 @@
 #include "resources.h"
 #include <fstream>
+#include "mapsapp.h"
 #include "tangram.h"
 #include "scene/scene.h"
 #include "usvg/svgparser.h"
@@ -160,7 +161,13 @@ static std::unique_ptr<SvgPainter> boundsSvgPainter;
 void initResources(const char* baseDir)
 {
   Painter::initFontStash(FONS_DELAY_LOAD | FONS_SUMMED);
-  Painter::loadFont("sans", FSPath(baseDir, "scenes/fonts/roboto-regular.ttf").c_str());
+#if PLATFORM_IOS || PLATFORM_OSX
+  const char* dfltFont = "scenes/fonts/SanFranciscoDisplay-Regular.otf";
+#else
+  const char* dfltFont = "scenes/fonts/roboto-regular.ttf";
+#endif
+  std::string uiFont = MapsApp::config["ui"]["font"].as<std::string>(dfltFont);
+  Painter::loadFont("sans", FSPath(baseDir, uiFont).c_str());
   if(Painter::loadFont("fallback", FSPath(baseDir, "scenes/fonts/DroidSansFallback.ttf").c_str()))
     Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback
 
