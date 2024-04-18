@@ -617,9 +617,9 @@ Button* MapsSearch::createPanel()
         </g>
         <rect class="noquery-overlay" display='none' fill='none' box-anchor='fill' width='20' height='20'/>
       </g>
-      <g box-anchor="hfill" layout="box">
-        <rect class="separator" width="20" height="22" box-anchor="hfill"/>
+      <g box-anchor="hfill" layout="flex" flex-direction="column">
         <text class="result-count-text" box-anchor="right" margin="0 5" font-size="12"></text>
+        <rect class="separator" width="20" height="2" box-anchor="hfill"/>
       </g>
     </g>
   )#";

@@ -315,7 +315,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         </g>
         <g class="value-container" box-anchor="hfill" layout="box" margin="0 10"></g>
       </g>
-      <rect class="listitem-separator separator" margin="0 2 0 2" box-anchor="top hfill" width="20" height="1"/>
+      <rect class="listitem-separator separator" margin="0 2 0 2" box-anchor="bottom hfill" width="20" height="1"/>
     </g>
   )";
   static std::unique_ptr<SvgNode> rowProto;
@@ -1211,11 +1211,15 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   Button* themeCb = createCheckBoxMenuItem("Use light theme");
   themeCb->onClicked = [=](){
-    themeCb->setChecked(!themeCb->checked());
-    themeCb->checked() ? win->node->addClass("light") : win->node->removeClass("light");
-    setWindowXmlClass(themeCb->checked() ? "light" : "");
+    bool light = !themeCb->checked();
+    themeCb->setChecked(light);
+    config["ui"]["theme"] = light ? "light" : "dark";
+    light ? win->node->addClass("light") : win->node->removeClass("light");
+    setWindowXmlClass(light ? "light" : "");
   };
   overflowMenu->addItem(themeCb);
+  if(config["ui"]["theme"].as<std::string>("") == "light")
+    themeCb->onClicked();
 
   Menu* debugMenu = createMenu(Menu::HORZ);
   const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
@@ -1812,7 +1816,8 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     glNeedsInit = false;
     map->setupGL();
     // Painter created here since GL context required to build shaders
-    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES));  //Painter::PAINT_SW | Painter::SW_BLIT_GL
+    // ALIGN_SCISSOR needed only due to rotated direction-icon inside scroll area
+    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));  //Painter::PAINT_SW | Painter::SW_BLIT_GL
     scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
     gui->fullRedraw = painter->usesGPU();
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles

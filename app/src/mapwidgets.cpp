@@ -594,9 +594,9 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel)
 {
   static const char* inlineDialogSVG = R"#(
-    <g class="col-layout" box-anchor="hfill" layout="flex" flex-direction="column" margin="2 5">
+    <g class="inline-dialog col-layout" box-anchor="hfill" layout="flex" flex-direction="column" margin="2 5">
+      <g class="button-container toolbar" margin="4 0" box-anchor="hfill" layout="flex" flex-direction="row"></g>
       <g class="child-container" box-anchor="hfill" layout="flex" flex-direction="column"></g>
-      <g class="button-container dialog-buttons" margin="4 0" box-anchor="hfill" layout="flex" flex-direction="row"></g>
     </g>
   )#";
   static std::unique_ptr<SvgNode> proto;
@@ -607,18 +607,19 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
   Widget* container = dialog->selectFirst(".child-container");
   for(Widget* child : widgets)
     container->addWidget(child);
-  Widget* btns = dialog->selectFirst(".dialog-buttons");
-  //Button* acceptBtn = createToolbutton(MapsApp::uiIcon("accept"), acceptLabel, true);
-  //Button* cancelBtn = createToolbutton(MapsApp::uiIcon("cancel"), "Cancel", true);
-  Button* acceptBtn = createPushbutton(acceptLabel);
-  Button* cancelBtn = createPushbutton("Cancel");
+  Widget* btns = dialog->selectFirst(".button-container");
+  Button* acceptBtn = createToolbutton(uiIcon("accept"), acceptLabel, true);
+  Button* cancelBtn = createToolbutton(uiIcon("cancel"), "Cancel", true);
+  //Button* acceptBtn = createPushbutton(acceptLabel);
+  //Button* cancelBtn = createPushbutton("Cancel");
   acceptBtn->isFocusable = false;  // make this the default for pushbuttons?
   cancelBtn->isFocusable = false;
   acceptBtn->onClicked = [=](){ dialog->setVisible(false); onAccept(); };
   cancelBtn->onClicked = [=](){ dialog->setVisible(false); if(onCancel) onCancel(); };
   acceptBtn->node->addClass("accept-btn");
-  btns->addWidget(acceptBtn);
   btns->addWidget(cancelBtn);
+  btns->addWidget(createStretch());
+  btns->addWidget(acceptBtn);
   dialog->setVisible(false);
 
   dialog->addHandler([=](SvgGui* gui, SDL_Event* event){
@@ -693,6 +694,10 @@ Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int
   SpinBox* yearBox = createTextSpinBox(year0, 1, 0, 9999, "%.0f");
   SpinBox* monthBox = createTextSpinBox(month0, 1, 0, 13, "%02.0f");
   SpinBox* dayBox = createTextSpinBox(day0, 1, 0, 32, "%02.0f");
+  monthBox->setMargins(0, 5);
+  setMinWidth(yearBox, 110);
+  setMinWidth(monthBox, 90);
+  setMinWidth(dayBox, 90);
   Widget* row = createRow();
   row->addWidget(yearBox);
   row->addWidget(monthBox);

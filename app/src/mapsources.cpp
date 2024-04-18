@@ -136,10 +136,11 @@ void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
   mapSources[key] = srcnode;
   if(!mapSources[key]["__plugin"])
     saveSourcesNeeded = true;
+  sourcesDirty = true;
   if(sourcesPanel && sourcesPanel->isVisible())
     populateSources();
-  else
-    sourcesDirty = true;
+  else if(sourceEditPanel && sourceEditPanel->isVisible() && key == currSource)
+    populateSourceEdit(key);
   //for(auto& k : layerkeys) -- TODO: if modified layer is in use, reload
 }
 
@@ -543,7 +544,7 @@ void MapsSources::populateSceneVars()
         auto datepicker = createDatePicker(year0, month0, day0, [=](int year, int month, int day){
           updateSceneVar("global." + name, fstring("%04d-%02d-%02d", year, month, day), onchange, reload);
         });
-        varsContent->addWidget(createTitledRow(label.c_str(), datepicker));
+        varsContent->addWidget(createTitledRow(label.c_str(), NULL, datepicker));
       }
       else {
         auto textedit = createTitledTextEdit(label.c_str(), value.c_str());
