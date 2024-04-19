@@ -104,4 +104,5 @@ private:
   bool replaceWaypt = false;  // replacing waypt from search or bookmarks
   bool stealPickResult = false;  // adding waypt from search or bookmarks
   std::unique_ptr<SelectDialog> selectTrackDialog;
+  std::unique_ptr<Dialog> editWayptDialog;
 };

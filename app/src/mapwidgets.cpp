@@ -48,14 +48,16 @@ static Dialog* setupMobileDialog(Dialog* dialog, const char* title, const char* 
 {
   Widget* col = createColumn();
   col->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
-  TextBox* titleText = new TextBox(createTextNode(title));
+  TextBox* titleText = new TextLabel(createTextNode(title));
+  titleText->node->addClass("dialog-title");
+  titleText->node->setAttribute("box-anchor", "hfill");
   Toolbar* titleTb = createToolbar();
   titleTb->node->addClass("title-toolbar");
   dialog->cancelBtn = createToolbutton(uiIcon("cancel"), "Cancel");
   dialog->cancelBtn->onClicked = [=](){ dialog->finish(Dialog::CANCELLED); };
   titleTb->addWidget(dialog->cancelBtn);
   titleTb->addWidget(titleText);
-  titleTb->addWidget(createStretch());
+  //titleTb->addWidget(createStretch());
   if(acceptTitle) {
     dialog->acceptBtn = createToolbutton(uiIcon("accept"), acceptTitle, true);
     dialog->acceptBtn->node->addClass("accept-btn");
@@ -517,7 +519,7 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
     <g class="listitem" margin="0 0" layout="box" box-anchor="hfill">
       <rect box-anchor="hfill" width="48" height="42"/>
       <use class="drag-indicator icon" display="none" box-anchor="left" opacity="0.7" width="8" height="32" xlink:href=":/ui-icons.svg#drag-indicator"/>
-      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
+      <g class="child-container" layout="flex" flex-direction="row" box-anchor="fill">
         <g class="toolbutton drag-btn" margin="2 3 2 7">
           <use class="listitem-icon icon" width="30" height="30" xlink:href=""/>
         </g>

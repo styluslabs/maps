@@ -29,6 +29,10 @@ global:
         u_exaggerate:
             style: hillshade
             label: Hillshade Exaggeration
+        u_min_slope_angle:
+            style: hillshade
+            label: Min Slope Angle
+
         #contour_color:
         #    label: Contour Color
 
@@ -107,14 +111,14 @@ styles:
         shaders:
             defines:
                 # not sure if there is any way to figure this out in shader
-                ELEVATION_MAX_ZOOM: 14.0
+                #ELEVATION_MAX_ZOOM: 14.0
                 ELEVATION_INDEX: 0
                 SHOW_CONTOURS: false
                 SHOW_ANGLE: false
             uniforms:
                 u_exaggerate: 4.5
                 CONTOUR_COLOR: global.contour_color
-                u_min_slope_angle: 0.2618  # we could use stop-opacity="0" instead
+                u_min_slope_angle: 20.0  # we could use stop-opacity="0" instead
                 # some more colormaps: https://www.fabiocrameri.ch/
                 u_slope_angle: |
                     data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="1">
@@ -200,7 +204,7 @@ styles:
                     if(bot.y) { h00 = 2.*h01 - h02; h10 = 2.*h11 - h12; h20 = 2.*h21 - h22; }
                     if(top.y) { h02 = 2.*h01 - h00; h12 = 2.*h11 - h10; h22 = 2.*h21 - h20; }
                     // proj meters per elevation tile pixel (u_tile_origin.z is tile zoom, u_map_position.z is real zoom)
-                    vec2 dxy_elev = 2.*3.141592*6378137.0*exp2(-min(ELEVATION_MAX_ZOOM, u_tile_origin.z))*duv;
+                    vec2 dxy_elev = 2.*3.141592*6378137.0*exp2(-u_tile_origin.w)*duv;
                     // offset from pixel center
                     vec2 f = ij - cen_ij;
                     // 2nd order finite diff - mixed partials needed to (almost) eliminate hillshading pixelation
@@ -252,18 +256,18 @@ styles:
                         ddn = abs(1. - fract(hc/coarse))*coarse/slope / u_meters_per_pixel;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
                     #ifdef SHOW_ANGLE
-                        float angle = atan(slope);
-                        vec4 tint = texture2D(u_slope_angle, vec2(angle/(3.14159*0.5), 0.5));
-                        base_color = mix(base_color, tint, elev > 0. && angle >= u_min_slope_angle ? 0.5 : 0.0);
+                        float degs = atan(slope)*180.0/3.14159;
+                        vec4 tint = texture2D(u_slope_angle, vec2(degs/90.0, 0.5));
+                        base_color = mix(base_color, tint, elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
                     #endif
                         // blend
                         color = mix(base_color, CONTOUR_COLOR, min(cov, 1.));
                     }
                     #else
                     #ifdef SHOW_ANGLE
-                        float angle = atan(length(grad));
-                        vec4 tint = texture2D(u_slope_angle, vec2(angle/(3.14159*0.5), 0.5));
-                        base_color = mix(base_color, tint, elev > 0. && angle >= u_min_slope_angle ? 0.5 : 0.0);
+                        float degs = atan(length(grad))*180.0/3.14159;
+                        vec4 tint = texture2D(u_slope_angle, vec2(angle/90.0, 0.5));
+                        base_color = mix(base_color, tint, elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
                     #endif
                     color = base_color;
                     #endif

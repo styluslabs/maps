@@ -235,7 +235,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     SvgUse* icon = static_cast<SvgUse*>(diricon->node);
     if(icon)
       icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
-    distwdgt->setText(fstring(metricUnits ? "%.1f km" : "%.1f mi", metricUnits ? dist : dist*0.621371).c_str());
+    distwdgt->setText(distKmToStr(dist).c_str());
   }
 
   // show place type
@@ -793,6 +793,20 @@ std::string MapsApp::elevToStr(double meters)
   return fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? meters : meters*3.28084);
 }
 
+std::string MapsApp::distKmToStr(double dist, int prec)
+{
+  if(!MapsApp::metricUnits) {
+    double miles = dist*0.621371;
+    if(miles < 0.1)
+      return fstring("%.0f ft", 5280*miles);
+    else
+      return fstring("%.*f mi", (miles < 1 && prec < 1) ? 1 : prec, miles);
+  }
+  if(dist < 0.1 || (dist < 1 && prec > 1))
+    return fstring("%.0f m", dist*1000);
+  return fstring("%.*f km", prec, dist);
+}
+
 void MapsApp::dumpTileContents(float x, float y)
 {
   using namespace Tangram;
@@ -952,15 +966,15 @@ void ScaleBarWidget::directDraw(Painter* p) const
 
   real y0 = bbox.height()/2;
   p->setFillBrush(Color::NONE);
-  p->setStroke(Color::WHITE, 3);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->setStroke(Color::WHITE, 3, Painter::RoundCap);
   p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
-  p->setStroke(Color::BLACK, 2);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->setStroke(Color::BLACK, 2, Painter::RoundCap);
   p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
+  // render text
   p->setFontSize(12);
   p->setStroke(Color::WHITE, 2);
-  p->drawText(0, 0, str.c_str());
+  p->setStrokeAlign(Painter::StrokeOuter);
   p->setFillBrush(Color::BLACK);
-  p->setStroke(Color::NONE);
   p->drawText(0, 0, str.c_str());
   p->restore();
 }

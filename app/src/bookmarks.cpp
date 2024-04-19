@@ -428,7 +428,6 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
       it->second->updateMarker(rowid, {{{"name", title}}});
     app->setPickResult(app->pickResultCoord, title, app->pickResultProps);  // must be last (destroys widget)
   };
-  //auto onCancelEdit = [=](){ noteText->setVisible(true); };
   auto editPlaceDialog = createInputDialog({titleEdit, noteEdit}, "Edit Place", "Accept", onAcceptEdit);  //, onCancelEdit);
   editPlaceDialogs.emplace_back(editPlaceDialog);
 
@@ -453,12 +452,8 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     app->gui->deleteWidget(section);
   };
 
-  //auto addNoteBtn = new Button(widget->containerNode()->selectFirst(".addnote-btn"));
-  //addNoteBtn->setVisible(notestr.empty());
   addNoteBtn->onClicked = [=](){
-    //noteText->setVisible(false);
-    //showInlineDialogModal(editContent);
-    showModalCentered(editPlaceDialog, MapsApp::gui);
+    showModalCentered(editPlaceDialog, MapsApp::gui);  //showInlineDialogModal(editContent);
     app->gui->setFocused(noteEdit, SvgGui::REASON_TAB);
   };
 

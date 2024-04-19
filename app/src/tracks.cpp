@@ -399,11 +399,11 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
   sparkStats->selectFirst(".spark-time")->setText(timeStr.c_str());
   statsContent->selectFirst(".track-moving-time")->setText(durationToStr(movingTime).c_str());
 
-  double distUser = app->metricUnits ? trackDist/1000 : trackDist*0.000621371;
-  std::string distStr = fstring(app->metricUnits ? "%.2f km" : "%.2f mi", distUser);
+  std::string distStr = MapsApp::distKmToStr(trackDist/1000);
   statsContent->selectFirst(".track-dist")->setText(distStr.c_str());
   sparkStats->selectFirst(".spark-dist")->setText(distStr.c_str());
 
+  double distUser = app->metricUnits ? trackDist/1000 : trackDist*0.000621371;
   std::string avgSpeedStr = fstring(app->metricUnits ? "%.2f km/h" : "%.2f mph", distUser/(movingTime/3600));
   statsContent->selectFirst(".track-avg-speed")->setText(movingTime > 0 ? avgSpeedStr.c_str() : notime);
 
@@ -427,16 +427,6 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
   trackSpark->setTrack(locs);
 }
 
-static std::string distKmToStr(double distkm)
-{
-  if(MapsApp::metricUnits)
-    return fstring(distkm < 1 ? "%.0f m" : "%.2f km", distkm < 1 ? distkm*1000 : distkm);
-  else if(distkm*0.621371 < 0.1)
-    return fstring("%.0f ft", distkm*1000*3.28084);
-  else
-    return fstring("%.2f mi", distkm*0.621371);
-}
-
 void MapsTracks::updateDistances()
 {
   if(!activeTrack || activeTrack->routes.empty()) return;
@@ -451,7 +441,7 @@ void MapsTracks::updateDistances()
       if(!it->routed) continue;
       while(rteidx < route.size()-1 && route[rteidx].lngLat() != it->lngLat()) ++rteidx;
       TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
-      std::string s = distKmToStr(route[rteidx].dist/1000);
+      std::string s = MapsApp::distKmToStr(route[rteidx].dist/1000);
       if(!it->desc.empty())
         s.append(u8" \u2022 ").append(it->desc);
       detail->setText(s.c_str());
@@ -498,7 +488,7 @@ void MapsTracks::updateDistances()
     if(!rtePt) continue;  // should never happen
     double distkm = rtePt->dist/1000 + lngLatDist(rtePt->lngLat(), it->lngLat());
     TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
-    std::string s = distKmToStr(distkm);
+    std::string s = MapsApp::distKmToStr(distkm);
     if(!it->desc.empty())
       s.append(u8" \u2022 ").append(it->desc);  // or \u00B7
     detail->setText(s.c_str());
@@ -611,8 +601,8 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
     // hack around problem of setPickResult destroying this closure
     refreshWayptPlaceInfo(track, *it);
   };
-  auto onCancelEdit = [=](){ noteText->setVisible(true); };
-  auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
+  //auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
+  editWayptDialog.reset(createInputDialog({titleEdit, noteEdit}, "Edit Waypoint", "Apply", onAcceptEdit));
 
   Widget* toolRow = createRow();
   Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), track->title.c_str(), true);
@@ -627,9 +617,8 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   };
 
   addNoteBtn->onClicked = [=](){
-    showInlineDialogModal(editContent);
-    noteText->setVisible(false);
-    app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit);
+    showModalCentered(editWayptDialog.get(), MapsApp::gui);  //showInlineDialogModal(editContent);
+    app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit, SvgGui::REASON_TAB);
   };
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
@@ -656,12 +645,14 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   toolRow->addWidget(addNoteBtn);
   toolRow->addWidget(overflowBtn);
 
+  section->addWidget(createHRule(2, "0 6"));
   section->addWidget(toolRow);
   section->addWidget(noteText);
-  section->addWidget(editContent);
+  //section->addWidget(editContent);
 
   //return section;
   app->infoContent->selectFirst(".waypt-section")->addWidget(section);
+
 }
 
 Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
@@ -866,7 +857,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->map->lngLatToScreenPosition(mappos.longitude, mappos.latitude, &scrpos.x, &scrpos.y);
       app->crossHair->routePreviewOrigin = (scrpos - mapcenter)/MapsApp::gui->paintScale;
       double distkm = lngLatDist(mappos, app->getMapCenter());
-      std::string pvstr = distKmToStr(distkm);
+      std::string pvstr = MapsApp::distKmToStr(distkm);
       if(it != activeTrack->waypoints.begin() && distkm > 0) {
         LngLat prevpt = (--it)->lngLat();
         auto pm0 = MapProjection::lngLatToProjectedMeters(prevpt);

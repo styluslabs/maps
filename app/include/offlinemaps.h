@@ -28,4 +28,5 @@ private:
   void populateOffline();
   bool cancelDownload(int mapid);
   std::unique_ptr<SelectDialog> selectDestDialog;
+  std::unique_ptr<Dialog> downloadDialog;
 };

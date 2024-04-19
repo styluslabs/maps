@@ -37,7 +37,7 @@ global:
         water_halo: "#e2eef0"
         beach: '#FEEFC3'  #[1.000,0.953,0.900]
         ice: white
-        rock: grey
+        rock: '#F5F0E5'
         road: '#fff'
         casing_16: '#999'
         casing_18: '#aaa'
@@ -1371,9 +1371,7 @@ layers:
 
             text:
                 priority: global.priority.boundary
-                #text_source:
-                #    left: 'adm0_l'
-                #    right: 'adm0_r'
+                text_source: global.names_one_line  #{ left: "", right: global.names_one_line } -- need to fix tilemaker
                 font:
                     family: Open Sans
                     size: 12px
@@ -1381,6 +1379,10 @@ layers:
                     stroke: { color: global.color.place_halo, width: 4 }
                     transform: uppercase
                     weight: bold
+
+        region:
+            filter: { admin_level: [3, 4] }
+            draw: { text: { font: { size: 10px } } }
 
         country:
             filter: { admin_level: 2 }

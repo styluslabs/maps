@@ -622,7 +622,6 @@ void MapsOffline::populateOffline()
   SQLiteStmt(app->bkmkDB, query).exec([&](int mapid, double lng0, double lat0, double lng1, double lat1,
       std::string sourcestr, std::string titlestr, int64_t timestamp){
     auto srcinfo = app->mapsSources->mapSources[sourcestr];
-
     std::string detail = srcinfo ? srcinfo["title"].Scalar() : sourcestr;
     detail.append(u8" \u2022 ").append(ftimestr("%F %H:%M:%S", timestamp*1000));
     Button* item = createListItem(MapsApp::uiIcon("fold-map"), titlestr.c_str(), detail.c_str());
@@ -679,6 +678,8 @@ Widget* MapsOffline::createPanel()
       " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, maxzoom INTEGER, source TEXT, title TEXT,"
       " done INTEGER DEFAULT 0, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
 
+  TextBox* downloadText = new TextBox(createTextNode(""));
+  downloadText->node->setAttribute("box-anchor", "left");
   TextEdit* titleEdit = createTitledTextEdit("Title");
   SpinBox* maxZoomSpin = createSpinBox(13, 1, 1, 20, "%.0f");
   Widget* maxZoomRow = createTitledRow("Max zoom", maxZoomSpin);
@@ -697,7 +698,8 @@ Widget* MapsOffline::createPanel()
     if(item) item->onClicked();
   };
 
-  Widget* downloadPanel = createInlineDialog({titleEdit, maxZoomRow}, "Download", downloadFn);  //createColumn();
+  //Widget* downloadPanel = createInlineDialog({titleEdit, maxZoomRow}, "Download", downloadFn);  //createColumn();
+  downloadDialog.reset(createInputDialog({downloadText, titleEdit, maxZoomRow}, "Download", "Start", downloadFn));
 
   Button* openBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Install Offline Map");
 
@@ -735,7 +737,17 @@ Widget* MapsOffline::createPanel()
 
     titleEdit->setText(ftimestr("%FT%H.%M.%S").c_str());
     MapsApp::gui->setFocused(titleEdit, SvgGui::REASON_TAB);
-    showInlineDialogModal(downloadPanel);
+
+    LngLat lngLat00, lngLat11;
+    app->getMapBounds(lngLat00, lngLat11);
+    auto ydist = MapsApp::distKmToStr(lngLatDist(lngLat00, {lngLat00.longitude, lngLat11.latitude}), 1);
+    auto xdist = MapsApp::distKmToStr(lngLatDist(lngLat00, {lngLat11.longitude, lngLat00.latitude}), 1);
+    downloadText->setText(("Current region: " + xdist + " x " + ydist).c_str());
+
+    auto srcinfo = app->mapsSources->mapSources[app->mapsSources->currSource];
+    std::string title = "Download " + (srcinfo ? srcinfo["title"].Scalar() : "");
+    static_cast<TextLabel*>(downloadDialog->selectFirst(".dialog-title"))->setText(title.c_str());
+    showModalCentered(downloadDialog.get(), MapsApp::gui);  //showInlineDialogModal(downloadPanel);
   };
 
   offlineContent = createColumn();
@@ -752,7 +764,7 @@ Widget* MapsOffline::createPanel()
     return false;
   });
 
-  offlineContent->addWidget(downloadPanel);
+  //offlineContent->addWidget(downloadPanel);
 
   Button* offlineBtn = createToolbutton(MapsApp::uiIcon("offline"), "Offline Maps");
   offlineBtn->onClicked = [this](){

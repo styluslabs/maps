@@ -163,6 +163,7 @@ public:
   static void sdlEvent(SDL_Event* event);
 
   static std::string elevToStr(double meters);
+  static std::string distKmToStr(double dist, int prec = 2);
 
   static MapsApp* inst;
   static Platform* platform;
