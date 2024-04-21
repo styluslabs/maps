@@ -116,14 +116,14 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
 }
 
 // return the number w/ the fewest significant digits between x0 and x1
-static real fewestSigDigits(real x0, real x1)
-{
-  real dx = x1 - x0;
-  real expnt = std::pow(10, std::floor(std::log10(dx)));
-  real lead = dx/expnt;
-  real quant = lead > 5 ? 5*expnt : lead > 2 ? 2*expnt : expnt;
-  return std::ceil(x0/quant)*quant;
-}
+//static real fewestSigDigits(real x0, real x1)
+//{
+//  real dx = x1 - x0;
+//  real expnt = std::pow(10, std::floor(std::log10(dx)));
+//  real lead = dx/expnt;
+//  real quant = lead > 5 ? 5*expnt : lead > 2 ? 2*expnt : expnt;
+//  return std::ceil(x0/quant)*quant;
+//}
 
 // should we highlight zoomed region of track on map?
 void TrackPlot::draw(SvgPainter* svgp) const

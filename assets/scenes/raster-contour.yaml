@@ -93,28 +93,35 @@ global:
 sources:
     elevation:
         type: Raster
-        url: https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png
-        #url: https://tile.nextzen.org/tilezen/terrain/v1/256/terrarium/{z}/{x}/{y}.png
-        #url_params:
-        #    api_key: global.sdk_api_key
-        max_zoom: 14
-        zoom_offset: -1
         filtering: nearest
-        cache: terrarium
+        url: https://elevation-tiles-prod.s3.amazonaws.com/geotiff/{z}/{x}/{y}.tif
+        max_zoom: 14
+        cache: terrarium-tiff
+        #url: https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png
+        #max_zoom: 14
+        #zoom_offset: -1
+        #cache: terrarium
 
 
 styles:
+    # rasters assigned to a vector tile are limited to vector tile zoom, so to see higher resolution DEM, we
+    #  have to blend vector polygons over base hillshading
+    translucent-polygons:
+        base: polygons
+        lighting: false
+        blend: translucent
+        draw: { alpha: 0.25 }
+
     hillshade:
         base: polygons
         raster: custom
         #texcoords: true
         shaders:
             defines:
-                # not sure if there is any way to figure this out in shader
-                #ELEVATION_MAX_ZOOM: 14.0
                 ELEVATION_INDEX: 0
                 SHOW_CONTOURS: false
                 SHOW_ANGLE: false
+                FLOAT_TEX: true
             uniforms:
                 u_exaggerate: 4.5
                 CONTOUR_COLOR: global.contour_color
@@ -165,9 +172,14 @@ styles:
             blocks:
                 global: |
                     #ifdef TANGRAM_FRAGMENT_SHADER
-                    float getElevation(sampler2D tex, vec2 uv) {
+                    float getElevation(sampler2D tex, vec2 uv) {  // in meters
                         vec4 h = texture2D(tex, uv);
-                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // in meters
+                    #ifdef FLOAT_TEX
+                        return h.r;
+                    #else
+                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // mapzen terrarium
+                    #endif
+                        //return (h.r*256.*256. + h.g*256. + h.b)*0.1 - 10000.;  // mapbox
                     }
                     #endif
 
@@ -266,7 +278,7 @@ styles:
                     #else
                     #ifdef SHOW_ANGLE
                         float degs = atan(length(grad))*180.0/3.14159;
-                        vec4 tint = texture2D(u_slope_angle, vec2(angle/90.0, 0.5));
+                        vec4 tint = texture2D(u_slope_angle, vec2(degs/90.0, 0.5));
                         base_color = mix(base_color, tint, elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
                     #endif
                     color = base_color;

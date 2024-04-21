@@ -966,7 +966,7 @@ void ScaleBarWidget::directDraw(Painter* p) const
 
   real y0 = bbox.height()/2;
   p->setFillBrush(Color::NONE);
-  p->setStroke(Color::WHITE, 3, Painter::RoundCap);
+  p->setStroke(Color::WHITE, 4, Painter::RoundCap);
   p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
   p->setStroke(Color::BLACK, 2, Painter::RoundCap);
   p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));

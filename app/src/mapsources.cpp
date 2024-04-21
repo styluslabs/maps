@@ -203,9 +203,10 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     app->loadSceneFile(async);
     sceneVarsLoaded = false;
     legendsLoaded = false;
-    currSource = srcname;
-    if(!srcname.empty())
+    if(!srcname.empty()) {
+      currSource = srcname;
       app->config["sources"]["last_source"] = currSource;
+    }
     auto sourcesItems = sourcesContent->select(".listitem");
     auto archiveItems = archivedContent->select(".listitem");
     sourcesItems.insert(sourcesItems.end(), archiveItems.begin(), archiveItems.end());
