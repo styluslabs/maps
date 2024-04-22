@@ -514,7 +514,9 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
   //createBkmkBtn->node->setAttribute("box-anchor", "left");
 
   auto createBkmkFn = [=](int list_id, std::string listname){
-    std::string namestr = !app->pickResultName.empty() ? app->pickResultName : lngLatToStr(app->pickResultCoord);
+    std::string namestr = app->pickResultName;
+    if(app->currLocPlaceInfo) namestr = "Location at " + ftimestr("%FT%H.%M.%S");
+    else if(namestr.empty())  namestr = lngLatToStr(app->pickResultCoord);
     int rowid = addBookmark(list_id, app->pickResultOsmId, namestr, app->pickResultProps, "", app->pickResultCoord);
     Widget* section = getPlaceInfoSubSection(rowid, list_id, namestr, "");
     Widget* bkmks = app->infoContent->selectFirst(".bkmk-content");

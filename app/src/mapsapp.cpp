@@ -673,6 +673,7 @@ void MapsApp::updateLocation(const Location& _loc)
     double elev = currLocation.alt;
     if(elevnode)
       elevnode->setText(elevToStr(elev).c_str());
+    pickResultCoord = _loc.lngLat();  // update coords for use when saving bookmark, waypoint, etc
   }
 
   sendMapEvent(LOC_UPDATE);
@@ -712,17 +713,22 @@ YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
   return node;
 }
 
-#include "data/rasterSource.h"
+#include "util/imageLoader.h"
 
-static double readElevTex(Tangram::Texture* tex, int x, int y)
+struct malloc_deleter { void operator()(void* x) { std::free(x); } };
+struct ElevTex { std::unique_ptr<uint8_t, malloc_deleter> data; int width; int height; GLint fmt; };
+
+static double readElevTex(const ElevTex& tex, int x, int y)
 {
   // see getElevation() in raster-contour.yaml and https://github.com/tilezen/joerd
-  GLubyte* p = tex->bufferData() + y*tex->width()*4 + x*4;
+  if(tex.fmt == GL_R32F)
+    return ((float*)tex.data.get())[y*tex.width + x];
+  GLubyte* p = tex.data.get() + y*tex.width*4 + x*4;
   //(red * 256 + green + blue / 256) - 32768
   return (p[0]*256 + p[1] + p[2]/256.0) - 32768;
 }
 
-static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
+static double elevationLerp(const ElevTex& tex, TileID tileId, LngLat pos)
 {
   using namespace Tangram;
 
@@ -734,10 +740,10 @@ static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
   if(ox < 0 || ox > 1 || oy < 0 || oy > 1)
     LOGE("Elevation tile position out of range");
   // ... seems this work correctly w/o accounting for vertical flip of texture
-  double x0 = ox*tex->width() - 0.5, y0 = oy*tex->height() - 0.5;  // -0.5 to adjust for pixel centers
+  double x0 = ox*tex.width - 0.5, y0 = oy*tex.height - 0.5;  // -0.5 to adjust for pixel centers
   // we should extrapolate at edges instead of clamping - see shader in raster_contour.yaml
   int ix0 = std::max(0, int(std::floor(x0))), iy0 = std::max(0, int(std::floor(y0)));
-  int ix1 = std::min(int(std::ceil(x0)), tex->width()-1), iy1 = std::min(int(std::ceil(y0)), tex->height()-1);
+  int ix1 = std::min(int(std::ceil(x0)), tex.width-1), iy1 = std::min(int(std::ceil(y0)), tex.height-1);
   double fx = x0 - ix0, fy = y0 - iy0;
   double t00 = readElevTex(tex, ix0, iy0);
   double t01 = readElevTex(tex, ix0, iy1);
@@ -750,15 +756,13 @@ static double elevationLerp(Tangram::Texture* tex, TileID tileId, LngLat pos)
 
 void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
 {
-  using namespace Tangram;
-
-  static std::unique_ptr<Texture> prevTex;
+  static ElevTex prevTex;
   static TileID prevTileId = {0, 0, 0, 0};
 
-  if(prevTex) {
+  if(prevTex.data) {
     TileID tileId = lngLatTile(pos, prevTileId.z);
     if(tileId == prevTileId) {
-      callback(elevationLerp(prevTex.get(), tileId, pos));
+      callback(elevationLerp(prevTex, tileId, pos));
       return;
     }
   }
@@ -773,13 +777,12 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
         src->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
           runOnMainThread([=](){
             if(_task->hasData()) {
-              auto* rsrc = static_cast<RasterSource*>(_task->source().get());
-              auto tex = rsrc->getTextureDirect(_task);
-              if(tex && tex->bufferData()) {
-                callback(elevationLerp(tex.get(), tileId, pos));
-                prevTex = std::move(tex);
-                prevTileId = tileId;
-              }
+              auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
+              prevTex.data.reset(Tangram::loadImage((const uint8_t*)data.data(),
+                  data.size(), &prevTex.width, &prevTex.height, &prevTex.fmt, 4));
+              prevTileId = tileId;
+              if(prevTex.data)
+                callback(elevationLerp(prevTex, tileId, pos));
             }
           });
         }});

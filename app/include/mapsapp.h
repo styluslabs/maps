@@ -84,6 +84,7 @@ public:
   LngLat tapLocation = {NAN, NAN};
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
+  bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool hasLocation = false;
   bool glNeedsInit = true;
   bool drawOnMap = false;
@@ -189,7 +190,6 @@ private:
   void populateColorPickerMenu();
   void customizeColors(Color initialColor, std::function<void(Color)> callback);
 
-  bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool flyToPickResult = false;
   bool sensorsEnabled = true;
   int shuffleSeed = 0;

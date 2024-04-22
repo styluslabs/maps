@@ -80,6 +80,11 @@ usgs-imagery:
     title: USGS Imagery
     url: http://basemap.nationalmap.gov/ArcGIS/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}
 
+waymarked-trails:
+    title: Waymarked Trails
+    layer: true
+    url: http://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png
+
 enable-contours:
     title: Contours
     layer: true
@@ -126,7 +131,8 @@ hillshade-usgs:
             type: Raster
             filtering: nearest
             url: https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WMSServer?FORMAT=image/tiff&VERSION=1.3.0&SERVICE=WMS&REQUEST=GetMap&LAYERS=3DEPElevation:None&STYLES=&CRS=CRS:84&WIDTH=512&HEIGHT=512&BBOX={bbox}
-            max_zoom: 18
+            # ~1 meter/pixel at z=16 for 512x512 ... highest res data in USGS DEM is 1 meter
+            max_zoom: 16
             cache: usgs-elevation
 
 hillshade:
