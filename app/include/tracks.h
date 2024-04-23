@@ -42,6 +42,7 @@ public:
   TrackPlot* trackPlot = NULL;
   Button* pauseRecordBtn = NULL;
   Button* stopRecordBtn = NULL;
+  Button* saveCurrLocBtn = NULL;
   Button* saveRouteBtn = NULL;
   Button* routeModeBtn = NULL;
   Button* routePluginBtn = NULL;
@@ -84,7 +85,7 @@ private:
   bool findPickedWaypoint(GpxFile* track);
   void toggleRouteEdit(bool show);
   Widget* createEditDialog(Button* editTrackBtn);
-  void refreshWayptPlaceInfo(GpxFile* track, const Waypoint& wpt);
+  void editWaypoint(GpxFile* track, const Waypoint& wpt, std::function<void()> callback);
 
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;

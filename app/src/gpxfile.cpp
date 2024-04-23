@@ -31,7 +31,7 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
   if(timenode) {
     std::tm tmb;
     std::stringstream(timenode.child_value()) >> std::get_time(&tmb, "%Y-%m-%dT%TZ");  //2023-03-31T20:19:15Z
-    time = mktime(&tmb);
+    time = timegm(&tmb);  //mktime(&tmb);
   }
 
   Waypoint wpt({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0}, trkpt.child_value("name"), trkpt.child_value("desc"));

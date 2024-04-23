@@ -251,8 +251,10 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     YAML::Node layers = node["layers"];
     node["title"] = titleEdit->text();
     if(layers) {
+      YAML::Node newnode = YAML::Node(YAML::NodeType::Sequence);
       for(auto& src : currLayers)
-        layers.push_back(YAML::Load("{source: " + src + "}"));
+        newnode.push_back(YAML::Load("{source: " + src + "}"));
+      layers = newnode;
     }
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
     // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
@@ -311,7 +313,7 @@ void MapsSources::populateSources()
       };
     }
 
-    Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Show");
+    Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
     if(isLayer) {
       Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
       showBtn->node->addClass("show-btn");

@@ -232,6 +232,17 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       SQLiteStmt(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?").bind(track->rowid).exec();
       for(auto it = tracks.begin(); it != tracks.end(); ++it) {
         if(it->rowid == track->rowid) {
+          // move GPX file to trash and add undelete item
+          FSPath fileinfo(track->filename);
+          FSPath trashinfo(MapsApp::baseDir, ".trash/" + fileinfo.fileName());
+          moveFile(fileinfo, trashinfo);
+          app->addUndeleteItem(track->title, MapsApp::uiIcon("track"), [=](){
+            GpxFile restored("", "", trashinfo.path);
+            loadGPX(&restored);
+            tracks.push_back(std::move(restored));
+            updateDB(&tracks.back());
+            populateTracks();
+          });
           bool archived = track->archived;
           yamlRemove(app->config["tracks"]["visible"], track->rowid);
           tracks.erase(it);
@@ -324,6 +335,7 @@ void MapsTracks::populateStats(GpxFile* track)
   bool isRecTrack = track == &recordedTrack;
   pauseRecordBtn->setVisible(isRecTrack);
   stopRecordBtn->setVisible(isRecTrack);
+  saveCurrLocBtn->setVisible(isRecTrack);
   if(!isRecTrack)
     track->marker->setStylePath("layers.selected-track.draw.track");
 
@@ -567,10 +579,31 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
     createRoute(track);
 }
 
-void MapsTracks::refreshWayptPlaceInfo(GpxFile* track, const Waypoint& wpt)
+void MapsTracks::editWaypoint(GpxFile* track, const Waypoint& wpt, std::function<void()> callback)
 {
-  app->setPickResult(app->pickResultCoord, wpt.name, app->pickResultProps);
-  setPlaceInfoSection(track, wpt);
+  std::string uid = wpt.uid;
+  auto titleEdit = createTitledTextEdit("Name");
+  auto noteEdit = createTitledTextEdit("Note");
+  titleEdit->setText(wpt.name.c_str());
+  noteEdit->setText(wpt.desc.c_str());
+
+  auto onAcceptEdit = [=](){
+    auto it = track->findWaypoint(uid);
+    it->name = titleEdit->text();
+    it->desc = noteEdit->text();
+    if(it->marker) {
+      app->map->markerSetProperties(it->marker,
+          {{{"name", it->name}, {"color", track->style}, {"priority", it->marker}}});
+    }
+    waypointsDirty = true;
+    // hack around problem of setPickResult destroying this closure
+    //refreshWayptPlaceInfo(track, *it);
+    if(callback) callback();  //track, *it);
+  };
+  //auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
+  editWayptDialog.reset(createInputDialog({titleEdit, noteEdit}, "Edit Waypoint", "Apply", onAcceptEdit));
+  showModalCentered(editWayptDialog.get(), app->gui);  //showInlineDialogModal(editContent);
+  app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit, SvgGui::REASON_TAB);
 }
 
 // cut and paste from bookmarks
@@ -584,7 +617,7 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   noteText->setText(wpt.desc.c_str());
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
 
-  auto titleEdit = createTitledTextEdit("Name");
+  /*auto titleEdit = createTitledTextEdit("Name");
   auto noteEdit = createTitledTextEdit("Note");
   titleEdit->setText(wpt.name.c_str());
   noteEdit->setText(wpt.desc.c_str());
@@ -602,7 +635,7 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
     refreshWayptPlaceInfo(track, *it);
   };
   //auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
-  editWayptDialog.reset(createInputDialog({titleEdit, noteEdit}, "Edit Waypoint", "Apply", onAcceptEdit));
+  editWayptDialog.reset(createInputDialog({titleEdit, noteEdit}, "Edit Waypoint", "Apply", onAcceptEdit));*/
 
   Widget* toolRow = createRow();
   Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), track->title.c_str(), true);
@@ -617,8 +650,13 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   };
 
   addNoteBtn->onClicked = [=](){
-    showModalCentered(editWayptDialog.get(), MapsApp::gui);  //showInlineDialogModal(editContent);
-    app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit, SvgGui::REASON_TAB);
+    auto& wp = *track->findWaypoint(uid);
+    editWaypoint(track, wp, [this, track, &wp](){
+      app->setPickResult(app->pickResultCoord, wp.name, app->pickResultProps);
+      setPlaceInfoSection(track, wp);
+    });
+    //showModalCentered(editWayptDialog.get(), MapsApp::gui);  //showInlineDialogModal(editContent);
+    //app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit, SvgGui::REASON_TAB);
   };
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
@@ -748,7 +786,7 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
   Button* item = createListItem(MapsApp::uiIcon("waypoint"), wpname.c_str(), desc);
   Widget* container = item->selectFirst(".child-container");
 
-  item->onClicked = [this, uid=wp.uid](){
+  item->onClicked = [this, uid](){
     if(activeTrack == &navRoute && navRoute.routeMode != "direct") {
       replaceWaypt = true;
       insertionWpt = uid;
@@ -774,6 +812,13 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
       createRoute(activeTrack);
     };
   }
+
+  Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
+  editBtn->onClicked = [=](){
+    auto it = activeTrack->findWaypoint(uid);
+    editWaypoint(activeTrack, *it, [this](){ populateWaypoints(activeTrack); });
+  };
+  container->addWidget(editBtn);
 
   Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
   discardBtn->onClicked = [=](){ removeWaypoint(activeTrack, uid); };
@@ -951,7 +996,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   if(activeTrack) {
     Button* addWptBtn = createToolbutton(MapsApp::uiIcon("waypoint"), "Add waypoint");
     addWptBtn->onClicked = [=](){
-      Waypoint* wpt = addWaypoint({app->pickResultCoord, app->pickResultName, "", app->pickResultProps});
+      std::string nm = app->currLocPlaceInfo ? "Location at " + ftimestr("%FT%H.%M.%S") : app->pickResultName;
+      Waypoint* wpt = addWaypoint({app->pickResultCoord, nm, "", app->pickResultProps});
       if(wpt)
         setPlaceInfoSection(activeTrack, *wpt);
     };
@@ -1368,8 +1414,6 @@ Button* MapsTracks::createPanel()
     recordTrack = false;
     tracksDirty = true;
     pauseRecordBtn->setChecked(false);
-    pauseRecordBtn->setVisible(false);
-    stopRecordBtn->setVisible(false);
     populateStats(&tracks.back());
   };
 
@@ -1468,6 +1512,11 @@ Button* MapsTracks::createPanel()
   Button* statsOverflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
   Menu* statsOverflow = createMenu(Menu::VERT_LEFT, false);
   statsOverflowBtn->setMenu(statsOverflow);
+  saveCurrLocBtn = statsOverflow->addItem("Save location", [=](){
+    std::string namestr = "Location at " + ftimestr("%FT%H.%M.%S");
+    Waypoint* wpt = addWaypoint({app->currLocation, namestr});
+    editWaypoint(activeTrack, *wpt, {});
+  });
   statsOverflow->addItem("Export", [=](){
     MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}},
         activeTrack->title, [this](const char* s){ saveGPX(activeTrack, s); });
@@ -1592,11 +1641,14 @@ Button* MapsTracks::createPanel()
     <g layout="box" box-anchor="hfill" margin="3 3">
       <rect class="background" box-anchor="fill" width="20" height="20"/>
       <g class="spark-row-container" layout="flex" flex-direction="row" box-anchor="hfill">
-        <g layout="flex" flex-direction="column" box-anchor="vfill" margin="0 2" font-size="14">
-          <text class="spark-dist" box-anchor="left"></text>
-          <text class="spark-time" box-anchor="left"></text>
-          <text class="spark-ascent" box-anchor="left"></text>
-          <text class="spark-descent" box-anchor="left"></text>
+        <g layout="box" box-anchor="vfill">
+          <rect class="min-width-rect" width="60" height="20" fill="none"/>
+          <g layout="flex" flex-direction="column" box-anchor="vfill" margin="0 2" font-size="14">
+            <text class="spark-dist" box-anchor="left"></text>
+            <text class="spark-time" box-anchor="left"></text>
+            <text class="spark-ascent" box-anchor="left"></text>
+            <text class="spark-descent" box-anchor="left"></text>
+          </g>
         </g>
       </g>
     </g>

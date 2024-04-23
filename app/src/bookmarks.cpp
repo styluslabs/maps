@@ -156,9 +156,9 @@ void MapsBookmarks::populateLists(bool archived)
   const char* query = "SELECT lists.id, lists.title, lists.color, COUNT(b.rowid) FROM lists LEFT JOIN"
       " bookmarks AS b ON lists.id = b.list_id WHERE lists.archived = ? GROUP by lists.id ORDER BY %s;";
   SQLiteStmt(app->bkmkDB, fstring(query, archived ? "lists.title" : "lists.rowid DESC")).bind(archived)
-      .exec([=](int rowid, std::string list, std::string color, int nplaces){
+      .exec([=](int rowid, std::string title, std::string color, int nplaces){
     Button* item = createListItem(MapsApp::uiIcon("folder"),
-        list.c_str(), nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());  //new Button(bkmkListProto->clone());
+        title.c_str(), nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());  //new Button(bkmkListProto->clone());
     item->onClicked = [=](){ populateBkmks(rowid, true); };
     Widget* container = item->selectFirst(".child-container");
 
@@ -211,6 +211,10 @@ void MapsBookmarks::populateLists(bool archived)
 
     // undo?  maybe try https://www.sqlite.org/undoredo.html (using triggers to populate an undo table)
     overflowMenu->addItem("Delete", [=](){
+      FSPath trashinfo(MapsApp::baseDir, ".trash/" + title + ".gpx");
+      exportGpx(trashinfo.c_str(), rowid);
+      app->addUndeleteItem(title, MapsApp::uiIcon("folder"), [=](){ importGpx(trashinfo.c_str()); });
+
       SQLiteStmt(app->bkmkDB, "DELETE FROM bookmarks WHERE list_id = ?;").bind(rowid).exec();
       SQLiteStmt(app->bkmkDB, "DELETE FROM lists WHERE id = ?;").bind(rowid).exec();
       auto it1 = bkmkMarkers.find(rowid);
@@ -266,8 +270,7 @@ void MapsBookmarks::deleteBookmark(int listid, int rowid)
 
 void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 {
-  std::string listname;
-  std::string color;
+  std::string listname, color;
   SQLiteStmt(app->bkmkDB, "SELECT title, color FROM lists WHERE id = ?;").bind(list_id).onerow(listname, color);
 
   if(createUI) {
@@ -315,6 +318,10 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
       const char* itemname = namestr.empty() ? "Untitled" : namestr.c_str();
       Button* item = createListItem(MapsApp::uiIcon("pin"), itemname, notestr);
       item->onClicked = onPicked;
+
+      Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
+      editBtn->onClicked = [=](){ editBookmark(rowid, list_id, [=](){ populateBkmks(list_id, true); }); };
+      item->selectFirst(".child-container")->addWidget(editBtn);
 
       // alternative to overflow would be multi-select w/ selection toolbar; part of MapPanel, shared
       //  between bookmarks, tracks, etc
@@ -373,7 +380,6 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   Widget* content = createColumn();
   content->node->setAttribute("box-anchor", "hfill");
   content->node->addClass("bkmk-content");
-  editPlaceDialogs.clear();
   // attempt lookup w/ osm_id if passed
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
   // - if this gives us too many false positives, we could add "Nearby bookmarks" title to section
@@ -400,19 +406,10 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
   return content;
 }
 
-Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string namestr, std::string notestr)
+void MapsBookmarks::editBookmark(int rowid, int listid, std::function<void()> callback)
 {
-  std::string liststr;
-  SQLiteStmt(app->bkmkDB, "SELECT title FROM lists WHERE id = ?;").bind(listid).onerow(liststr);
-
-  Widget* section = createColumn();
-  section->node->setAttribute("box-anchor", "hfill");
-  TextBox* noteText = new TextBox(loadSVGFragment(
-      R"(<text class="note-text weak" box-anchor="left" margin="0 10" font-size="12"></text>)"));
-  noteText->setText(notestr.c_str());
-  noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), app->getPanelWidth() - 20).c_str());
-
-  // bookmark editing
+  std::string namestr, notestr;
+  SQLiteStmt(app->bkmkDB, "SELECT title, notes FROM bookmarks WHERE rowid = ?;").bind(rowid).onerow(namestr, notestr);
   auto titleEdit = createTitledTextEdit("Name");
   auto noteEdit = createTitledTextEdit("Note");
   titleEdit->setText(namestr.c_str());
@@ -426,10 +423,24 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     auto it = bkmkMarkers.find(listid);
     if(it != bkmkMarkers.end())
       it->second->updateMarker(rowid, {{{"name", title}}});
-    app->setPickResult(app->pickResultCoord, title, app->pickResultProps);  // must be last (destroys widget)
+    if(callback) callback();
   };
-  auto editPlaceDialog = createInputDialog({titleEdit, noteEdit}, "Edit Place", "Accept", onAcceptEdit);  //, onCancelEdit);
-  editPlaceDialogs.emplace_back(editPlaceDialog);
+  editPlaceDialog.reset(createInputDialog({titleEdit, noteEdit}, "Edit Place", "Accept", onAcceptEdit));  //, onCancelEdit);
+  showModalCentered(editPlaceDialog.get(), app->gui);  //showInlineDialogModal(editContent);
+  app->gui->setFocused(noteEdit, SvgGui::REASON_TAB);
+}
+
+Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string namestr, std::string notestr)
+{
+  std::string liststr;
+  SQLiteStmt(app->bkmkDB, "SELECT title FROM lists WHERE id = ?;").bind(listid).onerow(liststr);
+
+  Widget* section = createColumn();
+  section->node->setAttribute("box-anchor", "hfill");
+  TextBox* noteText = new TextBox(loadSVGFragment(
+      R"(<text class="note-text weak" box-anchor="left" margin="0 10" font-size="12"></text>)"));
+  noteText->setText(notestr.c_str());
+  noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), app->getPanelWidth() - 20).c_str());
 
   Widget* toolRow = createRow();
   //Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), liststr.c_str(), true);
@@ -453,8 +464,11 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   };
 
   addNoteBtn->onClicked = [=](){
-    showModalCentered(editPlaceDialog, MapsApp::gui);  //showInlineDialogModal(editContent);
-    app->gui->setFocused(noteEdit, SvgGui::REASON_TAB);
+    editBookmark(rowid, listid, [=](){
+      // this is ridiculous ...
+      std::string newname;
+      SQLiteStmt(app->bkmkDB, "SELECT title FROM bookmarks WHERE rowid = ?;").bind(rowid).onerow(newname);
+      app->setPickResult(app->pickResultCoord, newname, app->pickResultProps); });
   };
 
   auto setListFn = [=](int newlistid, std::string listname){
@@ -601,6 +615,21 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
   });
 }
 
+void MapsBookmarks::exportGpx(const char* filename, int listid)
+{
+  std::string listname, color;
+  SQLiteStmt(app->bkmkDB, "SELECT title, color FROM lists WHERE id = ?;").bind(listid).onerow(listname, color);
+  GpxFile gpx(listname, "", filename);
+  gpx.style = color;
+  const char* q = "SELECT rowid, title, props, notes, lng, lat, timestamp FROM bookmarks WHERE list_id = ? ORDER BY timestamp DESC;";
+  SQLiteStmt(app->bkmkDB, q).bind(listid).exec([&](int id, std::string namestr,
+      std::string propstr, const char* notestr, double lng, double lat, int64_t timestamp){
+    gpx.waypoints.push_back(Waypoint(Location{double(timestamp), lat, lng, 0,0,0,0,0,0,0}, namestr, notestr));
+    gpx.waypoints.back().props = propstr;
+  });
+  saveGPX(&gpx);
+}
+
 Button* MapsBookmarks::createPanel()
 {
   // DB setup
@@ -735,24 +764,12 @@ Button* MapsBookmarks::createPanel()
     populateBkmks(activeListId, true);
   });
 
-  auto exportListFn = [this](const char* filename){
-    GpxFile gpx(activeListTitle, "", filename);
-    gpx.style = activeListColor;
-    const char* q = "SELECT rowid, title, props, notes, lng, lat, timestamp FROM bookmarks WHERE list_id = ? ORDER BY timestamp DESC;";
-    SQLiteStmt(app->bkmkDB, q).bind(activeListId).exec([&](int id, std::string namestr,
-        std::string propstr, const char* notestr, double lng, double lat, int64_t timestamp){
-      gpx.waypoints.push_back(Waypoint(Location{double(timestamp), lat, lng, 0,0,0,0,0,0,0}, namestr, notestr));
-      gpx.waypoints.back().props = propstr;
-    });
-    saveGPX(&gpx);
-  };
   listOverflowMenu->addItem("Export", [=](){
     // on Android, callback would be called with temp filename, then Android share dialog shown
     // ... should we saveFileDialog pass callback an IOStream instead of a filename?
-    MapsApp::saveFileDialog(
-        {{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}}, activeListTitle, exportListFn);
+    MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}},
+        activeListTitle, [this](const char* filename){ exportGpx(filename, activeListId); });
   });
-
 
   toolbar->addWidget(sortBtn);
   toolbar->addWidget(mapAreaBkmksBtn);

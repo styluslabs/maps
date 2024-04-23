@@ -632,8 +632,7 @@ Button* MapsSearch::createPanel()
   setMinWidth(queryText, 100);
 
   Widget* searchBox = new Widget(searchBoxNode);
-  searchBox->isFocusable = true;
-  queryText->isFocusable = false;
+  setupFocusable(searchBox);  //queryText->isFocusable = false; searchBox->isFocusable = true;
   searchBox->addHandler([this](SvgGui* gui, SDL_Event* event){
     if(SvgGui::isFocusedWidgetEvent(event))
       return queryText->sdlEvent(gui, event);

@@ -120,6 +120,7 @@ public:
   void dumpTileContents(float x, float y);
   bool drawFrame(int fbWidth, int fbHeight);
   void setDpi(float dpi);
+  Button* addUndeleteItem(const std::string& title, const SvgNode* icon, std::function<void()> callback);
 
   Widget* currLayout = NULL;
   Splitter* panelSplitter = NULL;
@@ -143,6 +144,7 @@ public:
   std::vector<Widget*> panelPages;
   std::unique_ptr<ManageColorsDialog> customColorDialog;
   Widget* panelToSkip = NULL;
+  Menu* undeleteMenu = NULL;
 
   std::atomic_int_fast64_t storageTotal = {0};
   std::atomic_int_fast64_t storageOffline = {0};

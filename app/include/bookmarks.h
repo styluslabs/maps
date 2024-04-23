@@ -30,6 +30,8 @@ private:
   Color nextListColor();
   void importGpx(const char* filename);
   void importImages(int64_t list_id, const char* path);
+  void exportGpx(const char* filename, int listid);
+  void editBookmark(int rowid, int listid, std::function<void()> callback);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;
@@ -47,6 +49,6 @@ private:
   std::unique_ptr<SvgNode> placeInfoSectionProto;
   //std::unique_ptr<SvgDocument> chooseListProto;
   std::unique_ptr<Dialog> chooseListDialog;
-  std::vector< std::unique_ptr<Dialog> > editPlaceDialogs;
+  std::unique_ptr<Dialog> editPlaceDialog;
 };
 

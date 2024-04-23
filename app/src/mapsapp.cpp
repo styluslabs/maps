@@ -193,8 +193,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   infoContent->addWidget(item);
 
   showPanel(infoPanel, true);
-  Widget* minbtn = infoPanel->selectFirst(".minimize-btn");
-  if(minbtn) minbtn->setVisible(panelHistory.size() > 1);
+  //Widget* minbtn = infoPanel->selectFirst(".minimize-btn");
+  //if(minbtn) minbtn->setVisible(panelHistory.size() > 1);
 
   // actions toolbar
   Toolbar* toolbar = createToolbar();
@@ -1027,6 +1027,20 @@ void MapsApp::populateColorPickerMenu()
   colorPickerMenu->addItem(overflowBtn);
 }
 
+Button* MapsApp::addUndeleteItem(const std::string& title, const SvgNode* icon, std::function<void()> callback)
+{
+  auto menuitems = undeleteMenu->selectFirst(".child-container")->containerNode();
+  if(menuitems->children().size() >= 10)
+    gui->deleteWidget(static_cast<Widget*>(menuitems->children().front()->ext()));
+  Button* item = undeleteMenu->addItem(title.c_str(), icon, {});
+  item->onClicked = [=](){
+    callback();
+    gui->deleteWidget(item);
+  };
+  undeleteMenu->setVisible(true);
+  return item;
+}
+
 void MapsApp::setWindowLayout(int fbWidth)
 {
   bool narrow = fbWidth/gui->paintScale < 700;
@@ -1061,10 +1075,10 @@ void MapsApp::setWindowLayout(int fbWidth)
     }
   }
 
-  SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
-  auto minbtns = panelContent->select(".minimize-btn");
-  for(Widget* btn : minbtns)
-    static_cast<Button*>(btn)->setIcon(minicon);
+  //SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
+  //auto minbtns = panelContent->select(".minimize-btn");
+  //for(Widget* btn : minbtns)
+  //  static_cast<Button*>(btn)->setIcon(minicon);
   // let's try hiding panel title icons if we also show the main toolbar w/ the same icon
   auto panelicons = panelContent->select(".panel-icon");
   for(Widget* btn : panelicons)
@@ -1216,6 +1230,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   Menu* overflowMenu = createMenu(Menu::VERT);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem(pluginBtn);
+  undeleteMenu = createMenu(Menu::HORZ);
+  overflowMenu->addSubmenu("Undelete", undeleteMenu);
+  undeleteMenu->setVisible(false);  // hidden when empty
   Button* metricCb = createCheckBoxMenuItem("Use metric units");
   metricCb->onClicked = [=](){
     metricUnits = !metricUnits;
@@ -1512,9 +1529,9 @@ void MapsApp::maximizePanel(bool maximize)
     notifyStatusBarBG(maximize ?
         win->node->hasClass("light") : !readSceneValue("global.dark_base_map").as<bool>(false));
   }
-  Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
-  if(minbtn)
-    minbtn->setVisible(!maximize);
+  //Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
+  //if(minbtn)
+  //  minbtn->setVisible(!maximize);
 }
 
 // make this a static method or standalone fn?
@@ -1583,8 +1600,8 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widge
   });
 
   btn->onClicked = [=](){
-    if(btn->isChecked() && !panelContainer->isVisible())
-      showPanelContainer(true);
+    if(btn->isChecked())  // && !panelContainer->isVisible())
+      showPanelContainer(!panelContainer->isVisible());
     else
       showPanel(panel);
   };
@@ -1595,12 +1612,12 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widge
 Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedContent, bool canMinimize)
 {
   // on mobile, easier to just swipe down to minimize instead of tapping button
-  if(PLATFORM_DESKTOP && canMinimize) {
-    auto minimizeBtn = createToolbutton(MapsApp::uiIcon("chevron-down"));
-    minimizeBtn->node->addClass("minimize-btn");
-    minimizeBtn->onClicked = [this](){ showPanelContainer(false); };
-    header->addWidget(minimizeBtn);
-  }
+  //if(PLATFORM_DESKTOP && canMinimize) {
+  //  auto minimizeBtn = createToolbutton(MapsApp::uiIcon("chevron-down"));
+  //  minimizeBtn->node->addClass("minimize-btn");
+  //  minimizeBtn->onClicked = [this](){ showPanelContainer(false); };
+  //  header->addWidget(minimizeBtn);
+  //}
 
   Widget* panel = createColumn();
   if(canMinimize) panel->node->addClass("can-minimize");
@@ -1756,9 +1773,11 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
       LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
   }
 
-  // make sure cache folder exists
-  mkdir(FSPath(baseDir, "cache").c_str(), 0777);
-  mkdir(FSPath(baseDir, "tracks").c_str(), 0777);
+  // create required folders
+  createPath(FSPath(baseDir, "cache")); //, 0777);
+  createPath(FSPath(baseDir, "tracks")); //, 0777);
+  createPath(FSPath(baseDir, ".trash"));  //, 0777);
+  removeDir(FSPath(baseDir, ".trash"), false);  // empty trash
 
   // cache management
   storageTotal = config["storage"]["total"].as<int64_t>(0);
