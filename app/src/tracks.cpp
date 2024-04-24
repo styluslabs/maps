@@ -225,7 +225,8 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       SQLiteStmt(app->bkmkDB, q2).bind(track->rowid).exec();
       track->archived = !track->archived;
       if(!track->archived) tracksDirty = true;
-      app->gui->deleteWidget(item);
+      else archiveDirty = true;
+      app->gui->deleteWidget(item);  // must be last!
     });
 
     overflowMenu->addItem("Delete", [=](){
@@ -246,8 +247,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
           bool archived = track->archived;
           yamlRemove(app->config["tracks"]["visible"], track->rowid);
           tracks.erase(it);
-          // touching tracks vector invalidates all the pointers saved with each list item
-          archived ? populateArchived() : populateTracks();  //app->gui->deleteWidget(item);
+          app->gui->deleteWidget(item);
           break;
         }
       }
@@ -260,14 +260,12 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 
 void MapsTracks::loadTracks(bool archived)
 {
+  // order by timestamp for Archived
   const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch'), style"
-      " FROM tracks WHERE archived = ? ORDER BY title;";
+      " FROM tracks WHERE archived = ? ORDER BY timestamp;";
   SQLiteStmt(app->bkmkDB, query).bind(archived).exec(
-      [&](int rowid, const char* title, const char* filename, const char* date, const char* style) {
-    tracks.emplace_back(title, date, filename);
-    tracks.back().rowid = rowid;
-    tracks.back().style = style ? style : "";
-    tracks.back().archived = archived;
+      [&](int rowid, std::string title, std::string filename, std::string date, std::string style) {
+    tracks.emplace_back(title, date, filename, style, rowid, archived);
   });
 }
 
@@ -275,12 +273,18 @@ void MapsTracks::populateArchived()
 {
   if(!archiveLoaded)
     loadTracks(true);
+  else if(!archiveDirty)
+    return;
   archiveLoaded = true;
+  archiveDirty = false;
+  // needed to handle case of archiving an imported track, maybe some other edge cases
+  tracks.sort([](const GpxFile& a, const GpxFile& b){ return a.timestamp < b.timestamp; });
 
   app->gui->deleteContents(archivedContent, ".listitem");
-  for(GpxFile& track : tracks) {
-    if(track.archived)
-      archivedContent->addWidget(createTrackEntry(&track));
+  // tracks is ordered by ascending timestamp, but we want Archived ordered from newest to oldest
+  for(auto it = tracks.rbegin(); it != tracks.rend(); ++it) {  //for(GpxFile& track : tracks) {
+    if(it->archived)
+      archivedContent->addWidget(createTrackEntry(&(*it)));
   }
 }
 
@@ -996,7 +1000,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   if(activeTrack) {
     Button* addWptBtn = createToolbutton(MapsApp::uiIcon("waypoint"), "Add waypoint");
     addWptBtn->onClicked = [=](){
-      std::string nm = app->currLocPlaceInfo ? "Location at " + ftimestr("%FT%H.%M.%S") : app->pickResultName;
+      std::string nm = app->currLocPlaceInfo ? "Location at " + ftimestr("%H:%M:%S %F") : app->pickResultName;
       Waypoint* wpt = addWaypoint({app->pickResultCoord, nm, "", app->pickResultProps});
       if(wpt)
         setPlaceInfoSection(activeTrack, *wpt);
@@ -1339,7 +1343,10 @@ Button* MapsTracks::createPanel()
     if(!selectTrackDialog) {
       selectTrackDialog.reset(createSelectDialog("Choose Track", MapsApp::uiIcon("track")));
       selectTrackDialog->onSelected = [this](int idx){
-        auto* way = tracks[idx].activeWay();
+        auto order = tracksContent->getOrder();
+        int rowid = std::stoi(order[idx]);
+        auto it = std::find_if(tracks.rbegin(), tracks.rend(), [=](const GpxFile& a){ return a.rowid == rowid; });
+        GpxWay* way = it != tracks.rend() ? it->activeWay() : NULL;
         if(!way) return;
         if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
         auto& locs = activeTrack->activeWay()->pts;
@@ -1348,11 +1355,17 @@ Button* MapsTracks::createPanel()
         populateStats(activeTrack);
       };
     }
-    selectTrackDialog->addItems({});
-    for(auto& track : tracks) {
-      if(!track.archived)
-        selectTrackDialog->addItems({track.title}, false);
+
+    auto order = tracksContent->getOrder();
+    std::vector<std::string> items;
+    items.reserve(order.size());
+    for(const std::string& idstr : order) {
+      int rowid = std::stoi(idstr);
+      auto it = std::find_if(tracks.rbegin(), tracks.rend(), [=](const GpxFile& a){ return a.rowid == rowid; });
+      if(it == tracks.rend()) continue;  // shouldn't happen
+      items.push_back(it->title);
     }
+    selectTrackDialog->addItems(items);
     showModalCentered(selectTrackDialog.get(), MapsApp::gui);
   });
 
@@ -1451,27 +1464,25 @@ Button* MapsTracks::createPanel()
   };
 
   // Tracks panel
-  Widget* tracksContainer = createColumn();
-  tracksContainer->node->setAttribute("box-anchor", "fill");
-  tracksContent = new DragDropList;  //createColumn();
-
   Button* drawTrackBtn = createToolbutton(MapsApp::uiIcon("add-track"), "Create Route");
   TextEdit* newTrackTitle = createTitledTextEdit("Title");
-  Widget* newTrackContent = createInlineDialog({newTrackTitle}, "Create", [=](){
+  ColorPicker* newTrackColor = createColorPicker(app->colorPickerMenu, Color::BLUE);
+  newTrackColor->node->setAttribute("box-anchor", "bottom");
+  Widget* newTrackRow = createRow({newTrackTitle, newTrackColor});
+
+  newTrackDialog.reset(createInputDialog({newTrackRow}, "New Route", "Create", [=](){
     tracks.emplace_back(newTrackTitle->text(), ftimestr("%F"), "");
     updateDB(&tracks.back());
     populateWaypoints(&tracks.back());
     toggleRouteEdit(true);
-    drawTrackBtn->setChecked(false);
-  }, [=](){ drawTrackBtn->setChecked(false); });
-  newTrackTitle->onChanged = [=](const char* s){ newTrackContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
-  tracksContainer->addWidget(newTrackContent);
-  tracksContainer->addWidget(tracksContent);
+  }));
+  newTrackTitle->onChanged = [=](const char* s){ newTrackDialog->selectFirst(".accept-btn")->setEnabled(s[0]); };
 
   drawTrackBtn->onClicked = [=](){
+    newTrackDialog->focusedWidget = NULL;
+    showModalCentered(newTrackDialog.get(), app->gui);  //showInlineDialogModal(editContent);
     newTrackTitle->setText(ftimestr("%FT%H.%M.%S").c_str());  //"%Y-%m-%d %HH%M"
-    showInlineDialogModal(newTrackContent);
-    drawTrackBtn->setChecked(true);
+    app->gui->setFocused(newTrackTitle, SvgGui::REASON_TAB);
   };
 
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
@@ -1513,7 +1524,7 @@ Button* MapsTracks::createPanel()
   Menu* statsOverflow = createMenu(Menu::VERT_LEFT, false);
   statsOverflowBtn->setMenu(statsOverflow);
   saveCurrLocBtn = statsOverflow->addItem("Save location", [=](){
-    std::string namestr = "Location at " + ftimestr("%FT%H.%M.%S");
+    std::string namestr = "Location at " + ftimestr("%H:%M:%S %F");
     Waypoint* wpt = addWaypoint({app->currLocation, namestr});
     editWaypoint(activeTrack, *wpt, {});
   });
@@ -1546,11 +1557,12 @@ Button* MapsTracks::createPanel()
     return false;
   });
 
+  tracksContent = new DragDropList;  //createColumn();
   auto tracksTb = app->createPanelHeader(MapsApp::uiIcon("track"), "Tracks");
   tracksTb->addWidget(drawTrackBtn);
   tracksTb->addWidget(loadTrackBtn);
   tracksTb->addWidget(recordTrackBtn);
-  tracksPanel = app->createMapPanel(tracksTb, NULL, tracksContainer, false);
+  tracksPanel = app->createMapPanel(tracksTb, NULL, tracksContent, false);
 
   tracksPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
@@ -1790,16 +1802,16 @@ Button* MapsTracks::createPanel()
         populateTracks();  // needed to get order
       auto items = tracksContent->getOrder();
       for(size_t ii = 0; ii < (recordTrack ? 9 : 10) && ii < items.size(); ++ii) {
-        for(size_t jj = 0; jj < tracks.size(); ++jj) {
-          if(std::to_string(tracks[jj].rowid) == items[ii]) {
-            Button* item = createCheckBoxMenuItem(tracks[jj].title.c_str());
-            tracksMenu->addItem(item);
-            SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
-            item->onClicked = [jj, this](){ setTrackVisible(&tracks[jj], !tracks[jj].visible); };
-            item->setChecked(tracks[jj].visible || &tracks[jj] == activeTrack);
-            break;
-          }
-        }
+        int rowid = std::stoi(items[ii]);
+        auto it = std::find_if(tracks.rbegin(), tracks.rend(), [=](const GpxFile& a){ return a.rowid == rowid; });
+        if(it == tracks.rend()) continue;  // shouldn't happen
+        GpxFile* track = &(*it);
+        Button* item = createCheckBoxMenuItem(track->title.c_str());
+        tracksMenu->addItem(item);
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
+        item->onClicked = [=](){ setTrackVisible(track, !track->visible); };
+        item->setChecked(track->visible || track == activeTrack);
+        break;
       }
     }
     return false;

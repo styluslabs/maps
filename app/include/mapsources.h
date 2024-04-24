@@ -44,6 +44,7 @@ private:
   Button* legendBtn = NULL;
   Menu* legendMenu = NULL;
   TextEdit* titleEdit = NULL;
+  TextEdit* urlEdit = NULL;
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
   Widget* varsSeparator = NULL;
@@ -52,4 +53,5 @@ private:
   bool saveSourcesNeeded = false;
   std::vector<std::string> layerKeys;
   std::unique_ptr<SelectDialog> selectLayerDialog;
+  std::unique_ptr<Dialog> importDialog;
 };

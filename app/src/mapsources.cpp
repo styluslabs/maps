@@ -162,7 +162,7 @@ void MapsSources::saveSources()
 
 void MapsSources::sourceModified()
 {
-  saveBtn->setEnabled(!titleEdit->text().empty());
+  saveBtn->setEnabled(!titleEdit->text().empty() && (!urlEdit->isVisible() || !urlEdit->text().empty()));
 }
 
 void MapsSources::rebuildSource(const std::string& srcname, bool async)
@@ -256,6 +256,8 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
         newnode.push_back(YAML::Load("{source: " + src + "}"));
       layers = newnode;
     }
+    else if(node["url"])
+      node["url"] = urlEdit->text();
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
     // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
     for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
@@ -567,36 +569,48 @@ void MapsSources::populateSceneVars()
 
 void MapsSources::populateSourceEdit(std::string key)
 {
-  if(currSource != key)
-    rebuildSource(key);
-  if(mapSources[key])
-    titleEdit->setText(mapSources[key]["title"].Scalar().c_str());
   app->showPanel(sourceEditPanel, true);
   app->gui->deleteContents(layersContent);
+  if(currSource != key)
+    rebuildSource(key);
+  auto src = mapSources[key];
+  saveBtn->setEnabled(!src);
+  if(src)
+    titleEdit->setText(mapSources[key]["title"].Scalar().c_str());
 
-  for(auto& src : currLayers) {
-    Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[src]["title"].Scalar().c_str());
-    Widget* container = item->selectFirst(".child-container");
+  if(!src || src["layers"]) {
+    for(auto& layer : currLayers) {
+      Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[layer]["title"].Scalar().c_str());
+      Widget* container = item->selectFirst(".child-container");
 
-    //<use class="icon elevation-icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
-    //widgetNode("#listitem-icon")
-    //TextEdit* opacityEdit = createTextEdit(80);
-    //container->addWidget(opacityEdit);
-    //... updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", <alpha value>);
+      //<use class="icon elevation-icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
+      //widgetNode("#listitem-icon")
+      //TextEdit* opacityEdit = createTextEdit(80);
+      //container->addWidget(opacityEdit);
+      //... updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", <alpha value>);
 
-    Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
-    discardBtn->onClicked = [=](){
-      currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), src), currLayers.end());
-      rebuildSource();  //tempLayers);
-      app->gui->deleteWidget(item);
-    };
-    container->addWidget(discardBtn);
+      Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
+      discardBtn->onClicked = [=](){
+        currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), layer), currLayers.end());
+        rebuildSource();  //tempLayers);
+        app->gui->deleteWidget(item);
+        sourceModified();
+      };
+      container->addWidget(discardBtn);
+      layersContent->addWidget(item);
+    }
+
+    Button* item = createListItem(MapsApp::uiIcon("add"), "Add Layer...");
+    item->onClicked = [=](){ showModalCentered(selectLayerDialog.get(), MapsApp::gui); };
     layersContent->addWidget(item);
+    urlEdit->setVisible(false);
   }
-
-  Button* item = createListItem(MapsApp::uiIcon("add"), "Add Layer...");
-  item->onClicked = [=](){ showModalCentered(selectLayerDialog.get(), MapsApp::gui); };
-  layersContent->addWidget(item);
+  else if(src["url"]) {  // raster tiles
+    urlEdit->setVisible(true);
+    urlEdit->setText(src["url"].Scalar().c_str());
+  }
+  else  // vector scene
+    urlEdit->setVisible(true);
 
   if(app->map->getScene()->isReady())
     populateSceneVars();
@@ -645,39 +659,23 @@ void MapsSources::importSources(const std::string& src)
 
 Button* MapsSources::createPanel()
 {
-  Toolbar* sourceTb = createToolbar();
-  titleEdit = createTitledTextEdit("Title");
-  titleEdit->node->setAttribute("box-anchor", "hfill");
-  saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save Source");
-  //discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete Source");
-  saveBtn->node->setAttribute("box-anchor", "bottom");
-  sourceTb->node->setAttribute("margin", "0 3");
-  sourceTb->addWidget(titleEdit);
-  sourceTb->addWidget(saveBtn);
-
+  // Source list panel
   Toolbar* importTb = createToolbar();
   TextEdit* importEdit = createTitledTextEdit("URL or YAML");
   Button* importFileBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Open file...");
-  Button* importAccept = createToolbutton(MapsApp::uiIcon("accept"), "Save");
-  Button* importCancel = createToolbutton(MapsApp::uiIcon("cancel"), "Cancel");
   importTb->addWidget(importFileBtn);
   importTb->addWidget(importEdit);
-  importTb->addWidget(importAccept);
-  importTb->addWidget(importCancel);
-  importTb->setVisible(false);
-  importCancel->onClicked = [=](){ importTb->setVisible(false); };
 
   auto importFileFn = [=](const char* outPath){
+    importDialog->finish(Dialog::CANCELLED);
     importSources(std::string("file://") + outPath);
-    importTb->setVisible(false);
   };
   importFileBtn->onClicked = [=](){ MapsApp::openFileDialog({{"YAML files", "yaml,yml"}}, importFileFn); };
 
-  // JSON (YAML flow), tile URL, or path/URL to file
-  importAccept->onClicked = [=](){
+  importDialog.reset(createInputDialog({importTb}, "Import source", "Import", [=](){
+    // JSON (YAML flow), tile URL, or path/URL to file
     importSources(importEdit->text());
-    importTb->setVisible(false);
-  };
+  }));
 
   Button* createBtn = createToolbutton(MapsApp::uiIcon("add"), "New Source");
   createBtn->onClicked = [=](){
@@ -686,37 +684,11 @@ Button* MapsSources::createPanel()
     titleEdit->setText("Untitled");
   };
 
-  saveBtn->onClicked = [=](){
-    createSource(currSource);
-    saveBtn->setEnabled(false);
-  };
-
-  // we should check for conflicting w/ title of other source here
-  titleEdit->onChanged = [this](const char* s){ saveBtn->setEnabled(s[0]); };
-
   archivedContent = createColumn();
   auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Sources");
   archivedPanel = app->createMapPanel(archivedHeader, archivedContent, NULL, false);
 
   sourcesContent = new DragDropList;
-  Widget* sourcesContainer = createColumn();
-  sourcesContainer->node->setAttribute("box-anchor", "fill");
-  sourcesContainer->addWidget(importTb);
-  sourcesContainer->addWidget(sourcesContent);
-
-  Widget* srcEditContent = createColumn();
-  varsContent = createColumn();
-  varsContent->node->setAttribute("box-anchor", "hfill");
-  varsContent->node->setAttribute("margin", "0 10");
-  layersContent = createColumn();
-  layersContent->node->setAttribute("box-anchor", "hfill");
-  varsSeparator = createHRule(2, "2 6 0 6");
-  varsSeparator->setVisible(false);
-  srcEditContent->addWidget(sourceTb);
-  srcEditContent->addWidget(createHRule(2, "8 6 0 6"));
-  srcEditContent->addWidget(varsContent);
-  srcEditContent->addWidget(varsSeparator);
-  srcEditContent->addWidget(layersContent);
 
   Widget* offlineBtn = app->mapsOffline->createPanel();
 
@@ -729,9 +701,10 @@ Button* MapsSources::createPanel()
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem("Import source", [=](){
-    importTb->setVisible(true);
+    importDialog->focusedWidget = NULL;
+    showModalCentered(importDialog.get(), app->gui);  //showInlineDialogModal(editContent);
     importEdit->setText("");
-    app->gui->setFocused(importEdit);
+    app->gui->setFocused(importEdit, SvgGui::REASON_TAB);
   });
   overflowMenu->addItem("Restore default sources", [=](){
     FSPath path = FSPath(app->configFile).parent().child("mapsources.default.yaml");
@@ -765,7 +738,7 @@ Button* MapsSources::createPanel()
   sourcesHeader->addWidget(legendBtn);
   sourcesHeader->addWidget(offlineBtn);
   sourcesHeader->addWidget(overflowBtn);
-  sourcesPanel = app->createMapPanel(sourcesHeader, NULL, sourcesContainer, false);
+  sourcesPanel = app->createMapPanel(sourcesHeader, NULL, sourcesContent, false);
 
   sourcesPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
@@ -774,6 +747,43 @@ Button* MapsSources::createPanel()
     }
     return false;
   });
+
+  // Source edit panel
+  titleEdit = createTitledTextEdit("Title");
+  titleEdit->node->setAttribute("box-anchor", "hfill");
+  urlEdit = createTitledTextEdit("URL");
+  urlEdit->node->setAttribute("box-anchor", "hfill");
+  urlEdit->node->setAttribute("margin", "0 3");
+  saveBtn = createToolbutton(MapsApp::uiIcon("save"), "Save Source");
+  //discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete Source");
+  saveBtn->node->setAttribute("box-anchor", "bottom");
+  saveBtn->onClicked = [=](){
+    createSource(currSource);
+    saveBtn->setEnabled(false);
+  };
+  // we should check for conflict w/ title of other source here
+  titleEdit->onChanged = [this](const char*){ sourceModified(); };
+  urlEdit->onChanged = [this](const char*){ sourceModified(); };
+
+  Toolbar* sourceTb = createToolbar();
+  sourceTb->node->setAttribute("margin", "0 3");
+  sourceTb->addWidget(titleEdit);
+  sourceTb->addWidget(saveBtn);
+
+  Widget* srcEditContent = createColumn();
+  varsContent = createColumn();
+  varsContent->node->setAttribute("box-anchor", "hfill");
+  varsContent->node->setAttribute("margin", "0 10");
+  layersContent = createColumn();
+  layersContent->node->setAttribute("box-anchor", "hfill");
+  varsSeparator = createHRule(2, "2 6 0 6");
+  varsSeparator->setVisible(false);
+  srcEditContent->addWidget(sourceTb);
+  srcEditContent->addWidget(urlEdit);
+  srcEditContent->addWidget(createHRule(2, "8 6 0 6"));
+  srcEditContent->addWidget(varsContent);
+  srcEditContent->addWidget(varsSeparator);
+  srcEditContent->addWidget(layersContent);
 
   auto editHeader = app->createPanelHeader(MapsApp::uiIcon("edit"), "Edit Source");
   sourceEditPanel = app->createMapPanel(editHeader, srcEditContent);  //, sourceTb);

@@ -19,6 +19,14 @@ std::vector<Waypoint>::iterator GpxFile::addWaypoint(Waypoint wpt, const std::st
   return waypoints.insert(nextuid.empty() ? waypoints.end() : findWaypoint(nextuid), wpt);
 }
 
+static double parseGpxTime(const char* s)
+{
+  if(!s || !s[0]) return 0;
+  std::tm tmb;
+  std::stringstream(s) >> std::get_time(&tmb, "%Y-%m-%dT%TZ");  //2023-03-31T20:19:15Z
+  return timegm(&tmb);  //mktime(&tmb);
+}
+
 // https://www.topografix.com/GPX/1/1/ , https://www.topografix.com/gpx_manual.asp
 // https://github.com/tkrajina/gpxpy/blob/dev/test_files/gpx1.0_with_all_fields.gpx
 static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
@@ -26,14 +34,7 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
   double lat = trkpt.attribute("lat").as_double();
   double lng = trkpt.attribute("lon").as_double();
   double ele = atof(trkpt.child_value("ele"));
-  double time = 0;
-  pugi::xml_node timenode = trkpt.child("time");
-  if(timenode) {
-    std::tm tmb;
-    std::stringstream(timenode.child_value()) >> std::get_time(&tmb, "%Y-%m-%dT%TZ");  //2023-03-31T20:19:15Z
-    time = timegm(&tmb);  //mktime(&tmb);
-  }
-
+  double time = parseGpxTime(trkpt.child_value("time"));
   Waypoint wpt({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0}, trkpt.child_value("name"), trkpt.child_value("desc"));
   pugi::xml_node extnode = trkpt.child("extensions");
   if(extnode) {
@@ -58,12 +59,23 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
   pugi::xml_node gpx = doc.child("gpx");
   if(!gpx)
     return false;
+  // we were previously writing name and desc to <gpx> instead of proper location of <gpx><metadata>
   const char* gpxname = gpx.child_value("name");
   const char* gpxdesc = gpx.child_value("desc");
+  double gpxtime = 0;
+  pugi::xml_node metadata = gpx.child("metadata");
+  if(metadata) {
+    gpxname = metadata.child_value("name");
+    gpxdesc = metadata.child_value("desc");
+    gpxtime = parseGpxTime(metadata.child_value("time"));
+  }
   // value set in UI (and stored in DB) takes precedence
   if(gpxname[0] && track->title.empty()) track->title = gpxname;
   if(gpxdesc[0]) track->desc = gpxdesc;
-  pugi::xml_node extnode = gpx.child("extensions").child("sl:gpx");
+  if(gpxtime > 0) track->timestamp = gpxtime;
+  pugi::xml_node extnode = metadata.child("extensions").child("sl:gpx");
+  if(!extnode)
+    extnode = gpx.child("extensions").child("sl:gpx");
   if(extnode)
     track->style = extnode.attribute("style").as_string();
 
@@ -131,17 +143,21 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
   return true;
 }
 
+static std::string saveGpxTime(double time)
+{
+  char timebuf[256];
+  time_t t = time_t(time);
+  strftime(timebuf, sizeof(timebuf), "%FT%TZ", gmtime(&t));
+  return std::string(timebuf);
+}
+
 static void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
 {
   trkpt.append_attribute("lat").set_value(fstring("%.7f", wpt.loc.lat).c_str());
   trkpt.append_attribute("lon").set_value(fstring("%.7f", wpt.loc.lng).c_str());
   trkpt.append_child("ele").append_child(pugi::node_pcdata).set_value(fstring("%.1f", wpt.loc.alt).c_str());
-  if(wpt.loc.time > 0) {
-    char timebuf[256];
-    time_t t = time_t(wpt.loc.time);
-    strftime(timebuf, sizeof(timebuf), "%FT%TZ", gmtime(&t));
-    trkpt.append_child("time").append_child(pugi::node_pcdata).set_value(timebuf);
-  }
+  if(wpt.loc.time > 0)
+    trkpt.append_child("time").append_child(pugi::node_pcdata).set_value(saveGpxTime(wpt.loc.time).c_str());
   if(!wpt.name.empty())
     trkpt.append_child("name").append_child(pugi::node_pcdata).set_value(wpt.name.c_str());
   if(!wpt.desc.empty())
@@ -161,10 +177,13 @@ bool saveGPX(GpxFile* track, const char* filename)
   // saving track
   pugi::xml_document doc;
   pugi::xml_node gpx = doc.append_child("gpx");
-  gpx.append_child("name").append_child(pugi::node_pcdata).set_value(track->title.c_str());
-  gpx.append_child("desc").append_child(pugi::node_pcdata).set_value(track->desc.c_str());
+  pugi::xml_node metadata = gpx.append_child("metadata");
+  metadata.append_child("name").append_child(pugi::node_pcdata).set_value(track->title.c_str());
+  metadata.append_child("desc").append_child(pugi::node_pcdata).set_value(track->desc.c_str());
+  if(track->timestamp > 0)
+    metadata.append_child("time").append_child(pugi::node_pcdata).set_value(saveGpxTime(track->timestamp).c_str());
   if(!track->style.empty()) {
-    pugi::xml_node extnode = gpx.append_child("extensions").append_child("sl:gpx");
+    pugi::xml_node extnode = metadata.append_child("extensions").append_child("sl:gpx");
     extnode.append_attribute("style").set_value(track->style.c_str());
   }
 

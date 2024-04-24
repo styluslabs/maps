@@ -40,15 +40,19 @@ int MapsBookmarks::addBookmark(int list_id, const std::string& osm_id, const std
   return rowid;
 }
 
+static int64_t insertNewList(const std::string& title, Color color)
+{
+  std::string colorstr = colorToStr(color);
+  SQLiteStmt(MapsApp::bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(title, colorstr).exec();
+  return sqlite3_last_insert_rowid(MapsApp::bkmkDB);
+}
+
 int MapsBookmarks::getListId(const char* listname, bool create)
 {
   int list_id = -1;
   SQLiteStmt(app->bkmkDB, "SELECT id FROM lists WHERE title = ?;").bind(listname).onerow(list_id);
-  if(list_id < 0 && create) {
-    SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);")
-        .bind(listname, colorToStr(nextListColor())).exec();
-    list_id = sqlite3_last_insert_rowid(app->bkmkDB);
-  }
+  if(list_id < 0 && create)
+    return insertNewList(listname, nextListColor());
   return list_id;
 }
 
@@ -71,48 +75,32 @@ Color MapsBookmarks::nextListColor()
   return MapsApp::markerColors[(minidx + ncolors/2 - 1)%ncolors];
 }
 
-Widget* MapsBookmarks::createNewListWidget(std::function<void(int, std::string)> callback)
+void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> callback)  //int rowid)
 {
+  chooseListDialog.reset(createMobileDialog("Choose Place List", NULL));  //new Dialog( setupWindowNode(chooseListProto->clone()) );
+  Widget* content = createColumn();
+  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
+
   TextEdit* newListTitle = createTitledTextEdit("Title");
-  ColorPicker* newListColor = createColorPicker(app->colorPickerMenu, Color::CYAN);
+  ColorPicker* newListColor = createColorPicker(app->colorPickerMenu, nextListColor());
   Widget* newListRow = createRow();
   newListRow->addWidget(newListTitle);
   newListRow->addWidget(newListColor);
   newListColor->node->setAttribute("box-anchor", "bottom");
-  auto onCreateList = [=](){
-    std::string colorstr = colorToStr(newListColor->color());
-    std::string listname = newListTitle->text();
-    if(listname.empty()) return;
-    SQLiteStmt(MapsApp::bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(listname, colorstr).exec();
-    int list_id = sqlite3_last_insert_rowid(MapsApp::bkmkDB);
-    if(callback)
-      callback(list_id, listname);
-  };
-  auto newListContent = createInlineDialog({newListRow}, "Create", onCreateList);
-  newListTitle->onChanged = [=](const char* s){ newListContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
-  newListContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SvgGui::VISIBLE) {
-      newListColor->setColor(nextListColor());
-      newListTitle->setText("");
-      gui->setFocused(newListTitle);
-    }
-    return false;
-  });
-  return newListContent;
-}
-
-void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> callback)  //int rowid)
-{
-  chooseListDialog.reset(createMobileDialog("Bookmark List", NULL));  //new Dialog( setupWindowNode(chooseListProto->clone()) );
-  Widget* content = createColumn();
-  content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
-
-  Widget* newListContent = createNewListWidget([=](int id, std::string name){
+  auto newListContent = createInlineDialog({newListRow}, "Create", [=](){
+    int64_t list_id = insertNewList(newListTitle->text(), newListColor->color());
     chooseListDialog->finish(Dialog::ACCEPTED);
-    callback(id, name);
+    callback(list_id, newListTitle->text());
   });
+  newListTitle->onChanged = [=](const char* s){ newListContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
+  newListTitle->onChanged("");
+
   Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
-  newListBtn->onClicked = [=](){ newListContent->setVisible(!newListContent->isVisible()); };
+  newListBtn->onClicked = [=](){
+    newListContent->setVisible(!newListContent->isVisible());
+    if(newListContent->isVisible())
+      app->gui->setFocused(newListTitle, SvgGui::REASON_TAB);
+  };
 
   Toolbar* titleTb = static_cast<Toolbar*>(chooseListDialog->selectFirst(".title-toolbar"));
   titleTb->addWidget(newListBtn);
@@ -529,7 +517,7 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
 
   auto createBkmkFn = [=](int list_id, std::string listname){
     std::string namestr = app->pickResultName;
-    if(app->currLocPlaceInfo) namestr = "Location at " + ftimestr("%FT%H.%M.%S");
+    if(app->currLocPlaceInfo) namestr = "Location at " + ftimestr("%H:%M:%S %F");
     else if(namestr.empty())  namestr = lngLatToStr(app->pickResultCoord);
     int rowid = addBookmark(list_id, app->pickResultOsmId, namestr, app->pickResultProps, "", app->pickResultCoord);
     Widget* section = getPlaceInfoSubSection(rowid, list_id, namestr, "");
@@ -642,15 +630,26 @@ Button* MapsBookmarks::createPanel()
   //    " rotation REAL, tilt REAL, width REAL, height REAL);");
 
   // Bookmark lists panel (main and archived lists)
-  Widget* newListContent = createNewListWidget([this](int, std::string){ populateLists(false); });
   Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");
-  newListBtn->onClicked = [=](){ showInlineDialogModal(newListContent); };
+  newListBtn->onClicked = [=](){
+    TextEdit* newListTitle = createTitledTextEdit("Title");
+    ColorPicker* newListColor = createColorPicker(app->colorPickerMenu, nextListColor());
+    Widget* newListRow = createRow();
+    newListRow->addWidget(newListTitle);
+    newListRow->addWidget(newListColor);
+    newListColor->node->setAttribute("box-anchor", "bottom");
+    newListTitle->onChanged = [=](const char* s){ newListDialog->selectFirst(".accept-btn")->setEnabled(s[0]); };
 
-  listsContent = new DragDropList;  //
-  Widget* listsCol = createColumn(); //createListContainer();
-  listsCol->node->setAttribute("box-anchor", "fill");  // ancestors of ScrollWidget must use fill, not vfill
-  listsCol->addWidget(newListContent);
-  listsCol->addWidget(listsContent);
+    newListDialog.reset(createInputDialog({newListRow}, "New Place List", "Create", [=](){
+      insertNewList(newListTitle->text(), newListColor->color());
+      populateLists(false);
+    }));
+    showModalCentered(newListDialog.get(), app->gui);  //showInlineDialogModal(editContent);
+    app->gui->setFocused(newListTitle, SvgGui::REASON_TAB);
+    newListTitle->onChanged("");
+  };
+
+  listsContent = new DragDropList;
   auto listHeader = app->createPanelHeader(MapsApp::uiIcon("pin"), "Saved Places");  //"Bookmark Lists");
   listHeader->addWidget(newListBtn);
 
@@ -663,16 +662,14 @@ Button* MapsBookmarks::createPanel()
   overflowMenu->addItem("Import photos", [=](){
     MapsApp::pickFolderDialog([this](const char* path){
       FSPath pathinfo(path);
-      SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);")
-          .bind(pathinfo.baseName(), colorToStr(nextListColor())).exec();
-      int64_t list_id = sqlite3_last_insert_rowid(app->bkmkDB);
+      int64_t list_id = insertNewList(pathinfo.baseName(), nextListColor());
       populateLists(false);
       MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, pathinfo.c_str()); });
     });
   });
   listHeader->addWidget(overflowBtn);
 
-  listsPanel = app->createMapPanel(listHeader, NULL, listsCol, false);
+  listsPanel = app->createMapPanel(listHeader, NULL, listsContent, false);
 
   archivedContent = createColumn();
   auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Bookmaks");
@@ -696,30 +693,7 @@ Button* MapsBookmarks::createPanel()
 
   // Bookmarks panel
   bkmkContent = createColumn();
-  TextEdit* listTitle = createTitledTextEdit("Title");
-  ColorPicker* listColor = createColorPicker(app->colorPickerMenu, Color::CYAN);
-  Widget* editListRow = createRow();
-  editListRow->addWidget(listTitle);
-  editListRow->addWidget(listColor);
-  listColor->node->setAttribute("box-anchor", "bottom");
-  auto onAcceptListEdit = [=](){
-    SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(
-        listTitle->text(), colorToStr(listColor->color()), activeListId).exec();
-    listsDirty = archiveDirty = true;
-    // if bookmark list opened from place info, need to update list title there
-    int listid = activeListId;
-    if(!std::isnan(app->pickResultCoord.latitude)) {
-      app->popPanel();
-      app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
-    }
-    // update title and rebuild markers if color changed
-    populateBkmks(listid, true);
-  };
-  auto editListContent = createInlineDialog({editListRow}, "Apply", onAcceptListEdit);
-  bkmkContent->addWidget(editListContent);
-
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("folder"), "");
-
   static const char* bkmkSortKeys[] = {"name", "date", "dist"};
   std::string initSort = app->config["bookmarks"]["sort"].as<std::string>("date");
   size_t initSortIdx = 0;
@@ -731,7 +705,7 @@ Button* MapsBookmarks::createPanel()
   Button* sortBtn = createToolbutton(MapsApp::uiIcon("sort"), "Sort");
   sortBtn->setMenu(sortMenu);
 
-  Button* mapAreaBkmksBtn = createToolbutton(MapsApp::uiIcon("fold-map-pin"), "Bookmarks in map area only");
+  Button* mapAreaBkmksBtn = createToolbutton(MapsApp::uiIcon("fold-map-pin"), "Places in map area only");
   mapAreaBkmksBtn->onClicked = [=](){
     mapAreaBkmks = !mapAreaBkmks;
     mapAreaBkmksBtn->setChecked(mapAreaBkmks);
@@ -747,13 +721,29 @@ Button* MapsBookmarks::createPanel()
   Menu* listOverflowMenu = createMenu(Menu::VERT_LEFT, false);
   listOverflowBtn->setMenu(listOverflowMenu);
   listOverflowMenu->addItem("Edit", [=](){
-    bool show = !editListContent->isVisible();
-    if(show) {
-      listTitle->setText(activeListTitle.c_str());
-      listColor->setColor(parseColor(activeListColor, Color::CYAN));
-      MapsApp::gui->setFocused(listTitle, SvgGui::REASON_TAB);
-      showInlineDialogModal(editListContent);
-    }
+    TextEdit* listTitle = createTitledTextEdit("Title", activeListTitle.c_str());
+    ColorPicker* listColor = createColorPicker(app->colorPickerMenu, parseColor(activeListColor, Color::CYAN));
+    Widget* editListRow = createRow();
+    editListRow->addWidget(listTitle);
+    editListRow->addWidget(listColor);
+    listColor->node->setAttribute("box-anchor", "bottom");
+    listTitle->onChanged = [=](const char* s){ listTitle->selectFirst(".accept-btn")->setEnabled(s[0]); };
+
+    editListDialog.reset(createInputDialog({editListRow}, "Edit Place List", "Apply", [=](){
+      SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(
+          listTitle->text(), colorToStr(listColor->color()), activeListId).exec();
+      listsDirty = archiveDirty = true;
+      // if bookmark list opened from place info, need to update list title there
+      int listid = activeListId;
+      if(!std::isnan(app->pickResultCoord.latitude)) {
+        app->popPanel();
+        app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
+      }
+      // update title and rebuild markers if color changed
+      populateBkmks(listid, true);
+    }));
+    showModalCentered(editListDialog.get(), app->gui);  //showInlineDialogModal(editContent);
+    app->gui->setFocused(listTitle, SvgGui::REASON_TAB);
   });
 
   listOverflowMenu->addItem("Clear", [=](){

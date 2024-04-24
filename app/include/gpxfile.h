@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mapscomponent.h"
+#include "ulib/platformutil.h"
 
 class UniqueMarkerID
 {
@@ -65,7 +66,8 @@ public:
   bool onPicked(MarkerID picked);
 };
 
-struct GpxFile {
+struct GpxFile
+{
   std::string title;
   std::string desc;
   std::string filename;
@@ -77,6 +79,7 @@ struct GpxFile {
   std::vector<GpxWay> routes;
   std::vector<GpxWay> tracks;
 
+  double timestamp = mSecSinceEpoch()/1000.0;
   int rowid = -1;
   int wayPtSerial = 0;
   bool visible = false;

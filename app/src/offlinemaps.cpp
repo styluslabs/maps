@@ -736,7 +736,6 @@ Widget* MapsOffline::createPanel()
       maxZoomSpin->setValue(maxZoom);
 
     titleEdit->setText(ftimestr("%FT%H.%M.%S").c_str());
-    MapsApp::gui->setFocused(titleEdit, SvgGui::REASON_TAB);
 
     LngLat lngLat00, lngLat11;
     app->getMapBounds(lngLat00, lngLat11);
@@ -747,7 +746,9 @@ Widget* MapsOffline::createPanel()
     auto srcinfo = app->mapsSources->mapSources[app->mapsSources->currSource];
     std::string title = "Download " + (srcinfo ? srcinfo["title"].Scalar() : "");
     static_cast<TextLabel*>(downloadDialog->selectFirst(".dialog-title"))->setText(title.c_str());
+    downloadDialog->focusedWidget = NULL;
     showModalCentered(downloadDialog.get(), MapsApp::gui);  //showInlineDialogModal(downloadPanel);
+    MapsApp::gui->setFocused(titleEdit, SvgGui::REASON_TAB);
   };
 
   offlineContent = createColumn();

@@ -101,6 +101,7 @@ void SelectDialog::addItems(const std::vector<std::string>& _items, bool replace
     }
   }
 
+  int offset = int(content->containerNode()->children().size());
   SvgNode* proto = containerNode()->selectFirst(".listitem-proto");
   for(int ii = 0; ii < int(_items.size()); ++ii) {
     Button* btn = new Button(proto->clone());
@@ -108,7 +109,7 @@ void SelectDialog::addItems(const std::vector<std::string>& _items, bool replace
     btn->onClicked = [=](){
       finish(Dialog::ACCEPTED);
       if(onSelected)
-        onSelected(ii);
+        onSelected(offset + ii);
     };
     SvgText* titlenode = static_cast<SvgText*>(btn->containerNode()->selectFirst(".title-text"));
     titlenode->addText(_items[ii].c_str());
@@ -507,6 +508,10 @@ void SharedMenu::show(Widget* _host)
   SvgGui* gui = window()->gui();
   if(gui->lastClosedMenu == this && host == _host)
     return;
+  if(window() != _host->window()) {
+    removeFromParent();
+    _host->window()->addWidget(this);
+  }
   host = _host;
   gui->showMenu(this);
   gui->setPressed(this);
@@ -583,6 +588,7 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
   textEditNode->setAttribute("box-anchor", "hfill");
   TextEdit* widget = new TextEdit(textEditNode);
   widget->selectFirst(".inputbox-title")->setText(title);
+  setupFocusable(widget);
 
   //TextEdit* widget = createTextEdit();
   //widget->node->setAttribute("box-anchor", "hfill");
@@ -597,7 +603,7 @@ Widget* createInlineDialog(std::initializer_list<Widget*> widgets,
 {
   static const char* inlineDialogSVG = R"#(
     <g class="inline-dialog col-layout" box-anchor="hfill" layout="flex" flex-direction="column" margin="2 5">
-      <g class="button-container toolbar" margin="4 0" box-anchor="hfill" layout="flex" flex-direction="row"></g>
+      <g class="button-container toolbar" margin="0 0" box-anchor="hfill" layout="flex" flex-direction="row"></g>
       <g class="child-container" box-anchor="hfill" layout="flex" flex-direction="column"></g>
     </g>
   )#";
@@ -886,6 +892,7 @@ ManageColorsDialog::ManageColorsDialog(std::vector<Color>& _colors) : Dialog(cre
   };
 
   Toolbar* toolbar = createToolbar();
+  toolbar->node->setAttribute("margin", "0 3");
   toolbar->addWidget(colorEditBox);
   toolbar->addWidget(createStretch());
   toolbar->addWidget(saveBtn);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include "mapscomponent.h"
 #include "gpxfile.h"
 
@@ -26,7 +27,7 @@ public:
   MarkerID trackStartMarker = 0;
   MarkerID trackEndMarker = 0;
 
-  std::vector<GpxFile> tracks;
+  std::list<GpxFile> tracks;
   GpxFile recordedTrack;
   GpxFile navRoute;
   GpxFile* activeTrack = NULL;
@@ -98,6 +99,7 @@ private:
   //bool drawTrack = false;
   bool directRoutePreview = false;
   bool tracksDirty = true;
+  bool archiveDirty = true;
   bool waypointsDirty = true;
   bool showAllWaypts = false;
   bool archiveLoaded = false;
@@ -106,4 +108,5 @@ private:
   bool stealPickResult = false;  // adding waypt from search or bookmarks
   std::unique_ptr<SelectDialog> selectTrackDialog;
   std::unique_ptr<Dialog> editWayptDialog;
+  std::unique_ptr<Dialog> newTrackDialog;
 };
