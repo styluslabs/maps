@@ -145,6 +145,7 @@ constructionValues = Set { "primary", "secondary", "tertiary", "motorway", "serv
 pavedValues = Set { "paved", "asphalt", "cobblestone", "concrete", "concrete:lanes", "concrete:plates", "metal", "paving_stones", "sett", "unhewn_cobblestone", "wood" }
 unpavedValues = Set { "unpaved", "compacted", "dirt", "earth", "fine_gravel", "grass", "grass_paver", "gravel", "gravel_turf", "ground", "ice", "mud", "pebblestone", "salt", "sand", "snow", "woodchips" }
 
+boundaryValues = Set { "administrative", "disputed" }
 parkValues = Set { "protected_area", "national_park" }
 landuseAreas = Set { "retail", "military", "residential", "commercial", "industrial", "railway", "cemetery", "forest", "grass", "allotments", "meadow", "recreation_ground", "village_green", "landfill", "farmland", "farmyard", "orchard", "vineyard", "plant_nursery", "greenhouse_horticulture", "farm" }
 naturalAreas = Set { "wood", "grassland", "grass", "scrub", "fell", "heath", "wetland", "glacier", "beach", "sand", "bare_rock", "scree" }
@@ -189,7 +190,7 @@ function relation_scan_function(relation)
   local reltype = relation:Find("type");
   if reltype == "boundary" then
     local bndtype = relation:Find("boundary")
-    if bndtype=="administrative" or bndtype=="disputed" then
+    if boundaryValues[bndtype] or parkValues[bndtype] then
       relation:Accept()
     end
   elseif reltype == "route" then
@@ -199,32 +200,54 @@ end
 
 -- process relations for public transport routes
 
-function relation_function(relation)
-  if relation:Find("type")=="route" then
-    local route = relation:Find("route")
+function relation_function(rel)
+  local reltype = rel:Find("type");
+  if reltype=="route" then
+    local route = rel:Find("route")
     if route == "ferry" then
-      relation:Layer("transportation", false)
-      relation:Attribute("class", "ferry")
-      relation:MinZoom(9)
-      SetNameAttributes(relation, 12, "relation")
+      rel:Layer("transportation", false)
+      rel:Attribute("class", "ferry")
+      rel:MinZoom(9)
+      SetNameAttributes(rel, 12, "relation")
       return
     elseif transitRoutes[route] then
-      relation:Layer("transit", false)
-      relation:MinZoom(transitRoutes[route])
+      rel:Layer("transit", false)
+      rel:MinZoom(transitRoutes[route])
     elseif otherRoutes[route] then
-      relation:Layer("transportation", false)
-      relation:MinZoom(otherRoutes[route])
+      rel:Layer("transportation", false)
+      rel:MinZoom(otherRoutes[route])
     else
       return
     end
-    relation:Attribute("class", "route")
-    relation:Attribute("route", route)
-    relation:Attribute("name", relation:Find("name"))
-    relation:Attribute("ref", relation:Find("ref"))
-    relation:Attribute("network", relation:Find("network"))
-    relation:Attribute("color", relation:Find("colour"))
-    relation:Attribute("osm_id", relation:Id())
-    relation:Attribute("osm_type", "relation")
+    rel:Attribute("class", "route")
+    rel:Attribute("route", route)
+    rel:Attribute("name", rel:Find("name"))
+    rel:Attribute("ref", rel:Find("ref"))
+    rel:Attribute("network", rel:Find("network"))
+    rel:Attribute("color", rel:Find("colour"))
+    rel:Attribute("osm_id", rel:Id())
+    rel:Attribute("osm_type", "relation")
+  elseif reltype=="boundary" then
+    local boundary = rel:Find("boundary")
+    if parkValues[boundary] then
+      local leisure = rel:Find("leisure")
+      local area = rel:Area();
+      rel:Layer("landuse", true)
+      SetMinZoomByArea(rel)
+      rel:Attribute("class", boundary)
+      rel:Attribute("boundary", boundary)
+      if leisure~="" then rel:Attribute("leisure", leisure) end
+      SetNameAttributes(rel, 0, "relation")
+      rel:AttributeNumeric("area", area)
+      -- write POI at centroid
+      rel:LayerAsCentroid("poi")
+      SetMinZoomByArea(rel)
+      rel:Attribute("class", boundary)
+      rel:Attribute("boundary", boundary)
+      if leisure~="" then rel:Attribute("leisure", leisure) end
+      SetNameAttributes(rel, 0, "relation")
+      rel:AttributeNumeric("area", area)
+    end
   end
 end
 
@@ -578,8 +601,10 @@ function way_function(way)
   local park_boundary = parkValues[boundary]
   if park_boundary or leisure=="nature_reserve" then
     way:Layer("landuse", true)
-    SetMinZoomByArea(way)  --way:MinZoom(11)
-    way:Attribute("class", park_boundary and boundary or leisure)  --"park");
+    SetMinZoomByArea(way)
+    way:Attribute("class", park_boundary and boundary or leisure)
+    if park_boundary then way:Attribute("boundary", boundary) end
+    if leisure~="" then way:Attribute("leisure", leisure) end
     SetNameAttributes(way)
     landuse_poi = true
   end

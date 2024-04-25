@@ -229,14 +229,11 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
 
 std::string MapsSources::createSource(std::string savekey, const std::string& yamlStr)
 {
-  if(savekey.empty() || !mapSources[savekey]) {
+  if(savekey.empty()) {
     // find available name
     int ii = mapSources.size();
     while(ii < INT_MAX && mapSources[fstring("custom-%d", ii)]) ++ii;
     savekey = fstring("custom-%d", ii);
-
-    mapSources[savekey] = YAML::Node(YAML::NodeType::Map);
-    mapSources[savekey]["layers"] = YAML::Node(YAML::NodeType::Sequence);  //"Multi";
   }
 
   if(!yamlStr.empty()) {
@@ -247,14 +244,13 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     }
   }
   else {
-    YAML::Node node = mapSources[savekey];
-    YAML::Node layers = node["layers"];
+    YAML::Node node = mapSources[savekey] ? mapSources[savekey] : YAML::Node(YAML::NodeType::Map);
     node["title"] = titleEdit->text();
-    if(layers) {
-      YAML::Node newnode = YAML::Node(YAML::NodeType::Sequence);
+    if(node["layers"] || !mapSources[savekey]) {
+      YAML::Node layers = YAML::Node(YAML::NodeType::Sequence);
       for(auto& src : currLayers)
-        newnode.push_back(YAML::Load("{source: " + src + "}"));
-      layers = newnode;
+        layers.push_back(YAML::Load("{source: " + src + "}"));
+      node["layers"] = layers;
     }
     else if(node["url"])
       node["url"] = urlEdit->text();
@@ -262,6 +258,7 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
     for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
       updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;
+    if(!mapSources[savekey]) mapSources[savekey] = node;
   }
 
   saveSources();
@@ -619,11 +616,11 @@ void MapsSources::populateSourceEdit(std::string key)
 void MapsSources::importSources(const std::string& src)
 {
   std::string key;
-  if(src.back() == '}') {
+  if(src.front() == '{') {
     key = createSource("", src);
   }
   else if(Tangram::NetworkDataSource::urlHasTilePattern(src)) {
-    key = createSource("", fstring("{title: 'New Source', url: %s}", src.c_str()));
+    key = createSource("", fstring(R"({title: "New Source", url: "%s"})", src.c_str()));
   }
   else {
     // source name conflicts: skip, replace, rename, or cancel? dialog on first conflict?

@@ -216,7 +216,7 @@ styles:
                     if(bot.y) { h00 = 2.*h01 - h02; h10 = 2.*h11 - h12; h20 = 2.*h21 - h22; }
                     if(top.y) { h02 = 2.*h01 - h00; h12 = 2.*h11 - h10; h22 = 2.*h21 - h20; }
                     // proj meters per elevation tile pixel (u_tile_origin.z is tile zoom, u_map_position.z is real zoom)
-                    vec2 dxy_elev = 2.*3.141592*6378137.0*exp2(-u_tile_origin.w)*duv;
+                    vec2 dxy_elev = 2.*3.141592*6378137.0*exp2(-u_tile_origin.w)*duv/u_raster_offsets[ELEVATION_INDEX].z;
                     // offset from pixel center
                     vec2 f = ij - cen_ij;
                     // 2nd order finite diff - mixed partials needed to (almost) eliminate hillshading pixelation
