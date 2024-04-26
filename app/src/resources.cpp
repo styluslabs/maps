@@ -223,6 +223,52 @@ void initResources(const char* baseDir)
   setGuiResources(widgetDoc, styleSheet);
 }
 
+struct SDFcontext { NVGcontext* vg; std::vector<float> fbuff; int fbuffw, fbuffh; float sdfScale, sdfOffset; };
+
+static constexpr float INITIAL_SDF_DIST = 1E6f;
+
+static void sdfRender(void* uptr, void* fontimpl, unsigned char* output,
+      int outWidth, int outHeight, int outStride, float scale, int padding, int glyph)
+{
+  SDFcontext* ctx = (SDFcontext*)uptr;
+
+  nvgBeginFrame(ctx->vg, 0, 0, 1);
+  nvgDrawSTBTTGlyph(ctx->vg, (stbtt_fontinfo*)fontimpl, scale, padding, glyph);
+  nvgEndFrame(ctx->vg);
+
+  for(int iy = 0; iy < outHeight; ++iy) {
+    for(int ix = 0; ix < outWidth; ++ix) {
+      float sd = ctx->fbuff[ix + iy*ctx->fbuffw] * ctx->sdfScale + ctx->sdfOffset;
+      output[ix + iy*outStride] = (unsigned char)(0.5f + std::min(std::max(sd, 0.f), 255.f));
+      ctx->fbuff[ix + iy*ctx->fbuffw] = INITIAL_SDF_DIST;   // will get clamped to 255
+    }
+  }
+}
+
+static void sdfDelete(void* uptr)
+{
+  SDFcontext* ctx = (SDFcontext*)uptr;
+  nvgswDelete(ctx->vg);
+  delete ctx;
+}
+
+FONScontext* userCreateFontstash(FONSparams* params, int atlasFontPx)
+{
+  SDFcontext* ctx = new SDFcontext;
+  ctx->fbuffh = ctx->fbuffw = atlasFontPx + 2*params->sdfPadding + 16;
+  ctx->sdfScale = params->sdfPixelDist;
+  ctx->sdfOffset = 127;  // stbtt on_edge_value
+
+  ctx->fbuff.resize(ctx->fbuffw*ctx->fbuffh, INITIAL_SDF_DIST);
+  ctx->vg = nvgswCreate(NVG_AUTOW_DEFAULT | NVG_NO_FONTSTASH | NVGSW_PATHS_XC | NVGSW_SDFGEN);
+  nvgswSetFramebuffer(ctx->vg, ctx->fbuff.data(), ctx->fbuffw, ctx->fbuffh, params->sdfPadding, 0,0,0);
+
+  params->userPtr = ctx;
+  params->userSDFRender = sdfRender;
+  params->userDelete = sdfDelete;
+  return fonsCreateInternal(params);
+}
+
 // rasterizing SVG markers (previous nanosvg impl removed 2023-08-13)
 
 namespace Tangram {
