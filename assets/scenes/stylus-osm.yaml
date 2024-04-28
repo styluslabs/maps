@@ -49,6 +49,7 @@ global:
         motorway_link: '#FDE293'  #'#aaa'
         motorway_muted: '#eee'
         path: '#fff'
+        unpaved_trail: '#B06000'
         transit: '#EB322F'
         rail: '#96ABB2'  #[0.588,0.671,0.698]
         rail_tunnel: '#A9C3CB'
@@ -59,6 +60,8 @@ global:
         taxiway: '#BCBCCC'
         airport: '#E8EAEF'  #'#ddd'
         airport_name: '#487585'
+        shield: '#FFFFFF'
+        motorway_shield: '#FFDC36'
         road_name: '#666'
         road_halo: white
         ferry_name: '#8db3ce'
@@ -99,17 +102,17 @@ global:
 
     # z-order for polygons and lines (higher z-order draws over lower); order > 1000 is reserved by mapsapp
     order:
-        landuse: 1
-        parks: 2
-        park_detail: 3
-        golf: 4
-        airport: 5
-        landcover: 6
-        waterway: 7
-        water: 8
-        pier: 9
-        bldg: 10
-        transportation_casing: 11
+        landuse: 10
+        parks: 12
+        park_detail: 14
+        golf: 16
+        airport: 18
+        landcover: 20
+        waterway: 22
+        water: 24
+        pier: 26
+        bldg: 30
+        transportation_casing: 38
         transportation: 40
         rail: 40
         taxiway: 50
@@ -162,11 +165,12 @@ global:
         forest: 23
         peak: 30
         # road labels
-        oneway_arrow: 24
-        motorway_ref: 25
-        motorway_name: 26
+        oneway_arrow: 23
+        motorway_ref: 24
+        highway_ref: 25
         road_primary: 30
         road_secondary: 40
+        motorway_name: 45  # shield generally more important than name for motorway
         road_tertiary: 50
         road_minor: 60
         # transit line labels
@@ -488,7 +492,16 @@ layers:
             lines:
                 order: global.order.waterway
                 color: global.color.water
-                width: [[7,0.5px],[8,1px],[15,2px]]
+                width: [[10,0px],[11,1px],[15,2px]]
+        river:
+            filter: { waterway: river }
+            draw: { lines: { width: [[7,0.5px],[8,1px],[12,2px],[15,4px]] } }
+        intermittent:
+            filter: { intermittent: true }
+            draw: { lines: { style: dashed-bike } }
+            stream:
+                filter: { waterway: stream }
+                draw: { lines: { width: [[15,0px],[16,1.5px],[19,2px]] } }
 
     waterway_name:
         data: { source: osm, layer: water }
@@ -534,7 +547,7 @@ layers:
             priority: 1
             draw: { lines: { color: global.color.tunnel, outline: { color: global.color.tunnel_casing } } }
         motorway:
-            filter: { class: motorway }
+            filter: { highway: [motorway, motorway_link] }
             draw:
                 lines:
                     order: global.order.motorway
@@ -548,13 +561,13 @@ layers:
                 priority: 1
                 draw: { lines: { color: global.color.motorway_tunnel } }
             link:
-                filter: { ramp: 1 }
+                filter: { highway: motorway_link }
                 draw:
                     lines:
                         #color: global.color.motorway_link
                         width: [[13, 0], [14, 12]]
         trunk:
-            filter: { class: [trunk], $zoom: { min: 8 } }
+            filter: { highway: [trunk, trunk_link], $zoom: { min: 8 } }
             draw:
                 lines:
                     order: global.order.major_road
@@ -562,15 +575,19 @@ layers:
                     outline:
                         width: [[16, 0], [17, 1]]
         major_road:
-            filter: { class: [primary, secondary], $zoom: { min: 10 } }
+            filter: { highway: [primary, primary_link, secondary, secondary_link] }
             draw:
                 lines:
                     order: global.order.major_road
                     width: [[10, 0], [13, 2px], [14, 2px], [16, 12]]
                     outline:
                         width: [[16, 0], [17, 1]]
+            withref:
+                filter: { ref: true }
+                draw: { lines: { width: [[8, 0], [9, 1px], [13, 2px], [14, 2px], [16, 12]] } }
+
         minor_road:
-            filter: { class: [tertiary, minor, service] }
+            filter: { highway: [tertiary, tertiary_link, unclassified, residential, road, living_street, service] }
             draw:
                 lines:
                     order: global.order.minor_road
@@ -578,14 +595,14 @@ layers:
                     outline:
                         width: [[17, 0], [18, 1]]
             service:
-                filter: { class: service }
+                filter: { highway: service }
                 draw: { lines: { width: [[15, 0px], [16, 4px], [17, 8]] } }
             parking:
                 filter: { service: parking_aisle }
                 draw: { lines: { width: [[15, 0px], [16, 2px], [17, 4]] } }
 
         paths:
-            filter: { class: path }
+            filter: { highway: [footway, path, steps, pedestrian] }
             draw:
                 lines:
                     order: global.order.path
@@ -601,13 +618,13 @@ layers:
                     - highway: false  # for old schema
                     - highway: path
                     - { highway: footway, surface: unpaved }
-                draw: { lines: { color: '#B06000', width: [[10, 1px], [18, 3px]] } }
+                draw: { lines: { color: global.color.unpaved_trail, width: [[10, 1px], [18, 3px]] } }
             poor:
                 filter: { trail_visibility: [ bad, very_bad, horrible, no, none, poor ] }
                 draw: { lines: { style: dashed-bike } }
 
         tracks:
-            filter: { class: track }
+            filter: { highway: [cycleway, byway, bridleway, track] }
             draw:
                 lines:
                     order: global.order.path
@@ -753,17 +770,22 @@ layers:
             route: false
             #not: { class: [transit, route, aeroway] }
             any:
-                - { class: motorway, $zoom: { min: 6 } }
-                - { class: [trunk, primary], $zoom: { min: 10 } }
-                - $zoom: { min: 13 }
+                - { highway: motorway, $zoom: { min: 6 } }
+                - { highway: [trunk, primary], $zoom: { min: 9 } }
+                - { highway: [secondary, tertiary], $zoom: { min: 13 } }
+                - $zoom: { min: 14 }
+        motorway:
+            filter: { highway: motorway }
+            draw: { points: { priority: global.priority.motorway_ref, color: global.color.motorway_shield } }
         draw:
             points:
                 visible: function() { return feature.ref.split(";")[0].length <= 8; }
-                style: points
+                style: poi-points
                 texture: pois
                 sprite: shield  #function() { return feature.network; }
+                color: global.color.shield
                 #sprite_default: shield
-                priority: global.priority.motorway_ref
+                priority: global.priority.highway_ref
                 # faster roads get higher priority
                 #priority: function() { return global.priority.motorway_ref - parseInt(feature.maxspeed)/200; }
                 size: |
@@ -807,11 +829,12 @@ layers:
                     family: Open Sans
                     fill: global.color.road_name
                     stroke: { color: global.color.road_halo, width: 2 }
-                    size: 12px
+                    # 0px to hide by default
+                    size: 0px
 
         motorway:
             exclusive: true
-            filter: { class: motorway, $zoom: {min: 13} }
+            filter: { highway: motorway, $zoom: { min: 13 } }
             draw:
                 text:
                     visible: global.show_motorways
@@ -819,14 +842,16 @@ layers:
                     repeat_group: road_labels
                     priority: global.priority.motorway_name
                     font:
+                        # shield is generally more important than name for motorway
+                        size: 12px
                         stroke: { width: 4 }
 
         primary:
             exclusive: true
             filter:
                 any:
-                    - {class: trunk, $zoom: {min: 13}}
-                    - {class: primary, $zoom: {min: 14}}
+                    - {highway: trunk, $zoom: { min: 13 }}
+                    - {highway: primary, $zoom: { min: 14 }}
             draw:
                 text:
                     repeat_distance: 100px
@@ -838,7 +863,7 @@ layers:
 
         secondary:
             exclusive: true
-            filter: { class: secondary, $zoom: { min: 14 } }
+            filter: { highway: secondary, $zoom: { min: 14 } }
             draw:
                 text:
                     repeat_distance: 100px
@@ -850,7 +875,7 @@ layers:
 
         tertiary:
             exclusive: true
-            filter: { class: tertiary, $zoom: { min: 15 } }
+            filter: { highway: tertiary, $zoom: { min: 15 } }
             draw:
                 text:
                     priority: global.priority.road_tertiary
@@ -860,7 +885,27 @@ layers:
 
         minor:
             exclusive: true
-            filter: { class: minor, $zoom: { min: 16 } }
+            filter: { highway: [unclassified, residential, road, living_street, service], $zoom: { min: 16 } }
+            draw:
+                text:
+                    priority: global.priority.road_minor
+                    font:
+                        size: 10px
+                        stroke: { width: 4 }
+
+        paths:
+            exclusive: true
+            filter: { highway: [footway, path, steps, pedestrian], $zoom: { min: 15 } }
+            draw:
+                text:
+                    priority: global.priority.road_minor
+                    font:
+                        size: 10px
+                        stroke: { width: 4 }
+
+        tracks:
+            exclusive: true
+            filter: { highway: [cycleway, byway, bridleway, track], $zoom: { min: 15 } }
             draw:
                 text:
                     priority: global.priority.road_minor

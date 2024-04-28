@@ -9,6 +9,7 @@ class MapsSources : public MapsComponent
 public:
   MapsSources(MapsApp* _app);
 
+  void reload();
   void addSource(const std::string& key, YAML::Node srcnode);
   void rebuildSource(const std::string& srcname = "", bool async = true);
   void onMapEvent(MapEvent_t event);
@@ -16,7 +17,6 @@ public:
   Button* createPanel();
 
   std::string currSource;
-  bool sceneVarsLoaded = false;
 
 private:
   std::string createSource(std::string savekey, const std::string& yamlStr = "");
@@ -33,13 +33,6 @@ private:
   DragDropList* sourcesContent = NULL;
   Widget* archivedPanel = NULL;
   Widget* archivedContent = NULL;
-  std::string baseUrl;
-  std::string srcFile;
-  YAML::Node mapSources;
-  std::atomic<bool> sourcesLoaded{false};
-  std::vector<std::string> currLayers;
-  std::vector<SceneUpdate> currUpdates;
-
   Widget* layersContent = NULL;
   Button* legendBtn = NULL;
   Menu* legendMenu = NULL;
@@ -48,10 +41,17 @@ private:
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
   Widget* varsSeparator = NULL;
+  std::unique_ptr<SelectDialog> selectLayerDialog;
+  std::unique_ptr<Dialog> importDialog;
+
+  std::string baseUrl;
+  std::string srcFile;
+  YAML::Node mapSources;
+  std::vector<std::string> currLayers;
+  std::vector<SceneUpdate> currUpdates;
+  std::vector<std::string> layerKeys;
   bool legendsLoaded = false;
   bool sourcesDirty = true;
   bool saveSourcesNeeded = false;
-  std::vector<std::string> layerKeys;
-  std::unique_ptr<SelectDialog> selectLayerDialog;
-  std::unique_ptr<Dialog> importDialog;
+  bool sceneVarsLoaded = false;
 };

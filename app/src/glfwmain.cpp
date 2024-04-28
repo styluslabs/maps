@@ -152,9 +152,9 @@ int main(int argc, char* argv[])
     if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
       MapsApp::runApplication = false;
     else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
+      app->mapsSources->reload();
       app->pluginManager->reload(MapsApp::baseDir + "plugins");
       app->loadSceneFile();  // reload scene
-      app->mapsSources->sceneVarsLoaded = false;
     }
     return false;
   });

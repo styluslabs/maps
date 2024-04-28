@@ -482,10 +482,12 @@ function way_function(way)
   end
 
   if piste_diff~="" then
+    local piste_type = way:Find("piste:type")
     way:Layer("transportation", isClosed)
     way:Attribute("class", "piste")
     way:Attribute("route", "piste")
     way:Attribute("difficulty", piste_diff)
+    if piste_type~="" then way:Attribute("piste_type", piste_type) end
     way:MinZoom(10)
     SetNameAttributes(way, 14)
   end

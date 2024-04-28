@@ -110,9 +110,9 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   return "import:\n" + importstr;  //+ "\nglobal:\n\nsources:\n\nstyles:\n\nlayers:\n";
 }
 
-// auto it = mapSources.begin();  std::advance(it, currSrcIdx[ii]-1); builder.addLayer(it->first.Scalar(), it->second);
+MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app) { reload(); }
 
-MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::string& sourcesFile
+void MapsSources::reload()
 {
   FSPath path = FSPath(app->configFile).parent();
   baseUrl = "file://" + path.path;
@@ -129,6 +129,9 @@ MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app)  // const std::str
     }
   }
   srcFile = srcfile.c_str();
+  sourcesDirty = true;
+  sceneVarsLoaded = false;
+  currSource.clear();
 }
 
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
@@ -290,12 +293,14 @@ void MapsSources::populateSources()
     auto src = mapSources[key];
     bool archived = src["archived"].as<bool>(false);
     bool isLayer = src["layer"].as<bool>(false);
+    bool isRaster = bool(src["url"]);
     if(!src["layers"] || isLayer) {
       layerKeys.push_back(key);
       layerTitles.push_back(src["title"].Scalar());
     }
 
-    Button* item = createListItem(MapsApp::uiIcon("layers"), src["title"].Scalar().c_str());
+    Button* item = createListItem(MapsApp::uiIcon("layers"),
+        src["title"].Scalar().c_str(), src["description"].Scalar().c_str());
     item->node->setAttr("__sourcekey", key.c_str());
     item->setChecked(key == currSource);
     Widget* container = item->selectFirst(".child-container");
@@ -313,17 +318,31 @@ void MapsSources::populateSources()
     }
 
     Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
-    if(isLayer) {
+    if(isLayer || isRaster) {
       Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
       showBtn->node->addClass("show-btn");
       showBtn->onClicked = [=](){
         if(key == currSource) return;
         bool show = !showBtn->isChecked();
         showBtn->setChecked(show);
-        if(show)
+        if(show) {
+          auto src = mapSources[key];
+          if(src["url"] && !src["layer"].as<bool>(false))
           currLayers.push_back(key);
-        else
+        }
+        if(!show)
           currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), key), currLayers.end());
+        else if(!isLayer) {
+          // insert before first layer that is not an opaque raster
+          auto it = currLayers.begin();
+          for(; it != currLayers.end(); ++it) {
+            auto itsrc = mapSources[*it];
+            if(!itsrc["url"] || itsrc["layer"].as<bool>(false)) break;
+          }
+          currLayers.insert(it, key);
+        }
+        else
+          currLayers.push_back(key);
         rebuildSource();  //currLayers
       };
       container->addWidget(showBtn);
@@ -518,7 +537,7 @@ void MapsSources::populateSceneVars()
         varsContent->addWidget(createTitledRow(label.c_str(), uwidget));
     }
     else {  // global variable
-      std::string value = app->readSceneValue("global." + name).as<std::string>("");
+      std::string value = yamlToStr(app->readSceneValue("global." + name));  //.as<std::string>("");
       if(value == "true" || value == "false") {
         auto checkbox = createCheckBox("", value == "true");
         checkbox->onToggled = [=](bool newval){
@@ -547,6 +566,15 @@ void MapsSources::populateSceneVars()
           updateSceneVar("global." + name, fstring("%04d-%02d-%02d", year, month, day), onchange, reload);
         });
         varsContent->addWidget(createTitledRow(label.c_str(), NULL, datepicker));
+      }
+      else if(var.second["min"] || var.second["max"]) {
+        float minval = var.second["min"].as<float>(-INFINITY);
+        float maxval = var.second["max"].as<float>(INFINITY);
+        auto spinBox = createTextSpinBox(std::stof(value), 1, minval, maxval, "%.2f");
+        spinBox->onValueChanged = [=](real val){
+          updateSceneVar("global." + name, std::to_string(val), onchange, reload);
+        };
+        varsContent->addWidget(createTitledRow(label.c_str(), spinBox));
       }
       else {
         auto textedit = createTitledTextEdit(label.c_str(), value.c_str());
@@ -590,8 +618,8 @@ void MapsSources::populateSourceEdit(std::string key)
       discardBtn->onClicked = [=](){
         currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), layer), currLayers.end());
         rebuildSource();  //tempLayers);
-        app->gui->deleteWidget(item);
         sourceModified();
+        app->gui->deleteWidget(item);
       };
       container->addWidget(discardBtn);
       layersContent->addWidget(item);

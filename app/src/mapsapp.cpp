@@ -1037,7 +1037,7 @@ Button* MapsApp::addUndeleteItem(const std::string& title, const SvgNode* icon, 
     callback();
     gui->deleteWidget(item);
   };
-  undeleteMenu->setVisible(true);
+  undeleteMenu->parent()->setVisible(true);
   return item;
 }
 
@@ -1232,7 +1232,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   overflowMenu->addItem(pluginBtn);
   undeleteMenu = createMenu(Menu::HORZ);
   overflowMenu->addSubmenu("Undelete", undeleteMenu);
-  undeleteMenu->setVisible(false);  // hidden when empty
+  undeleteMenu->parent()->setVisible(false);  // hidden when empty
   Button* metricCb = createCheckBoxMenuItem("Use metric units");
   metricCb->onClicked = [=](){
     metricUnits = !metricUnits;
