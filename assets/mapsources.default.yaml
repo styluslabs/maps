@@ -27,12 +27,21 @@ stylus-osm-terrain:
         styles.hillshade.shaders.defines.SHOW_CONTOURS: global.show_trails
 
 stylus-satellite:
-    title: Stylus Labs OSM + Bing Earth
+    title: Stylus Labs OSM + Satellite
     layers:
         - source: bing-earth
         - source: stylus-osm-dark
     updates:
         global.show_polygons: false
+
+stylus-worldcover:
+    title: Stylus Labs OSM + Worldcover
+    layers:
+        - {source: worldcover}
+        - {source: stylus-osm-terrain}
+        - {source: mix-base-raster}
+    updates:
+        global.show_trails: true
 
 opentopomap:
     title: OpenTopoMap
@@ -125,7 +134,7 @@ mix-base-raster:
 # - https://dynamicworld.app -  https://earthengine.googleapis.com/v1/projects/earthengine-legacy/maps/76b78881a84efddf3f44b9213bd84a91-e90ba03983f97a1cd25ca98cb7a03cf5/tiles/12/1240/1514
 worldcover:
     title: ESA Worldcover
-    description: 10m resolution 2021 landcover from Sentinel-2
+    description: 10m landcover (2021) from Sentinel-2
     #filtering: nearest
     max_zoom: 14
     url: 	https://services.terrascope.be/wmts/v2?layer=WORLDCOVER_2021_MAP&style=&tilematrixset=EPSG:3857&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image/png&TileMatrix=EPSG:3857:{z}&TileCol={x}&TileRow={y}
@@ -153,7 +162,7 @@ hillshade-png:
 
 hillshade-usgs:
     title: Hillshading (USGS)
-    description: 1m resolution elevation data for continental US
+    description: 1m elevation data (US only)
     layer: true
     layers:
         - source: hillshade

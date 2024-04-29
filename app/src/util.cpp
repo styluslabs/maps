@@ -32,8 +32,10 @@ double lngLatDist(LngLat r1, LngLat r2)
 // initial bearing on great circle path from r1 to r2
 double lngLatBearing(LngLat r1, LngLat r2)
 {
-  double y = sin(r2.longitude-r1.longitude) * cos(r2.latitude);
-  double x = cos(r1.latitude)*sin(r2.latitude) - sin(r1.latitude)*cos(r2.latitude)*cos(r2.longitude-r1.longitude);
+  double dlng = M_PI*(r2.longitude-r1.longitude)/180;
+  double lat1 = M_PI*r1.latitude/180, lat2 = M_PI*r2.latitude/180;
+  double y = sin(dlng) * cos(lat2);
+  double x = cos(lat1)*sin(lat2) - sin(lat1)*cos(lat2)*cos(dlng);
   return atan2(y, x);
 }
 

@@ -222,7 +222,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
       if(showbtn) {
         bool shown = std::find(currLayers.begin(), currLayers.end(), key) != currLayers.end()
             || std::find(builder.layerkeys.begin(), builder.layerkeys.end(), key) != builder.layerkeys.end();
-        showbtn->setChecked(shown);
+        showbtn->setChecked(key != currSource && shown);
       }
     }
   }
@@ -351,7 +351,7 @@ void MapsSources::populateSources()
         if(key != currSource)
           rebuildSource(key);
       };
-      editBtn->onClicked = [=](){ populateSourceEdit(showBtn->isChecked() ? "" : key); };
+      editBtn->onClicked = [=](){ populateSourceEdit(showBtn->isChecked() ? currSource : key); };
     }
     else {
       item->onClicked = [=](){ if(key != currSource) rebuildSource(key); };
@@ -538,6 +538,7 @@ void MapsSources::populateSceneVars()
     }
     else {  // global variable
       std::string value = yamlToStr(app->readSceneValue("global." + name));  //.as<std::string>("");
+      std::string valtype = var.second["type"].as<std::string>("");
       if(value == "true" || value == "false") {
         auto checkbox = createCheckBox("", value == "true");
         checkbox->onToggled = [=](bool newval){
@@ -556,7 +557,7 @@ void MapsSources::populateSceneVars()
         };
         varsContent->addWidget(createTitledRow(label.c_str(), combobox));
       }
-      else if(var.second["type"].as<std::string>("") == "date") {
+      else if(valtype == "date") {
         auto parts = splitStr<std::vector>(value, " -/");
         if(parts.size() != 3) parts = {"2024", "01", "01"};
         int year0 = atoi(parts[0].c_str());
@@ -567,10 +568,11 @@ void MapsSources::populateSceneVars()
         });
         varsContent->addWidget(createTitledRow(label.c_str(), NULL, datepicker));
       }
-      else if(var.second["min"] || var.second["max"]) {
+      else if(var.second["min"] || var.second["max"] || valtype == "int") {
         float minval = var.second["min"].as<float>(-INFINITY);
         float maxval = var.second["max"].as<float>(INFINITY);
-        auto spinBox = createTextSpinBox(std::stof(value), 1, minval, maxval, "%.2f");
+        const char* format = valtype == "int" ? "%.0f" : "%.2f";
+        auto spinBox = createTextSpinBox(atof(value.c_str()), 1, minval, maxval, format);
         spinBox->onValueChanged = [=](real val){
           updateSceneVar("global." + name, std::to_string(val), onchange, reload);
         };

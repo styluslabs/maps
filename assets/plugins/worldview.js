@@ -13,6 +13,7 @@ function nasaWorldView()
   };
   const mapSrc = {
     "title": "NASA Worldview " + date,
+    "description": "Daily 250m imagery",
     "url": tileUrl,
     "url_subdomains": ["a", "b", "c"],
     //"tile_size": 512,

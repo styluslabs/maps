@@ -907,13 +907,14 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->crossHair->routePreviewOrigin = (scrpos - mapcenter)/MapsApp::gui->paintScale;
       double distkm = lngLatDist(mappos, app->getMapCenter());
       std::string pvstr = MapsApp::distKmToStr(distkm);
+      double bearing = 180*lngLatBearing(mappos, app->getMapCenter())/M_PI;
+      pvstr += fstring(" | %.1f\u00B0", bearing < 0 ? bearing + 360 : bearing);
       if(it != activeTrack->waypoints.begin() && distkm > 0) {
         LngLat prevpt = (--it)->lngLat();
-        auto pm0 = MapProjection::lngLatToProjectedMeters(prevpt);
-        auto pm1 = MapProjection::lngLatToProjectedMeters(mappos);  //pts[0]);
-        auto pm2 = MapProjection::lngLatToProjectedMeters(app->getMapCenter());  //pts[1]);
-        auto dr0 = glm::normalize(pm1 - pm0), dr1 = glm::normalize(pm2 - pm1);
-        pvstr += fstring(" | %.1f\u00B0", 180*std::acos(glm::dot(dr0, dr1))/M_PI);
+        double bchange = bearing - 180*lngLatBearing(prevpt, mappos)/M_PI;
+        if(bchange > 180) bchange -= 360;
+        else if(bchange < -180) bchange += 360;
+        pvstr += fstring(" (%+.1f\u00B0)", bchange);
       }
       previewDistText->setText(pvstr.c_str());
     }
