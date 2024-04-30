@@ -13,6 +13,8 @@ global:
     earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
     elevation_sources: []
     marker_font: Open Sans
+    # Open Sans looks very good, especially the italic style
+    primary_font: Open Sans
 
     # HSL: 0 (== 360) is red, 120 is green, 240 is blue
     color:
@@ -472,7 +474,7 @@ layers:
                 text_source: global.names_two_lines
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
-                    family: Open Sans
+                    family: global.primary_font
                     fill: global.color.water_name
                     stroke: { color: global.color.water_halo, width: 2 }
                     style: italic
@@ -515,7 +517,7 @@ layers:
                 text_source: global.names_one_line
                 #buffer: 3px
                 font:
-                    family: Open Sans
+                    family: global.primary_font
                     fill: global.color.water_name
                     stroke: { color: global.color.water_halo, width: 2 }
                     style: italic
@@ -698,7 +700,7 @@ layers:
                     text:
                         text_source: name
                         font:
-                            family: Open Sans
+                            family: global.primary_font
                             fill: global.color.aerialway_name
                             stroke: { color: global.color.aerialway_halo, width: 3 }
                             size: 12px
@@ -735,7 +737,7 @@ layers:
                     text:
                         text_source: global.piste_name_fn
                         font:
-                            family: Open Sans
+                            family: global.primary_font
                             fill: global.piste_color_fn
                             stroke: { color: global.color.piste_halo, width: 3 }
                             size: 12px
@@ -806,7 +808,7 @@ layers:
                     anchor: center
                     text_source: function() { return feature.ref.split(";")[0]; }
                     font:
-                        family: Open Sans
+                        family: global.primary_font
                         size: 10px
                         fill: black
 
@@ -826,7 +828,7 @@ layers:
                     }
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
-                    family: Open Sans
+                    family: global.primary_font
                     fill: global.color.road_name
                     stroke: { color: global.color.road_halo, width: 2 }
                     # 0px to hide by default
@@ -971,7 +973,7 @@ layers:
                 text_source: global.names_one_line
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
-                    family: Open Sans
+                    family: global.primary_font
                     fill: global.color.airport_name
                     stroke: { color: global.color.default_halo, width: 2 }
                     size: [[12, 12px], [13, 14px]]
@@ -1050,7 +1052,7 @@ layers:
                 offset: [0px, -0.5px]
                 repeat_distance: 400px
                 font:
-                    family: Open Sans
+                    family: global.primary_font
                     fill: white  #'function() { return feature.color == "yellow" ? "#555": "white"; }'
                     stroke:
                         color: global.transit_color_fn
@@ -1105,7 +1107,7 @@ layers:
                 priority: global.priority.housenumber
                 text_source: housenumber
                 font:
-                    family: Open Sans
+                    family: global.primary_font
                     size: 11px
                     fill: global.color.housenumber
                     stroke: { color: global.color.housenumber_halo, width: 2px }
@@ -1143,7 +1145,7 @@ layers:
                     text_wrap: 100
                     max_lines: 2
                     font:
-                        family: Open Sans
+                        family: global.primary_font
                         style: italic
                         size: 8pt
                         fill: global.color.default_label
@@ -1165,7 +1167,7 @@ layers:
                     anchor: [right, left, bottom, top]
                     max_lines: 2
                     font:
-                        family: Open Sans
+                        family: global.primary_font
                         size: 12px
                         fill: global.color.default_label
                         stroke: { color: global.color.default_halo, width: 3 }
@@ -1418,7 +1420,7 @@ layers:
                 priority: global.priority.boundary
                 text_source: global.names_one_line  #{ left: "", right: global.names_one_line } -- need to fix tilemaker
                 font:
-                    family: Open Sans
+                    family: global.primary_font
                     size: 12px
                     fill: global.color.place_name
                     stroke: { color: global.color.place_halo, width: 4 }
@@ -1453,7 +1455,7 @@ layers:
                     text_source: global.names_two_lines
                     priority: global.priority.continent
                     font:
-                        family: Open Sans
+                        family: global.primary_font
                         size: 12px
                         fill: global.color.place_name
                         stroke: { color: global.color.place_halo, width: 4 }
@@ -1488,7 +1490,7 @@ layers:
                         #optional: false
                         interactive: true
                         font:
-                            family: Open Sans
+                            family: global.primary_font
                             fill: global.color.place_name
                             stroke: { color: global.color.place_halo, width: 4 }
                             #transform: uppercase
@@ -1511,7 +1513,7 @@ layers:
                     text_source: global.names_two_lines
                     priority: global.priority.place_fn
                     font:
-                        family: Open Sans
+                        family: global.primary_font
                         size: 12px
                         fill: global.color.place_name
                         stroke: { color: global.color.place_halo, width: 4 }

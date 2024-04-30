@@ -145,7 +145,7 @@ int main(int argc, char* argv[])
 
   MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
   app->setDpi(dpi);
-  app->map->setupGL();
+  //app->map->setupGL();
   app->createGUI((SDL_Window*)glfwWin);
 
   app->win->addHandler([&](SvgGui*, SDL_Event* event){

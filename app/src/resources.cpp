@@ -252,11 +252,14 @@ static void sdfDelete(void* uptr)
   delete ctx;
 }
 
+namespace Tangram {
+
 FONScontext* userCreateFontstash(FONSparams* params, int atlasFontPx)
 {
   SDFcontext* ctx = new SDFcontext;
   ctx->fbuffh = ctx->fbuffw = atlasFontPx + 2*params->sdfPadding + 16;
-  ctx->sdfScale = params->sdfPixelDist;
+  // we use dist < 0.0f inside glyph; but for scale > 0, stbtt uses >on_edge_value for inside
+  ctx->sdfScale = -params->sdfPixelDist;
   ctx->sdfOffset = 127;  // stbtt on_edge_value
 
   ctx->fbuff.resize(ctx->fbuffw*ctx->fbuffh, INITIAL_SDF_DIST);
@@ -270,8 +273,6 @@ FONScontext* userCreateFontstash(FONSparams* params, int atlasFontPx)
 }
 
 // rasterizing SVG markers (previous nanosvg impl removed 2023-08-13)
-
-namespace Tangram {
 
 bool userLoadSvg(const char* svg, size_t len, Texture* texture)
 {
