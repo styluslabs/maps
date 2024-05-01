@@ -41,6 +41,7 @@ private:
   Button* saveBtn = NULL;
   Widget* varsContent = NULL;
   Widget* varsSeparator = NULL;
+  TextBox* creditsText = NULL;
   std::unique_ptr<SelectDialog> selectLayerDialog;
   std::unique_ptr<Dialog> importDialog;
 

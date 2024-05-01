@@ -46,7 +46,9 @@ colors:
   - "#F39C12"
   - "#D35400"
 
-#ui: { font: "scenes/fonts/NotoSans-Regular.ttf" }
+ui:
+  reverse_map_btns: true
+  #font: "scenes/fonts/NotoSans-Regular.ttf"
 
 # for debugging
 num_tile_workers: 2

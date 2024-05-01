@@ -135,6 +135,8 @@ mix-base-raster:
 worldcover:
     title: ESA Worldcover
     description: 10m landcover (2021) from Sentinel-2
+    attribution: |
+        ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium
     #filtering: nearest
     max_zoom: 14
     url: 	https://services.terrascope.be/wmts/v2?layer=WORLDCOVER_2021_MAP&style=&tilematrixset=EPSG:3857&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image/png&TileMatrix=EPSG:3857:{z}&TileCol={x}&TileRow={y}
@@ -162,7 +164,9 @@ hillshade-png:
 
 hillshade-usgs:
     title: Hillshading (USGS)
-    description: 1m elevation data (US only)
+    description: 1m elevation data (CON-US only)
+    attribution: |
+        United States 3DEP data courtesy of the U.S. Geological Survey
     layer: true
     layers:
         - source: hillshade

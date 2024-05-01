@@ -5,6 +5,7 @@
 
 class MapsApp;
 class SvgGui;
+class Timer;
 union SDL_Event;
 
 class TouchHandler
@@ -31,6 +32,7 @@ public:
   float dblTapDragScale = 1.0f;
   struct PrevPinchPt { float dist; double t; };
   std::list<PrevPinchPt> prevDists;
+  Timer* tapTimer = NULL;;
 
   enum { TOUCH_NONE, TOUCH_PINCH, TOUCH_ROTATE, TOUCH_SHOVE } multiTouchState;
   enum { TAP_NONE, DBL_TAP_DRAG_PENDING, DBL_TAP_DRAG_ACTIVE } tapState;

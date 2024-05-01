@@ -592,6 +592,18 @@ void MapsSources::populateSceneVars()
     }
   }
   varsSeparator->setVisible(!varsContent->containerNode()->children().empty());
+
+  std::string credits;
+  YAML::Node srcs = app->readSceneValue("sources");
+  for(const auto& src : srcs) {
+    //std::string name = var.first.Scalar();  //.as<std::string>("");
+    std::string credit = src.second["attribution"].as<std::string>("");
+    if(!credit.empty()) credits.append(credit).append("\n");
+  }
+  creditsText->setText(credits.c_str());
+  if(!credits.empty())
+    creditsText->setText(SvgPainter::breakText(
+        static_cast<SvgText*>(creditsText->node), app->getPanelWidth() - 30).c_str());
 }
 
 void MapsSources::populateSourceEdit(std::string key)
@@ -792,12 +804,8 @@ Button* MapsSources::createPanel()
   titleEdit->onChanged = [this](const char*){ sourceModified(); };
   urlEdit->onChanged = [this](const char*){ sourceModified(); };
 
-  Toolbar* sourceTb = createToolbar();
+  Toolbar* sourceTb = createToolbar({titleEdit, saveBtn});
   sourceTb->node->setAttribute("margin", "0 3");
-  sourceTb->addWidget(titleEdit);
-  sourceTb->addWidget(saveBtn);
-
-  Widget* srcEditContent = createColumn();
   varsContent = createColumn();
   varsContent->node->setAttribute("box-anchor", "hfill");
   varsContent->node->setAttribute("margin", "0 10");
@@ -805,12 +813,12 @@ Button* MapsSources::createPanel()
   layersContent->node->setAttribute("box-anchor", "hfill");
   varsSeparator = createHRule(2, "2 6 0 6");
   varsSeparator->setVisible(false);
-  srcEditContent->addWidget(sourceTb);
-  srcEditContent->addWidget(urlEdit);
-  srcEditContent->addWidget(createHRule(2, "8 6 0 6"));
-  srcEditContent->addWidget(varsContent);
-  srcEditContent->addWidget(varsSeparator);
-  srcEditContent->addWidget(layersContent);
+  creditsText = new TextBox(createTextNode(""));
+  creditsText->node->addClass("weak");
+  creditsText->node->setAttribute("font-size", "12");
+  creditsText->node->setAttribute("margin", "8 0");
+  Widget* srcEditContent = createColumn(
+      {sourceTb, urlEdit, createHRule(2, "8 6 0 6"), varsContent, varsSeparator, layersContent, creditsText});
 
   auto editHeader = app->createPanelHeader(MapsApp::uiIcon("edit"), "Edit Source");
   sourceEditPanel = app->createMapPanel(editHeader, srcEditContent);  //, sourceTb);

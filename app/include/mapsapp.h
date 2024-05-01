@@ -16,6 +16,7 @@ class PluginManager;
 
 class SvgGui;
 class Splitter;
+class Pager;
 class Widget;
 class Button;
 class Window;
@@ -145,6 +146,8 @@ public:
   std::unique_ptr<ManageColorsDialog> customColorDialog;
   Widget* panelToSkip = NULL;
   Menu* undeleteMenu = NULL;
+  Pager* panelPager = NULL;
+  std::function<bool(SvgGui*, Widget*, SDL_Event*)> pagerEventFilter;
 
   std::atomic_int_fast64_t storageTotal = {0};
   std::atomic_int_fast64_t storageOffline = {0};

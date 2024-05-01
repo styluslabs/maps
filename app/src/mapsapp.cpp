@@ -66,6 +66,7 @@ static void dumpJSStats(Tangram::Scene* scene)
 {
   std::lock_guard<std::mutex> lock(jsStatsMutex);
   if(scene) {
+    Tangram::logMsg("*** JS stats at %s\n", ftimestr("%FT%H:%M:%S").c_str());
     auto& fns = scene->functions();
     for(size_t ii = 0; ii < fns.size() && ii < jsCallStats.size(); ++ii) {
       if(jsCallStats[ii].ncalls == 0) continue;
@@ -1145,7 +1146,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   panelContent = createBoxLayout();
 
-  Pager* panelPager = new Pager(winnode->selectFirst(".panel-container-narrow"));
+  panelPager = new Pager(winnode->selectFirst(".panel-container-narrow"));
   panelPager->getNextPage = [=](bool left) {
     for(size_t ii = 0; ii < panelPages.size(); ++ii) {
       if(panelPages[ii] == panelHistory.front()) {
@@ -1157,9 +1158,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       }
     }
   };
-  panelPager->onPageChanged = [this](Widget* page){
-    showPanel(page);
-  };
+  panelPager->onPageChanged = [this](Widget* page){ showPanel(page); };
+  pagerEventFilter = std::move(panelPager->eventFilter);  // we set event filter on panel toolbar instead
 
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
   panelSplitter = new Splitter(winnode->selectFirst(".panel-splitter"),
@@ -1331,8 +1331,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsContent->addWidget(mapsWidget);
 
   // recenter, reorient btns
-  //Toolbar* floatToolbar = createVertToolbar();
-  Widget* floatToolbar = createColumn();
   // we could switch to different orientation modes (travel direction, compass direction) w/ multiple taps
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->setMargins(0, 0, 6, 0);
@@ -1422,16 +1420,15 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   gpsStatusBtn->setMargins(0, 0, 6, 0);
   gpsStatusBtn->setVisible(false);
 
-  floatToolbar->addWidget(gpsStatusBtn);
-  floatToolbar->addWidget(reorientBtn);
-  floatToolbar->addWidget(recenterBtn);
-  floatToolbar->node->setAttribute("box-anchor", "bottom right");
-  floatToolbar->setMargins(0, 10, 10, 0);
+  bool revbtns = config["ui"]["reverse_map_btns"].as<bool>(false);
+  Widget* floatToolbar = createColumn({gpsStatusBtn, reorientBtn, recenterBtn});  //createVertToolbar();
+  floatToolbar->node->setAttribute("box-anchor", revbtns ? "bottom left" : "bottom right");
+  floatToolbar->setMargins(10, 10);
   mapsContent->addWidget(floatToolbar);
 
   scaleBar = new ScaleBarWidget(map.get());
-  scaleBar->node->setAttribute("box-anchor", "bottom left");
-  scaleBar->setMargins(0, 0, 6, 10);
+  scaleBar->node->setAttribute("box-anchor", revbtns ? "bottom right" : "bottom left");
+  scaleBar->setMargins(6, 10);
   mapsContent->addWidget(scaleBar);
 
   crossHair = new CrosshairWidget();
@@ -1551,16 +1548,29 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   //static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
   toolbar->addWidget(titleWidget);
 
-  // forward press event not captured by toolbuttons to splitter
-  toolbar->addHandler([this](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
-      panelSplitter->sdlEvent(gui, event);
-      return true;
+  toolbar->eventFilter = [=](SvgGui* gui, Widget* widget, SDL_Event* event){
+    if(gui->pressedWidget == panelPager)
+      return pagerEventFilter(gui, widget, event);
+    else if(gui->pressedWidget == panelSplitter)
+      return false;
+    else if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
+        && event->tfinger.touchId != SDL_TOUCH_MOUSEID && (gui->fingerClicks == 0 || !gui->pressedWidget)) {
+      if(gui->pressedWidget)
+        gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, NULL);  //this);
+      auto& p0 = gui->pressEvent.tfinger;
+      auto& p1 = event->tfinger;
+      if(std::abs(p1.x-p0.x) > std::abs(p1.y-p0.y)) {
+        pagerEventFilter(gui, widget, &gui->pressEvent);  // send to Pager
+        gui->setPressed(panelPager);
+        return pagerEventFilter(gui, widget, event);
+      }
+      else {
+        panelSplitter->sdlEvent(gui, &gui->pressEvent);  // send to splitter
+      }
     }
     return false;
-  });
+  };
 
-  //toolbar->addWidget(stretch);
   return toolbar;
 }
 

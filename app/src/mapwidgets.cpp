@@ -771,7 +771,8 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
       //gui->pressedWidget = this;
       nextPage = NULL;  // shouldn't be necessary
     }
-    else if(event->type == SDL_FINGERMOTION && gui->pressedWidget && gui->pressedWidget->isDescendantOf(this)) {
+    else if(event->type == SDL_FINGERMOTION  //gui->pressedWidget && gui->pressedWidget->isDescendantOf(this)) {
+        && event->tfinger.fingerId == SDL_BUTTON_LMASK && event->tfinger.touchId != SDL_TOUCH_MOUSEID) {
       xoffset = event->tfinger.x - initialPos.x;
       real xc = initialBounds.center().x;
       bool left = initialPos.x > xc;
@@ -779,8 +780,8 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
 
       if(!nextPage) {
         uint32_t dt = event->tfinger.timestamp - initialTime;
-        if(std::abs(xoffset) > 60 && std::abs(event->tfinger.y - initialPos.y) < 20 && dt < 400) {
-
+        if(gui->pressedWidget == this  // allow another handler to make us pressed
+            || (std::abs(xoffset) > 60 && std::abs(event->tfinger.y - initialPos.y) < 20 && dt < 400)) {
           if(getNextPage)
             getNextPage(!left);
           else {
@@ -795,7 +796,6 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
             else if(xoffset < 0 && left && ++it != children.end())  // swiping left
               nextPage = static_cast<Widget*>((*it)->ext(false));
           }
-
           if(nextPage) {
             if(gui->pressedWidget && gui->pressedWidget != this)
               gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, this);
@@ -804,26 +804,27 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
           }
         }
       }
-
-      if(nextPage) {
-        real w = (xoffset < 0 ? 1 : -1)*initialBounds.width();
-        // setLayoutTransform will set bounds dirty and trigger layout; instead, we only want to dirty pixels
-        if(xoffset >= 0 || !behaveAsStack) currPage->setLayoutTransform(Transform2D::translating(xoffset, 0));  // * child->m_layoutTransform;
-        if(xoffset <= 0 || !behaveAsStack) nextPage->setLayoutTransform(Transform2D::translating(xoffset + w, 0));  // * child->m_layoutTransform;
-        currPage->node->invalidateBounds(true);
-        nextPage->node->invalidateBounds(true);
-        redraw();
-      }
     }
-    else if(event->type == SDL_FINGERUP && nextPage) {
+    if(nextPage) {  //&& gui->pressedWidget == this) {
       gui->sendEvent(window(), this, event);
       return true;
     }
-    return nextPage != NULL;  // swallow all events if active
+    return false;
   };
 
   addHandler([this](SvgGui* gui, SDL_Event* event){
-    if((event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED) && nextPage) {
+    if(!nextPage) return false;
+    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == this) {
+      xoffset = event->tfinger.x - initialPos.x;
+      real w = (xoffset < 0 ? 1 : -1)*initialBounds.width();
+      // setLayoutTransform will set bounds dirty and trigger layout; instead, we only want to dirty pixels
+      if(xoffset >= 0 || !behaveAsStack) currPage->setLayoutTransform(Transform2D::translating(xoffset, 0));  // * child->m_layoutTransform;
+      if(xoffset <= 0 || !behaveAsStack) nextPage->setLayoutTransform(Transform2D::translating(xoffset + w, 0));  // * child->m_layoutTransform;
+      currPage->node->invalidateBounds(true);
+      nextPage->node->invalidateBounds(true);
+      redraw();
+    }
+    else if(event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED || event->type == SVGGUI_FINGERCANCEL) {
       currPage->setLayoutTransform(Transform2D());
       nextPage->setLayoutTransform(Transform2D());
       if(std::abs(xoffset) > initialBounds.width()/2) {

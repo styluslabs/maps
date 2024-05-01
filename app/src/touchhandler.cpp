@@ -48,10 +48,22 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
     else if(event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL) {
       if(gui->fingerClicks > 0) {
         app->map->handlePanGesture(prevCOM.x, prevCOM.y, initCOM.x, initCOM.y);  // undo any panning
-        if(gui->fingerClicks == 1)
-          app->tapEvent(initCOM.x, initCOM.y);
-        else if(gui->fingerClicks == 2)  //%2 == 0)
+        if(gui->fingerClicks == 1) {
+          if(event->tfinger.touchId == SDL_TOUCH_MOUSEID)
+            app->tapEvent(initCOM.x, initCOM.y);
+          else {
+            // note delay is less than max double tap delay (400ms)
+            tapTimer = app->gui->setTimer(350, app->win.get(), tapTimer, [this]() {
+              app->tapEvent(initCOM.x, initCOM.y);
+              tapTimer = NULL;
+              return 0;
+            });
+          }
+        }
+        else if(gui->fingerClicks == 2) { //%2 == 0)
+          gui->removeTimer(tapTimer);
           app->doubleTapEvent(initCOM.x, initCOM.y);
+        }
       }
       else if(gui->flingV != Point(0,0)) {
         Point v = Point(gui->flingV).clamp(-2000, 2000)*xyScale;  // pixels per second

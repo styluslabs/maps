@@ -250,6 +250,8 @@ sources:
     osm:
         type: MVT
         cache: stylus-osm
+        attribution: |
+            © OpenStreetMap contributors
         #url: file:///home/mwhite/maps/tilemaker/countries.mbtiles
         #url: file:///home/mwhite/maps/sf.mbtiles  # maptiler 2017 extract
         #url: file:///home/mwhite/maps/SanFrancisco-bbbike.mbtiles   # from bbbike.org, but no bike info!
