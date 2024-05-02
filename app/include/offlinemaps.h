@@ -2,6 +2,8 @@
 
 #include "mapscomponent.h"
 
+struct OfflineMapInfo;
+
 class MapsOffline : public MapsComponent
 {
 public:
@@ -24,7 +26,8 @@ private:
   MarkerID rectMarker = 0;
   Widget* offlineContent = NULL;
 
-  bool importFile(std::string destsrc, std::string srcpath);
+  void openForImport(std::string srcpath);
+  bool importFile(std::string destsrc, std::string srcpath, OfflineMapInfo olinfo, bool hasPois);
   void populateOffline();
   bool cancelDownload(int mapid);
   std::unique_ptr<SelectDialog> selectDestDialog;

@@ -1,7 +1,7 @@
-#define TANGRAM_TRACING
-#include "log.h"
-std::chrono::time_point<std::chrono::system_clock> tangram_log_time_start, tangram_log_time_last;
-std::mutex tangram_log_time_mutex;
+//#define TANGRAM_TRACING
+//#include "log.h"
+//std::chrono::time_point<std::chrono::system_clock> tangram_log_time_start, tangram_log_time_last;
+//std::mutex tangram_log_time_mutex;
 
 #include "mapsearch.h"
 #include "mapsapp.h"
@@ -25,7 +25,7 @@ std::mutex tangram_log_time_mutex;
 #include "ugui/textedit.h"
 
 // building search DB from tiles
-static sqlite3* searchDB = NULL;
+SQLiteDB MapsSearch::searchDB;
 static sqlite3_stmt* insertStmt = NULL;
 
 class DummyStyleContext : public Tangram::StyleContext {
@@ -73,31 +73,47 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
 {
   int64_t rowId = -1;
   auto tileId = task->tileId();
-  SQLiteStmt(searchDB, "SELECT id FROM tiles WHERE z = ? AND x = ? AND y = ?;")
+  searchDB.stmt("SELECT id FROM tiles WHERE z = ? AND x = ? AND y = ?;")
       .bind(tileId.z, tileId.x, tileId.y).exec([&](int64_t id) { rowId = id; });
   if(rowId < 0) {
     LOGTInit(">>> indexing tile %s", tileId.toString().c_str());
     const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
-    SQLiteStmt(searchDB, query).bind(tileId.z, tileId.x, tileId.y).exec();
-    rowId = sqlite3_last_insert_rowid(searchDB);
+    searchDB.stmt(query).bind(tileId.z, tileId.x, tileId.y).exec();
+    rowId = searchDB.lastInsertRowId();
     sqlite3_bind_int64(insertStmt, 6, rowId);  // bind tile_id
 
-    sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
+    searchDB.exec("BEGIN TRANSACTION");
     processTileData(task, insertStmt, searchData);
-    sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
+    searchDB.exec("COMMIT TRANSACTION");
     LOGT("<<< indexing tile %s", tileId.toString().c_str());
     LOGD("Search indexing completed for tile %s", tileId.toString().c_str());
   }
   if(rowId >= 0)
-    SQLiteStmt(searchDB, "INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(rowId, mapId).exec();
+    searchDB.stmt("INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(rowId, mapId).exec();
+}
+
+void MapsSearch::importPOIs(std::string srcpath, int offlineId)
+{
+  static const char* poiImportSQL = R"#(ATTACH DATABASE 'file:%s?mode=ro' AS poidb;
+    BEGIN;
+    INSERT INTO pois SELECT * FROM poidb.pois;
+    INSERT INTO offline_tiles SELECT tile_id, %d FROM poidb.pois GROUP BY tile_id;
+    COMMIT;
+    DETACH DATABASE poidb;
+  )#";
+
+  if(searchDB.exec(fstring(poiImportSQL, srcpath.c_str(), offlineId)))
+    LOG("POI import from %s completed", srcpath.c_str());
+  else
+    LOGE("SQL error importing POIs from %s: %s", srcpath.c_str(), searchDB.errMsg());
 }
 
 void MapsSearch::onDelOfflineMap(int mapId)
 {
   //DELETE FROM tiles WHERE id IN (SELECT tile_id FROM offline_tiles WHERE offline_id = ? AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?));
   // need to use sqlite3_exec for multiple statments in single string
-  SQLiteStmt(searchDB, "DELETE FROM offline_tiles WHERE offline_id = ?;").bind(mapId).exec();
-  SQLiteStmt(searchDB, "DELETE FROM tiles WHERE id NOT IN (SELECT tile_id FROM offline_tiles);").exec();
+  searchDB.stmt("DELETE FROM offline_tiles WHERE offline_id = ?;").bind(mapId).exec();
+  searchDB.stmt("DELETE FROM tiles WHERE id NOT IN (SELECT tile_id FROM offline_tiles);").exec();
 }
 
 std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
@@ -144,34 +160,32 @@ CREATE TRIGGER pois_update AFTER UPDATE ON pois BEGIN
 END;
 COMMIT;)#";
 
-static bool initSearch()
+bool MapsSearch::initSearch()
 {
   std::string dbPath = MapsApp::baseDir + "fts1.sqlite";
-  if(sqlite3_open_v2(dbPath.c_str(), &searchDB, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
-    sqlite3_close(searchDB);
-    searchDB = NULL;
+  if(sqlite3_open_v2(dbPath.c_str(), &searchDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
+    sqlite3_close(searchDB.release());
 
     // DB doesn't exist - create it
-    if(sqlite3_open_v2(dbPath.c_str(), &searchDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
+    if(sqlite3_open_v2(dbPath.c_str(), &searchDB.db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
       LOGE("Error creating %s", dbPath.c_str());
-      sqlite3_close(searchDB);
-      searchDB = NULL;
+      sqlite3_close(searchDB.release());
       return false;
     }
 
-    sqlite3_exec(searchDB, POI_SCHEMA, NULL, NULL, NULL);
+    searchDB.exec(POI_SCHEMA);
     // search history - NOCASE causes comparisions to be case-insensitive but still stores case
-    DB_exec(searchDB, "CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+    searchDB.exec("CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
   }
   //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF; PRAGMA count_changes=OFF; PRAGMA journal_mode=MEMORY; PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
 
   char const* stmtStr = "INSERT INTO pois (name,tags,props,lng,lat,tile_id) VALUES (?,?,?,?,?,?);";
-  if(sqlite3_prepare_v2(searchDB, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
-    LOGE("sqlite3_prepare_v2 error: %s\n", sqlite3_errmsg(searchDB));
+  if(sqlite3_prepare_v2(searchDB.db, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
+    LOGE("sqlite3_prepare_v2 error: %s\n", searchDB.errMsg());
     return false;
   }
 
-  if(sqlite3_create_function(searchDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
+  if(sqlite3_create_function(searchDB.db, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
     LOGE("sqlite3_create_function: error creating osmSearchRank for search DB");
   return true;
 }
@@ -223,12 +237,12 @@ bool MapsSearch::indexMBTiles()
     sqlite3_close(tileDB);
 
     tileCount = (max_row-min_row+1)*(max_col-min_col+1);
-    sqlite3_exec(searchDB, "BEGIN TRANSACTION", NULL, NULL, NULL);
+    searchDB.exec("BEGIN TRANSACTION");
     auto tilecb = TileTaskCb{[searchData, this](std::shared_ptr<TileTask> task) {
       if(task->hasData())
         processTileData(task.get(), insertStmt, searchData);
       if(--tileCount == 0) {
-        sqlite3_exec(searchDB, "COMMIT TRANSACTION", NULL, NULL, NULL);
+        searchDB.exec("COMMIT TRANSACTION");
         //sqlite3_finalize(insertStmt);  // then ... stmt = NULL;
         LOG("Search index built.\n");
       }
@@ -303,7 +317,7 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
 {
   const char* query = "SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON pois.ROWID = pois_fts.ROWID WHERE pois_fts "
       "MATCH ? AND pois.lng >= ? AND pois.lat >= ? AND pois.lng <= ? AND pois.lat <= ? ORDER BY rank LIMIT 1000;";
-  SQLiteStmt(searchDB, query)
+  searchDB.stmt(query)
       .bind(queryStr, lnglat00.longitude, lnglat00.latitude, lngLat11.longitude, lngLat11.latitude)
       .exec([&](int rowid, double lng, double lat, double score, const char* json){
     addMapResult(rowid, lng, lat, score, json);
@@ -320,7 +334,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
   std::string query = fstring("SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON"
       " pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;",
       sortByDist ? "-1.0" : "rank");
-  SQLiteStmt(searchDB, query).bind(queryStr, offset).exec([&](int rowid, double lng, double lat,
+  searchDB.stmt(query).bind(queryStr, offset).exec([&](int rowid, double lng, double lat,
       double score, const char* json){ addListResult(rowid, lng, lat, score, json); });
   moreListResultsAvail = listResults.size() - offset >= 20;
 }
@@ -483,7 +497,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   if(phase == EDITING) {
     std::vector<std::string> autocomplete;
-    SQLiteStmt(searchDB, "SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;")
+    searchDB.stmt("SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;")
         .bind(query + "%", query.size() > 1 && providerIdx == 0 ? 5 : 25) // LIMIT 5 to leave room for results
         .exec([&](const char* q){ autocomplete.emplace_back(q); });
     populateAutocomplete(autocomplete);
@@ -495,7 +509,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   }
 
   if(phase == RETURN && query.size() > 1) {
-    SQLiteStmt(searchDB, "INSERT OR REPLACE INTO history (query) VALUES (?);").bind(query).exec();
+    searchDB.stmt("INSERT OR REPLACE INTO history (query) VALUES (?);").bind(query).exec();
     // handle lat,lng string
     if(isDigit(query[0]) || query[0] == '-') {
       LngLat pos = parseLngLat(query.c_str());
@@ -552,9 +566,7 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
 
     Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
     discardBtn->onClicked = [=](){
-      DB_exec(searchDB, "DELETE FROM history WHERE query = ?;", NULL, [&](sqlite3_stmt* stmt){
-        sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
-      });
+      searchDB.stmt("DELETE FROM history WHERE query = ?;").bind(query).exec();
       searchText(queryText->text(), EDITING);  // refresh
     };
     container->addWidget(discardBtn);
@@ -805,7 +817,7 @@ Button* MapsSearch::createPanel()
         // TODO: pinned searches - timestamp column = INF?
         int uiWidth = app->getPanelWidth();
         const char* sql = "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;";
-        SQLiteStmt(searchDB, sql).exec([&](std::string s){
+        searchDB.stmt(sql).exec([&](std::string s){
           Button* item = searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
             app->showPanel(searchPanel);
             queryText->setText(s.c_str());

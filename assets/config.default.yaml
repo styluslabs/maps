@@ -20,6 +20,8 @@ storage:
   purge_offline: true
   # max number of simultaneous download requests
   offline_download_rate: 20
+  #import_pois: true  -- default is true
+  #export_pois: true  -- default is false
 
 view:
   lng: -122.434668
@@ -47,7 +49,7 @@ colors:
   - "#D35400"
 
 ui:
-  reverse_map_btns: true
+  reverse_map_btns: false
   #font: "scenes/fonts/NotoSans-Regular.ttf"
 
 # for debugging

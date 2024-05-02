@@ -306,7 +306,11 @@ bool OfflineDownloader::mbtilesImport(SQLiteDB& tileDB)
     return false;
   }
 
-  if(!searchData.empty()) {
+  if(searchData.empty()) {}
+  else if(searchData[0].layer == "__IMPORT__") {
+    MapsSearch::importPOIs(searchData[0].fields[0], offlineId);
+  }
+  else {
     const char* newtilesSql = "SELECT tile_data, tile_column, tile_row FROM src.tiles WHERE zoom_level = ?";
     tileDB.stmt(newtilesSql).bind(srcMaxZoom).exec([&](sqlite3_stmt* stmt){
       if(canceled) return;
@@ -515,35 +519,17 @@ void MapsOffline::resumeDownloads()
   });
 }
 
-bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
+void MapsOffline::openForImport(std::string srcpath)
 {
-  // loading source will ensure mbtiles cache is created if enabled for source
-  if(destsrc != app->mapsSources->currSource)
-    app->mapsSources->rebuildSource(destsrc, false);
-
   SQLiteDB srcDB;
   if(sqlite3_open_v2(srcpath.c_str(), &srcDB.db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
     MapsApp::messageBox("Import map", fstring("Cannot import from %s: cannot open file", srcpath.c_str()), {"OK"});
-    return false;
+    return;
   }
-  std::string srcFmt;
-  srcDB.stmt("SELECT value FROM metadata WHERE name = 'format';").exec([&](const char* fmt){ srcFmt = fmt; });
-
-  // check vector vs raster; mbtiles cache does not set json metadata field, so we cannot compare that
-  Tangram::TileSource* tileSource = NULL;
-  for(auto& tilesrc : app->map->getScene()->tileSources()) {
-    if(!tilesrc->isRaster() == (srcFmt == "pbf")) {
-      tileSource = tilesrc.get();
-      break;
-    }
-  }
-  std::string destpath = tileSource ? tileSource->offlineInfo().cacheFile : "";
-  if(destpath.empty())
-    destpath = tileSource->offlineInfo().url;
-  if(destpath.empty() || Url::getPathExtension(destpath) != "mbtiles") {
-    MapsApp::messageBox("Import map", "Cannot import to selected source: no cache file found", {"OK"});
-    return false;
-  }
+  std::string srcFmt, desc, pois;
+  srcDB.stmt("SELECT value FROM metadata WHERE name = 'format';").onerow(srcFmt);
+  srcDB.stmt("SELECT value FROM metadata WHERE name = 'desc';").onerow(desc);
+  bool hasPois = srcDB.stmt("SELECT name FROM sqlite_master WHERE type='table' AND name='pois';").onerow(pois);
 
   LngLat lngLat00, lngLat11;
   int maxZoom = 0;
@@ -556,30 +542,99 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath)
     lngLat11 = MapProjection::projectedMetersToLngLat(
         MapProjection::tileSouthWestCorner(TileID(max_col+1, (1 << max_zoom) - 1 - max_row - 1, max_zoom)));
   });
-  sqlite3_close(srcDB.release());  // probably not necessary
+  sqlite3_close(srcDB.release());
   if(maxZoom <= 0) {
     MapsApp::messageBox("Import map", fstring("Cannot import from %s: no tiles found", srcpath.c_str()), {"OK"});
-    return false;
+    return;
   }
 
   int offlineId = int(time(NULL));
+  OfflineMapInfo olinfo = {offlineId, lngLat00, lngLat11, 0, maxZoom, {}, false};
+
+  if(app->mapsSources->mapSources[desc]) {
+    if(importFile(desc, srcpath, olinfo, hasPois))
+      populateOffline();
+  }
+  else {
+    std::vector<std::string> layerKeys;
+    std::vector<std::string> layerTitles;
+    for(const auto& src : app->mapsSources->mapSources) {
+      if(srcFmt == "pbf" ? src.second["scene"] : src.second["url"]) {
+        layerKeys.push_back(src.first.Scalar());
+        layerTitles.push_back(src.second["title"].Scalar());
+      }
+    }
+    if(!selectDestDialog)
+      selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
+    selectDestDialog->addItems(layerTitles);
+    selectDestDialog->onSelected = [=](int idx){
+      if(importFile(layerKeys[idx], srcpath, olinfo, hasPois))
+        populateOffline();
+    };
+    showModalCentered(selectDestDialog.get(), MapsApp::gui);
+  }
+}
+
+bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMapInfo olinfo, bool hasPois)
+{
+  // loading source will ensure mbtiles cache is created if enabled for source
+  if(destsrc != app->mapsSources->currSource)
+    app->mapsSources->rebuildSource(destsrc, false);
+
+  // check vector vs raster; mbtiles cache does not set json metadata field, so we cannot compare that
+  auto& tilesrcs = app->map->getScene()->tileSources();
+  auto* tileSource = tilesrcs.empty() ? NULL : tilesrcs.front().get();
+  std::string destpath = tileSource ? tileSource->offlineInfo().cacheFile : "";
+  if(destpath.empty())
+    destpath = tileSource->offlineInfo().url;
+  if(destpath.empty() || Url::getPathExtension(destpath) != "mbtiles") {
+    MapsApp::messageBox("Import map", "Cannot import to selected source: no cache file found", {"OK"});
+    return false;
+  }
+
   // note that we set done = 1 since import is not resumable
   std::string maptitle = FSPath(srcpath).baseName();
   const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title,done) VALUES (?,?,?,?,?,?,?,?,?);";
-  SQLiteStmt(app->bkmkDB, query).bind(offlineId, lngLat00.longitude, lngLat00.latitude,
-      lngLat11.longitude, lngLat11.latitude, maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
-  app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(lngLat00, lngLat11, {32}), 0.5f);
+  SQLiteStmt(app->bkmkDB, query).bind(olinfo.id, olinfo.lngLat00.longitude, olinfo.lngLat00.latitude,
+      olinfo.lngLat11.longitude, olinfo.lngLat11.latitude, olinfo.maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
+  app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(olinfo.lngLat00, olinfo.lngLat11, {32}), 0.5f);
 
-  OfflineMapInfo olinfo = {offlineId, lngLat00, lngLat11, 0, maxZoom, {}, false};
   olinfo.sources.push_back({tileSource->name(), destpath, "file:///" + srcpath, {}, tileSource->maxZoom(), {}});
-  if(!tileSource->isRaster())
+  if(hasPois && app->config["storage"]["import_pois"].as<bool>(true))
+    olinfo.sources.back().searchData.push_back(YAML::Load(fstring("[ { layer: __IMPORT__, layers: [\"%s\"] } ]", srcpath.c_str())));
+  else if(!tileSource->isRaster())
     Tangram::YamlPath("global.search_data").get(app->map->getScene()->config(), olinfo.sources.back().searchData);
   //offlinePending.push_back(std::move(olinfo));
 
-  queueOfflineTask(offlineId, [olinfo=std::move(olinfo)](){
+  queueOfflineTask(olinfo.id, [olinfo=std::move(olinfo)](){
     offlineDownloaders.emplace_back(new OfflineDownloader(*MapsApp::platform, olinfo, olinfo.sources.back()));
     currTilesTotal += offlineDownloaders.back()->remainingTiles();
   });
+
+  if(!hasPois && app->config["storage"]["export_pois"].as<bool>(false)) {
+    // queue task to run after import completed
+    queueOfflineTask(-1, [srcpath, offlineId=olinfo.id](){
+      static const char* poiExportSQL = R"#(ATTACH DATABASE 'file:%s?mode=ro' AS searchdb;
+        BEGIN;
+        DROP TABLE IF EXISTS pois;
+        CREATE TABLE pois AS SELECT * FROM searchdb.pois WHERE tile_id IN
+            (SELECT tile_id FROM searchdb.offline_tiles WHERE offline_id = %d);
+        COMMIT;
+        DETACH DATABASE searchdb;
+      )#";
+      std::string searchDB = MapsApp::baseDir + "fts1.sqlite";
+      SQLiteDB poiOutDB;
+      if(sqlite3_open_v2(srcpath.c_str(), &poiOutDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
+        LOGE("Error opening %s for POI export", srcpath.c_str());
+        return;
+      }
+      if(poiOutDB.exec(fstring(poiExportSQL, searchDB.c_str(), offlineId)))
+        LOG("POI export to %s completed", srcpath.c_str());
+      else
+        LOGE("SQL error exporting POIs to %s: %s", srcpath.c_str(), poiOutDB.errMsg());
+    });
+  }
+
   return true;
 }
 
@@ -702,27 +757,7 @@ Widget* MapsOffline::createPanel()
   downloadDialog.reset(createInputDialog({downloadText, titleEdit, maxZoomRow}, "Download", "Start", downloadFn));
 
   Button* openBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Install Offline Map");
-
-  auto openMapFn = [this](const char* outPath){
-    std::string srcpath(outPath);
-    std::vector<std::string> layerKeys;
-    std::vector<std::string> layerTitles;
-    for(const auto& src : app->mapsSources->mapSources) {
-      if(src.second["scene"] || src.second["url"]) {  // vector or raster map
-        layerKeys.push_back(src.first.Scalar());
-        layerTitles.push_back(src.second["title"].Scalar());
-      }
-    }
-    if(!selectDestDialog)
-      selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
-    selectDestDialog->addItems(layerTitles);
-    selectDestDialog->onSelected = [=](int idx){
-      if(importFile(layerKeys[idx], srcpath))
-        populateOffline();
-    };
-    showModalCentered(selectDestDialog.get(), MapsApp::gui);
-  };
-
+  auto openMapFn = [this](const char* outPath){ openForImport(outPath); };
   openBtn->onClicked = [=](){ MapsApp::openFileDialog({{"MBTiles files", "mbtiles"}}, openMapFn); };
 
   Button* saveBtn = createToolbutton(MapsApp::uiIcon("download"), "Save Offline Map");
