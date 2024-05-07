@@ -233,7 +233,7 @@ function relation_function(rel)
       local leisure = rel:Find("leisure")
       local area = rel:Area();
       rel:Layer("landuse", true)
-      SetMinZoomByArea(rel)
+      SetMinZoomByArea(area)
       rel:Attribute("class", boundary)
       rel:Attribute("boundary", boundary)
       if leisure~="" then rel:Attribute("leisure", leisure) end
@@ -241,7 +241,7 @@ function relation_function(rel)
       rel:AttributeNumeric("area", area)
       -- write POI at centroid
       rel:LayerAsCentroid("poi")
-      SetMinZoomByArea(rel)
+      SetMinZoomByArea(area)
       rel:Attribute("class", boundary)
       rel:Attribute("boundary", boundary)
       if leisure~="" then rel:Attribute("leisure", leisure) end
@@ -467,7 +467,7 @@ function way_function(way)
     SetZOrder(way)
     way:Attribute("class", man_made)
     way:Attribute("man_made", man_made)
-    SetMinZoomByArea(way)
+    SetMinZoomByArea(way:Area())
   end
 
   -- 'Ferry'
@@ -523,7 +523,7 @@ function way_function(way)
   if building~="" then
     way:Layer("building", true)
     SetBuildingHeightAttributes(way)
-    SetMinZoomByArea(way)
+    SetMinZoomByArea(way:Area())
 
     -- housenumber is also commonly set on poi nodes, but not very useful w/o at least street name too
     --"housenumber":      { "minzoom": 14, "maxzoom": 14 },
@@ -564,7 +564,7 @@ function way_function(way)
     if class=="lake" and way:Find("wikidata")=="Q192770" then return end  -- crazy lake in Finland
     if class=="ocean" and isClosed and (way:AreaIntersecting("ocean")/way:Area() > 0.98) then return end
     way:Layer("water", true)
-    SetMinZoomByArea(way)
+    SetMinZoomByArea(way:Area())
     way:Attribute("class", class)
     way:Attribute("water", water~="" and water or waterbody)
 
@@ -581,13 +581,22 @@ function way_function(way)
     return -- in case we get any landuse processing
   end
 
+  -- special case since valleys are mapped as ways
+  if natural=="valley" then
+    local len = way:Length()
+    way:Layer("landuse", false)
+    SetMinZoomByArea(len*len);
+    way:Attribute("natural", natural)
+    SetNameAttributes(way)
+  end
+
   -- landuse/landcover
   --"landcover":        { "minzoom":  0, "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "landuse" },
   --"park":             { "minzoom": 11, "maxzoom": 14 },
   local landuse_poi = false
   if landuseAreas[landuse] or naturalAreas[natural] or leisureAreas[leisure] or amenityAreas[amenity] or tourismAreas[tourism] then
     way:Layer("landuse", true)
-    SetMinZoomByArea(way)
+    SetMinZoomByArea(way:Area())
     --way:Attribute("class", landuseKeys[l])
     --if landuse=="residential" and way:Area()<ZRES8^2 then way:MinZoom(8) else SetMinZoomByArea(way) end
     if landuse~="" then way:Attribute("landuse", landuse) end
@@ -603,7 +612,7 @@ function way_function(way)
   local park_boundary = parkValues[boundary]
   if park_boundary or leisure=="nature_reserve" then
     way:Layer("landuse", true)
-    SetMinZoomByArea(way)
+    SetMinZoomByArea(way:Area())
     way:Attribute("class", park_boundary and boundary or leisure)
     if park_boundary then way:Attribute("boundary", boundary) end
     if leisure~="" then way:Attribute("leisure", leisure) end
@@ -712,8 +721,8 @@ function SetBrunnelAttributes(obj)
 end
 
 -- Set minimum zoom level by area
-function SetMinZoomByArea(way)
-  local area=way:Area()
+function SetMinZoomByArea(area)
+  --local area=way:Area()
   if     area>ZRES5^2  then way:MinZoom(6)
   elseif area>ZRES6^2  then way:MinZoom(7)
   elseif area>ZRES7^2  then way:MinZoom(8)

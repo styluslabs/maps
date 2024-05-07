@@ -350,6 +350,7 @@ void MapsTracks::populateStats(GpxFile* track)
     activeTrack = track;
     retryBtn->setVisible(false);
   }
+  trackPlot->zoomScale = 1.0;
   trackPlot->setTrack(track->activeWay()->pts, track->waypoints);
 }
 
@@ -441,6 +442,7 @@ void MapsTracks::updateStats(std::vector<Waypoint>& locs)
 
   sparkStats->setVisible(locs.size() > 1);
   trackSpark->setTrack(locs);
+  plotVsTimeBtn->setVisible(ttot > 0);
 }
 
 void MapsTracks::updateDistances()
@@ -621,26 +623,6 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   noteText->setText(wpt.desc.c_str());
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
 
-  /*auto titleEdit = createTitledTextEdit("Name");
-  auto noteEdit = createTitledTextEdit("Note");
-  titleEdit->setText(wpt.name.c_str());
-  noteEdit->setText(wpt.desc.c_str());
-
-  auto onAcceptEdit = [=](){
-    auto it = track->findWaypoint(uid);
-    it->name = titleEdit->text();
-    it->desc = noteEdit->text();
-    if(it->marker) {
-      app->map->markerSetProperties(it->marker,
-          {{{"name", it->name}, {"color", track->style}, {"priority", it->marker}}});
-    }
-    waypointsDirty = true;
-    // hack around problem of setPickResult destroying this closure
-    refreshWayptPlaceInfo(track, *it);
-  };
-  //auto editContent = createInlineDialog({titleEdit, noteEdit}, "Apply", onAcceptEdit, onCancelEdit);
-  editWayptDialog.reset(createInputDialog({titleEdit, noteEdit}, "Edit Waypoint", "Apply", onAcceptEdit));*/
-
   Widget* toolRow = createRow();
   Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), track->title.c_str(), true);
   Button* removeBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete");
@@ -659,8 +641,6 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
       app->setPickResult(app->pickResultCoord, wp.name, app->pickResultProps);
       setPlaceInfoSection(track, wp);
     });
-    //showModalCentered(editWayptDialog.get(), MapsApp::gui);  //showInlineDialogModal(editContent);
-    //app->gui->setFocused(titleEdit->text().empty() ? titleEdit : noteEdit, SvgGui::REASON_TAB);
   };
 
   Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
@@ -948,8 +928,15 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     else {
       if(!activeTrack || !findPickedWaypoint(activeTrack)) {  // navRoute is not in tracks
         for(GpxFile& track : tracks) {
-          if(track.visible && &track != activeTrack && findPickedWaypoint(&track))
+          if(!track.visible || &track == activeTrack) continue;
+          if(findPickedWaypoint(&track)) break;
+          if(track.marker->onPicked(app->pickedMarkerId)) {
+            if(!track.routes.empty() || track.tracks.empty())
+              populateWaypoints(&track);
+            else
+              populateStats(&track);
             break;
+          }
         }
       }
     }
@@ -1138,16 +1125,16 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
   TextEdit* editTrackTitle = createTitledTextEdit("Title");
   ColorPicker* editTrackColor = createColorPicker(app->colorPickerMenu, Color::BLUE);
   editTrackColor->node->setAttribute("box-anchor", "bottom");
-  CheckBox* editTrackCopyCb = createCheckBox("Save as copy", false);
-  editTrackCopyCb->node->setAttribute("box-anchor", "left");
+  //CheckBox* editTrackCopyCb = createCheckBox("Save as copy", false);
+  //editTrackCopyCb->node->setAttribute("box-anchor", "left");
   Widget* editTrackRow = createRow();
   editTrackRow->addWidget(editTrackTitle);
   editTrackRow->addWidget(editTrackColor);
-  Widget* saveTrackContent = createInlineDialog({editTrackRow, editTrackCopyCb}, "Save", [=](){
+  auto saveTrackFn = [=](bool savecopy){
     auto title = editTrackTitle->text();
     bool sametitle = title == activeTrack->title;
     // add entry for original track if making copy
-    if(activeTrack->rowid >= 0 && editTrackCopyCb->isChecked()) {
+    if(activeTrack->rowid >= 0 && savecopy) {
       tracks.emplace_back(activeTrack->title, activeTrack->desc, activeTrack->filename,
           activeTrack->style, activeTrack->rowid, activeTrack->archived);
     }
@@ -1160,7 +1147,7 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
     if(titleWidget)
       static_cast<TextLabel*>(titleWidget)->setText(activeTrack->title.c_str());
     if(activeTrack->rowid >= 0 || activeTrack == &recordedTrack) {
-      if(editTrackCopyCb->isChecked()) {
+      if(savecopy) {
         activeTrack->rowid = -1;
         activeTrack->filename.clear();
         if(sametitle)
@@ -1172,14 +1159,23 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
     }
     if(editTrackBtn && editTrackBtn->isChecked())
       editTrackBtn->onClicked();  // close edit track view
-  }, [=](){ if(editTrackBtn && editTrackBtn->isChecked()) editTrackBtn->onClicked(); });
-  editTrackTitle->onChanged = [=](const char* s){ saveTrackContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
+  };
+  Widget* saveTrackContent = createInlineDialog({editTrackRow}, "Save Copy", [=](){ saveTrackFn(true); },
+      [=](){ if(editTrackBtn && editTrackBtn->isChecked()) editTrackBtn->onClicked(); });
+
+  Button* saveCopyBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
+  saveCopyBtn->setIcon(NULL);
+  Button* saveBtn = createToolbutton(uiIcon("save"), "Save", true);
+  saveBtn->onClicked = [=](){ saveTrackFn(false); };
+  saveCopyBtn->parent()->addWidget(saveBtn);
+
+  editTrackTitle->onChanged = [=](const char* s){ saveCopyBtn->setEnabled(s[0]); };
   saveTrackContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
       editTrackTitle->setText(activeTrack->title.c_str());
       editTrackColor->setColor(parseColor(activeTrack->style, Color::BLUE));
-      editTrackCopyCb->setChecked(false);
-      editTrackCopyCb->setVisible(activeTrack->rowid >= 0);
+      //editTrackCopyCb->setChecked(false);
+      saveCopyBtn->setVisible(activeTrack->rowid >= 0);
     }
     return false;
   });
@@ -1201,19 +1197,21 @@ Button* MapsTracks::createPanel()
 
   // bearing? direction (of travel)?
   //statsContent->addWidget(createStatsRow({"Latitude", "track-latitude", "Longitude", "track-longitude"}));
-  statsContent->addWidget(createStatsRow({"Altitude", "track-altitude", "Speed", "track-speed"}));
-  statsContent->addWidget(createStatsRow({"Total time", "track-time", "Moving time", "track-moving-time"}));
-  statsContent->addWidget(createStatsRow({"Distance", "track-dist", "Avg speed", "track-avg-speed"}));
-  statsContent->addWidget(createStatsRow({"Ascent", "track-ascent", "Descent", "track-descent"}));
-  statsContent->addWidget(createStatsRow({"Ascent speed", "track-ascent-speed", "Descent speed", "track-descent-speed"}));
+  Widget* statsCol = createColumn({
+      createStatsRow({"Altitude", "track-altitude", "Speed", "track-speed"}),
+      createStatsRow({"Total time", "track-time", "Moving time", "track-moving-time"}),
+      createStatsRow({"Distance", "track-dist", "Avg speed", "track-avg-speed"}),
+      createStatsRow({"Ascent", "track-ascent", "Descent", "track-descent"}),
+      createStatsRow({"Ascent speed", "track-ascent-speed", "Descent speed", "track-descent-speed"}) });
+  statsContent->addWidget(statsCol);
 
   Button* vertAxisSelBtn = createToolbutton(NULL, "Altitude", true);
   Menu* vertAxisMenu = createMenu(Menu::VERT_LEFT);
   vertAxisSelBtn->setMenu(vertAxisMenu);
   Button* plotAltiBtn = createCheckBoxMenuItem("Altitude");
   Button* plotSpeedBtn = createCheckBoxMenuItem("Speed");
-  vertAxisMenu->addWidget(plotAltiBtn);
-  vertAxisMenu->addWidget(plotSpeedBtn);
+  vertAxisMenu->addItem(plotAltiBtn);
+  vertAxisMenu->addItem(plotSpeedBtn);
   plotAltiBtn->setChecked(true);
 
   plotAltiBtn->onClicked = [=](){
@@ -1242,11 +1240,11 @@ Button* MapsTracks::createPanel()
 
   Button* horzAxisSelBtn = createToolbutton(NULL, "Distance", true);
   Button* plotVsDistBtn = createCheckBoxMenuItem("Distance", "#radiobutton");
-  Button* plotVsTimeBtn = createCheckBoxMenuItem("Time", "#radiobutton");
+  plotVsTimeBtn = createCheckBoxMenuItem("Time", "#radiobutton");
   Menu* horzAxisMenu = createMenu(Menu::VERT_LEFT);
   horzAxisSelBtn->setMenu(horzAxisMenu);
-  horzAxisMenu->addWidget(plotVsDistBtn);
-  horzAxisMenu->addWidget(plotVsTimeBtn);
+  horzAxisMenu->addItem(plotVsDistBtn);
+  horzAxisMenu->addItem(plotVsTimeBtn);
   plotVsDistBtn->setChecked(true);
 
   auto horzAxisSelFn = [=](bool vsdist){
@@ -1259,20 +1257,16 @@ Button* MapsTracks::createPanel()
   plotVsTimeBtn->onClicked = [=](){ horzAxisSelFn(false); };
   plotVsDistBtn->onClicked = [=](){ horzAxisSelFn(true); };
 
-  Toolbar* axisSelRow = createToolbar();
-  axisSelRow->addWidget(vertAxisSelBtn);
-  axisSelRow->addWidget(new TextBox(createTextNode("vs.")));
-  axisSelRow->addWidget(horzAxisSelBtn);
-  statsContent->addWidget(axisSelRow);
+  Toolbar* axisSelRow = createToolbar({vertAxisSelBtn, new TextBox(createTextNode("vs.")), horzAxisSelBtn});
 
   trackPlot = new TrackPlot();
   trackPlot->node->setAttribute("box-anchor", "hfill");
-  trackPlot->setMargins(1, 5);
-
-  statsContent->addWidget(trackPlot);
 
   trackSliders = createTrackSliders();
-  statsContent->addWidget(trackSliders);
+
+  // need enough margin to move slider handles away from edge of screen
+  Widget* plotContent = createColumn({axisSelRow, trackPlot, trackSliders}, "1 15", "", "hfill");
+  statsContent->addWidget(plotContent);
 
   trackSliders->onStartHandleChanged = [=](){
     cropStart = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
@@ -1378,11 +1372,7 @@ Button* MapsTracks::createPanel()
     populateStats(activeTrack);
   });
 
-  Toolbar* editTrackTb = createToolbar();
-  editTrackTb->addWidget(cropTrackBtn);
-  editTrackTb->addWidget(deleteSegmentBtn);
-  editTrackTb->addWidget(createStretch());
-  editTrackTb->addWidget(moreTrackOptionsBtn);
+  Toolbar* editTrackTb = createToolbar({cropTrackBtn, deleteSegmentBtn, createStretch(), moreTrackOptionsBtn});
   editTrackTb->setVisible(false);
   statsContent->addWidget(editTrackTb);
 
@@ -1435,17 +1425,19 @@ Button* MapsTracks::createPanel()
     bool show = !editTrackBtn->isChecked();
     editTrackBtn->setChecked(show);
     saveTrackContent->setVisible(show);
+    statsCol->setVisible(!show);  // hide stats when editing
     if(activeTrack != &recordedTrack)
       setTrackEdit(show);
   };
 
-  auto hoverFn = [=](real s){
+  trackSliders->onValueChanged = [=](real s){
     if(editTrackTb->isVisible()) return;  // disabled when editing
     if(s < 0 || s > 1 || !activeTrack) {
       app->map->markerSetVisible(trackHoverMarker, false);
       return;
     }
-    trackHoverLoc = interpTrack(activeTrack->activeWay()->pts, s);
+    real pos = trackPlot->plotPosToTrackPos(s);
+    trackHoverLoc = interpTrack(activeTrack->activeWay()->pts, pos);
     if(trackHoverMarker == 0) {
       trackHoverMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(trackHoverMarker, "layers.track-marker.draw.marker");
@@ -1455,8 +1447,6 @@ Button* MapsTracks::createPanel()
     // or fixed color? or yellow?
     app->map->markerSetProperties(trackHoverMarker, {{{"color", activeTrack->style}}});
   };
-  //trackPlot->onHovered = hoverFn;
-  trackSliders->onValueChanged = hoverFn;
 
   trackPlot->onPanZoom = [=](){
     real start = trackPlot->trackPosToPlotPos(cropStart);

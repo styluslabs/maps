@@ -85,14 +85,16 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   altTimePlot.addPoint(0, -1000);  //locs.front().loc.time
   for(auto& wpt : locs) {
     const Location& tpt = wpt.loc;
-    altDistPlot.addPoint(Point(wpt.dist, MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084));
-    altTimePlot.addPoint(Point(tpt.time - minTime, MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084));
-    minAlt = std::min(minAlt, tpt.alt);
-    maxAlt = std::max(maxAlt, tpt.alt);
-    spdDistPlot.addPoint(Point(wpt.dist, MapsApp::metricUnits ? tpt.spd*3600*0.001 : tpt.spd*3600*0.000621371));
-    spdTimePlot.addPoint(Point(tpt.time - minTime, MapsApp::metricUnits ? tpt.spd*3600*0.001 : tpt.spd*3600*0.000621371));
-    minSpd = std::min(minSpd, tpt.spd);
-    maxSpd = std::max(maxSpd, tpt.spd);
+    double alt = MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084;
+    altDistPlot.addPoint(Point(wpt.dist, alt));
+    altTimePlot.addPoint(Point(tpt.time - minTime, alt));
+    minAlt = std::min(minAlt, alt);
+    maxAlt = std::max(maxAlt, alt);
+    double spd = MapsApp::metricUnits ? tpt.spd*3600*0.001 : tpt.spd*3600*0.000621371;
+    spdDistPlot.addPoint(Point(wpt.dist, spd));
+    spdTimePlot.addPoint(Point(tpt.time - minTime, spd));
+    minSpd = std::min(minSpd, spd);
+    maxSpd = std::max(maxSpd, spd);
   }
   altDistPlot.addPoint(locs.back().dist, -1000);
   altTimePlot.addPoint(locs.back().loc.time - minTime, -1000);
@@ -113,6 +115,7 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
     if(!wpts[ii].name.empty() && wpts[ii].dist > 0)
       waypoints.push_back(wpts[ii]);
   }
+  updateZoomOffset(0);
 }
 
 // return the number w/ the fewest significant digits between x0 and x1
@@ -135,20 +138,19 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->clipRect(Rect::wh(w, h));
   p->fillRect(Rect::wh(w, h), Color::WHITE);
 
-  // labels
+  // determine width of vertical axis labels (which will be right aligned!)
   p->setFillBrush(Color::BLACK);
   p->setFontSize(12);
   p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real labelw = 0;
   int nvert = 5;
   real dh = (maxAlt - minAlt)/nvert;
+  const char* vertlbl = vertAxis ? "%.0f" : (MapsApp::metricUnits ? "%.0f m" : "%.0f ft");
   for(int ii = 0; ii < nvert; ++ii)
-    labelw = std::max(labelw, p->textBounds(0, 0, fstring("%.0f", minAlt + ii*dh).c_str()));
-  p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
-  for(int ii = 0; ii < nvert; ++ii)
-    p->drawText(labelw, h*(1-real(ii)/nvert), fstring("%.0f", minAlt + ii*dh).c_str());
+    labelw = std::max(labelw, p->textBounds(0, 0, fstring(vertlbl, minAlt + ii*dh).c_str()));
 
-  int plotw = w - (labelw + 10);
+  int lmargin = vertAxis ? labelw+10 : 0;
+  int plotw = w - lmargin;
   int ploth = h - 15;
   plotWidth = plotw;
   p->setTextAlign(Painter::AlignHCenter | Painter::AlignBottom);
@@ -166,7 +168,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     //while(anch - dw > xMin) anch -= dw;
     real anch = std::ceil(xMin/dw)*dw;
     real dxlbl = dw*plotw/dx;
-    real anchlbl = (anch - xMin)*(plotw/dx) + labelw + 10;
+    real anchlbl = (anch - xMin)*(plotw/dx) + lmargin;
     for(int ii = 0; anch + ii*dw < xMax; ++ii)
       p->drawText(anchlbl + ii*dxlbl, h, fstring("%.*f", prec, anch + ii*dw).c_str());
     // vert grid lines
@@ -184,55 +186,73 @@ void TrackPlot::draw(SvgPainter* svgp) const
       real secs = xMin + ii*dw;
       real hrs = std::floor(secs/3600);
       real mins = (secs - hrs*3600)/60;
-      p->drawText(ii*plotw/nhorz + labelw + 10, h, fstring("%02.0f:%02.0f", hrs, mins).c_str());
+      p->drawText(ii*plotw/nhorz + lmargin, h, fstring("%02.0f:%02.0f", hrs, mins).c_str());
     }
+    // vert grid lines
+    real dxlbl = plotw/nhorz;
+    p->setFillBrush(Brush::NONE);
+    p->setStroke(Color(0, 0, 0, 64), 0.75);
+    for(int ii = 1; ii*dxlbl < w; ++ii)
+      p->drawLine(Point(ii*dxlbl, ploth), Point(ii*dxlbl, 0));
   }
   // horz grid lines
   for(int ii = 0; ii < nvert; ++ii)
-    p->drawLine(Point(labelw, h*(1-real(ii)/nvert)), Point(w, h*(1-real(ii)/nvert)));
+    p->drawLine(Point(lmargin, h*(1-real(ii)/nvert)), Point(w, h*(1-real(ii)/nvert)));
 
   // axes
   //drawCheckerboard(p, w, h, 4, 0x18000000);
   p->setStroke(Color::BLUE, 1.5);
   p->setFillBrush(Brush::NONE);
-  p->drawLine(Point(labelw + 5, h-15), Point(labelw + 5, 0));
-  p->drawLine(Point(labelw + 5, h-15), Point(w, h-15));
+  if(lmargin > 0)
+    p->drawLine(Point(labelw + 5, h-15), Point(labelw + 5, 0));
+  p->drawLine(Point(lmargin > 0 ? labelw + 5 : 0, h-15), Point(w, h-15));
 
   // plot
-  p->clipRect(Rect::ltrb(labelw + 6, 0, w, h-15));  // clip plot to axes
+  p->clipRect(Rect::ltrb(lmargin > 0 ? labelw + 6 : 0, 0, w, h-15));  // clip plot to axes
   p->save();
-  p->translate(labelw + 10, 0);
-  p->scale(plotVsDist ? plotw/maxDist : plotw/(maxTime - minTime), -ploth/(maxAlt - minAlt));
-
-  p->translate(0, -maxAlt + minAlt);
-
+  p->translate(lmargin, 0);
+  p->scale(plotVsDist ? plotw/maxDist : plotw/(maxTime - minTime), 1);
   p->scale(zoomScale, 1);
   p->translate(zoomOffset, 0);
   if(plotAlt) {
-    p->translate(0, -minAlt);
+    p->save();
+    p->scale(1, -ploth/(maxAlt - minAlt));
+    p->translate(0, -maxAlt);
     p->setFillBrush(Color(0, 0, 255, 128));
     p->setStroke(Color::NONE);
     p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
-    p->translate(0, minAlt);
+    p->restore();
   }
   if(plotSpd) {
+    p->scale(1, -ploth/(maxSpd - minSpd));
+    p->translate(0, -maxSpd);
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color::RED, 2.0);
+    p->setVectorEffect(Painter::NonScalingStroke);
     p->drawPath(plotVsDist ? spdDistPlot : spdTimePlot);
   }
+  p->restore();
+
+  // draw vertical labels
+  p->setFillBrush(Color::BLUE);
+  //p->setStroke(Color::NONE);
+  p->setStroke(Color::WHITE, 4);
+  p->setStrokeAlign(Painter::StrokeOuter);
+  p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
+  for(int ii = 0; ii < nvert; ++ii)
+    p->drawText(labelw, h*(1-real(ii)/nvert), fstring(vertlbl, minAlt + ii*dh).c_str());
 
   // draw markers for waypoints
-  p->restore();
   p->setFontSize(11);
   p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real texty = 20;
   // lines
   p->setFillBrush(Brush::NONE);
-  p->setStroke(Color::GREEN, 1.5);
+  p->setStroke(Color::BLUE, 1.5);
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
     if(s < 0 || s > 1) continue;
-    real x = s*plotw + (labelw + 10);
+    real x = s*plotw + lmargin;
     p->drawLine(Point(x, 15), Point(x, h));
   }
   // text (we want text on top of all lines)
@@ -241,7 +261,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
     if(s < 0 || s > 1) continue;
-    real x = s*plotw + (labelw + 10);
+    real x = s*plotw + lmargin;
     if(texty >= h - 20) texty = 20;  // back to top
     //real textw = p->textBounds(x0, ploth - 20, wpt.name.c_str(), NULL);
     p->drawText(x + 4, texty, wpt.name.c_str());  // note clip rect is still set

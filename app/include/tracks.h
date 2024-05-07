@@ -54,6 +54,7 @@ public:
   TrackSliders* trackSliders = NULL;
   Button* routeEditBtn = NULL;
   Toolbar* routeEditTb = NULL;
+  Button* plotVsTimeBtn = NULL;
 
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters

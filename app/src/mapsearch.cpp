@@ -405,22 +405,22 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 void MapsSearch::resultsUpdated(int flags)
 {
   populateResults();
-  resultCountText->setText(mapResults.size() == 1 ? "1 result" :
-      fstring("%s%d results", moreMapResultsAvail ? "over " : "" , mapResults.size()).c_str());
+  int nresults = std::max(mapResults.size(), listResults.size());
+  resultCountText->setText(nresults == 1 ? "1 result" :
+      fstring("%s%d results", moreMapResultsAvail || moreListResultsAvail ? "over " : "" , nresults).c_str());
 
   // zoom out if necessary to show first 5 results
   if(flags & FLY_TO) {
     Map* map = app->map.get();
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
-    int resultIdx = 0;
-    for(auto& res : listResults) {
-      if(resultIdx <= 5 || lngLatDist(app->getMapCenter(), res.pos) < 2.0) {
+    for(size_t ii = 0; ii < listResults.size(); ++ii) {
+      auto& res = listResults[ii];
+      if(ii < 5 || lngLatDist(app->getMapCenter(), res.pos) < 2.0) {
         minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
         minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
         maxLngLat.longitude = std::max(maxLngLat.longitude, res.pos.longitude);
         maxLngLat.latitude = std::max(maxLngLat.latitude, res.pos.latitude);
       }
-      ++resultIdx;
     }
 
     if(minLngLat.longitude != 180) {
@@ -575,7 +575,7 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
   }
 }
 
-void MapsSearch::populateResults()  //const std::vector<SearchResult>& results)
+void MapsSearch::populateResults()
 {
   for(size_t ii = listResultOffset; ii < listResults.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = listResults[ii];

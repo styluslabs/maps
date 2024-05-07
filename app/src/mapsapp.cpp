@@ -1138,6 +1138,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   )#";
 
   Tooltips::inst = &tooltipsInst;
+  TextEdit::defaultMaxLength = 65536;
 
   SvgDocument* winnode = createWindowNode(mainWindowSVG);
   win.reset(new Window(winnode));
@@ -1239,6 +1240,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     config["metric_units"] = metricUnits;
     metricCb->setChecked(metricUnits);
     mapsSources->rebuildSource(mapsSources->currSource);  //loadSceneFile();
+    while(!panelHistory.empty()) popPanel();  // to force update of panels
   };
   metricCb->setChecked(metricUnits);
   overflowMenu->addItem(metricCb);
