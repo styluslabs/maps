@@ -24,6 +24,7 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.Selection;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.view.WindowManager;
 import android.view.View;
 import android.view.ViewGroup;
@@ -141,13 +142,25 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     Window window = getWindow();
     window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-    window.getDecorView().setSystemUiVisibility(
-        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+    window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR  //);
+        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);  // to disable back gesture
+    if(Build.VERSION.SDK_INT >= 29)
+      window.getDecorView().setSystemGestureExclusionRects(Collections.singletonList(new Rect(0, 0, 10000, 10000)));
     //View.SYSTEM_UI_FLAG_FULLSCREEN | View.INVISIBLE |
     window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
     //WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
     window.setStatusBarColor(Color.TRANSPARENT);
   }
+
+  /* add this to MapsView.java if setSystemGestureExclusionRects on decor view doesn't work:
+  @Override
+  protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+    super.onLayout(changed, left, top, right, bottom);
+    if(Build.VERSION.SDK_INT >= 29)
+      setSystemGestureExclusionRects(Collections.singletonList(new Rect(left, top, right, bottom)));
+  }
+  */
 
   protected boolean canGetLocation()
   {
@@ -767,7 +780,7 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
   }
 
   @Override
-  protected void onFocusChanged(boolean gainFocus, int direction, android.graphics.Rect previouslyFocusedRect) {
+  protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
     ///Log.v("Tangram", "Focus change: " + (gainFocus ? "true" : "false"));
     super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
     if(!gainFocus)

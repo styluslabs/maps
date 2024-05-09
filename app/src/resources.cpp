@@ -134,7 +134,7 @@ static const char* moreWidgetSVG = R"#(
   <g id="toolbutton" class="toolbutton" layout="box">
     <rect class="background" box-anchor="hfill" width="36" height="42"/>
     <rect class="checkmark" box-anchor="bottom hfill" margin="0 2" fill="none" width="36" height="3"/>
-    <g margin="0 5" box-anchor="fill" layout="flex" flex-direction="row">
+    <g class="toolbutton-content" margin="0 5" box-anchor="fill" layout="flex" flex-direction="row">
       <use class="icon" width="30" height="30" xlink:href="" />
       <text class="title" display="none" margin="0 9"></text>
     </g>

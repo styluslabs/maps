@@ -21,7 +21,7 @@ public:
 private:
   std::string createSource(std::string savekey, const std::string& yamlStr = "");
   void populateSources();
-  Widget* processUniformVar(const std::string& stylename, const std::string& name);
+  Widget* processUniformVar(const std::string& stylename, const std::string& name, YAML::Node varnode);
   void populateSceneVars();
   void populateSourceEdit(std::string key);
   void sourceModified();

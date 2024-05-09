@@ -51,7 +51,8 @@ TrackPlot::TrackPlot()  // : CustomWidget()
 void TrackPlot::updateZoomOffset(real dx)
 {
   real w = plotVsDist ? maxDist : maxTime - minTime;
-  zoomOffset = std::min(std::max((1/zoomScale - 1)*w, zoomOffset + dx*w/plotWidth/zoomScale), 0.0);
+  minOffset = (1/zoomScale - 1)*w;
+  zoomOffset = std::min(std::max(minOffset, zoomOffset + dx*w/plotWidth/zoomScale), 0.0);
   if(onPanZoom)
     onPanZoom();
 }
@@ -108,6 +109,10 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   real quant = lead > 5 ? expnt : lead > 2 ? expnt/2 : expnt/5;
   minAlt = std::floor(minAlt/quant)*quant;  //-= 0.05*elev;
   maxAlt = std::ceil(maxAlt/quant)*quant;  //+= 0.05*elev;
+  // assuming 5 vertical divisions
+  minSpd = 0;
+  maxSpd = std::ceil(maxSpd/5)*5;
+
   maxZoom = locs.size()/8;  // min 8 points in view
   // exclude first and last waypoints and waypoints missing name or distance along path
   waypoints.clear();
@@ -144,15 +149,17 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real labelw = 0;
   int nvert = 5;
-  real dh = (maxAlt - minAlt)/nvert;
-  const char* vertlbl = vertAxis ? "%.0f" : (MapsApp::metricUnits ? "%.0f m" : "%.0f ft");
+  real dhalt = (maxAlt - minAlt)/nvert;
+  const char* altlbl = "%.0f";  //vertAxis ? "%.0f" : (MapsApp::metricUnits ? "%.0f m" : "%.0f ft");
   for(int ii = 0; ii < nvert; ++ii)
-    labelw = std::max(labelw, p->textBounds(0, 0, fstring(vertlbl, minAlt + ii*dh).c_str()));
+    labelw = std::max(labelw, p->textBounds(0, 0, fstring(altlbl, minAlt + ii*dhalt).c_str()));
 
-  int lmargin = vertAxis ? labelw+10 : 0;
-  int plotw = w - lmargin;
-  int ploth = h - 15;
+  int lmargin = vertAxis ? labelw+10 : 15;
+  int tmargin = 5;
+  int plotw = w - 2*lmargin;
+  int ploth = h - 15 - tmargin;
   plotWidth = plotw;
+  p->translate(lmargin, tmargin);
   p->setTextAlign(Painter::AlignHCenter | Painter::AlignBottom);
   if(plotVsDist) {
     real xMin = -zoomOffset/1000;
@@ -168,7 +175,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     //while(anch - dw > xMin) anch -= dw;
     real anch = std::ceil(xMin/dw)*dw;
     real dxlbl = dw*plotw/dx;
-    real anchlbl = (anch - xMin)*(plotw/dx) + lmargin;
+    real anchlbl = (anch - xMin)*(plotw/dx);
     for(int ii = 0; anch + ii*dw < xMax; ++ii)
       p->drawText(anchlbl + ii*dxlbl, h, fstring("%.*f", prec, anch + ii*dw).c_str());
     // vert grid lines
@@ -186,7 +193,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
       real secs = xMin + ii*dw;
       real hrs = std::floor(secs/3600);
       real mins = (secs - hrs*3600)/60;
-      p->drawText(ii*plotw/nhorz + lmargin, h, fstring("%02.0f:%02.0f", hrs, mins).c_str());
+      p->drawText(ii*plotw/nhorz, h, fstring("%02.0f:%02.0f", hrs, mins).c_str());
     }
     // vert grid lines
     real dxlbl = plotw/nhorz;
@@ -197,20 +204,19 @@ void TrackPlot::draw(SvgPainter* svgp) const
   }
   // horz grid lines
   for(int ii = 0; ii < nvert; ++ii)
-    p->drawLine(Point(lmargin, h*(1-real(ii)/nvert)), Point(w, h*(1-real(ii)/nvert)));
+    p->drawLine(Point(0, (ii*ploth)/nvert), Point(plotw, (ii*ploth)/nvert));
 
   // axes
   //drawCheckerboard(p, w, h, 4, 0x18000000);
   p->setStroke(Color::BLUE, 1.5);
   p->setFillBrush(Brush::NONE);
-  if(lmargin > 0)
+  if(vertAxis)
     p->drawLine(Point(labelw + 5, h-15), Point(labelw + 5, 0));
   p->drawLine(Point(lmargin > 0 ? labelw + 5 : 0, h-15), Point(w, h-15));
 
   // plot
-  p->clipRect(Rect::ltrb(lmargin > 0 ? labelw + 6 : 0, 0, w, h-15));  // clip plot to axes
   p->save();
-  p->translate(lmargin, 0);
+  p->clipRect(Rect::ltrb(0, 0, plotw, ploth));  // clip plot to axes
   p->scale(plotVsDist ? plotw/maxDist : plotw/(maxTime - minTime), 1);
   p->scale(zoomScale, 1);
   p->translate(zoomOffset, 0);
@@ -234,13 +240,26 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->restore();
 
   // draw vertical labels
-  p->setFillBrush(Color::BLUE);
-  //p->setStroke(Color::NONE);
-  p->setStroke(Color::WHITE, 4);
-  p->setStrokeAlign(Painter::StrokeOuter);
-  p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
-  for(int ii = 0; ii < nvert; ++ii)
-    p->drawText(labelw, h*(1-real(ii)/nvert), fstring(vertlbl, minAlt + ii*dh).c_str());
+  if(plotAlt) {
+    p->setFillBrush(Color::BLUE);
+    //p->setStroke(Color::NONE);
+    p->setStroke(Color::WHITE, 4);
+    p->setStrokeAlign(Painter::StrokeOuter);
+    p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
+    for(int ii = 0; ii <= nvert; ++ii)
+      p->drawText(labelw-lmargin, (ii*ploth)/nvert, fstring(altlbl, minAlt + ii*dhalt).c_str());
+  }
+  if(plotSpd) {
+    real dhspd = (maxSpd - minSpd)/nvert;
+    const char* spdlbl = "%.0f";  //vertAxis ? "%.0f" : (MapsApp::metricUnits ? "%.0f km/h" : "%.0f mph");
+    p->setFillBrush(Color::RED);
+    //p->setStroke(Color::NONE);
+    p->setStroke(Color::WHITE, 4);
+    p->setStrokeAlign(Painter::StrokeOuter);
+    p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
+    for(int ii = 0; ii <= nvert; ++ii)
+      p->drawText(w-lmargin-5, (ii*ploth)/nvert, fstring(spdlbl, minSpd + ii*dhspd).c_str());
+  }
 
   // draw markers for waypoints
   p->setFontSize(11);
@@ -252,8 +271,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
     if(s < 0 || s > 1) continue;
-    real x = s*plotw + lmargin;
-    p->drawLine(Point(x, 15), Point(x, h));
+    p->drawLine(Point(s*plotw, 0), Point(s*plotw, ploth));
   }
   // text (we want text on top of all lines)
   p->setFillBrush(Color::BLACK);
@@ -261,10 +279,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
     if(s < 0 || s > 1) continue;
-    real x = s*plotw + lmargin;
     if(texty >= h - 20) texty = 20;  // back to top
     //real textw = p->textBounds(x0, ploth - 20, wpt.name.c_str(), NULL);
-    p->drawText(x + 4, texty, wpt.name.c_str());  // note clip rect is still set
+    p->drawText(s*plotw + 4, texty, wpt.name.c_str());  // note clip rect is still set
     texty += 16;
   }
 }

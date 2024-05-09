@@ -28,6 +28,7 @@ public:
 
   real zoomScale = 1;
   real zoomOffset = 0;
+  real minOffset = 0;
   real maxZoom = 1;
 
   //static Color bgColor;

@@ -31,7 +31,16 @@ global:
             label: Hillshade Exaggeration
         u_min_slope_angle:
             style: hillshade
-            label: Min Slope Angle
+            label: Min Slope Angle (°)
+            min: 0
+            max: 90
+        u_min_contour_elev:
+            style: hillshade
+            label: Min Contour Elevation (m)
+            step: 100
+            min: 0
+            max: 9000
+
 
         #contour_color:
         #    label: Contour Color
@@ -117,6 +126,7 @@ styles:
                 u_exaggerate: 4.5
                 CONTOUR_COLOR: global.contour_color
                 u_min_slope_angle: 20.0  # we could use stop-opacity="0" instead
+                u_min_contour_elev: 0.0
                 # some more colormaps: https://www.fabiocrameri.ch/
                 u_slope_angle: |
                     data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="1">
@@ -236,7 +246,7 @@ styles:
                     #else
                         // terrain colormap (i.e., map height to color) for low zooms
                         vec4 relief = texture2D(u_terrain_color, vec2(elev/5000., 0.5));
-                        color = mix(base_color, relief, 0.5);
+                        color = mix(base_color, relief, elev < u_min_contour_elev ? 0.0 : 0.5);
                     #endif
                     } else {
                         // contour lines
@@ -251,7 +261,7 @@ styles:
                         //float intervals[4] = float[](10., 20., 50., 100.);  -- need GLES 3
                         //float interval = 10.*clamp(exp2(15. - u_tile_origin.z), 1., 100.);
                         // no underwater contour lines!
-                        float hc = max(elev, interval/2.);
+                        float hc = max(elev, u_min_contour_elev + interval/2.);
                         // distance in pixels to nearest contour lines (above and below)
                         float dup = fract(hc/interval)*interval/slope / u_meters_per_pixel;
                         float ddn = abs(1. - fract(hc/interval))*interval/slope / u_meters_per_pixel;

@@ -486,7 +486,7 @@ void MapsSources::updateSceneVar(const std::string& path, const std::string& new
     app->map->updateGlobals({app->sceneUpdates.back()});
 }
 
-Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& name)
+Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& name, YAML::Node varnode)
 {
   auto& styles = app->map->getScene()->styles();
   for(auto& style : styles) {
@@ -494,7 +494,10 @@ Widget* MapsSources::processUniformVar(const std::string& stylename, const std::
       for(auto& uniform : style->styleUniforms()) {
         if(uniform.first.name == name) {
           if(uniform.second.is<float>()) {
-            auto spinBox = createTextSpinBox(uniform.second.get<float>(), 1, -INFINITY, INFINITY, "%.2f");
+            float stepval = varnode["step"].as<float>(1);
+            float minval = varnode["min"].as<float>(-INFINITY);
+            float maxval = varnode["max"].as<float>(INFINITY);
+            auto spinBox = createTextSpinBox(uniform.second.get<float>(), stepval, minval, maxval, "%.2f");
             spinBox->onValueChanged = [=, &uniform](real val){
               std::string path = "styles." + stylename + ".shaders.uniforms." + name;
               std::string newval = std::to_string(val);
@@ -532,7 +535,7 @@ void MapsSources::populateSceneVars()
     if(!varsContent->containerNode()->children().empty())
       varsContent->addWidget(createHRule(1));
     if(!stylename.empty()) {  // shader uniform
-      Widget* uwidget = processUniformVar(stylename, name);
+      Widget* uwidget = processUniformVar(stylename, name, var.second);
       if(uwidget)
         varsContent->addWidget(createTitledRow(label.c_str(), uwidget));
     }
@@ -568,11 +571,12 @@ void MapsSources::populateSceneVars()
         });
         varsContent->addWidget(createTitledRow(label.c_str(), NULL, datepicker));
       }
-      else if(var.second["min"] || var.second["max"] || valtype == "int") {
+      else if(var.second["min"] || var.second["max"] || var.second["step"] || valtype == "int") {
+        float stepval = var.second["step"].as<float>(1);
         float minval = var.second["min"].as<float>(-INFINITY);
         float maxval = var.second["max"].as<float>(INFINITY);
         const char* format = valtype == "int" ? "%.0f" : "%.2f";
-        auto spinBox = createTextSpinBox(atof(value.c_str()), 1, minval, maxval, format);
+        auto spinBox = createTextSpinBox(atof(value.c_str()), stepval, minval, maxval, format);
         spinBox->onValueChanged = [=](real val){
           updateSceneVar("global." + name, std::to_string(val), onchange, reload);
         };

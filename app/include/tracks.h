@@ -32,30 +32,6 @@ public:
   GpxFile navRoute;
   GpxFile* activeTrack = NULL;
 
-  DragDropList* tracksContent = NULL;
-  Widget* archivedContent = NULL;
-  Widget* tracksPanel = NULL;
-  Widget* archivedPanel = NULL;
-  Widget* statsContent = NULL;
-  Widget* statsPanel = NULL;
-  DragDropList* wayptContent = NULL;
-  Widget* wayptPanel = NULL;
-  TrackPlot* trackPlot = NULL;
-  Button* pauseRecordBtn = NULL;
-  Button* stopRecordBtn = NULL;
-  Button* saveCurrLocBtn = NULL;
-  Button* saveRouteBtn = NULL;
-  Button* routeModeBtn = NULL;
-  Button* routePluginBtn = NULL;
-  TextBox* previewDistText = NULL;
-  Button* sparkStats = NULL;
-  TrackSparkline* trackSpark = NULL;
-  Button* retryBtn = NULL;
-  TrackSliders* trackSliders = NULL;
-  Button* routeEditBtn = NULL;
-  Toolbar* routeEditTb = NULL;
-  Button* plotVsTimeBtn = NULL;
-
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
   double minTrackTime = 5;  // seconds
@@ -68,9 +44,9 @@ private:
   void showTrack(GpxFile* track, bool show);
   void setTrackVisible(GpxFile* track, bool visible);
   void populateArchived();
-  void populateTracks();
-  void populateStats(GpxFile* track);
-  void populateWaypoints(GpxFile* track);
+  void populateTrackList();
+  void populateTrack(GpxFile* track);
+  //void populateWaypoints(GpxFile* track);
   Widget* createTrackEntry(GpxFile* track);
   Waypoint interpTrack(const std::vector<Waypoint>& locs, double s, size_t* idxout = NULL);
   void setRouteMode(const std::string& mode);
@@ -82,16 +58,61 @@ private:
   void updateDB(GpxFile* track);
   Waypoint* addWaypoint(Waypoint wpt);
   void removeTrackMarkers(GpxFile* track);
-  void updateStats(std::vector<Waypoint>& locs);
+  void updateStats(GpxFile* track);
   void updateDistances();
   bool findPickedWaypoint(GpxFile* track);
   void toggleRouteEdit(bool show);
   Widget* createEditDialog(Button* editTrackBtn);
   void editWaypoint(GpxFile* track, const Waypoint& wpt, std::function<void()> callback);
+  void setStatsText(const char* selector, std::string str);
+  void setTrackEdit(bool show);
+  // UI setup
+  void createStatsContent();
+  void createPlotContent();
+  void createWayptContent();
+  void createTrackListPanel();
+  void createTrackPanel();
+
+  Widget* trackPanel = NULL;
+  Toolbar* trackToolbar = NULL;
+  Widget* trackContainer = NULL;
+  Menu* trackOverflow = NULL;
+  std::vector<Widget*> statsWidgets;
+  std::vector<Widget*> plotWidgets;
+  std::vector<Widget*> wayptWidgets;
+  enum TrackView_t { TRACK_NONE=-1, TRACK_STATS=0, TRACK_PLOT, TRACK_WAYPTS };
+
+  DragDropList* tracksContent = NULL;
+  Widget* archivedContent = NULL;
+  Widget* tracksPanel = NULL;
+  Widget* archivedPanel = NULL;
+  Widget* statsContent = NULL;
+  DragDropList* wayptContent = NULL;
+  TrackPlot* trackPlot = NULL;
+  Button* pauseRecordBtn = NULL;
+  Button* stopRecordBtn = NULL;
+  Button* saveCurrLocBtn = NULL;
+  Button* saveRouteBtn = NULL;
+  Button* routeModeBtn = NULL;
+  Button* routePluginBtn = NULL;
+  TextBox* previewDistText = NULL;
+  Widget* sparkStats = NULL;
+  TrackSparkline* trackSpark = NULL;
+  Button* retryBtn = NULL;
+  TrackSliders* trackSliders = NULL;
+  Button* routeEditBtn = NULL;
+  Toolbar* routeEditTb = NULL;
+  Button* plotVsTimeBtn = NULL;
+  Widget* liveStatsRow = NULL;
+  Widget* nonliveStatsRow = NULL;
+  TextBox* wayptTabLabel = NULL;
+  Toolbar* editTrackTb = NULL;
+  Widget* editTrackContent = NULL;
 
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;
   std::string insertionWpt;
+  std::string trackSummary;
   Waypoint trackHoverLoc = LngLat{0, 0};
   double cropStart = 0;
   double cropEnd = 1;
