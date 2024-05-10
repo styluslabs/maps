@@ -38,16 +38,16 @@ enum MapEvent_t { MAP_CHANGE, LOC_UPDATE, MARKER_PICKED, SUSPEND };
 
 struct Location
 {
-  double time;
+  double time;  // seconds
   double lat;
   double lng;
-  float poserr;
-  double alt;
-  float alterr;
-  float dir;
-  float direrr;
-  float spd;
-  float spderr;
+  float poserr;  // meters
+  double alt;  // meters
+  float alterr;  // meters
+  float dir;  // degrees
+  float direrr;  // degrees
+  float spd;  // m/s
+  float spderr;  // m/s
 
   //Location(LngLat r, double _alt = 0, double t = 0) : time(t), lat(r.latitude), lng(r.longitude), alt(_alt) {}
   LngLat lngLat() const { return LngLat(lng, lat); }

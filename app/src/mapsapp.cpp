@@ -608,6 +608,12 @@ void MapsApp::mapUpdate(double time)
 //  map->resize(fWidth, fHeight);  // this just calls setViewport
 //}
 
+void MapsApp::onLowMemory()
+{
+  // could be more aggressive if suspended, e.g., completely unload scene
+  map->onMemoryWarning();
+}
+
 void MapsApp::onSuspend()
 {
   sendMapEvent(SUSPEND);
@@ -643,14 +649,22 @@ void MapsApp::updateLocMarker()
 
 void MapsApp::updateLocation(const Location& _loc)
 {
-  //Point l0, l1;
-  //map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &l0.x, &l0.y);
-  //map->lngLatToScreenPosition(_loc.lng, _loc.lat, &l1.x, &l1.y);
-  //LOGW("Location update dist: %.2f pixels", l1.dist(l0));
+  // we may get same location twice due to service for track recording
+  double dt = _loc.time - currLocation.time;
+  if(std::abs(dt) < 0.1 && _loc.lngLat() == currLocation.lngLat() && _loc.alt == currLocation.alt)
+    return;
+  double dr = lngLatDist(_loc.lngLat(), currLocation.lngLat());
+  double dh = _loc.alt - currLocation.alt;
+  if(_loc.poserr > dr && _loc.alterr > std::abs(dh)
+      && _loc.poserr > currLocation.poserr + dt*std::max(currLocation.spd, 1.0f)) {
+    LOGD("Rejecting location update: dt = %.3f s, %dr = %.2f m, err = %.2f m", dt, dr, _loc.poserr);
+    return;
+  }
 
   currLocation = _loc;
   if(currLocation.time <= 0)
     currLocation.time = mSecSinceEpoch()/1000.0;
+  hasLocation = gpsSatsUsed > 0 || (_loc.poserr > 0 && _loc.poserr < 10);
   updateLocMarker();
 
   if(followState == FOLLOW_ACTIVE) {
@@ -686,9 +700,11 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
   gpsStatusBtn->setVisible(!satsUsed);
   if(!satsUsed)
     gpsStatusBtn->setText(fstring("%d", satsVisible).c_str());  //"%d/%d", satsUsed
-  bool doupdate = (satsUsed > 0) != hasLocation;
-  hasLocation = satsUsed > 0;
-  if(doupdate) updateLocMarker();
+  bool hadloc = hasLocation;
+  hasLocation = satsUsed > 0 || (currLocation.poserr > 0 && currLocation.poserr < 10);
+  gpsSatsUsed = satsUsed;
+  if(hasLocation != hadloc)
+    updateLocMarker();
 }
 
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)

@@ -236,6 +236,24 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
      } });
   }
 
+  public void setServiceState(int state, float intervalSec, float minDist)
+  {
+    runOnUiThread(new Runnable() { @Override public void run() {
+      if(state > 0) {
+        Intent intent = new Intent(this, MapsService.class).setAction(MapsService.START_RECORDING);
+        intent.putExtra(MapsService.EXTRA_INTERVAL, intervalSec);
+        intent.putExtra(MapsService.EXTRA_DISTANCE, minDist);
+        if(Build.VERSION.SDK_INT >= 26)
+          startForegroundService(intent);
+        else
+          startService(intent);
+      }
+      else {
+        startService(new Intent(this, MapsService.class).setAction(MapsService.STOP_RECORDING));
+      }
+     } });
+  }
+
   @Override
   public void onLocationChanged(Location loc)
   {

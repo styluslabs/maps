@@ -86,6 +86,7 @@ void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::strin
 
 void MapsApp::notifyStatusBarBG(bool) {}
 void MapsApp::setSensorsEnabled(bool enabled) {}
+void MapsApp::setServiceState(int state, float intervalSec, float minDist) {}
 
 int main(int argc, char* argv[])
 {

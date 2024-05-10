@@ -1255,8 +1255,9 @@ void MapsTracks::createStatsContent()
                       "Descent", "track-descent", "Descent speed", "track-descent-speed"}) });
 
   statsContent->addWidget(statsCol);
-  trackContainer->addWidget(statsContent);
-  statsWidgets.push_back(statsContent);
+  auto statsContainer = new ScrollWidget(new SvgDocument(), statsContent);
+  trackContainer->addWidget(statsContainer);
+  statsWidgets.push_back(statsContainer);
 }
 
 void MapsTracks::createPlotContent()
@@ -1468,7 +1469,8 @@ void MapsTracks::createPlotContent()
     trackSliders->setCropHandles(start, end, TrackSliders::NO_UPDATE);
   };
 
-  auto plotContainer = createColumn({axisSelRow, trackPlot, trackSliders, editTrackTb}, "", "", "hfill");
+  auto plotContent = createColumn({axisSelRow, trackPlot, trackSliders, editTrackTb}, "", "", "hfill");
+  auto plotContainer = new ScrollWidget(new SvgDocument(), plotContent);
   trackContainer->addWidget(plotContainer);
   plotWidgets.push_back(plotContainer);
 
@@ -1638,10 +1640,13 @@ void MapsTracks::createTrackPanel()
     // show/hide track editing controls
     if(recordTrack && editTrackTb->isVisible())
       setTrackEdit(false);
+    app->setServiceState(recordTrack, 0.1f, 0);  //minTrackTime*1.1, minTrackDist*1.1);
   };
 
   stopRecordBtn->onClicked = [=](){
     saveGPX(&recordedTrack);
+    if(recordTrack)
+      app->setServiceState(0);
     //updateDB(&recordedTrack);
     recordedTrack.desc = ftimestr("%F") + trackSummary;
     tracks.push_back(std::move(recordedTrack));
@@ -1660,7 +1665,7 @@ void MapsTracks::createTrackPanel()
     editWaypoint(activeTrack, *wpt, {});
   });
 
-  trackPanel = app->createMapPanel(trackToolbar, trackContainer);
+  trackPanel = app->createMapPanel(trackToolbar, NULL, trackContainer);
   trackPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE || event->type == SvgGui::INVISIBLE) {
       if(statsWidgets[0]->isVisible()) { for(Widget* w : statsWidgets) w->sdlEvent(gui, event); }
@@ -1790,6 +1795,7 @@ void MapsTracks::createTrackListPanel()
       populateTrack(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
     else {
       recordTrack = true;
+      app->setServiceState(true, 0.1f, 0);  //minTrackTime*1.1, minTrackDist*1.1);
       std::string timestr = ftimestr("%FT%H.%M.%S");
       FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
       recordedTrack = GpxFile(timestr, "Recording", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};

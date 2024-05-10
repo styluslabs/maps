@@ -330,6 +330,7 @@ static jmethodID setImeTextMID = nullptr;
 static jmethodID shareFileMID = nullptr;
 static jmethodID notifyStatusBarBGMID = nullptr;
 static jmethodID setSensorsEnabledMID = nullptr;
+static jmethodID setServiceStateMID = nullptr;
 
 #define TANGRAM_JNI_VERSION JNI_VERSION_1_6
 
@@ -354,6 +355,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   shareFileMID = jniEnv->GetMethodID(cls, "shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
   notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
+  setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceStateMID", "(IFF)V");
 
   return TANGRAM_JNI_VERSION;
 }
@@ -508,6 +510,12 @@ void MapsApp::setSensorsEnabled(bool enabled)
 {
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jniEnv->CallVoidMethod(mapsActivityRef, setSensorsEnabledMID, enabled);
+}
+
+void MapsApp::setServiceState(int state, float intervalSec, float minDist)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, setServiceStateMID, state, intervalSec, minDist);
 }
 
 // EGL setup and main loop
@@ -686,6 +694,11 @@ JNI_FN(onResume)(JNIEnv* env, jclass)
   //  app->gui->sdlEvent(&event);
   //  //app->win->redraw();  -- looks like surfaceChanged is called on resume, so no need for this
   //});
+}
+
+JNI_FN(onLowMemory)(JNIEnv* env, jclass)
+{
+  MapsApp::runOnMainThread([=](){ app->onLowMemory(); });
 }
 
 JNI_FN(touchEvent)(JNIEnv* env, jclass, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)

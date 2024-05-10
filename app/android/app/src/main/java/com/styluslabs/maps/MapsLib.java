@@ -16,6 +16,7 @@ public class MapsLib
   public static native void surfaceDestroyed();
   public static native void onPause();
   public static native void onResume();
+  public static native void onLowMemory();
   public static native void touchEvent(int ptrId, int action, int t, float x, float y, float p);
   public static native void keyEvent(int keycode, int action);
   public static native void charInput(int c, int newCursorPosition);

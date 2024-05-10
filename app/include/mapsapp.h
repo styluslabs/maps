@@ -46,6 +46,7 @@ public:
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
   //void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void onSuspend();
+  void onLowMemory();
   void updateLocation(const Location& _loc);
   void updateOrientation(float azimuth, float pitch, float roll);
   void updateGpsStatus(int satsVisible, int satsUsed);
@@ -85,6 +86,7 @@ public:
   LngLat tapLocation = {NAN, NAN};
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
+  int gpsSatsUsed = 0;
   bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool hasLocation = false;
   bool glNeedsInit = true;
@@ -166,6 +168,7 @@ public:
   static void saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback);
   static void notifyStatusBarBG(bool isLight);
   static void setSensorsEnabled(bool enabled);
+  void setServiceState(int state, float intervalSec = 0, float minDist = 0);
   static void sdlEvent(SDL_Event* event);
 
   static std::string elevToStr(double meters);
