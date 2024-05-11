@@ -20,43 +20,13 @@
 #include "usvg/svgwriter.h"  // for serializeColor
 
 
-// decode encoded polyline, used by Valhalla, Google, etc.
-// - https://github.com/valhalla/valhalla/blob/master/docs/docs/decoding.md - Valhalla uses 1E6 precision
-// - https://developers.google.com/maps/documentation/utilities/polylinealgorithm - Google uses 1E5 precision
-std::vector<Waypoint> MapsTracks::decodePolylineStr(const std::string& encoded, double precision)
-{
-  const double invprec = 1/precision;
-  size_t i = 0;     // what byte are we looking at
-
-  // Handy lambda to turn a few bytes of an encoded string into an integer
-  auto deserialize = [&encoded, &i](const int previous) {
-    // Grab each 5 bits and mask it in where it belongs using the shift
-    int byte, shift = 0, result = 0;
-    do {
-      byte = static_cast<int>(encoded[i++]) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-    // Undo the left shift from above or the bit flipping and add to previous since it's an offset
-    return previous + (result & 1 ? ~(result >> 1) : (result >> 1));
-  };
-
-  // Iterate over all characters in the encoded string
-  std::vector<Waypoint> shape;
-  int lon = 0, lat = 0;
-  while (i < encoded.length()) {
-    lat = deserialize(lat);
-    lon = deserialize(lon);
-    shape.emplace_back(LngLat(lon*invprec, lat*invprec));
-  }
-  return shape;
-}
-
 void MapsTracks::updateLocation(const Location& loc)
 {
   if(!recordTrack)
     return;
   auto& locs = recordedTrack.tracks.back().pts;
+  if(loc.poserr > 50 || (locs.empty() && loc.poserr > 25))
+    return;
   if(locs.empty()) {
     locs.emplace_back(loc);
     locs.back().dist = 0;
@@ -67,28 +37,45 @@ void MapsTracks::updateLocation(const Location& loc)
     double dist = 1000*lngLatDist(loc.lngLat(), prev.lngLat());
     double vert = loc.alt - prev.loc.alt;
     double dt = loc.time - prev.loc.time;
-    if(dist > minTrackDist || dt > minTrackTime || vert > minTrackDist) {
-      double d0 = prev.dist;
-      locs.emplace_back(loc);
-      locs.back().dist = d0 + dist;
-      if(loc.spd == 0)
-        locs.back().loc.spd = dist/dt;
-      if(recordedTrack.visible)
-        updateTrackMarker(&recordedTrack);  // rebuild marker
-      if(activeTrack == &recordedTrack) {
-        updateStats(activeTrack);
-        // if zoomed and scrolled to end of plot, scroll to include new location point
-        if(trackPlot->zoomScale > 1 && trackPlot->zoomOffset == trackPlot->minOffset)
-          trackPlot->zoomOffset = -INFINITY;
-        trackPlot->setTrack(recordedTrack.tracks.back().pts, recordedTrack.waypoints);
-        recordedTrack.desc = "Recording" + trackSummary;
-      }
-      if(loc.time > recordLastSave + 60) {
-        saveGPX(&recordedTrack);
-        recordLastSave = loc.time;
-      }
+    // note MapsApp::updateLocation() has already filtered out points w/ poserr increased too much vs. prev
+    if(dist < minTrackDist && dt < minTrackTime && vert < minTrackDist)
+      return;
+    double d0 = prev.dist;
+    locs.emplace_back(loc);
+    locs.back().dist = d0 + dist;
+    if(loc.spd == 0)
+      locs.back().loc.spd = dist/dt;
+    if(recordedTrack.visible)
+      updateTrackMarker(&recordedTrack);  // rebuild marker
+    if(activeTrack == &recordedTrack) {
+      updateStats(activeTrack);
+      // if zoomed and scrolled to end of plot, scroll to include new location point
+      if(trackPlot->zoomScale > 1 && trackPlot->zoomOffset == trackPlot->minOffset)
+        trackPlot->zoomOffset = -INFINITY;
+      trackPlot->setTrack(recordedTrack.tracks.back().pts, recordedTrack.waypoints);
+      recordedTrack.desc = "Recording" + trackSummary;
     }
+    // append point to GPX file in case process is killed - pugixml will ignore the missing closing tags
+    if(!recordGPXStrm) {
+      recordGPXStrm.reset(new FileStream(recordedTrack.filename.c_str(), "rb+"));
+      // file is not created until user taps save button in track panel
+      if(!recordGPXStrm->is_open()) return;
+      // don't bother truncating since single <trkpt> node is over 30 bytes
+      recordGPXStrm->seek(-30, SEEK_END);  // before "</trkseg>\n</trk>\n</gpx>\n"
+    }
+    else if(!recordGPXStrm->is_open()) return;
+    PugiXMLWriter writer(*recordGPXStrm);
+    pugi::xml_document xmldoc;
+    saveWaypoint(xmldoc, locs.back());
+    xmldoc.save(writer, "  ", pugi::format_default | pugi::format_no_declaration);
   }
+}
+
+bool MapsTracks::saveTrack(GpxFile* track)
+{
+  if(track == &recordedTrack)
+    recordGPXStrm.reset();
+  return saveGPX(track);
 }
 
 static void addRouteStepMarker(Map* map, Waypoint& wp, GpxFile* track)
@@ -345,9 +332,6 @@ void MapsTracks::setTrackWidgets(TrackView_t view)
 void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
 {
   bool istrack = track->routes.empty() && !track->tracks.empty();
-  app->showPanel(trackPanel, true);
-  static_cast<TextLabel*>(trackPanel->selectFirst(".panel-title"))->setText(track->title.c_str());
-
   showTrack(track, true);
   bool isRecTrack = track == &recordedTrack;
   pauseRecordBtn->setVisible(isRecTrack);
@@ -355,6 +339,7 @@ void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
   saveCurrLocBtn->setVisible(isRecTrack);
 
   if(activeTrack != track) {
+    waypointsDirty = true; plotDirty = true;
     viewEntireTrack(track);
     if(!isRecTrack)
       track->marker->setStylePath("layers.selected-track.draw.track");
@@ -367,11 +352,12 @@ void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
       setTrackWidgets(TRACK_WAYPTS);
     if(istrack && wayptWidgets[0]->isVisible())
       setTrackWidgets(TRACK_PLOT);
+    wayptTabLabel->setText(fstring("%d waypoints", int(track->waypoints.size())).c_str());
   }
   trackPlot->zoomScale = 1.0;
   updateStats(track);
 
-  if(wayptWidgets[0]->isVisible()) {
+  if(waypointsDirty && wayptWidgets[0]->isVisible()) {
     waypointsDirty = false;
     if(activeTrack != track) {
       if(!istrack && track->routeMode.empty())
@@ -390,8 +376,9 @@ void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
     routeModeBtn->setVisible(!istrack);
     routePluginBtn->setVisible(!istrack);
   }
-  else
-    waypointsDirty = true;
+
+  app->showPanel(trackPanel, true);
+  static_cast<TextLabel*>(trackPanel->selectFirst(".panel-title"))->setText(track->title.c_str());
 }
 
 static std::string durationToStr(double totsecs)
@@ -406,11 +393,12 @@ void MapsTracks::setStatsText(const char* selector, std::string str)
 {
   Widget* widget = statsContent->selectFirst(selector);
   if(!widget || widget->node->type() != SvgNode::TEXT) return;
-  char* value = str.data();
+  char* value = const_cast<char*>(str.data());
   char* units = strchr(value, ' ');
-  if(units) *units++ = '\0';
-  static_cast<SvgTspan*>(widget->node->selectFirst(".stat-value-tspan"))->setText(value);
+  // we want to include space in units string
   static_cast<SvgTspan*>(widget->node->selectFirst(".stat-units-tspan"))->setText(units ? units : "");
+  if(units) *units = '\0';
+  static_cast<SvgTspan*>(widget->node->selectFirst(".stat-value-tspan"))->setText(value);
 }
 
 void MapsTracks::updateStats(GpxFile* track)
@@ -506,8 +494,10 @@ void MapsTracks::updateStats(GpxFile* track)
   trackSpark->setTrack(locs);
   plotVsTimeBtn->setVisible(ttot > 0);
 
-  //if(plotWidgets[0]->isVisible())
-  trackPlot->setTrack(locs, track->waypoints);  //else plotDirty = true;
+  if(plotDirty && plotWidgets[0]->isVisible()) {
+    plotDirty = false;
+    trackPlot->setTrack(locs, track->waypoints);
+  }
 }
 
 void MapsTracks::updateDistances()
@@ -973,7 +963,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     for(const std::string& s : order)
       ordercfg.push_back(s);
     if(activeTrack && activeTrack->modified)
-      activeTrack->modified = !saveGPX(activeTrack);
+      activeTrack->modified = !saveTrack(activeTrack);
   }
 }
 
@@ -1055,32 +1045,6 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     };
     tb->addWidget(measureBtn);
   }
-}
-
-static Widget* createStatsRow(std::vector<const char*> items)  // const char* title1, const char* class1, const char* title2, const char* class2)
-{
-  static const char* statBlockProtoSVG = R"(
-    <g layout="box">
-      <rect fill="none" width="150" height="40"/>
-      <text class="title-text weak" box-anchor="left top" margin="0 0 0 10" font-size="12"></text>
-      <text class="stat-text" box-anchor="left top" margin="15 0 0 16">
-        <tspan class="stat-value-tspan" font-size="16"></tspan>
-        <tspan class="stat-units-tspan" font-size="13"></tspan>
-      </text>
-    </g>
-  )";
-  std::unique_ptr<SvgNode> statBlockProto;
-  if(!statBlockProto)
-    statBlockProto.reset(loadSVGFragment(statBlockProtoSVG));
-
-  Widget* row = createRow();
-  for(size_t ii = 0; ii+1 < items.size(); ii += 2) {
-    Widget* block = new Widget(statBlockProto->clone());
-    block->selectFirst(".title-text")->setText(items[ii]);
-    block->selectFirst(".stat-text")->node->addClass(items[ii+1]);
-    row->addWidget(block);
-  }
-  return row;
 }
 
 static Waypoint interpLoc(const Waypoint& a, const Waypoint& b, double f)
@@ -1204,7 +1168,7 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
           activeTrack->title.append(" Copy");
       }
       updateDB(activeTrack);
-      saveGPX(activeTrack);
+      saveTrack(activeTrack);
       origLocs.clear();
     }
     setTrackEdit(true);
@@ -1231,11 +1195,34 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
   return saveTrackContent;
 }
 
+static Widget* createStatsRow(std::vector<const char*> items)  // const char* title1, const char* class1, const char* title2, const char* class2)
+{
+  static const char* statBlockProtoSVG = R"(
+    <g layout="box" box-anchor="hfill">
+      <!-- rect fill="none" width="150" height="40"/ -->
+      <text class="title-text weak" box-anchor="left top" margin="0 0 0 10" font-size="12"></text>
+      <text class="stat-text" box-anchor="left top" margin="15 0 0 16">
+        <tspan class="stat-value-tspan" font-size="16"></tspan>
+        <tspan class="stat-units-tspan" font-size="13"></tspan>
+      </text>
+    </g>
+  )";
+  std::unique_ptr<SvgNode> statBlockProto;
+  if(!statBlockProto)
+    statBlockProto.reset(loadSVGFragment(statBlockProtoSVG));
+
+  Widget* row = createRow();
+  for(size_t ii = 0; ii+1 < items.size(); ii += 2) {
+    Widget* block = new Widget(statBlockProto->clone());
+    block->selectFirst(".title-text")->setText(items[ii]);
+    block->selectFirst(".stat-text")->node->addClass(items[ii+1]);
+    row->addWidget(block);
+  }
+  return row;
+}
+
 void MapsTracks::createStatsContent()
 {
-  // Stats panel
-  statsContent = createColumn();
-
   // bearing? direction (of travel)?
   //statsContent->addWidget(createStatsRow({"Latitude", "track-latitude", "Longitude", "track-longitude"}));
   //Widget* statsCol = createColumn({
@@ -1252,10 +1239,11 @@ void MapsTracks::createStatsContent()
       createStatsRow({"Total time", "track-time", "Moving time", "track-moving-time",
                       "Distance", "track-dist", "Moving speed", "track-avg-speed"}),
       createStatsRow({"Ascent", "track-ascent", "Ascent speed", "track-ascent-speed",
-                      "Descent", "track-descent", "Descent speed", "track-descent-speed"}) });
+                      "Descent", "track-descent", "Descent speed", "track-descent-speed"}) }, "", "", "fill");
 
-  statsContent->addWidget(statsCol);
+  statsContent = createColumn({statsCol}, "", "", "fill");
   auto statsContainer = new ScrollWidget(new SvgDocument(), statsContent);
+  statsContainer->node->setAttribute("box-anchor", "fill");
   trackContainer->addWidget(statsContainer);
   statsWidgets.push_back(statsContainer);
 }
@@ -1471,11 +1459,17 @@ void MapsTracks::createPlotContent()
 
   auto plotContent = createColumn({axisSelRow, trackPlot, trackSliders, editTrackTb}, "", "", "hfill");
   auto plotContainer = new ScrollWidget(new SvgDocument(), plotContent);
+  plotContainer->node->setAttribute("box-anchor", "fill");
   trackContainer->addWidget(plotContainer);
   plotWidgets.push_back(plotContainer);
 
   plotContainer->addHandler([=](SvgGui* gui, SDL_Event* event) {
-    if(event->type == SvgGui::INVISIBLE) {
+    if(event->type == SvgGui::VISIBLE) {
+      if(plotDirty && activeTrack->activeWay())
+        trackPlot->setTrack(activeTrack->activeWay()->pts, activeTrack->waypoints);
+      plotDirty = false;
+    }
+    else if(event->type == SvgGui::INVISIBLE) {
       app->map->markerSetVisible(trackHoverMarker, false);
     }
     return false;
@@ -1504,7 +1498,7 @@ void MapsTracks::createWayptContent()
     else if(activeTrack->filename.empty())
       LOGE("Active track has no filename!");
     else
-      activeTrack->modified = !saveGPX(activeTrack);
+      activeTrack->modified = !saveTrack(activeTrack);
   };
 
   bool hasPlugins = !app->pluginManager->routeFns.empty();
@@ -1581,7 +1575,7 @@ void MapsTracks::createWayptContent()
   routeEditTb = createToolbar({ previewDistText, createStretch(),
       retryBtn, mapCenterWayptBtn, searchWayptBtn, bkmkWayptBtn, rteEditOverflowBtn });
 
-  auto wayptContainer = createColumn({ routeEditTb, sparkStats, wayptContent }, "", "", "hfill");
+  auto wayptContainer = createColumn({ routeEditTb, wayptContent }, "", "", "fill");
   trackContainer->addWidget(wayptContainer);
   wayptWidgets.push_back(wayptContainer);
 
@@ -1603,7 +1597,7 @@ void MapsTracks::createWayptContent()
       directRoutePreview = routeEditTb->isVisible();
       app->crossHair->setVisible(directRoutePreview);
       if(waypointsDirty)
-        populateWaypoints(activeTrack);
+        populateTrack(activeTrack);
     }
     else if(event->type == SvgGui::INVISIBLE) {
       directRoutePreview = false;
@@ -1640,15 +1634,15 @@ void MapsTracks::createTrackPanel()
     // show/hide track editing controls
     if(recordTrack && editTrackTb->isVisible())
       setTrackEdit(false);
-    app->setServiceState(recordTrack, 0.1f, 0);  //minTrackTime*1.1, minTrackDist*1.1);
+    app->setServiceState(recordTrack, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
   };
 
   stopRecordBtn->onClicked = [=](){
-    saveGPX(&recordedTrack);
+    recordedTrack.desc = ftimestr("%F") + trackSummary;
+    saveTrack(&recordedTrack);
     if(recordTrack)
       app->setServiceState(0);
     //updateDB(&recordedTrack);
-    recordedTrack.desc = ftimestr("%F") + trackSummary;
     tracks.push_back(std::move(recordedTrack));
     recordedTrack = GpxFile();
     recordTrack = false;
@@ -1679,8 +1673,8 @@ void MapsTracks::createTrackPanel()
     else if(event->type == MapsApp::PANEL_CLOSED) {
       app->pluginManager->cancelRequests(PluginManager::ROUTE);
       if(activeTrack && activeTrack->modified)
-        activeTrack->modified = !saveGPX(activeTrack);
-      if(activeTrack && app->panelHistory.back() != trackPanel) {
+        activeTrack->modified = !saveTrack(activeTrack);
+      if(activeTrack) {  //&& app->panelHistory.back() != trackPanel) {
         if(activeTrack != &recordedTrack)
           activeTrack->marker->setStylePath("layers.track.draw.track");
         if(!activeTrack->visible)
@@ -1713,21 +1707,24 @@ void MapsTracks::createTrackPanel()
   wayptTabLabel = new TextBox(createTextNode(""));
 
   Button* statsTabBtn = createToolbutton(uiIcon("sigma"), "Statistics");
+  statsTabBtn->node->setAttribute("box-anchor", "hfill");
   statsTabBtn->selectFirst(".toolbutton-content")->addWidget(sparkStats);
+  statsTabBtn->node->addClass("checked");
   statsWidgets.push_back(statsTabBtn->selectFirst(".checkmark"));
-  statsWidgets.back()->node->addClass("checked");
   statsTabBtn->onClicked = [=](){ setTrackWidgets(TRACK_STATS); };
 
   Button* plotTabBtn = createToolbutton(uiIcon("graph-line"), "Plot");
+  plotTabBtn->node->setAttribute("box-anchor", "hfill");
   plotTabBtn->selectFirst(".toolbutton-content")->addWidget(trackSpark);
+  plotTabBtn->node->addClass("checked");
   plotWidgets.push_back(plotTabBtn->selectFirst(".checkmark"));
-  plotWidgets.back()->node->addClass("checked");
   plotTabBtn->onClicked = [=](){ setTrackWidgets(TRACK_PLOT); };
 
   Button* wayptTabBtn = createToolbutton(uiIcon("waypoint"), "Waypoints");
+  wayptTabBtn->node->setAttribute("box-anchor", "hfill");
   wayptTabBtn->selectFirst(".toolbutton-content")->addWidget(wayptTabLabel);
+  wayptTabBtn->node->addClass("checked");
   wayptWidgets.push_back(wayptTabBtn->selectFirst(".checkmark"));
-  wayptWidgets.back()->node->addClass("checked");
   wayptTabBtn->onClicked = [=](){ setTrackWidgets(TRACK_WAYPTS); };
 
   Widget* tabBarRow = createRow({statsTabBtn, plotTabBtn, wayptTabBtn});
@@ -1795,13 +1792,14 @@ void MapsTracks::createTrackListPanel()
       populateTrack(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
     else {
       recordTrack = true;
-      app->setServiceState(true, 0.1f, 0);  //minTrackTime*1.1, minTrackDist*1.1);
+      app->setServiceState(true, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
       std::string timestr = ftimestr("%FT%H.%M.%S");
       FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
       recordedTrack = GpxFile(timestr, "Recording", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
       recordedTrack.loaded = true;
       recordedTrack.tracks.emplace_back();
-      recordedTrack.tracks.back().pts.push_back(app->currLocation);
+      if(app->hasLocation)
+        recordedTrack.tracks.back().pts.push_back(app->currLocation);
       recordedTrack.style = "#FF6030";  // use color in marker style instead?
       recordedTrack.marker = std::make_unique<TrackMarker>(app->map.get(), "layers.recording-track.draw.track");
       tracksDirty = true;
@@ -1836,6 +1834,10 @@ Button* MapsTracks::createPanel()
 {
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS tracks(title TEXT, filename TEXT, style TEXT,"
       " timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)), archived INTEGER DEFAULT 0);");
+
+  minTrackDist = app->config["tracks"]["min_distance"].as<double>(0.5);
+  minTrackTime = app->config["tracks"]["min_time"].as<double>(5);
+  gpsSamplePeriod = app->config["tracks"]["sample_period"].as<float>(0.1);
 
   createTrackListPanel();
   createTrackPanel();

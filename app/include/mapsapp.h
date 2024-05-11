@@ -86,7 +86,7 @@ public:
   LngLat tapLocation = {NAN, NAN};
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
-  int gpsSatsUsed = 0;
+  //int gpsSatsUsed = 0;
   bool currLocPlaceInfo = false;  // special case of showing place info for current location
   bool hasLocation = false;
   bool glNeedsInit = true;

@@ -38,6 +38,7 @@ public class MapsService extends Service implements LocationListener
     locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
   }
 
+  // GPS left on if interval < 10 sec - see Android GnssLocationProvider.java : GPS_POLLING_THRESHOLD_INTERVAL
   private void startLocationUpdates(float minInterval, float minDistance)
   {
     locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, (long)(minInterval*1000), minDistance, this);

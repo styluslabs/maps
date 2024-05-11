@@ -151,8 +151,8 @@ void TrackPlot::draw(SvgPainter* svgp) const
   int nvert = 5;
   real dhalt = (maxAlt - minAlt)/nvert;
   const char* altlbl = "%.0f";  //vertAxis ? "%.0f" : (MapsApp::metricUnits ? "%.0f m" : "%.0f ft");
-  for(int ii = 0; ii < nvert; ++ii)
-    labelw = std::max(labelw, p->textBounds(0, 0, fstring(altlbl, minAlt + ii*dhalt).c_str()));
+  for(int ii = 0; ii <= nvert; ++ii)
+    labelw = std::max(labelw, p->textBounds(0, 0, fstring(altlbl, minAlt + (nvert-ii)*dhalt).c_str()));
 
   int lmargin = vertAxis ? labelw+10 : 15;
   int tmargin = 5;
@@ -247,7 +247,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setStrokeAlign(Painter::StrokeOuter);
     p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
     for(int ii = 0; ii <= nvert; ++ii)
-      p->drawText(labelw-lmargin, (ii*ploth)/nvert, fstring(altlbl, minAlt + ii*dhalt).c_str());
+      p->drawText(labelw-lmargin, (ii*ploth)/nvert, fstring(altlbl, minAlt + (nvert-ii)*dhalt).c_str());
   }
   if(plotSpd) {
     real dhspd = (maxSpd - minSpd)/nvert;
@@ -298,22 +298,19 @@ void TrackSparkline::setTrack(const std::vector<Waypoint>& locs)
   altDistPlot.addPoint(locs.front().dist, -1000);
   for(auto& wpt : locs) {
     const Location& tpt = wpt.loc;
-    altDistPlot.addPoint(Point(wpt.dist, MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084));
-    minAlt = std::min(minAlt, tpt.alt);
-    maxAlt = std::max(maxAlt, tpt.alt);
+    double alt = MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084;
+    altDistPlot.addPoint(Point(wpt.dist, alt));
+    minAlt = std::min(minAlt, alt);
+    maxAlt = std::max(maxAlt, alt);
   }
   altDistPlot.addPoint(locs.back().dist, -1000);
-
-  //real elev = maxAlt - minAlt;
-  //minAlt -= 0.05*elev;
-  //maxAlt += 0.05*elev;
 }
 
 void TrackSparkline::draw(SvgPainter* svgp) const
 {
   Painter* p = svgp->p;
-  int w = mBounds.width() - 4;
-  int h = mBounds.height() - 4;
+  int w = std::max(0.0, mBounds.width() - 4);
+  int h = std::max(0.0, mBounds.height() - 4);
   p->translate(2, 2);
   p->clipRect(Rect::wh(w, h));
   p->fillRect(Rect::wh(w, h), Color::WHITE);
@@ -322,7 +319,7 @@ void TrackSparkline::draw(SvgPainter* svgp) const
   real elev = maxAlt - minAlt;
   int plotw = w;
   int ploth = h;
-  p->clipRect(Rect::ltrb(0, 0, w, h));  // clip plot to axes
+  //p->clipRect(Rect::ltrb(0, 0, w, h));  // clip plot to axes
   p->save();
   p->scale(plotw/maxDist, -ploth/(maxAlt - minAlt + 0.1*elev));
 

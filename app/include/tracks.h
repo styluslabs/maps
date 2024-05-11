@@ -3,6 +3,7 @@
 #include <list>
 #include "mapscomponent.h"
 #include "gpxfile.h"
+#include "ulib/fileutil.h"
 
 class TrackPlot;
 class TrackSparkline;
@@ -35,8 +36,7 @@ public:
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
   double minTrackTime = 5;  // seconds
-
-  static std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double precision = 1E6);
+  float gpsSamplePeriod = 0.1f;  // seconds
 
 private:
   void loadTracks(bool archived);
@@ -66,6 +66,9 @@ private:
   void editWaypoint(GpxFile* track, const Waypoint& wpt, std::function<void()> callback);
   void setStatsText(const char* selector, std::string str);
   void setTrackEdit(bool show);
+  bool saveTrack(GpxFile* track);
+  enum TrackView_t { TRACK_NONE=-1, TRACK_STATS=0, TRACK_PLOT, TRACK_WAYPTS };
+  void setTrackWidgets(TrackView_t view);
   // UI setup
   void createStatsContent();
   void createPlotContent();
@@ -80,7 +83,6 @@ private:
   std::vector<Widget*> statsWidgets;
   std::vector<Widget*> plotWidgets;
   std::vector<Widget*> wayptWidgets;
-  enum TrackView_t { TRACK_NONE=-1, TRACK_STATS=0, TRACK_PLOT, TRACK_WAYPTS };
 
   DragDropList* tracksContent = NULL;
   Widget* archivedContent = NULL;
@@ -109,6 +111,7 @@ private:
   Toolbar* editTrackTb = NULL;
   Widget* editTrackContent = NULL;
 
+  std::unique_ptr<FileStream> recordGPXStrm;
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;
   std::string insertionWpt;
@@ -123,6 +126,7 @@ private:
   bool tracksDirty = true;
   bool archiveDirty = true;
   bool waypointsDirty = true;
+  bool plotDirty = true;
   bool showAllWaypts = false;
   bool archiveLoaded = false;
   bool tapToAddWaypt = false;

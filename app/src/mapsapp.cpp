@@ -657,14 +657,14 @@ void MapsApp::updateLocation(const Location& _loc)
   double dh = _loc.alt - currLocation.alt;
   if(_loc.poserr > dr && _loc.alterr > std::abs(dh)
       && _loc.poserr > currLocation.poserr + dt*std::max(currLocation.spd, 1.0f)) {
-    LOGD("Rejecting location update: dt = %.3f s, %dr = %.2f m, err = %.2f m", dt, dr, _loc.poserr);
+    LOGW("Rejecting location update: dt = %.3f s, %dr = %.2f m, err = %.2f m", dt, dr, _loc.poserr);
     return;
   }
 
   currLocation = _loc;
   if(currLocation.time <= 0)
     currLocation.time = mSecSinceEpoch()/1000.0;
-  hasLocation = gpsSatsUsed > 0 || (_loc.poserr > 0 && _loc.poserr < 10);
+  //hasLocation = gpsSatsUsed > 0 || (_loc.poserr > 0 && _loc.poserr < 10);
   updateLocMarker();
 
   if(followState == FOLLOW_ACTIVE) {
@@ -701,8 +701,8 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
   if(!satsUsed)
     gpsStatusBtn->setText(fstring("%d", satsVisible).c_str());  //"%d/%d", satsUsed
   bool hadloc = hasLocation;
-  hasLocation = satsUsed > 0 || (currLocation.poserr > 0 && currLocation.poserr < 10);
-  gpsSatsUsed = satsUsed;
+  hasLocation = satsUsed > 0;  //|| (currLocation.poserr > 0 && currLocation.poserr < 10);  -- age of currLocation!?!
+  //gpsSatsUsed = satsUsed;
   if(hasLocation != hadloc)
     updateLocMarker();
 }

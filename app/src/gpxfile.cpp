@@ -151,7 +151,7 @@ static std::string saveGpxTime(double time)
   return std::string(timebuf);
 }
 
-static void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
+void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
 {
   trkpt.append_attribute("lat").set_value(fstring("%.7f", wpt.loc.lat).c_str());
   trkpt.append_attribute("lon").set_value(fstring("%.7f", wpt.loc.lng).c_str());
@@ -208,6 +208,38 @@ bool saveGPX(GpxFile* track, const char* filename)
       saveWaypoint(seg.append_child("trkpt"), wpt);
   }
   return doc.save_file(filename ? filename : track->filename.c_str(), "  ");
+}
+
+// decode encoded polyline, used by Valhalla, Google, etc.
+// - https://github.com/valhalla/valhalla/blob/master/docs/docs/decoding.md - Valhalla uses 1E6 precision
+// - https://developers.google.com/maps/documentation/utilities/polylinealgorithm - Google uses 1E5 precision
+std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double precision)
+{
+  const double invprec = 1/precision;
+  size_t i = 0;     // what byte are we looking at
+
+  // Handy lambda to turn a few bytes of an encoded string into an integer
+  auto deserialize = [&encoded, &i](const int previous) {
+    // Grab each 5 bits and mask it in where it belongs using the shift
+    int byte, shift = 0, result = 0;
+    do {
+      byte = static_cast<int>(encoded[i++]) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    // Undo the left shift from above or the bit flipping and add to previous since it's an offset
+    return previous + (result & 1 ? ~(result >> 1) : (result >> 1));
+  };
+
+  // Iterate over all characters in the encoded string
+  std::vector<Waypoint> shape;
+  int lon = 0, lat = 0;
+  while (i < encoded.length()) {
+    lat = deserialize(lat);
+    lon = deserialize(lon);
+    shape.emplace_back(LngLat(lon*invprec, lat*invprec));
+  }
+  return shape;
 }
 
 // Tangram stores marker coords normalized to marker extent (max of bbox width, height) and line width is in

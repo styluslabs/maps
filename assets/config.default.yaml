@@ -32,6 +32,13 @@ search:
   min_poi_zoom: 19
   hide_bookmarks: false
 
+tracks:
+  # location added to track if min_distance (m) OR min_time (sec) from last point; this sets density of points
+  min_distance: 0.5
+  min_time: 5
+  # Android leaves GPS on continously if sample_period (sec) is less than 10 seconds
+  sample_period: 0.1
+
 metric_units: true
 
 # set global.shuffle_seed to random value each time app is run (can be used, e.g., to randomize POI priorities)

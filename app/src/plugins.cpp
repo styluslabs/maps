@@ -344,7 +344,7 @@ static int addRouteGPX(duk_context* ctx)
 static int addRoutePolyline(duk_context* ctx)
 {
   const char* str = duk_require_string(ctx, 0);
-  auto route = MapsTracks::decodePolylineStr(str);
+  auto route = decodePolylineStr(str);
   MapsApp::inst->mapsTracks->addRoute(std::move(route));
   return 0;
 }
