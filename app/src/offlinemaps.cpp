@@ -422,7 +422,7 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
       olinfo.sources.push_back(
           {src->name(), info.cacheFile, info.url, info.urlOptions, src->maxZoom(), {}});
       if(!src->isRaster())
-        Tangram::YamlPath("global.search_data").get(map->getScene()->config(), olinfo.sources.back().searchData);
+        Tangram::YamlPath("application.search_data").get(map->getScene()->config(), olinfo.sources.back().searchData);
     }
   }
   //offlinePending.push_back(std::move(olinfo));
@@ -603,7 +603,7 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
   if(hasPois && app->config["storage"]["import_pois"].as<bool>(true))
     olinfo.sources.back().searchData.push_back(YAML::Load(fstring("[ { layer: __IMPORT__, layers: [\"%s\"] } ]", srcpath.c_str())));
   else if(!tileSource->isRaster())
-    Tangram::YamlPath("global.search_data").get(app->map->getScene()->config(), olinfo.sources.back().searchData);
+    Tangram::YamlPath("application.search_data").get(app->map->getScene()->config(), olinfo.sources.back().searchData);
   //offlinePending.push_back(std::move(olinfo));
 
   queueOfflineTask(olinfo.id, [olinfo=std::move(olinfo)](){

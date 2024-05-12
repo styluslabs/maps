@@ -107,7 +107,7 @@ private:
   Button* plotVsTimeBtn = NULL;
   Widget* liveStatsRow = NULL;
   Widget* nonliveStatsRow = NULL;
-  TextBox* wayptTabLabel = NULL;
+  Widget* wayptTabLabel = NULL;
   Toolbar* editTrackTb = NULL;
   Widget* editTrackContent = NULL;
 

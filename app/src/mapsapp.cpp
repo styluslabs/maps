@@ -222,7 +222,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   if(currLocPlaceInfo) {
     item->selectFirst(".place-info-row")->setVisible(false);
     item->selectFirst(".currloc-info-row")->setVisible(true);
-    updateLocation(currLocation);  // set lng, lat, elevation text
+    updateLocPlaceInfo();
     return;
   }
 
@@ -647,6 +647,24 @@ void MapsApp::updateLocMarker()
       {"selected", currLocPlaceInfo ? 1 : 0}, {"angle", locMarkerAngle}}});
 }
 
+void MapsApp::updateLocPlaceInfo()
+{
+  SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
+  std::string locstr = lngLatToStr(currLocation.lngLat());
+  if(currLocation.poserr > 0)
+    locstr += fstring(" (\u00B1%.0f m)", currLocation.poserr);
+  // m/s -> kph or mph
+  locstr += metricUnits ? fstring(" %.1f km/h", currLocation.spd*3.6)
+      : fstring(" %.1f mph", currLocation.spd*2.23694);
+  if(coordnode)
+    coordnode->setText(locstr.c_str());
+
+  SvgText* elevnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".currloc-elevation-text"));
+  double elev = currLocation.alt;
+  if(elevnode)
+    elevnode->setText(elevToStr(elev).c_str());
+}
+
 void MapsApp::updateLocation(const Location& _loc)
 {
   // we may get same location twice due to service for track recording
@@ -674,20 +692,7 @@ void MapsApp::updateLocation(const Location& _loc)
   }
 
   if(currLocPlaceInfo) {
-    SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
-    std::string locstr = lngLatToStr(currLocation.lngLat());
-    if(currLocation.poserr > 0)
-      locstr += fstring(" (\u00B1%.0f m)", currLocation.poserr);
-    // m/s -> kph or mph
-    locstr += metricUnits ? fstring(" %.1f km/h", currLocation.spd*3.6)
-        : fstring(" %.1f mph", currLocation.spd*2.23694);
-    if(coordnode)
-      coordnode->setText(locstr.c_str());
-
-    SvgText* elevnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".currloc-elevation-text"));
-    double elev = currLocation.alt;
-    if(elevnode)
-      elevnode->setText(elevToStr(elev).c_str());
+    updateLocPlaceInfo();
     pickResultCoord = _loc.lngLat();  // update coords for use when saving bookmark, waypoint, etc
   }
 
@@ -1330,13 +1335,14 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   });
   appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
   appDebugMenu->addItem("Set location", [this](){
+    Location loc(currLocation);
     if(!std::isnan(pickResultCoord.latitude)) {
-      currLocation.lng = pickResultCoord.longitude;
-      currLocation.lat = pickResultCoord.latitude;
+      loc.lng = pickResultCoord.longitude;
+      loc.lat = pickResultCoord.latitude;
     }
     else
-      map->getPosition(currLocation.lng, currLocation.lat);
-    updateLocation(currLocation);
+      map->getPosition(loc.lng, loc.lat);
+    updateLocation(loc);
   });
   overflowMenu->addSubmenu("App debug", appDebugMenu);
 
@@ -1572,7 +1578,8 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
     else if(gui->pressedWidget == panelSplitter)
       return false;
     else if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
-        && event->tfinger.touchId != SDL_TOUCH_MOUSEID && (gui->fingerClicks == 0 || !gui->pressedWidget)) {
+        && event->tfinger.touchId != SDL_TOUCH_MOUSEID
+        && (!gui->pressedWidget || (gui->pressedWidget->isDescendantOf(toolbar) && gui->fingerClicks == 0))) {
       if(gui->pressedWidget)
         gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, NULL);  //this);
       auto& p0 = gui->pressEvent.tfinger;

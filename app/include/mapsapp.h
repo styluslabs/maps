@@ -68,6 +68,7 @@ public:
   int getPanelWidth() const;
   std::string getPlaceTitle(const Properties& props) const;
   void gotoCameraPos(const CameraPosition& campos);
+  void updateLocPlaceInfo();
 
   Location currLocation = {0};
   float orientation = 0;

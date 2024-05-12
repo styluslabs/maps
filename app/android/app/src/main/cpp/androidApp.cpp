@@ -355,7 +355,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   shareFileMID = jniEnv->GetMethodID(cls, "shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
   notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
-  setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceStateMID", "(IFF)V");
+  setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceState", "(IFF)V");
 
   return TANGRAM_JNI_VERSION;
 }

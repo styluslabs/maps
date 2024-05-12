@@ -53,7 +53,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
             app->tapEvent(initCOM.x, initCOM.y);
           else {
             // note delay is less than max double tap delay (400ms)
-            tapTimer = app->gui->setTimer(350, app->win.get(), tapTimer, [this]() {
+            tapTimer = app->gui->setTimer(250, app->win.get(), tapTimer, [this]() {
               app->tapEvent(initCOM.x, initCOM.y);
               tapTimer = NULL;
               return 0;

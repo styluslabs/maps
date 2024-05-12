@@ -36,9 +36,9 @@ function esaSentinel2()
     "global.sentinel2_date": date,
     "global.sentinel2_age": maxage,
     "global.sentinel2_clouds": maxcc,
-    "global.gui_variables.sentinel2_date": { "label": "Date", "type": "date", "onchange": "esaSentinel2" },
-    "global.gui_variables.sentinel2_age": { "label": "Max age (days)", "type": "int", "min": "0", "max": "180", "onchange": "esaSentinel2" },
-    "global.gui_variables.sentinel2_clouds": { "label": "Max cloud cover (%)", "type": "int", "min": "0", "max": "100", "onchange": "esaSentinel2" },
+    "application.gui_variables.sentinel2_date": { "label": "Date", "type": "date", "onchange": "esaSentinel2" },
+    "application.gui_variables.sentinel2_age": { "label": "Max age (days)", "type": "int", "min": "0", "max": "180", "onchange": "esaSentinel2" },
+    "application.gui_variables.sentinel2_clouds": { "label": "Max cloud cover (%)", "type": "int", "min": "0", "max": "100", "onchange": "esaSentinel2" },
   };
   const mapSrc = {
     "title": "Sentinel 2 " + date,

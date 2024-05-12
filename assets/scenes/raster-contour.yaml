@@ -25,6 +25,8 @@
 global:
     contour_color: '#C56008'  #vec4(0.773,0.376,0.031,1.)
 
+
+application:
     gui_variables:
         u_exaggerate:
             style: hillshade
@@ -41,11 +43,7 @@ global:
             min: 0
             max: 9000
 
-
-        #contour_color:
-        #    label: Contour Color
-
-    __legend:
+    legend:
         # menu item to toggle will be created for each item; needs to fit beside location button
         slope_angle:
             title: Slope Angle

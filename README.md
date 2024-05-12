@@ -69,9 +69,9 @@ If you have an idea for a plugin, I'm happy to help and to expose the necessary 
 ## Vector Maps ##
 
 Vector maps are styled using [Tangram YAML scene files](https://tangrams.readthedocs.io) with a few additions:
-* `global.gui_variables` to provide GUI controls in the Edit Source panel linked to scene file globals or shader uniforms
-* `global.search_data` to define which features and tags should be indexed for offline search
-* `global.__legend` to define SVG images to be optionally displayed over the map
+* `application.gui_variables` to provide GUI controls in the Edit Source panel linked to scene file globals or shader uniforms
+* `application.search_data` to define which features and tags should be indexed for offline search
+* `application.legend` to define SVG images to be optionally displayed over the map
 * `$latitude` and `$longitude` for tile center are available for filters to make location-specific adjustments to styling
 * SVG images are supported for textures; sprites can be created automatically using SVG id attributes.
 

@@ -103,12 +103,12 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
     plotVsDist = true;
 
   // rounding for altitude range
-  real elev = std::max(1.0, maxAlt - minAlt);
+  real elev = std::max(10.0, maxAlt - minAlt);
   real expnt = std::pow(10, std::floor(std::log10(elev)));
   real lead = elev/expnt;
   real quant = lead > 5 ? expnt : lead > 2 ? expnt/2 : expnt/5;
-  minAlt = std::floor(minAlt/quant)*quant;  //-= 0.05*elev;
-  maxAlt = std::ceil(maxAlt/quant)*quant;  //+= 0.05*elev;
+  maxAlt = std::ceil((minAlt + elev)/quant)*quant;
+  minAlt = std::floor(minAlt/quant)*quant;
   // assuming 5 vertical divisions
   minSpd = 0;
   maxSpd = std::ceil(maxSpd/5)*5;
@@ -150,14 +150,13 @@ void TrackPlot::draw(SvgPainter* svgp) const
   real labelw = 0;
   int nvert = 5;
   real dhalt = (maxAlt - minAlt)/nvert;
-  const char* altlbl = "%.0f";  //vertAxis ? "%.0f" : (MapsApp::metricUnits ? "%.0f m" : "%.0f ft");
   for(int ii = 0; ii <= nvert; ++ii)
-    labelw = std::max(labelw, p->textBounds(0, 0, fstring(altlbl, minAlt + (nvert-ii)*dhalt).c_str()));
+    labelw = std::max(labelw, p->textBounds(0, 0, fstring("%.0f", minAlt + (nvert-ii)*dhalt).c_str()));
 
   int lmargin = vertAxis ? labelw+10 : 15;
-  int tmargin = 5;
+  int tmargin = 5;  // need to leave some room for topmost vertical axis label
   int plotw = w - 2*lmargin;
-  int ploth = h - 15 - tmargin;
+  int ploth = h - 20 - tmargin;
   plotWidth = plotw;
   p->translate(lmargin, tmargin);
   p->setTextAlign(Painter::AlignHCenter | Painter::AlignBottom);
@@ -176,12 +175,15 @@ void TrackPlot::draw(SvgPainter* svgp) const
     real anch = std::ceil(xMin/dw)*dw;
     real dxlbl = dw*plotw/dx;
     real anchlbl = (anch - xMin)*(plotw/dx);
-    for(int ii = 0; anch + ii*dw < xMax; ++ii)
-      p->drawText(anchlbl + ii*dxlbl, h, fstring("%.*f", prec, anch + ii*dw).c_str());
+    for(int ii = 1; anch + ii*dw < xMax; ++ii)
+      p->drawText(anchlbl + ii*dxlbl, h - tmargin, fstring("%.*f", prec, anch + ii*dw).c_str());
+    real wlbl0 = p->drawText(anchlbl, h - tmargin, "0");  //fstring("%.*f", prec, anch).c_str());
+    p->setTextAlign(Painter::AlignLeft | Painter::AlignBottom);
+    p->drawText(anchlbl + wlbl0, h - tmargin, MapsApp::metricUnits ? " m" : " mi");
     // vert grid lines
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color(0, 0, 0, 64), 0.75);
-    for(int ii = 0; anchlbl + ii*dxlbl < w; ++ii)
+    for(int ii = 0; anchlbl + ii*dxlbl < plotw; ++ii)
       p->drawLine(Point(anchlbl + ii*dxlbl, ploth), Point(anchlbl + ii*dxlbl, 0));
   }
   else {
@@ -193,13 +195,13 @@ void TrackPlot::draw(SvgPainter* svgp) const
       real secs = xMin + ii*dw;
       real hrs = std::floor(secs/3600);
       real mins = (secs - hrs*3600)/60;
-      p->drawText(ii*plotw/nhorz, h, fstring("%02.0f:%02.0f", hrs, mins).c_str());
+      p->drawText(ii*plotw/nhorz, h - tmargin, fstring("%02.0f:%02.0f", hrs, mins).c_str());
     }
     // vert grid lines
     real dxlbl = plotw/nhorz;
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color(0, 0, 0, 64), 0.75);
-    for(int ii = 1; ii*dxlbl < w; ++ii)
+    for(int ii = 1; ii*dxlbl < plotw; ++ii)
       p->drawLine(Point(ii*dxlbl, ploth), Point(ii*dxlbl, 0));
   }
   // horz grid lines
@@ -212,7 +214,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->setFillBrush(Brush::NONE);
   if(vertAxis)
     p->drawLine(Point(labelw + 5, h-15), Point(labelw + 5, 0));
-  p->drawLine(Point(lmargin > 0 ? labelw + 5 : 0, h-15), Point(w, h-15));
+  p->drawLine(Point(0, ploth), Point(plotw, ploth));
 
   // plot
   p->save();
@@ -229,7 +231,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
     p->restore();
   }
-  if(plotSpd) {
+  if(plotSpd && maxSpd > 0) {
     p->scale(1, -ploth/(maxSpd - minSpd));
     p->translate(0, -maxSpd);
     p->setFillBrush(Brush::NONE);
@@ -247,18 +249,23 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setStrokeAlign(Painter::StrokeOuter);
     p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
     for(int ii = 0; ii <= nvert; ++ii)
-      p->drawText(labelw-lmargin, (ii*ploth)/nvert, fstring(altlbl, minAlt + (nvert-ii)*dhalt).c_str());
+      p->drawText(labelw-lmargin, (ii*ploth)/nvert, fstring("%.0f", minAlt + (nvert-ii)*dhalt).c_str());
+    // draw units for top-most label only
+    p->setTextAlign(Painter::AlignLeft | Painter::AlignVCenter);
+    p->drawText(labelw-lmargin, 0, MapsApp::metricUnits ? " m" : " ft");
+
   }
-  if(plotSpd) {
+  if(plotSpd && maxSpd > 0) {
     real dhspd = (maxSpd - minSpd)/nvert;
-    const char* spdlbl = "%.0f";  //vertAxis ? "%.0f" : (MapsApp::metricUnits ? "%.0f km/h" : "%.0f mph");
     p->setFillBrush(Color::RED);
     //p->setStroke(Color::NONE);
     p->setStroke(Color::WHITE, 4);
     p->setStrokeAlign(Painter::StrokeOuter);
     p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
-    for(int ii = 0; ii <= nvert; ++ii)
-      p->drawText(w-lmargin-5, (ii*ploth)/nvert, fstring(spdlbl, minSpd + ii*dhspd).c_str());
+    const char* spdlbl = MapsApp::metricUnits ? "%.0f km/h" : "%.0f mph";
+    p->drawText(w-lmargin-5, 0, fstring(spdlbl, minSpd + nvert*dhspd).c_str());
+    for(int ii = 1; ii <= nvert; ++ii)
+      p->drawText(w-lmargin-5, (ii*ploth)/nvert, fstring("%.0f", minSpd + (nvert-ii)*dhspd).c_str());
   }
 
   // draw markers for waypoints
@@ -275,7 +282,8 @@ void TrackPlot::draw(SvgPainter* svgp) const
   }
   // text (we want text on top of all lines)
   p->setFillBrush(Color::BLACK);
-  p->setStroke(Color::NONE);
+  p->setStroke(Color::WHITE, 2);
+  p->setStrokeAlign(Painter::StrokeOuter);
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
     if(s < 0 || s > 1) continue;
@@ -333,7 +341,7 @@ void TrackSparkline::draw(SvgPainter* svgp) const
   p->setStroke(Color::WHITE, 2);
   p->setStrokeAlign(Painter::StrokeOuter);
   p->setFillBrush(Color::BLACK);
-  p->setFontSize(12);
+  p->setFontSize(11);
   p->setTextAlign(Painter::AlignLeft | Painter::AlignVCenter);
   p->drawText(2, 8, MapsApp::elevToStr(maxAlt).c_str());
   p->drawText(2, ploth - 8, MapsApp::elevToStr(minAlt).c_str());

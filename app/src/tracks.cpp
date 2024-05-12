@@ -66,8 +66,9 @@ void MapsTracks::updateLocation(const Location& loc)
     else if(!recordGPXStrm->is_open()) return;
     PugiXMLWriter writer(*recordGPXStrm);
     pugi::xml_document xmldoc;
-    saveWaypoint(xmldoc, locs.back());
-    xmldoc.save(writer, "  ", pugi::format_default | pugi::format_no_declaration);
+    pugi::xml_node trkpt = xmldoc.append_child("trkpt");
+    saveWaypoint(trkpt, locs.back());
+    trkpt.print(writer, "  ", pugi::format_default | pugi::format_no_declaration);
   }
 }
 
@@ -455,9 +456,9 @@ void MapsTracks::updateStats(GpxFile* track)
 
   double slopeDeg = std::atan(currSlope)*180/M_PI;
   setStatsText(".track-slope",
-      fstring("%.*f%% (%.*f\00B0)", currSlope < 0.1 ? 1 : 0, currSlope*100, slopeDeg < 10 ? 1 : 0, slopeDeg));
+      fstring("%.*f%% (%.*f\u00B0)", currSlope < 0.1 ? 1 : 0, currSlope*100, slopeDeg < 10 ? 1 : 0, slopeDeg));
 
-  setStatsText(".track-direction", fstring("%.0f\00B0", loc.dir));
+  setStatsText(".track-direction", fstring("%.0f\u00B0", loc.dir));
 
   double ttot = locs.empty() ? 0 : locs.back().loc.time - locs.front().loc.time;
   auto timeStr = durationToStr(ttot);
@@ -515,8 +516,11 @@ void MapsTracks::updateDistances()
       while(rteidx < route.size()-1 && route[rteidx].lngLat() != it->lngLat()) ++rteidx;
       TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
       std::string s = MapsApp::distKmToStr(route[rteidx].dist/1000);
+      double alt = it->loc.alt > 0 ? it->loc.alt : route[rteidx].loc.alt;
+      if(alt > 0)
+        s.append(" | ").append(MapsApp::elevToStr(alt));
       if(!it->desc.empty())
-        s.append(u8" \u2022 ").append(it->desc);
+        s.append(" | ").append(it->desc);  //u8" \u2022 " -- filled circle
       detail->setText(s.c_str());
       it->dist = route[rteidx].dist;  // for stats plot
     }
@@ -1171,7 +1175,7 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
       saveTrack(activeTrack);
       origLocs.clear();
     }
-    setTrackEdit(true);
+    setTrackEdit(false);
   };
   Widget* saveTrackContent = createInlineDialog(
       {editTrackRow}, "Save Copy", [=](){ saveTrackFn(true); }, [=](){ setTrackEdit(false); });
@@ -1179,7 +1183,7 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
   Button* saveCopyBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
   saveCopyBtn->setIcon(NULL);
   Button* saveBtn = createToolbutton(uiIcon("save"), "Save", true);
-  saveBtn->onClicked = [=](){ saveTrackFn(false); };
+  saveBtn->onClicked = [=](){ saveTrackContent->setVisible(false); saveTrackFn(false); };
   saveCopyBtn->parent()->addWidget(saveBtn);
 
   editTrackTitle->onChanged = [=](const char* s){ saveCopyBtn->setEnabled(s[0]); };
@@ -1198,10 +1202,10 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
 static Widget* createStatsRow(std::vector<const char*> items)  // const char* title1, const char* class1, const char* title2, const char* class2)
 {
   static const char* statBlockProtoSVG = R"(
-    <g layout="box" box-anchor="hfill">
+    <g layout="box" box-anchor="hfill" margin="2 5">
       <!-- rect fill="none" width="150" height="40"/ -->
-      <text class="title-text weak" box-anchor="left top" margin="0 0 0 10" font-size="12"></text>
-      <text class="stat-text" box-anchor="left top" margin="15 0 0 16">
+      <text class="title-text weak" box-anchor="left top" font-size="12"></text>
+      <text class="stat-text" box-anchor="left top" margin="15 0 0 6">
         <tspan class="stat-value-tspan" font-size="16"></tspan>
         <tspan class="stat-units-tspan" font-size="13"></tspan>
       </text>
@@ -1223,25 +1227,15 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
 
 void MapsTracks::createStatsContent()
 {
-  // bearing? direction (of travel)?
-  //statsContent->addWidget(createStatsRow({"Latitude", "track-latitude", "Longitude", "track-longitude"}));
-  //Widget* statsCol = createColumn({
-  //    createStatsRow({"Altitude", "track-altitude", "Speed", "track-speed"}),
-  //    createStatsRow({"Total time", "track-time", "Moving time", "track-moving-time"}),
-  //    createStatsRow({"Distance", "track-dist", "Moving speed", "track-avg-speed"}),
-  //    createStatsRow({"Ascent", "track-ascent", "Descent", "track-descent"}),
-  //    createStatsRow({"Ascent speed", "track-ascent-speed", "Descent speed", "track-descent-speed"}) });
-
   liveStatsRow = createStatsRow({"Altitude", "track-altitude", "Speed", "track-speed",
       "Slope", "track-slope", "Direction", "track-direction"});
   nonliveStatsRow = createStatsRow({"Start", "track-start-date", "End", "track-end-date"});
-  Widget* statsCol = createColumn({ liveStatsRow, nonliveStatsRow,
+  statsContent = createColumn({ liveStatsRow, nonliveStatsRow,
       createStatsRow({"Total time", "track-time", "Moving time", "track-moving-time",
                       "Distance", "track-dist", "Moving speed", "track-avg-speed"}),
       createStatsRow({"Ascent", "track-ascent", "Ascent speed", "track-ascent-speed",
-                      "Descent", "track-descent", "Descent speed", "track-descent-speed"}) }, "", "", "fill");
+                      "Descent", "track-descent", "Descent speed", "track-descent-speed"}) }, "", "", "hfill");
 
-  statsContent = createColumn({statsCol}, "", "", "fill");
   auto statsContainer = new ScrollWidget(new SvgDocument(), statsContent);
   statsContainer->node->setAttribute("box-anchor", "fill");
   trackContainer->addWidget(statsContainer);
@@ -1270,14 +1264,14 @@ void MapsTracks::createPlotContent()
   horzAxisMenu->addItem(plotVsTimeBtn);
   plotVsDistBtn->setChecked(true);
 
-  auto updatePlotAxisBtns = [=](){
-    std::string altstr = MapsApp::metricUnits ? "Altitude (m)" : "Altitude (ft)";  //"Altitude"
-    std::string spdstr = MapsApp::metricUnits ? "Speed (km/h)" : "Speed (mph)";  //"Speed"
-    vertAxisSelBtn->setTitle((trackPlot->plotAlt && trackPlot->plotSpd ?
-        (altstr + ", " + spdstr) : (trackPlot->plotAlt ? altstr : spdstr)).c_str());
-    horzAxisSelBtn->setTitle(trackPlot->plotVsDist ?
-        (MapsApp::metricUnits ? "Distance (km)" : "Distance (mi)") : "Time");  //"Distance"
-  };
+  //auto updatePlotAxisBtns = [=](){
+  //  std::string altstr = MapsApp::metricUnits ? "Altitude (m)" : "Altitude (ft)";  //"Altitude"
+  //  std::string spdstr = MapsApp::metricUnits ? "Speed (km/h)" : "Speed (mph)";  //"Speed"
+  //  vertAxisSelBtn->setTitle((trackPlot->plotAlt && trackPlot->plotSpd ?
+  //      (altstr + ", " + spdstr) : (trackPlot->plotAlt ? altstr : spdstr)).c_str());
+  //  horzAxisSelBtn->setTitle(trackPlot->plotVsDist ?
+  //      (MapsApp::metricUnits ? "Distance (km)" : "Distance (mi)") : "Time");  //"Distance"
+  //};
 
   plotAltiBtn->onClicked = [=](){
     plotAltiBtn->setChecked(!plotAltiBtn->isChecked());
@@ -1286,7 +1280,9 @@ void MapsTracks::createPlotContent()
       trackPlot->plotSpd = true;
       plotSpeedBtn->setChecked(true);
     }
-    updatePlotAxisBtns();
+    //updatePlotAxisBtns();
+    vertAxisSelBtn->setTitle(trackPlot->plotAlt && trackPlot->plotSpd ?
+        "Altitude, Speed" : (trackPlot->plotAlt ? "Altitude" : "Speed"));
     trackPlot->redraw();
   };
 
@@ -1297,7 +1293,9 @@ void MapsTracks::createPlotContent()
       trackPlot->plotAlt = true;
       plotAltiBtn->setChecked(true);
     }
-    updatePlotAxisBtns();
+    //updatePlotAxisBtns();
+    vertAxisSelBtn->setTitle(trackPlot->plotAlt && trackPlot->plotSpd ?
+        "Altitude, Speed" : (trackPlot->plotAlt ? "Altitude" : "Speed"));
     trackPlot->redraw();
   };
 
@@ -1305,7 +1303,8 @@ void MapsTracks::createPlotContent()
     trackPlot->plotVsDist = vsdist;
     plotVsDistBtn->setChecked(vsdist);
     plotVsTimeBtn->setChecked(!vsdist);
-    updatePlotAxisBtns();
+    //updatePlotAxisBtns();
+    horzAxisSelBtn->setTitle(trackPlot->plotVsDist ? "Distance" : "Time");
     trackPlot->redraw();
   };
   plotVsTimeBtn->onClicked = [=](){ horzAxisSelFn(false); };
@@ -1530,10 +1529,12 @@ void MapsTracks::createWayptContent()
   showAllWptsBtn->onClicked = [=](){
     showAllWaypts = !showAllWaypts;
     showAllWptsBtn->setChecked(showAllWaypts);
+    waypointsDirty = true;
     populateTrack(activeTrack);
   };
   showAllWptsBtn->setChecked(showAllWaypts);
   trackOverflow->addItem(showAllWptsBtn);
+  wayptWidgets.push_back(showAllWptsBtn);
 
   // route edit toolbar - I think this will eventually be a floating toolbar
   previewDistText = new TextBox(createTextNode(""));
@@ -1687,7 +1688,7 @@ void MapsTracks::createTrackPanel()
 
   // tab bar for switching between stats, plot, and waypoints
   static const char* sparkStatsSVG = R"(
-    <g layout="box" box-anchor="vfill">
+    <g layout="box" box-anchor="fill">
       <rect class="min-width-rect" width="60" height="20" fill="none"/>
       <g layout="flex" flex-direction="column" box-anchor="vfill" margin="0 2" font-size="13">
         <text class="spark-dist" box-anchor="left"></text>
@@ -1700,11 +1701,11 @@ void MapsTracks::createTrackPanel()
   sparkStats = new Widget(loadSVGFragment(sparkStatsSVG));
 
   trackSpark = new TrackSparkline();
-  trackSpark->mBounds = Rect::wh(200, 50);  //80);
+  trackSpark->mBounds = Rect::wh(200, 40);  //80);
   trackSpark->node->setAttribute("box-anchor", "hfill");
   trackSpark->setMargins(1, 1);
 
-  wayptTabLabel = new TextBox(createTextNode(""));
+  wayptTabLabel = new Widget(loadSVGFragment("<g box-anchor='hfill' layout='box'><text font-size='13'></text></g>"));
 
   Button* statsTabBtn = createToolbutton(uiIcon("sigma"), "Statistics");
   statsTabBtn->node->setAttribute("box-anchor", "hfill");
@@ -1736,7 +1737,7 @@ void MapsTracks::createTrackPanel()
   createWayptContent();
 
   // bottom of menu
-  trackOverflow->addItem("Edit", [=](){ showInlineDialogModal(editTrackContent); });
+  trackOverflow->addItem("Edit", uiIcon("edit"), [=](){ showInlineDialogModal(editTrackContent); });
 
   trackOverflow->addItem("Export", [=](){
     MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}},
@@ -1803,6 +1804,8 @@ void MapsTracks::createTrackListPanel()
       recordedTrack.style = "#FF6030";  // use color in marker style instead?
       recordedTrack.marker = std::make_unique<TrackMarker>(app->map.get(), "layers.recording-track.draw.track");
       tracksDirty = true;
+      // create GPX file (so track data is safely saved w/o additional user input after tapping record btn)
+      saveTrack(&recordedTrack);
       setTrackVisible(&recordedTrack, true);
       populateTrack(&recordedTrack);
       setTrackWidgets(TRACK_STATS);  // plot isn't very useful until there are enough points
@@ -1882,7 +1885,6 @@ Button* MapsTracks::createPanel()
         SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
         item->onClicked = [=](){ setTrackVisible(track, !track->visible); };
         item->setChecked(track->visible || track == activeTrack);
-        break;
       }
     }
     return false;

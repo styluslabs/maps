@@ -41,9 +41,10 @@ public class MapsService extends Service implements LocationListener
   // GPS left on if interval < 10 sec - see Android GnssLocationProvider.java : GPS_POLLING_THRESHOLD_INTERVAL
   private void startLocationUpdates(float minInterval, float minDistance)
   {
-    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, (long)(minInterval*1000), minDistance, this);
+    long intervalMsec = (long)(minInterval*1000);
+    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, intervalMsec, minDistance, this);
     if(locationManager.getProvider("fused") != null) {
-      locationManager.requestLocationUpdates("fused", minInterval, minDistance, this);
+      locationManager.requestLocationUpdates("fused", intervalMsec, minDistance, this);
       onLocationChanged(locationManager.getLastKnownLocation("fused"));
     }
     else
@@ -78,7 +79,7 @@ public class MapsService extends Service implements LocationListener
     String action = intent.getAction();
     if(action.equals(START_RECORDING)) {
       prepareNotification();  // this calls startForeground()
-      startLocationUpdates(intent.getFloatExtra(EXTRA_INTERVAL), intent.getFloatExtra(EXTRA_DISTANCE));
+      startLocationUpdates(intent.getFloatExtra(EXTRA_INTERVAL, 0), intent.getFloatExtra(EXTRA_DISTANCE, 0));
     }
     else if(action.equals(STOP_RECORDING)) {
       //isRecording = false;

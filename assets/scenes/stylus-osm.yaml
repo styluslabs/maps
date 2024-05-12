@@ -224,6 +224,8 @@ global:
     show_parking: false
     show_motorways: true
 
+
+application:
     gui_variables:
         show_polygons: { label: Polygons }
         show_bike: { label: Bike }

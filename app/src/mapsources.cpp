@@ -325,11 +325,6 @@ void MapsSources::populateSources()
         if(key == currSource) return;
         bool show = !showBtn->isChecked();
         showBtn->setChecked(show);
-        if(show) {
-          auto src = mapSources[key];
-          if(src["url"] && !src["layer"].as<bool>(false))
-          currLayers.push_back(key);
-        }
         if(!show)
           currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), key), currLayers.end());
         else if(!isLayer) {
@@ -442,7 +437,7 @@ void MapsSources::onMapEvent(MapEvent_t event)
     // load legend widgets
     app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
     app->gui->deleteContents(app->legendContainer);
-    YAML::Node legends = app->readSceneValue("global.__legend");
+    YAML::Node legends = app->readSceneValue("application.legend");
     for(const auto& legend : legends) {
       Widget* widget = new Widget(loadSVGFragment(legend.second["svg"].Scalar().c_str()));
       app->legendContainer->addWidget(widget);
@@ -525,7 +520,7 @@ void MapsSources::populateSceneVars()
   sceneVarsLoaded = true;
   app->gui->deleteContents(varsContent);
 
-  YAML::Node vars = app->readSceneValue("global.gui_variables");
+  YAML::Node vars = app->readSceneValue("application.gui_variables");
   for(const auto& var : vars) {
     std::string name = var.first.Scalar();  //.as<std::string>("");
     std::string label = var.second["label"].as<std::string>("");
