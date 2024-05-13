@@ -165,7 +165,7 @@ void MapsSources::saveSources()
 
 void MapsSources::sourceModified()
 {
-  saveBtn->setEnabled(!titleEdit->text().empty() && (!urlEdit->isVisible() || !urlEdit->text().empty()));
+  saveBtn->setEnabled(!trimStr(titleEdit->text()).empty() && (!urlEdit->isVisible() || !urlEdit->text().empty()));
 }
 
 void MapsSources::rebuildSource(const std::string& srcname, bool async)
@@ -248,7 +248,7 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   }
   else {
     YAML::Node node = mapSources[savekey] ? mapSources[savekey] : YAML::Node(YAML::NodeType::Map);
-    node["title"] = titleEdit->text();
+    node["title"] = trimStr(titleEdit->text());
     if(node["layers"] || !mapSources[savekey]) {
       YAML::Node layers = YAML::Node(YAML::NodeType::Sequence);
       for(auto& src : currLayers)
@@ -256,7 +256,7 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
       node["layers"] = layers;
     }
     else if(node["url"])
-      node["url"] = urlEdit->text();
+      node["url"] = trimStr(urlEdit->text());
     YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
     // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
     for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {

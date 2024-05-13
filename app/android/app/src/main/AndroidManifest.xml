@@ -48,5 +48,10 @@
         <data android:scheme="geo" />
       </intent-filter>
     </activity>
+
+    <service
+      android:name="MapsService"
+      android:foregroundServiceType="location"/>
+
   </application>
 </manifest>

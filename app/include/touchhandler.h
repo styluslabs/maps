@@ -5,7 +5,7 @@
 
 class MapsApp;
 class SvgGui;
-class Timer;
+struct Timer;
 union SDL_Event;
 
 class TouchHandler

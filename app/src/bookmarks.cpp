@@ -88,9 +88,10 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   newListRow->addWidget(newListColor);
   newListColor->node->setAttribute("box-anchor", "bottom");
   auto newListContent = createInlineDialog({newListRow}, "Create", [=](){
-    int64_t list_id = insertNewList(newListTitle->text(), newListColor->color());
+    std::string title = trimStr(newListTitle->text());
+    int64_t list_id = insertNewList(title, newListColor->color());
     chooseListDialog->finish(Dialog::ACCEPTED);
-    callback(list_id, newListTitle->text());
+    callback(list_id, title);
   });
   newListTitle->onChanged = [=](const char* s){ newListContent->selectFirst(".accept-btn")->setEnabled(s[0]); };
   newListTitle->onChanged("");
@@ -404,7 +405,7 @@ void MapsBookmarks::editBookmark(int rowid, int listid, std::function<void()> ca
   noteEdit->setText(notestr.c_str());
 
   auto onAcceptEdit = [=](){
-    std::string title = titleEdit->text();
+    std::string title = trimStr(titleEdit->text());
     SQLiteStmt(app->bkmkDB, "UPDATE bookmarks SET title = ?, notes = ? WHERE rowid = ?;")
         .bind(title, noteEdit->text(), rowid).exec();
     bkmkPanelDirty = true;
@@ -641,7 +642,7 @@ Button* MapsBookmarks::createPanel()
     newListTitle->onChanged = [=](const char* s){ newListDialog->selectFirst(".accept-btn")->setEnabled(s[0]); };
 
     newListDialog.reset(createInputDialog({newListRow}, "New Place List", "Create", [=](){
-      insertNewList(newListTitle->text(), newListColor->color());
+      insertNewList(trimStr(newListTitle->text()), newListColor->color());
       populateLists(false);
     }));
     showModalCentered(newListDialog.get(), app->gui);  //showInlineDialogModal(editContent);
@@ -731,7 +732,7 @@ Button* MapsBookmarks::createPanel()
 
     editListDialog.reset(createInputDialog({editListRow}, "Edit Place List", "Apply", [=](){
       SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(
-          listTitle->text(), colorToStr(listColor->color()), activeListId).exec();
+          trimStr(listTitle->text()), colorToStr(listColor->color()), activeListId).exec();
       listsDirty = archiveDirty = true;
       // if bookmark list opened from place info, need to update list title there
       int listid = activeListId;

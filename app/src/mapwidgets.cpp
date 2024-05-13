@@ -395,7 +395,7 @@ void DragDropList::addItem(KeyType key, Widget* item, KeyType nextkey)
       }
       return true;
     }
-    else if(event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL || event->type == SvgGui::OUTSIDE_PRESSED) {
+    else if(event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED) {
       if(placeholder) {
         gui->removeTimer(dragBtn);
         item->removeFromParent();
@@ -816,6 +816,7 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
     if(!nextPage) return false;
     if(event->type == SDL_FINGERMOTION && gui->pressedWidget == this) {
       xoffset = event->tfinger.x - initialPos.x;
+      if((initialPos.x > initialBounds.center().x) != (xoffset < 0)) xoffset = 0;
       real w = (xoffset < 0 ? 1 : -1)*initialBounds.width();
       // setLayoutTransform will set bounds dirty and trigger layout; instead, we only want to dirty pixels
       if(xoffset >= 0 || !behaveAsStack) currPage->setLayoutTransform(Transform2D::translating(xoffset, 0));  // * child->m_layoutTransform;
@@ -824,7 +825,7 @@ Pager::Pager(SvgNode* _node) : Widget(_node)
       nextPage->node->invalidateBounds(true);
       redraw();
     }
-    else if(event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED || event->type == SVGGUI_FINGERCANCEL) {
+    else if(event->type == SDL_FINGERUP || event->type == SvgGui::OUTSIDE_PRESSED) {
       currPage->setLayoutTransform(Transform2D());
       nextPage->setLayoutTransform(Transform2D());
       if(std::abs(xoffset) > initialBounds.width()/2) {

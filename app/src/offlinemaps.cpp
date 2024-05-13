@@ -746,8 +746,8 @@ Widget* MapsOffline::createPanel()
     int maxZoom = int(maxZoomSpin->value());
     saveOfflineMap(offlineId, lngLat00, lngLat11, maxZoom);
     const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title) VALUES (?,?,?,?,?,?,?,?);";
-    SQLiteStmt(app->bkmkDB, query).bind(offlineId, lngLat00.longitude, lngLat00.latitude,
-        lngLat11.longitude, lngLat11.latitude, maxZoom, app->mapsSources->currSource, titleEdit->text()).exec();
+    SQLiteStmt(app->bkmkDB, query).bind(offlineId, lngLat00.longitude, lngLat00.latitude, lngLat11.longitude,
+        lngLat11.latitude, maxZoom, app->mapsSources->currSource, trimStr(titleEdit->text())).exec();
     populateOffline();
     auto item = static_cast<Button*>(offlineContent->selectFirst(".listitem"));
     if(item) item->onClicked();

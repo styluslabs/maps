@@ -233,7 +233,6 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
             updateDB(&tracks.back());
             populateTrackList();
           });
-          bool archived = track->archived;
           yamlRemove(app->config["tracks"]["visible"], track->rowid);
           tracks.erase(it);
           app->gui->deleteWidget(item);
@@ -295,7 +294,7 @@ void MapsTracks::populateTrackList()
   }
   Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived Tracks");
   item->onClicked = [this](){ app->showPanel(archivedPanel, true);  populateArchived(); };
-  tracksContent->addItem("archived", item);
+  tracksContent->addItem("-1", item);
   tracksContent->setOrder(order);
 }
 
@@ -655,7 +654,7 @@ void MapsTracks::editWaypoint(GpxFile* track, const Waypoint& wpt, std::function
 
   auto onAcceptEdit = [=](){
     auto it = track->findWaypoint(uid);
-    it->name = titleEdit->text();
+    it->name = trimStr(titleEdit->text());
     it->desc = noteEdit->text();
     if(it->marker) {
       app->map->markerSetProperties(it->marker,
@@ -1149,7 +1148,7 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
   editTrackRow->addWidget(editTrackTitle);
   editTrackRow->addWidget(editTrackColor);
   auto saveTrackFn = [=](bool savecopy){
-    auto title = editTrackTitle->text();
+    auto title = trimStr(editTrackTitle->text());
     bool sametitle = title == activeTrack->title;
     // add entry for original track if making copy
     if(activeTrack->rowid >= 0 && savecopy) {
@@ -1193,6 +1192,8 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
       editTrackColor->setColor(parseColor(activeTrack->style, Color::BLUE));
       //editTrackCopyCb->setChecked(false);
       saveCopyBtn->setVisible(activeTrack->rowid >= 0);
+      if(!plotWidgets[0]->isVisible())  // keyboard would hide the plot edit toolbar
+        gui->setFocused(editTrackTitle, SvgGui::REASON_TAB);
     }
     return false;
   });
@@ -1392,7 +1393,7 @@ void MapsTracks::createPlotContent()
       selectTrackDialog.reset(createSelectDialog("Choose Track", MapsApp::uiIcon("track")));
       selectTrackDialog->onSelected = [this](int idx){
         auto order = tracksContent->getOrder();
-        int rowid = std::stoi(order[idx]);
+        int rowid = std::atoi(order[idx].c_str());
         auto it = std::find_if(tracks.rbegin(), tracks.rend(), [=](const GpxFile& a){ return a.rowid == rowid; });
         GpxWay* way = it != tracks.rend() ? it->activeWay() : NULL;
         if(!way) return;
@@ -1410,7 +1411,7 @@ void MapsTracks::createPlotContent()
     std::vector<std::string> items;
     items.reserve(order.size());
     for(const std::string& idstr : order) {
-      int rowid = std::stoi(idstr);
+      int rowid = std::atoi(idstr.c_str());
       auto it = std::find_if(tracks.rbegin(), tracks.rend(), [=](const GpxFile& a){ return a.rowid == rowid; });
       if(it == tracks.rend()) continue;  // shouldn't happen
       items.push_back(it->title);
@@ -1735,6 +1736,7 @@ void MapsTracks::createTrackPanel()
   createStatsContent();
   createPlotContent();
   createWayptContent();
+  setTrackWidgets(TRACK_PLOT);
 
   // bottom of menu
   trackOverflow->addItem("Edit", uiIcon("edit"), [=](){ showInlineDialogModal(editTrackContent); });
@@ -1759,7 +1761,7 @@ void MapsTracks::createTrackListPanel()
   Widget* newTrackRow = createRow({newTrackTitle, newTrackColor});
 
   newTrackDialog.reset(createInputDialog({newTrackRow}, "New Route", "Create", [=](){
-    tracks.emplace_back(newTrackTitle->text(), ftimestr("%F"), "");
+    tracks.emplace_back(trimStr(newTrackTitle->text()), ftimestr("%F"), "");
     updateDB(&tracks.back());
     populateTrack(&tracks.back());
     toggleRouteEdit(true);
@@ -1876,7 +1878,7 @@ Button* MapsTracks::createPanel()
         populateTrackList();  // needed to get order
       auto items = tracksContent->getOrder();
       for(size_t ii = 0; ii < (recordTrack ? 9 : 10) && ii < items.size(); ++ii) {
-        int rowid = std::stoi(items[ii]);
+        int rowid = std::atoi(items[ii].c_str());  //stoi() can throw exception!
         auto it = std::find_if(tracks.rbegin(), tracks.rend(), [=](const GpxFile& a){ return a.rowid == rowid; });
         if(it == tracks.rend()) continue;  // shouldn't happen
         GpxFile* track = &(*it);

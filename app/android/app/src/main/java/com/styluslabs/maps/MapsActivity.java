@@ -577,96 +577,9 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 }
 
-/*
-class MapsInputConnection extends BaseInputConnection
-{
-  DummyEdit mEditView;
-
-  public MapsInputConnection(DummyEdit targetView, boolean fullEditor) {
-    super(targetView, fullEditor);
-    mEditView = targetView;
-    Log.v("Tangram", "MapsInputConnection ctor " + toString());
-  }
-
-  @Override
-  public Editable getEditable() {
-    return mEditView.getEditable();
-  }
-
-  // this must be implemented for SwiftKey keyboard to show suggestions
-  @Override
-  public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
-    Editable editable = getEditable();
-    ExtractedText et = new ExtractedText();
-    et.text = editable.toString();
-    et.partialEndOffset = editable.length();
-    et.selectionStart = Selection.getSelectionStart(editable);
-    et.selectionEnd = Selection.getSelectionEnd(editable);
-    et.flags = ExtractedText.FLAG_SINGLE_LINE;  //mSingleLine ? ExtractedText.FLAG_SINGLE_LINE : 0;
-    return et;
-  }
-
-  //@Override public boolean sendKeyEvent(KeyEvent event) { if (event.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
-
-  @Override
-  public void closeConnection() {
-    Log.v("Tangram", "closeConnection " + toString());
-    super.closeConnection();
-  }
-
-  @Override
-  public boolean commitText(CharSequence text, int newCursorPosition) {
-    Log.v("Tangram", "commitText: " + text);
-    return super.commitText(text, newCursorPosition) && updateText();
-  }
-
-  @Override
-  public boolean setComposingText(CharSequence text, int newCursorPosition) {
-    Log.v("Tangram", "setComposingText: " + text);
-    return super.setComposingText(text, newCursorPosition) && updateText();
-  }
-
-  @Override
-  public boolean deleteSurroundingText(int beforeLength, int afterLength) {
-    Log.v("Tangram", "deleteSurroundingText: " + beforeLength + ", " + afterLength);
-    return super.deleteSurroundingText(beforeLength, afterLength) && updateText();
-  }
-
-  @Override
-  public boolean setSelection(int start, int end) {
-    Log.v("Tangram", "setSelection: " + start + ", " + end + " len: " + getEditable().length());
-    return super.setSelection(start, end) && updateText();
-  }
-
-
-
-  @Override
-  public boolean setComposingRegion(int start, int end) {
-    Log.v("Tangram", "setComposingRegion: " + start + ", " + end);
-    return super.setComposingRegion(start, end);
-  }
-  @Override
-  public boolean finishComposingText() {
-    Log.v("Tangram", "finishComposingText");
-    return super.finishComposingText();
-  }
-
-
-
-  protected boolean updateText() {
-    final Editable content = getEditable();
-    if (content == null) { return false; }
-    Log.v("Tangram", "updateText (Java -> C++): " + content.toString() + "; sel: " + Selection.getSelectionStart(content) + ", " + Selection.getSelectionEnd(content));
-    MapsLib.imeTextUpdate(content.toString(),
-        Selection.getSelectionStart(content), Selection.getSelectionEnd(content));
-    return true;
-  }
-}
-*/
-
 // Some keyboards (e.g. SwiftKey) edit entire string via InputConnection, while others (e.g. Samsung) only edit
 //  composing text via InputConnection and send key events to edit already commited text, so easiest to just
-//  use Android EditText to handle everything
+//  use Android EditText to handle everything (old MapsInputConnection removed 12 May 2024)
 // refs:
 // - https://github.com/sillsdev/chromium-crosswalk/blob/master/content/public/android/java/src/org/chromium/content/browser/input/AdapterInputConnection.java
 // - https://android.googlesource.com/platform/frameworks/base.git/+/refs/heads/main/core/java/com/android/internal/inputmethod/EditableInputConnection.java
@@ -768,7 +681,6 @@ class ProxyEdit extends EditText
 class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.OnKeyListener
 {
   MapsInputConnection inputConn;
-  //EditText mEditText;
   ProxyEdit mEditText;
 
   public DummyEdit(Context context)
@@ -776,9 +688,6 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
     super(context);
     setFocusableInTouchMode(true);
     setFocusable(true);
-    //setOnKeyListener(this);
-    //mEditText = new EditText(context);
-
     mEditText = new ProxyEdit(context);
   }
 
@@ -816,25 +725,6 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
 
   //@Override
   public void onEditorAction(int actionCode) { mEditText.onEditorAction(actionCode); }
-
-  //@Override public boolean onKeyMultiple(int keyCode, int repeatCount, KeyEvent event) {
-
-  //@Override
-  //public boolean onKey(View v, int keyCode, KeyEvent event)
-  //{
-  //  if (event.getAction() == KeyEvent.ACTION_DOWN) {
-  //    if(!event.isCtrlPressed() && (event.isPrintingKey() || event.getKeyCode() == KeyEvent.KEYCODE_SPACE)) {
-  //      inputConn.commitText(String.valueOf((char) event.getUnicodeChar()), 1);
-  //    } else {
-  //      MapsLib.keyEvent(keyCode, 1);
-  //    }
-  //    return true;
-  //  } else if (event.getAction() == KeyEvent.ACTION_UP) {
-  //    MapsLib.keyEvent(keyCode, -1);
-  //    return true;
-  //  }
-  //  return false;
-  //}
 
   @Override
   public boolean onKeyPreIme(int keyCode, KeyEvent event)

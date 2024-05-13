@@ -462,7 +462,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   Map* map = app->map.get();
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
-  query = StringRef(query).trimmed().toString();
+  query = trimStr(query);
   if(phase != NEXTPAGE) {
     // add synonyms to query (e.g., add "fast food" to "restaurant" query)
     if(providerIdx == 0 && !query.empty()) {
