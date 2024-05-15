@@ -331,6 +331,7 @@ static jmethodID shareFileMID = nullptr;
 static jmethodID notifyStatusBarBGMID = nullptr;
 static jmethodID setSensorsEnabledMID = nullptr;
 static jmethodID setServiceStateMID = nullptr;
+static jmethodID openBatterySettingsMID = nullptr;
 
 #define TANGRAM_JNI_VERSION JNI_VERSION_1_6
 
@@ -356,7 +357,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
   setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceState", "(IFF)V");
-
+  openBatterySettingsMID = jniEnv->GetMethodID(cls, "openBatterySettings", "()V");
   return TANGRAM_JNI_VERSION;
 }
 
@@ -516,6 +517,12 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
 {
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jniEnv->CallVoidMethod(mapsActivityRef, setServiceStateMID, state, intervalSec, minDist);
+}
+
+void MapsApp::openBatterySettings()
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, openBatterySettingsMID);
 }
 
 // EGL setup and main loop
@@ -683,7 +690,9 @@ JNI_FN(onPause)(JNIEnv* env, jclass)
 
 JNI_FN(onResume)(JNIEnv* env, jclass)
 {
-  //MapsApp::runOnMainThread([=]() {
+  MapsApp::runOnMainThread([=]() {
+    app->onResume();
+
   //  SDL_Event event = {0};
   //  event.type = SDL_APP_WILLENTERFOREGROUND;
   //  app->gui->sdlEvent(&event);
@@ -693,7 +702,7 @@ JNI_FN(onResume)(JNIEnv* env, jclass)
   //  event.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
   //  app->gui->sdlEvent(&event);
   //  //app->win->redraw();  -- looks like surfaceChanged is called on resume, so no need for this
-  //});
+  });
 }
 
 JNI_FN(onLowMemory)(JNIEnv* env, jclass)

@@ -46,6 +46,7 @@ public:
   void onMouseWheel(double x, double y, double scrollx, double scrolly, bool rotating, bool shoving);
   //void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void onSuspend();
+  void onResume();
   void onLowMemory();
   void updateLocation(const Location& _loc);
   void updateOrientation(float azimuth, float pitch, float roll);
@@ -92,6 +93,7 @@ public:
   bool hasLocation = false;
   bool glNeedsInit = true;
   bool drawOnMap = false;
+  bool appSuspended = false;
 
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;
@@ -169,7 +171,8 @@ public:
   static void saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback);
   static void notifyStatusBarBG(bool isLight);
   static void setSensorsEnabled(bool enabled);
-  void setServiceState(int state, float intervalSec = 0, float minDist = 0);
+  static void setServiceState(int state, float intervalSec = 0, float minDist = 0);
+  static void openBatterySettings();
   static void sdlEvent(SDL_Event* event);
 
   static std::string elevToStr(double meters);

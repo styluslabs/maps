@@ -37,23 +37,22 @@ void MapsTracks::updateLocation(const Location& loc)
     double dist = 1000*lngLatDist(loc.lngLat(), prev.lngLat());
     double vert = loc.alt - prev.loc.alt;
     double dt = loc.time - prev.loc.time;
+    if(dt < 0) return;
     // note MapsApp::updateLocation() has already filtered out points w/ poserr increased too much vs. prev
     if(dist < minTrackDist && dt < minTrackTime && vert < minTrackDist)
       return;
+    lastTrackPtTime = mSecSinceEpoch();
+    plotDirty = true;
     double d0 = prev.dist;
     locs.emplace_back(loc);
     locs.back().dist = d0 + dist;
     if(loc.spd == 0)
       locs.back().loc.spd = dist/dt;
-    if(recordedTrack.visible)
-      updateTrackMarker(&recordedTrack);  // rebuild marker
-    if(activeTrack == &recordedTrack) {
-      updateStats(activeTrack);
-      // if zoomed and scrolled to end of plot, scroll to include new location point
-      if(trackPlot->zoomScale > 1 && trackPlot->zoomOffset == trackPlot->minOffset)
-        trackPlot->zoomOffset = -INFINITY;
-      trackPlot->setTrack(recordedTrack.tracks.back().pts, recordedTrack.waypoints);
-      recordedTrack.desc = "Recording" + trackSummary;
+    if(!app->appSuspended) {
+      if(recordedTrack.visible)
+        updateTrackMarker(&recordedTrack);  // rebuild marker
+      if(activeTrack == &recordedTrack || (!activeTrack && tracksPanel->isVisible()))
+        updateStats(&recordedTrack);
     }
     // append point to GPX file in case process is killed - pugixml will ignore the missing closing tags
     if(!recordGPXStrm) {
@@ -207,6 +206,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
   if(track == &recordedTrack) {  //->rowid >= 0) {
     overflowMenu->addItem("Pause", [this](){ pauseRecordBtn->onClicked(); });
     overflowMenu->addItem("Stop", [this](){ stopRecordBtn->onClicked(); });
+    recordDetailText = item->selectFirst(".detail-text");
   }
   else {
     overflowMenu->addItem(track->archived ? "Unarchive" : "Archive", [=](){
@@ -285,6 +285,7 @@ void MapsTracks::populateTrackList()
       order.push_back(key.Scalar());
   }
   tracksContent->clear();
+  recordDetailText = NULL;
 
   if(!recordedTrack.tracks.empty())
     tracksContent->addItem("rec", createTrackEntry(&recordedTrack));
@@ -404,50 +405,75 @@ void MapsTracks::setStatsText(const char* selector, std::string str)
 void MapsTracks::updateStats(GpxFile* track)
 {
   static const char* notime = u8"\u2014";  // emdash
-  if(!track->activeWay()) return;
-  std::vector<Waypoint>& locs = track->activeWay()->pts;
+  static std::vector<Waypoint> nolocs;
+  std::vector<Waypoint>& locs = track->activeWay() ? track->activeWay()->pts : nolocs;
   if(!locs.empty())
     locs.front().dist = 0;
-  // how to calculate max speed?
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
-  double currSpeed = 0, maxSpeed = 0, currSlope = 0;
+  double currSpeed = 0, maxSpeed = 0, currSlope = 0, movingTimeGps = 0, rawDist = 0, movingDist = 0;
+  size_t prevDistLoc = 0, prevVertLoc = 0;
   for(size_t ii = 1; ii < locs.size(); ++ii) {
-    const Location& prev = locs[ii-1].loc;
+    //const Location& prev = locs[ii-1].loc;
     Location& loc = locs[ii].loc;
-    double dist = 1000*lngLatDist(loc.lngLat(), prev.lngLat());
-    double vert = loc.alt - prev.alt;
-    double dt = loc.time - prev.time;
+    //size_t prevSlopeLoc = std::min(prevDistLoc, prevVertLoc);
+    double dt = loc.time - locs[ii-1].loc.time;
+    double dist = 1000*lngLatDist(loc.lngLat(), locs[prevDistLoc].lngLat());  //prev.lngLat()
+    double disterr = loc.poserr + locs[prevDistLoc].loc.poserr;
+    double vert = loc.alt - locs[prevVertLoc].loc.alt;
+    double verterr = loc.alterr + locs[prevVertLoc].loc.alterr;
 
-    if(dist > minTrackDist || vert > minTrackDist)
+    maxSpeed = std::max(double(loc.spd), maxSpeed);
+    if(loc.spd > 0.1f)
+      movingTimeGps += dt;
+    if(dist > minTrackDist || vert > minTrackDist) {  // dt < minTrackTime
       movingTime += dt;
+      movingDist += dist;
+    }
 
-    if(dt > 0 && loc.poserr < 100) {
-      // single pole IIR low pass filter for speed
-      float a = std::exp(-dt*speedInvTau);
-      currSpeed = a*currSpeed + (1-a)*dist/dt;
-      maxSpeed = std::max(currSpeed, maxSpeed);
-      if(dist > 0)
-        currSlope = a*currSlope + (1-a)*vert/dist;
+    rawDist += dist;
+    if(dist > disterr/2) prevDistLoc = ii;  // be more generous with distance than vert
+    else dist = 0;
+
+    if(std::abs(vert) > verterr) prevVertLoc = ii;
+    else vert = 0;
+    if(vert != 0) {
+      double vertdt = dt;
+      for(size_t jj = ii - 1; jj-- > 0;) {
+        // idea here is to try to exclude flat sections
+        if(std::abs(loc.alt - locs[jj].loc.alt) > verterr) {
+          vertdt = loc.time - locs[jj].loc.time;
+          break;
+        }
+      }
+      trackAscent += std::max(0.0, vert);
+      trackDescent += std::min(0.0, vert);
+      ascentTime += vert > 0 ? vertdt : 0;
+      descentTime += vert < 0 ? vertdt : 0;
     }
 
     trackDist += dist;
-    trackAscent += std::max(0.0, vert);
-    trackDescent += std::min(0.0, vert);
-    ascentTime += vert > 0 ? dt : 0;
-    descentTime += vert < 0 ? dt : 0;
-
-    //if(!origLocs.empty())  // track has been modified - recalc distances
-    locs[ii].dist = trackDist;
+    locs[ii].dist = trackDist;  //if(!origLocs.empty())
   }
 
-  const Location& loc = recordTrack ? app->currLocation : trackHoverLoc.loc;
+  // docs say this can be more accurate that dist/time due to e.g. doppler measurements of GPS signal
+  if(!locs.empty()) {
+    currSpeed = locs.back().loc.spd;
+    for(size_t ii = locs.size() - 1; ii-- > 0;) {
+      if(locs.back().loc.time - locs[ii].loc.time > 10 || locs.back().loc.alt - locs[ii].loc.alt > 10
+          || lngLatDist(locs.back().lngLat(), locs[ii].lngLat()) > 10) {
+        currSlope = (locs.back().loc.alt - locs[ii].loc.alt)/lngLatDist(locs.back().lngLat(), locs[ii].lngLat());
+        break;
+      }
+    }
+  }
+
   liveStatsRow->setVisible(recordTrack);
   nonliveStatsRow->setVisible(!recordTrack);
 
   statsContent->selectFirst(".track-start-date")->setText(ftimestr("%F %H:%M:%S", locs.front().loc.time*1000).c_str());
   statsContent->selectFirst(".track-end-date")->setText(ftimestr("%F %H:%M:%S", locs.back().loc.time*1000).c_str());
 
-  setStatsText(".track-altitude", app->elevToStr(loc.alt));
+  setStatsText(".track-altitude", app->elevToStr(app->currLocation.alt));
 
   // m/s -> kph or mph
   setStatsText(".track-speed",
@@ -457,9 +483,11 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-slope",
       fstring("%.*f%% (%.*f\u00B0)", currSlope < 0.1 ? 1 : 0, currSlope*100, slopeDeg < 10 ? 1 : 0, slopeDeg));
 
-  setStatsText(".track-direction", fstring("%.0f\u00B0", loc.dir));
+  float dir = app->currLocation.dir;
+  setStatsText(".track-direction", (dir < 0 || dir > 360) ? notime : fstring("%.0f\u00B0", dir));
 
   double ttot = locs.empty() ? 0 : locs.back().loc.time - locs.front().loc.time;
+  if(recordTrack) ttot += (mSecSinceEpoch() - lastTrackPtTime)/1000.0;
   auto timeStr = durationToStr(ttot);
   sparkStats->selectFirst(".spark-time")->setText(timeStr.c_str());
   setStatsText(".track-time", timeStr);
@@ -489,6 +517,13 @@ void MapsTracks::updateStats(GpxFile* track)
       : fstring("%.0f ft/h", (trackDescent*3.28084)/(descentTime/3600));
   setStatsText(".track-descent-speed", descentTime > 0 ? descentSpdStr : notime);
 
+  // more stats
+  setStatsText(".track-raw-dist", MapsApp::distKmToStr(rawDist/1000));
+  setStatsText(".track-moving-dist", MapsApp::distKmToStr(movingDist/1000));
+  setStatsText(".track-moving-time-gps", movingTimeGps > 0 ? durationToStr(movingTimeGps) : notime);
+  setStatsText(".track-max-speed",
+      app->metricUnits ? fstring("%.2f km/h", maxSpeed*3.6) : fstring("%.2f mph", maxSpeed*2.23694));
+
   trackSummary = " | " + timeStr + " | " + distStr;
   sparkStats->setVisible(locs.size() > 1);
   trackSpark->setTrack(locs);
@@ -496,7 +531,18 @@ void MapsTracks::updateStats(GpxFile* track)
 
   if(plotDirty && plotWidgets[0]->isVisible()) {
     plotDirty = false;
+    // if zoomed and scrolled to end of plot, scroll to include possible new location points
+    if(trackPlot->zoomScale > 1 && trackPlot->zoomOffset == trackPlot->minOffset)
+      trackPlot->zoomOffset = -INFINITY;
     trackPlot->setTrack(locs, track->waypoints);
+  }
+
+  if(recordTrack && track == &recordedTrack) {
+    recordedTrack.desc = "Recording" + trackSummary;
+    if(recordDetailText)  // && tracksPanel->isVisible())
+      recordDetailText->setText(recordedTrack.desc.c_str());
+    recordTimer = app->gui->setTimer(
+        950, trackPanel, recordTimer, [this](){ recordTimer = NULL; updateStats(activeTrack); return 0; });
   }
 }
 
@@ -968,6 +1014,12 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     if(activeTrack && activeTrack->modified)
       activeTrack->modified = !saveTrack(activeTrack);
   }
+  else if(event == RESUME) {
+    if(recordedTrack.visible)
+      updateTrackMarker(&recordedTrack);  // rebuild marker
+    if(activeTrack == &recordedTrack || (!activeTrack && tracksPanel->isVisible()))
+      updateStats(&recordedTrack);
+  }
 }
 
 void MapsTracks::setRouteMode(const std::string& mode)
@@ -1114,6 +1166,38 @@ void MapsTracks::updateDB(GpxFile* track)
   tracksDirty = true;
 }
 
+void MapsTracks::startRecording()
+{
+  recordTrack = true;
+  app->setServiceState(true, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
+  std::string timestr = ftimestr("%FT%H.%M.%S");
+  FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
+  recordedTrack = GpxFile(timestr, "Recording", gpxPath.path);
+  recordedTrack.loaded = true;
+  recordedTrack.tracks.emplace_back();
+  if(app->hasLocation)
+    recordedTrack.tracks.back().pts.push_back(app->currLocation);
+  recordedTrack.style = "#FF6030";  // use color in marker style instead?
+  recordedTrack.marker = std::make_unique<TrackMarker>(app->map.get(), "layers.recording-track.draw.track");
+  tracksDirty = true;
+  lastTrackPtTime = mSecSinceEpoch();
+  // create GPX file (so track data is safely saved w/o additional user input after tapping record btn)
+  updateDB(&recordedTrack);
+  saveTrack(&recordedTrack);
+  setTrackVisible(&recordedTrack, true);
+  populateTrack(&recordedTrack);
+  setTrackWidgets(TRACK_STATS);  // plot isn't very useful until there are enough points
+  editTrackContent->setVisible(true);
+#if PLATFORM_ANDROID
+  if(app->config["tracks"]["battery_prompt"].as<bool>(true)) {
+    app->config["tracks"]["battery_prompt"] = false;
+    MapsApp::messageBox("Disable battery optimization",
+        "Battery optimization must be disabled for background track recording.", {"Open Settings", "Cancel"},
+        [this](std::string res){ if(res != "Cancel") { app->openBatterySettings(); } });
+  }
+#endif
+}
+
 void MapsTracks::setTrackEdit(bool show)
 {
   if(show == editTrackTb->isVisible()) return;
@@ -1177,21 +1261,21 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
     setTrackEdit(false);
   };
   Widget* saveTrackContent = createInlineDialog(
-      {editTrackRow}, "Save Copy", [=](){ saveTrackFn(true); }, [=](){ setTrackEdit(false); });
+      {editTrackRow}, "Save", [=](){ saveTrackFn(false); }, [=](){ setTrackEdit(false); });
 
-  Button* saveCopyBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
-  saveCopyBtn->setIcon(NULL);
-  Button* saveBtn = createToolbutton(uiIcon("save"), "Save", true);
-  saveBtn->onClicked = [=](){ saveTrackContent->setVisible(false); saveTrackFn(false); };
-  saveCopyBtn->parent()->addWidget(saveBtn);
+  Button* saveBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
+  saveBtn->setIcon(uiIcon("save"));
+  Button* saveCopyBtn = createToolbutton(NULL, "Save Copy", true);
+  saveCopyBtn->onClicked = [=](){ saveTrackContent->setVisible(false); saveTrackFn(true); };
+  saveBtn->parent()->containerNode()->addChild(saveCopyBtn->node, saveBtn->node);
 
-  editTrackTitle->onChanged = [=](const char* s){ saveCopyBtn->setEnabled(s[0]); };
+  editTrackTitle->onChanged = [=](const char* s){ saveBtn->setEnabled(s[0]); saveCopyBtn->setEnabled(s[0]); };
   saveTrackContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
       editTrackTitle->setText(activeTrack->title.c_str());
       editTrackColor->setColor(parseColor(activeTrack->style, Color::BLUE));
       //editTrackCopyCb->setChecked(false);
-      saveCopyBtn->setVisible(activeTrack->rowid >= 0);
+      saveCopyBtn->setVisible(activeTrack != &recordedTrack && activeTrack->rowid >= 0);
       if(!plotWidgets[0]->isVisible())  // keyboard would hide the plot edit toolbar
         gui->setFocused(editTrackTitle, SvgGui::REASON_TAB);
     }
@@ -1236,6 +1320,9 @@ void MapsTracks::createStatsContent()
                       "Distance", "track-dist", "Moving speed", "track-avg-speed"}),
       createStatsRow({"Ascent", "track-ascent", "Ascent speed", "track-ascent-speed",
                       "Descent", "track-descent", "Descent speed", "track-descent-speed"}) }, "", "", "hfill");
+
+  statsContent->addWidget(createStatsRow({"Moving time (GPS)", "track-moving-time-gps", "Max speed", "track-max-speed",
+      "Raw distance", "track-raw-dist", "Moving distance", "track-moving-dist"}));
 
   auto statsContainer = new ScrollWidget(new SvgDocument(), statsContent);
   statsContainer->node->setAttribute("box-anchor", "fill");
@@ -1640,6 +1727,8 @@ void MapsTracks::createTrackPanel()
   };
 
   stopRecordBtn->onClicked = [=](){
+    app->gui->removeTimer(recordTimer);
+    recordTimer = NULL;
     recordedTrack.desc = ftimestr("%F") + trackSummary;
     saveTrack(&recordedTrack);
     if(recordTrack)
@@ -1715,7 +1804,7 @@ void MapsTracks::createTrackPanel()
   statsWidgets.push_back(statsTabBtn->selectFirst(".checkmark"));
   statsTabBtn->onClicked = [=](){ setTrackWidgets(TRACK_STATS); };
 
-  Button* plotTabBtn = createToolbutton(uiIcon("graph-line"), "Plot");
+  Button* plotTabBtn = createToolbutton(NULL, "Plot");  //uiIcon("graph-line")  -- maximize space for plot
   plotTabBtn->node->setAttribute("box-anchor", "hfill");
   plotTabBtn->selectFirst(".toolbutton-content")->addWidget(trackSpark);
   plotTabBtn->node->addClass("checked");
@@ -1793,26 +1882,8 @@ void MapsTracks::createTrackListPanel()
   recordTrackBtn->onClicked = [=](){
     if(!recordedTrack.tracks.empty())
       populateTrack(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
-    else {
-      recordTrack = true;
-      app->setServiceState(true, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
-      std::string timestr = ftimestr("%FT%H.%M.%S");
-      FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
-      recordedTrack = GpxFile(timestr, "Recording", gpxPath.path);  //Track{timestr, "", gpxPath.c_str(), "", 0, {}, -1, true, false};
-      recordedTrack.loaded = true;
-      recordedTrack.tracks.emplace_back();
-      if(app->hasLocation)
-        recordedTrack.tracks.back().pts.push_back(app->currLocation);
-      recordedTrack.style = "#FF6030";  // use color in marker style instead?
-      recordedTrack.marker = std::make_unique<TrackMarker>(app->map.get(), "layers.recording-track.draw.track");
-      tracksDirty = true;
-      // create GPX file (so track data is safely saved w/o additional user input after tapping record btn)
-      saveTrack(&recordedTrack);
-      setTrackVisible(&recordedTrack, true);
-      populateTrack(&recordedTrack);
-      setTrackWidgets(TRACK_STATS);  // plot isn't very useful until there are enough points
-      editTrackContent->setVisible(true);
-    }
+    else
+      startRecording();
   };
 
   tracksContent = new DragDropList;  //createColumn();

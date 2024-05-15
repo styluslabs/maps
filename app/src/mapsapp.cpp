@@ -616,8 +616,15 @@ void MapsApp::onLowMemory()
 
 void MapsApp::onSuspend()
 {
+  appSuspended = true;
   sendMapEvent(SUSPEND);
   saveConfig();
+}
+
+void MapsApp::onResume()
+{
+  appSuspended = false;
+  sendMapEvent(RESUME);
 }
 
 // Map::flyTo() zooms out and then back in, inappropriate for short flights
@@ -682,6 +689,10 @@ void MapsApp::updateLocation(const Location& _loc)
   currLocation = _loc;
   if(currLocation.time <= 0)
     currLocation.time = mSecSinceEpoch()/1000.0;
+  if(appSuspended) {
+    mapsTracks->onMapEvent(LOC_UPDATE);
+    return;
+  }
   //hasLocation = gpsSatsUsed > 0 || (_loc.poserr > 0 && _loc.poserr < 10);
   updateLocMarker();
 
@@ -1272,7 +1283,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     themeCb->setChecked(light);
     config["ui"]["theme"] = light ? "light" : "dark";
     light ? win->node->addClass("light") : win->node->removeClass("light");
-    setWindowXmlClass(light ? "light" : "");
+    gui->setWindowXmlClass(light ? "light" : "");
   };
   overflowMenu->addItem(themeCb);
   if(config["ui"]["theme"].as<std::string>("") == "light")
@@ -1882,6 +1893,9 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     queuedFn();
 
   if(!runApplication) return false;
+
+  if(appSuspended)
+    LOGW("Rendering while application suspended!");
 
   if(glNeedsInit) {
     glNeedsInit = false;

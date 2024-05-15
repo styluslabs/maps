@@ -55,17 +55,7 @@ public class MapsService extends Service implements LocationListener
   public void onLocationChanged(Location loc)
   {
     if(loc == null) return;  // getLastKnownLocation() can return null
-    float poserr = loc.getAccuracy();  // accuracy in meters
-    double alt = loc.getAltitude();  // meters
-    float dir = loc.getBearing();  // bearing (direction of travel) in degrees
-    float direrr = loc.getBearingAccuracyDegrees();
-    double lat = loc.getLatitude();  // degrees
-    double lng = loc.getLongitude();  // degrees
-    float spd = loc.getSpeed();  // m/s
-    float spderr = loc.getSpeedAccuracyMetersPerSecond();  // speed accuracy in m/s
-    long time = loc.getTime();  // ms since unix epoch
-    float alterr = loc.getVerticalAccuracyMeters();  // altitude accuracy in meters
-    MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
+    MapsActivity.updateLocation(loc);
   }
 
   @Override

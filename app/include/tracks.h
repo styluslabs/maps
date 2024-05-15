@@ -8,6 +8,7 @@
 class TrackPlot;
 class TrackSparkline;
 class TrackSliders;
+struct Timer;
 
 class MapsTracks : public MapsComponent {
 public:
@@ -69,6 +70,7 @@ private:
   bool saveTrack(GpxFile* track);
   enum TrackView_t { TRACK_NONE=-1, TRACK_STATS=0, TRACK_PLOT, TRACK_WAYPTS };
   void setTrackWidgets(TrackView_t view);
+  void startRecording();
   // UI setup
   void createStatsContent();
   void createPlotContent();
@@ -110,12 +112,15 @@ private:
   Widget* wayptTabLabel = NULL;
   Toolbar* editTrackTb = NULL;
   Widget* editTrackContent = NULL;
+  Widget* recordDetailText = NULL;
 
   std::unique_ptr<FileStream> recordGPXStrm;
+  Timer* recordTimer = NULL;
   int pluginFn = 0;
   std::vector<Waypoint> origLocs;
   std::string insertionWpt;
   std::string trackSummary;
+  Timestamp lastTrackPtTime;
   Waypoint trackHoverLoc = LngLat{0, 0};
   double cropStart = 0;
   double cropEnd = 1;

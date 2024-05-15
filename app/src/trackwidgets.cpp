@@ -84,18 +84,20 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   spdTimePlot.clear();
   altDistPlot.addPoint(locs.front().dist, -1000);
   altTimePlot.addPoint(0, -1000);  //locs.front().loc.time
+  double prevDist = -1;
   for(auto& wpt : locs) {
     const Location& tpt = wpt.loc;
     double alt = MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084;
-    altDistPlot.addPoint(Point(wpt.dist, alt));
+    if(wpt.dist > prevDist) altDistPlot.addPoint(Point(wpt.dist, alt));
     altTimePlot.addPoint(Point(tpt.time - minTime, alt));
     minAlt = std::min(minAlt, alt);
     maxAlt = std::max(maxAlt, alt);
     double spd = MapsApp::metricUnits ? tpt.spd*3600*0.001 : tpt.spd*3600*0.000621371;
-    spdDistPlot.addPoint(Point(wpt.dist, spd));
+    if(wpt.dist > prevDist) spdDistPlot.addPoint(Point(wpt.dist, spd));
     spdTimePlot.addPoint(Point(tpt.time - minTime, spd));
     minSpd = std::min(minSpd, spd);
     maxSpd = std::max(maxSpd, spd);
+    prevDist = wpt.dist;
   }
   altDistPlot.addPoint(locs.back().dist, -1000);
   altTimePlot.addPoint(locs.back().loc.time - minTime, -1000);
