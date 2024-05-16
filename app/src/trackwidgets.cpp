@@ -71,17 +71,17 @@ real TrackPlot::trackPosToPlotPos(real s) const
 
 void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Waypoint>& wpts)
 {
-  minAlt = FLT_MAX;
-  maxAlt = -FLT_MAX;
-  minSpd = FLT_MAX;
-  maxSpd = -FLT_MAX;
-  minTime = locs.front().loc.time;
-  maxTime = std::max(minTime + 10, locs.back().loc.time);
-  maxDist = std::max(locs.back().dist, 100.0);
+  minAlt = 0;  maxAlt = 0;  minSpd = 0;  maxSpd = 0;
+  minTime = 0;  maxTime = 10;  maxDist = 100;
   altDistPlot.clear();
   altTimePlot.clear();
   spdDistPlot.clear();
   spdTimePlot.clear();
+  if(locs.empty()) return;
+  minAlt = FLT_MAX;  maxAlt = -FLT_MAX;  minSpd = FLT_MAX;  maxSpd = -FLT_MAX;
+  minTime = locs.front().loc.time;
+  maxTime = std::max(minTime + 10, locs.back().loc.time);
+  maxDist = std::max(locs.back().dist, 100.0);
   altDistPlot.addPoint(locs.front().dist, -1000);
   altTimePlot.addPoint(0, -1000);  //locs.front().loc.time
   double prevDist = -1;
@@ -163,7 +163,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->translate(lmargin, tmargin);
   p->setTextAlign(Painter::AlignHCenter | Painter::AlignBottom);
   if(plotVsDist) {
-    real xMin = -zoomOffset/1000;
+    real xMin = zoomOffset < 0 ? -zoomOffset/1000 : 0.0;  // prevent "-0" axis label
     real xMax = xMin + maxDist/1000/zoomScale;
     real dx = xMax - xMin;
     //real anch = fewestSigDigits(xMin, xMax);
@@ -179,9 +179,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
     real anchlbl = (anch - xMin)*(plotw/dx);
     for(int ii = 1; anch + ii*dw < xMax; ++ii)
       p->drawText(anchlbl + ii*dxlbl, h - tmargin, fstring("%.*f", prec, anch + ii*dw).c_str());
-    real wlbl0 = p->drawText(anchlbl, h - tmargin, "0");  //fstring("%.*f", prec, anch).c_str());
+    real wlbl0 = p->drawText(anchlbl, h - tmargin, fstring("%.*f", prec, anch).c_str());
     p->setTextAlign(Painter::AlignLeft | Painter::AlignBottom);
-    p->drawText(anchlbl + wlbl0, h - tmargin, MapsApp::metricUnits ? " m" : " mi");
+    p->drawText(wlbl0, h - tmargin, MapsApp::metricUnits ? " km" : " mi");
     // vert grid lines
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color(0, 0, 0, 64), 0.75);
@@ -301,9 +301,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
 void TrackSparkline::setTrack(const std::vector<Waypoint>& locs)
 {
   altDistPlot.clear();
+  minAlt = 0; maxAlt = 0;
   if(locs.empty()) return;
-  minAlt = FLT_MAX;
-  maxAlt = -FLT_MAX;
+  minAlt = FLT_MAX; maxAlt = -FLT_MAX;
   maxDist = locs.back().dist;
   altDistPlot.addPoint(locs.front().dist, -1000);
   for(auto& wpt : locs) {

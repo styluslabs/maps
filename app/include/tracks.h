@@ -15,7 +15,6 @@ public:
   using MapsComponent::MapsComponent;
   Button* createPanel();
   void addPlaceActions(Toolbar* tb);
-  //void tapEvent(LngLat location);
   void updateLocation(const Location& loc);
   void onMapEvent(MapEvent_t event);
   void addRoute(std::vector<Waypoint>&& route);
@@ -47,7 +46,6 @@ private:
   void populateArchived();
   void populateTrackList();
   void populateTrack(GpxFile* track);
-  //void populateWaypoints(GpxFile* track);
   Widget* createTrackEntry(GpxFile* track);
   Waypoint interpTrack(const std::vector<Waypoint>& locs, double s, size_t* idxout = NULL);
   void setRouteMode(const std::string& mode);
@@ -71,6 +69,7 @@ private:
   enum TrackView_t { TRACK_NONE=-1, TRACK_STATS=0, TRACK_PLOT, TRACK_WAYPTS };
   void setTrackWidgets(TrackView_t view);
   void startRecording();
+  void closeActiveTrack();
   // UI setup
   void createStatsContent();
   void createPlotContent();

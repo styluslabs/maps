@@ -13,6 +13,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.FileProvider;
 import android.provider.DocumentsContract;
+import android.provider.Settings;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Build;
@@ -74,6 +75,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private float mDeclination = 0;
   private boolean replaceAssets = true;  // for development
   private boolean sensorsEnabled = true;
+  private boolean hasGpsFix = false;
 
   public static final int PERM_REQ_LOCATION = 1;
 
@@ -261,7 +263,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       intent.setData(Uri.parse("package:" + getPackageName()));
       try {
         startActivity(intent);
-      } catch (ActivityNotFoundException e) {
+      } catch (Exception e) {  //ActivityNotFoundException
         // try ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS instead?
         //Toast.makeText(this, "Unable to open Battery settings", Toast.LENGTH_LONG).show();
       }
@@ -270,17 +272,17 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public static void updateLocation(Location loc)
   {
-    //Log.v("Tangram", loc.toString);
-    float poserr = loc.getAccuracy();  // accuracy in meters
-    double alt = loc.getAltitude();  // meters
-    float dir = loc.hasBearing() ? loc.getBearing() : 1E6;  // bearing (direction of travel) in degrees
-    float direrr = loc.getBearingAccuracyDegrees();
+    Log.v("Tangram", loc.toString());
     double lat = loc.getLatitude();  // degrees
     double lng = loc.getLongitude();  // degrees
-    float spd = loc.getSpeed();  // m/s
+    float poserr = loc.getAccuracy();  // accuracy in meters
+    double alt = loc.getAltitude();  // meters
+    float alterr = loc.getVerticalAccuracyMeters();  // altitude accuracy in meters
+    float dir = loc.hasBearing() ? loc.getBearing() : Float.NaN;  // bearing (direction of travel) in degrees
+    float direrr = loc.getBearingAccuracyDegrees();
+    float spd = loc.hasSpeed() ? loc.getSpeed() : Float.NaN;  // m/s
     float spderr = loc.getSpeedAccuracyMetersPerSecond();  // speed accuracy in m/s
     long time = loc.getTime();  // ms since unix epoch
-    float alterr = loc.getVerticalAccuracyMeters();  // altitude accuracy in meters
     MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
   }
 
@@ -288,9 +290,10 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public void onLocationChanged(Location loc)
   {
     if(loc == null) return;  // getLastKnownLocation() can return null
+    if(hasGpsFix && loc.getProvider().equals("fused")) return;
     // for correcting orientation - convert degrees to radians
-    mDeclination = new GeomagneticField(loc.getLatitude(), loc.getLongitude(),
-        loc.getAltitude(), loc.getTime()).getDeclination()*(float)java.lang.Math.PI/180;
+    mDeclination = new GeomagneticField((float)loc.getLatitude(), (float)loc.getLongitude(),
+        (float)loc.getAltitude(), loc.getTime()).getDeclination()*(float)java.lang.Math.PI/180;
     updateLocation(loc);
   }
 
@@ -306,6 +309,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       if(sat.usedInFix())
         satsUsed++;
     }
+    hasGpsFix = satsUsed > 0;
     MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
 
