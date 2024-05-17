@@ -94,10 +94,10 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
 
 void MapsSearch::importPOIs(std::string srcpath, int offlineId)
 {
-  static const char* poiImportSQL = R"#(ATTACH DATABASE 'file:%s?mode=ro' AS poidb;
+  static const char* poiImportSQL = R"#(ATTACH DATABASE 'file://%s?mode=ro' AS poidb;
     BEGIN;
-    INSERT INTO pois SELECT * FROM poidb.pois;
-    INSERT INTO offline_tiles SELECT tile_id, %d FROM poidb.pois GROUP BY tile_id;
+    INSERT INTO main.pois SELECT * FROM poidb.pois;
+    INSERT INTO main.offline_tiles SELECT tile_id, %d FROM poidb.pois GROUP BY tile_id;
     COMMIT;
     DETACH DATABASE poidb;
   )#";

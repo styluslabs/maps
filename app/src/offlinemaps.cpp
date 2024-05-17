@@ -149,10 +149,10 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
   srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
 
   // SQL import?
-  if(src.url.substr(0, 8) == "file:///") {
+  if(src.url.substr(0, 7) == "file://") {
     importRemaining = 0;
     SQLiteDB tileDB(mbtiles->dbHandle());
-    if(tileDB.exec(fstring("ATTACH DATABASE '%s' AS src;", src.url.substr(8).c_str()))) {
+    if(tileDB.exec(fstring("ATTACH DATABASE '%s' AS src;", src.url.c_str()))) {
       const char* nSrcTilesSql = "SELECT count(1) FROM src.tiles WHERE zoom_level = ?";
       tileDB.stmt(nSrcTilesSql).bind(srcMaxZoom).exec([&](int n){ importRemaining = n; });
     }
@@ -289,11 +289,11 @@ bool OfflineDownloader::mbtilesImport(SQLiteDB& tileDB)
   }
   else if(hasMap && hasImages) {
     importSql = R"#(BEGIN;
-      REPLACE INTO map SELECT * FROM src.map;
-      DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM map);  -- delete orphaned tiles
-      REPLACE INTO images SELECT * FROM src.images;
-      REPLACE INTO offline_tiles SELECT tile_id, %d FROM src.map;
-      REPLACE INTO metadata(name, value) VALUES ('compression', 'unknown');
+      REPLACE INTO main.map SELECT * FROM src.map;
+      DELETE FROM main.images WHERE tile_id NOT IN (SELECT tile_id FROM main.map);  -- delete orphaned tiles
+      REPLACE INTO main.images SELECT * FROM src.images;
+      REPLACE INTO main.offline_tiles SELECT tile_id, %d FROM src.map;
+      REPLACE INTO main.metadata(name, value) VALUES ('compression', 'unknown');
       COMMIT;)#";
   }
   else {
@@ -599,7 +599,7 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
       olinfo.lngLat11.longitude, olinfo.lngLat11.latitude, olinfo.maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
   app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(olinfo.lngLat00, olinfo.lngLat11, {32}), 0.5f);
 
-  olinfo.sources.push_back({tileSource->name(), destpath, "file:///" + srcpath, {}, tileSource->maxZoom(), {}});
+  olinfo.sources.push_back({tileSource->name(), destpath, "file://" + srcpath + "?mode=ro", {}, tileSource->maxZoom(), {}});
   if(hasPois && app->config["storage"]["import_pois"].as<bool>(true))
     olinfo.sources.back().searchData.push_back(YAML::Load(fstring("[ { layer: __IMPORT__, layers: [\"%s\"] } ]", srcpath.c_str())));
   else if(!tileSource->isRaster())
@@ -614,10 +614,10 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
   if(!hasPois && app->config["storage"]["export_pois"].as<bool>(false)) {
     // queue task to run after import completed
     queueOfflineTask(-1, [srcpath, offlineId=olinfo.id](){
-      static const char* poiExportSQL = R"#(ATTACH DATABASE 'file:%s?mode=ro' AS searchdb;
+      static const char* poiExportSQL = R"#(ATTACH DATABASE 'file://%s?mode=ro' AS searchdb;
         BEGIN;
-        DROP TABLE IF EXISTS pois;
-        CREATE TABLE pois AS SELECT * FROM searchdb.pois WHERE tile_id IN
+        DROP TABLE IF EXISTS main.pois;
+        CREATE TABLE main.pois AS SELECT * FROM searchdb.pois WHERE tile_id IN
             (SELECT tile_id FROM searchdb.offline_tiles WHERE offline_id = %d);
         COMMIT;
         DETACH DATABASE searchdb;

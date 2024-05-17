@@ -82,8 +82,8 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   minTime = locs.front().loc.time;
   maxTime = std::max(minTime + 10, locs.back().loc.time);
   maxDist = std::max(locs.back().dist, 100.0);
-  altDistPlot.addPoint(locs.front().dist, -1000);
-  altTimePlot.addPoint(0, -1000);  //locs.front().loc.time
+  altDistPlot.addPoint(-1E6, -1000);  //locs.front().dist
+  altTimePlot.addPoint(-1E6, -1000);  //locs.front().loc.time
   double prevDist = -1;
   for(auto& wpt : locs) {
     const Location& tpt = wpt.loc;
@@ -99,8 +99,8 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
     maxSpd = std::max(maxSpd, spd);
     prevDist = wpt.dist;
   }
-  altDistPlot.addPoint(locs.back().dist, -1000);
-  altTimePlot.addPoint(locs.back().loc.time - minTime, -1000);
+  altDistPlot.addPoint(1E6, -1000);  //locs.back().dist, -1000);
+  altTimePlot.addPoint(1E6, -1000);  //locs.back().loc.time - minTime, -1000);
   if(maxTime - minTime <= 0)
     plotVsDist = true;
 
@@ -220,6 +220,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
 
   // plot
   p->save();
+  p->setVectorEffect(Painter::NonScalingStroke);
   p->clipRect(Rect::ltrb(0, 0, plotw, ploth));  // clip plot to axes
   p->scale(plotVsDist ? plotw/maxDist : plotw/(maxTime - minTime), 1);
   p->scale(zoomScale, 1);
@@ -229,7 +230,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->scale(1, -ploth/(maxAlt - minAlt));
     p->translate(0, -maxAlt);
     p->setFillBrush(Color(0, 0, 255, 128));
-    p->setStroke(Color::NONE);
+    p->setStroke(Color(0, 0, 255, 255), 2.0);  //Color::NONE);
     p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
     p->restore();
   }
@@ -238,7 +239,6 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->translate(0, -maxSpd);
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color::RED, 2.0);
-    p->setVectorEffect(Painter::NonScalingStroke);
     p->drawPath(plotVsDist ? spdDistPlot : spdTimePlot);
   }
   p->restore();

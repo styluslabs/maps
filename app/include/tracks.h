@@ -33,6 +33,7 @@ public:
   GpxFile navRoute;
   GpxFile* activeTrack = NULL;
 
+  double currSpeed = 0;
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
   double minTrackTime = 5;  // seconds

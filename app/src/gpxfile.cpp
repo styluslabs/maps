@@ -34,8 +34,11 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
   double lat = trkpt.attribute("lat").as_double();
   double lng = trkpt.attribute("lon").as_double();
   double ele = atof(trkpt.child_value("ele"));
+  // https://www.topografix.com/gpx_manual.asp#speed and used in actual GPX files
+  float speed = atof(trkpt.child_value("speed"));
+  float course = atof(trkpt.child_value("course"));
   double time = parseGpxTime(trkpt.child_value("time"));
-  Waypoint wpt({time, lat, lng, 0, ele, 0, /*dir*/0, 0, 0, 0}, trkpt.child_value("name"), trkpt.child_value("desc"));
+  Waypoint wpt({time, lat, lng, 0, ele, 0, course, 0, speed, 0}, trkpt.child_value("name"), trkpt.child_value("desc"));
   pugi::xml_node extnode = trkpt.child("extensions");
   if(extnode) {
     //wpt.visible = extnode.attribute("visible").as_bool(wpt.visible);
@@ -76,7 +79,7 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
   pugi::xml_node extnode = metadata.child("extensions").child("sl:gpx");
   if(!extnode)
     extnode = gpx.child("extensions").child("sl:gpx");
-  if(extnode)
+  if(extnode && track->style.empty())
     track->style = extnode.attribute("style").as_string();
 
   pugi::xml_node wpt = gpx.child("wpt");
@@ -125,13 +128,14 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
       pugi::xml_node trkpt = trkseg.child("trkpt");
       while(trkpt) {
         Waypoint pt1 = loadWaypoint(trkpt);
-        if(!track->tracks.back().pts.empty()) {
-          auto& pt0 = track->tracks.back().pts.back();
-          pt1.dist = pt0.dist + 1000*lngLatDist(pt1.lngLat(), pt0.lngLat());
-          if(pt1.loc.time > 0)
-            pt1.loc.spd = (pt1.dist - pt0.dist)/(pt1.loc.time - pt0.loc.time);
-        }
+        //if(!track->tracks.back().pts.empty()) {
+        //  auto& pt0 = track->tracks.back().pts.back();
+        //  pt1.dist = pt0.dist + 1000*lngLatDist(pt1.lngLat(), pt0.lngLat());
+        //  if(pt1.loc.time > 0)
+        //    pt1.loc.spd = (pt1.dist - pt0.dist)/(pt1.loc.time - pt0.loc.time);
+        //}
         track->tracks.back().pts.push_back(pt1);
+        if(pt1.loc.spd > 0) track->hasSpeed = true;
         trkpt = trkpt.next_sibling("trkpt");
       }
       trkseg = trkseg.next_sibling("trkseg");
@@ -151,11 +155,13 @@ static std::string saveGpxTime(double time)
   return std::string(timebuf);
 }
 
-void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt)
+void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd)
 {
   trkpt.append_attribute("lat").set_value(fstring("%.7f", wpt.loc.lat).c_str());
   trkpt.append_attribute("lon").set_value(fstring("%.7f", wpt.loc.lng).c_str());
   trkpt.append_child("ele").append_child(pugi::node_pcdata).set_value(fstring("%.1f", wpt.loc.alt).c_str());
+  if(savespd && wpt.loc.spd > 0)
+    trkpt.append_child("speed").append_child(pugi::node_pcdata).set_value(fstring("%.2f", wpt.loc.spd).c_str());
   if(wpt.loc.time > 0)
     trkpt.append_child("time").append_child(pugi::node_pcdata).set_value(saveGpxTime(wpt.loc.time).c_str());
   if(!wpt.name.empty())
@@ -205,7 +211,7 @@ bool saveGPX(GpxFile* track, const char* filename)
     trk.append_child("desc").append_child(pugi::node_pcdata).set_value(t.desc.c_str());
     pugi::xml_node seg = trk.append_child("trkseg");
     for(const Waypoint& wpt : t.pts)
-      saveWaypoint(seg.append_child("trkpt"), wpt);
+      saveWaypoint(seg.append_child("trkpt"), wpt, track->hasSpeed);
   }
   return doc.save_file(filename ? filename : track->filename.c_str(), "  ");
 }

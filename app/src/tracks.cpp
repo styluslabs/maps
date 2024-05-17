@@ -37,17 +37,22 @@ void MapsTracks::updateLocation(const Location& loc)
     double dist = 1000*lngLatDist(loc.lngLat(), prev.lngLat());
     double vert = loc.alt - prev.loc.alt;
     double dt = loc.time - prev.loc.time;
-    if(dt < 0) return;
+    if(dt <= 0) return;
+    // update speed even if point is rejected
+    double a = std::exp(-dt*speedInvTau);
+    double spd = std::isnan(loc.spd) ? dist/dt : loc.spd;
+    currSpeed = a*currSpeed + (1-a)*spd;
     // note MapsApp::updateLocation() has already filtered out points w/ poserr increased too much vs. prev
     if(dist < minTrackDist && dt < minTrackTime && vert < minTrackDist)
       return;
     lastTrackPtTime = mSecSinceEpoch();
     plotDirty = true;
+    if(loc.spd > 0) recordedTrack.hasSpeed = true;  // comparison false for NaN
     double d0 = prev.dist;
     locs.emplace_back(loc);
     locs.back().dist = d0 + dist;
-    if(std::isnan(loc.spd))
-      locs.back().loc.spd = dist/dt;
+    //if(std::isnan(loc.spd))
+      locs.back().loc.spd = currSpeed; //dist/dt;
     if(!app->appSuspended) {
       if(recordedTrack.visible || activeTrack == &recordedTrack)
         updateTrackMarker(&recordedTrack);  // rebuild marker
@@ -66,7 +71,7 @@ void MapsTracks::updateLocation(const Location& loc)
     PugiXMLWriter writer(*recordGPXStrm);
     pugi::xml_document xmldoc;
     pugi::xml_node trkpt = xmldoc.append_child("trkpt");
-    saveWaypoint(trkpt, locs.back());
+    saveWaypoint(trkpt, locs.back(), recordedTrack.hasSpeed);
     trkpt.print(writer, "  ", pugi::format_default | pugi::format_no_declaration);
   }
 }
@@ -428,37 +433,45 @@ void MapsTracks::updateStats(GpxFile* track)
   if(!locs.empty())
     locs.front().dist = 0;
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
-  double currSpeed = 0, maxSpeed = 0, currSlope = 0, movingTimeGps = 0, rawDist = 0, movingDist = 0;
+  double estSpeed = 0, maxSpeed = 0, currSlope = 0, movingTimeGps = 0, rawDist = 0, movingDist = 0;  //currSpeed = 0,
   size_t prevDistLoc = 0, prevVertLoc = 0;
   for(size_t ii = 1; ii < locs.size(); ++ii) {
-    //const Location& prev = locs[ii-1].loc;
     Location& loc = locs[ii].loc;
-    //size_t prevSlopeLoc = std::min(prevDistLoc, prevVertLoc);
     double dt = loc.time - locs[ii-1].loc.time;
     double dist = 1000*lngLatDist(loc.lngLat(), locs[prevDistLoc].lngLat());  //prev.lngLat()
     double disterr = loc.poserr + locs[prevDistLoc].loc.poserr;
     double vert = loc.alt - locs[prevVertLoc].loc.alt;
     double verterr = loc.alterr + locs[prevVertLoc].loc.alterr;
 
-    maxSpeed = std::max(double(loc.spd), maxSpeed);
     if(loc.spd > 0.1f)
       movingTimeGps += dt;
-    if(dist > minTrackDist || vert > minTrackDist) {  // dt < minTrackTime
-      movingTime += dt;
-      movingDist += dist;
-    }
+    //if(dist > minTrackDist || vert > minTrackDist) {  // dt < minTrackTime
 
     rawDist += dist;
-    if(dist > disterr/2) prevDistLoc = ii;  // be more generous with distance than vert
-    else dist = 0;
+    disterr = disterr > 0 ? disterr : 10;
+    // be more generous with distance than vert
+    if(dist > disterr/2) {
+      double tdist = loc.time - locs[prevDistLoc].loc.time;
+      trackDist += dist;
+      movingTime += std::min(10.0, tdist);
 
-    if(std::abs(vert) > verterr) prevVertLoc = ii;
-    else vert = 0;
-    if(vert != 0) {
-      double vertdt = dt;
-      for(size_t jj = ii - 1; jj-- > 0;) {
+      if(!track->hasSpeed) {
+        double a = std::exp(-dt*speedInvTau);
+        estSpeed = a*estSpeed + (1-a)*dist/tdist;
+      }
+      prevDistLoc = ii;
+    }
+    locs[ii].dist = trackDist;  //if(!origLocs.empty())
+    if(!track->hasSpeed)
+      loc.spd = estSpeed;
+    maxSpeed = std::max(double(loc.spd), maxSpeed);
+
+    verterr = verterr > 0 ? verterr : 20;
+    if(std::abs(vert) > verterr) {
+      double vertdt = dt;  //loc.time - locs[prevVertLoc].loc.time;
+      for(size_t jj = prevVertLoc; jj < ii; ++jj) {
         // idea here is to try to exclude flat sections
-        if(std::abs(loc.alt - locs[jj].loc.alt) > verterr) {
+        if(std::abs(loc.alt - locs[jj+1].loc.alt) <= verterr) {
           vertdt = loc.time - locs[jj].loc.time;
           break;
         }
@@ -467,18 +480,16 @@ void MapsTracks::updateStats(GpxFile* track)
       trackDescent += std::min(0.0, vert);
       ascentTime += vert > 0 ? vertdt : 0;
       descentTime += vert < 0 ? vertdt : 0;
+      prevVertLoc = ii;
     }
-
-    trackDist += dist;
-    locs[ii].dist = trackDist;  //if(!origLocs.empty())
   }
 
-  // docs say this can be more accurate that dist/time due to e.g. doppler measurements of GPS signal
   if(!locs.empty()) {
-    currSpeed = locs.back().loc.spd;
+    // docs say this can be more accurate than dist/time due to e.g. doppler measurements of GPS signal
+    //currSpeed = locs.back().loc.spd;
     for(size_t ii = locs.size() - 1; ii-- > 0;) {
-      if(locs.back().loc.time - locs[ii].loc.time > 10
-          || locs.back().loc.alt - locs[ii].loc.alt > 10 || locs.back().dist - locs[ii].dist > 10) {
+      if(locs.back().dist - locs[ii].dist > 10 && (locs.back().loc.time - locs[ii].loc.time > 10
+          || std::abs(locs.back().loc.alt - locs[ii].loc.alt) > 10)) {
         currSlope = (locs.back().loc.alt - locs[ii].loc.alt)/(locs.back().dist - locs[ii].dist);
         break;
       }
@@ -1093,8 +1104,9 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   else {
     Button* routeBtn = createToolbutton(MapsApp::uiIcon("directions"), "Directions");
     routeBtn->onClicked = [=](){
-      LngLat r1 = app->currLocation.lngLat(), r2 = app->pickResultCoord;
-      double km = lngLatDist(r1, r2);
+      Waypoint wp1(app->currLocation.lngLat(), "Start");
+      Waypoint wp2(app->pickResultCoord, app->pickResultName, "", app->pickResultProps);
+      double km = lngLatDist(wp1.lngLat(), wp2.lngLat());
       navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Navigation";
       navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
@@ -1102,21 +1114,22 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       app->panelToSkip = tracksPanel;
       populateTrack(&navRoute);
       if(km > 0.01)
-        addWaypoint({r1, "Start"});  //"Current location"
-      addWaypoint({r2, app->pickResultName, "", app->pickResultProps});
+        addWaypoint(wp1);  //"Current location"
+      addWaypoint(wp2);
       toggleRouteEdit(false);
     };
     tb->addWidget(routeBtn);
 
     Button* measureBtn = createToolbutton(MapsApp::uiIcon("measure"), "Measure");
     measureBtn->onClicked = [=](){
+      Waypoint wpt(app->pickResultCoord, app->pickResultName, "", app->pickResultProps);
       navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Measurement";
       navRoute.routeMode = "direct";
       app->showPanel(tracksPanel);
       app->panelToSkip = tracksPanel;
       populateTrack(&navRoute);
-      addWaypoint({app->pickResultCoord, app->pickResultName, "", app->pickResultProps});
+      addWaypoint(wpt);
       toggleRouteEdit(true);
     };
     tb->addWidget(measureBtn);

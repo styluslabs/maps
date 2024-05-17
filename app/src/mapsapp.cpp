@@ -661,8 +661,9 @@ void MapsApp::updateLocPlaceInfo()
   if(currLocation.poserr > 0)
     locstr += fstring(" (\u00B1%.0f m)", currLocation.poserr);
   // m/s -> kph or mph
-  locstr += metricUnits ? fstring(" %.1f km/h", currLocation.spd*3.6)
-      : fstring(" %.1f mph", currLocation.spd*2.23694);
+  if(!std::isnan(currLocation.spd))
+    locstr += metricUnits ? fstring(" %.1f km/h", currLocation.spd*3.6)
+        : fstring(" %.1f mph", currLocation.spd*2.23694);
   if(coordnode)
     coordnode->setText(locstr.c_str());
 
@@ -680,8 +681,8 @@ void MapsApp::updateLocation(const Location& _loc)
     return;
   double dr = lngLatDist(_loc.lngLat(), currLocation.lngLat());
   double dh = _loc.alt - currLocation.alt;
-  if(_loc.poserr > dr && _loc.alterr > std::abs(dh)
-      && _loc.poserr > currLocation.poserr + dt*std::max(currLocation.spd, 1.0f)) {
+  float spd = currLocation.spd > 1.0f ? currLocation.spd : 1.0f;  // handle NaN
+  if(_loc.poserr > dr && _loc.alterr > std::abs(dh) && _loc.poserr > currLocation.poserr + dt*spd) {
     LOGW("Rejecting location update: dt = %.3f s, dr = %.2f m, err = %.2f m", dt, dr, _loc.poserr);
     return;
   }
@@ -1305,10 +1306,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   // fake location updates to test track recording
   auto fakeLocFn = [this](){
-    real lat = currLocation.lat + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
-    real lng = currLocation.lng + 0.0001*(0.5 + std::rand()/real(RAND_MAX));
+    real lat = currLocation.lat + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
+    real lng = currLocation.lng + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
     real alt = currLocation.alt + 10*std::rand()/real(RAND_MAX);
-    updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 0, alt, 0, 0, 0, 0, 0});
+    updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 10, alt, 10, NAN, 0, NAN, 0});
   };
 
   Menu* appDebugMenu = createMenu(Menu::HORZ);
@@ -1808,6 +1809,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     markerColors.push_back(parseColor(colorstr.Scalar()));
 
   // DB setup
+  sqlite3_config(SQLITE_CONFIG_URI, 1);  // need to use URI to attach DB as readonly
   FSPath dbPath(baseDir, "places.sqlite");
   if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
     logMsg("Error creating %s", dbPath.c_str());

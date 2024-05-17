@@ -86,6 +86,7 @@ struct GpxFile
   bool archived = false;
   bool loaded = false;
   bool modified = false;
+  bool hasSpeed = false;
 
   GpxFile() {}
   GpxFile(const std::string& _title, const std::string& _desc, const std::string& _file,
@@ -99,7 +100,7 @@ struct GpxFile
 };
 
 namespace pugi { class xml_node; }
-void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt);
+void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd = false);
 bool loadGPX(GpxFile* track, const char* gpxSrc = NULL);
 bool saveGPX(GpxFile* track, const char* filename = NULL);
 std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double precision = 1E6);
