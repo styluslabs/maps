@@ -42,6 +42,7 @@ public:
   DragDropList(Widget* _content = NULL);
   void addItem(KeyType key, Widget* item, KeyType nextkey = {});
   void deleteItem(KeyType key);
+  Widget* getItem(KeyType key);
   void clear();
 
   void setOrder(const std::vector<KeyType>& order);
@@ -143,6 +144,7 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
 Menubar* createMenubar();
+Button* createActionbutton(const SvgNode* icon, const char* title, bool showTitle = false);
 ColorPicker* createColorPicker(SharedMenu* menu, Color initialColor);
 Button* createListItem(SvgNode* icon, const char* title, const char* note = NULL);
 TextEdit* createTitledTextEdit(const char* title, const char* text = NULL);
@@ -156,4 +158,3 @@ Widget* createBoxLayout(const char* anchor = "fill");
 Dialog* createMobileDialog(const char* title, const char* acceptTitle, Widget* content = NULL);
 Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* title,
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel = {});
-

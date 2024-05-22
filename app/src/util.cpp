@@ -47,6 +47,12 @@ TileID lngLatTile(LngLat ll, int z)
   return TileID(x, y, z);
 }
 
+int64_t packTileId(const TileID& tile)
+{
+  // we could interleave bits of x and y to get something like quadkey (but note we still need to include z)
+  return int64_t(tile.z) << 48 | int64_t(tile.x) << 24 | int64_t(tile.y);
+}
+
 static double parseCoord(const char* s, char** endptr)
 {
   // strToReal will consume 'E' (for east), but not a problem unless followed by a digit (w/o space)

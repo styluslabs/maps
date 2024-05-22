@@ -364,10 +364,9 @@ void MapsBookmarks::onMapEvent(MapEvent_t event)
   }
 }
 
-Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos)
+void MapsBookmarks::setPlaceInfoSection(const std::string& osm_id, LngLat pos)
 {
-  Widget* content = createColumn();
-  content->node->setAttribute("box-anchor", "hfill");
+  Widget* content = createColumn({}, "", "", "hfill");
   content->node->addClass("bkmk-content");
   // attempt lookup w/ osm_id if passed
   // - if no match, lookup by lat,lng but only accept hit w/o osm_id if osm_id is passed
@@ -380,7 +379,7 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
         content->addWidget(getPlaceInfoSubSection(rowid, listid, namestr, notestr));
     });
   }
-  if(content->containerNode()->children().empty()) {
+  if(content->isEmpty()) {
     const char* query2 = "SELECT rowid, list_id, title, notes FROM bookmarks WHERE "
         "lng >= ? AND lat >= ? AND lng <= ? AND lat <= ? LIMIT 1;";
     constexpr double delta = 0.00001;
@@ -390,9 +389,10 @@ Widget* MapsBookmarks::getPlaceInfoSection(const std::string& osm_id, LngLat pos
           content->addWidget(getPlaceInfoSubSection(rowid, listid, namestr, notestr));
     });
   }
-  if(!content->containerNode()->children().empty())
-    content->containerNode()->addChild(createHRule(2, "0 6")->node, content->containerNode()->children().front());
-  return content;
+  Widget* container = app->infoContent->selectFirst(".bkmk-section");
+  container->addWidget(content);  // add even if empty since bkmk-content used for new bookmarks
+  if(!content->isEmpty())
+    container->setVisible(true);
 }
 
 void MapsBookmarks::editBookmark(int rowid, int listid, std::function<void()> callback)
@@ -424,14 +424,12 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   std::string liststr;
   SQLiteStmt(app->bkmkDB, "SELECT title FROM lists WHERE id = ?;").bind(listid).onerow(liststr);
 
-  Widget* section = createColumn();
-  section->node->setAttribute("box-anchor", "hfill");
+  Widget* section = createColumn({}, "", "", "hfill");
   TextBox* noteText = new TextBox(loadSVGFragment(
       R"(<text class="note-text weak" box-anchor="left" margin="0 10" font-size="12"></text>)"));
   noteText->setText(notestr.c_str());
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), app->getPanelWidth() - 20).c_str());
 
-  Widget* toolRow = createRow();
   //Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), liststr.c_str(), true);
   // bit of a hack to use TextLabel on a toolbutton
   Button* chooseListBtn = new Button(widgetNode("#toolbutton"));
@@ -450,6 +448,9 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     bkmkPanelDirty = true;
     listsDirty = archiveDirty = true;  // list is dirty too since it shows number of bookmarks
     app->gui->deleteWidget(section);
+    Widget* container = app->infoContent->selectFirst(".bkmk-section");
+    if(container->selectFirst(".bkmk-content")->isEmpty())
+      container->setVisible(false);
   };
 
   addNoteBtn->onClicked = [=](){
@@ -499,21 +500,15 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     return false;
   });
 
-  toolRow->addWidget(chooseListBtn);
-  //toolRow->addWidget(createStretch());
-  toolRow->addWidget(removeBtn);
-  toolRow->addWidget(addNoteBtn);
-
+  Widget* toolRow = createRow({chooseListBtn, removeBtn, addNoteBtn});
   section->addWidget(toolRow);
   section->addWidget(noteText);
-  //section->addWidget(editContent);
-
   return section;
 }
 
 void MapsBookmarks::addPlaceActions(Toolbar* tb)
 {
-  Button* createBkmkBtn = createToolbutton(MapsApp::uiIcon("add-pin"), "Save place");
+  Button* createBkmkBtn = createActionbutton(MapsApp::uiIcon("add-pin"), "Save", true);
   //createBkmkBtn->node->setAttribute("box-anchor", "left");
 
   auto createBkmkFn = [=](int list_id, std::string listname){
@@ -523,9 +518,8 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
     int rowid = addBookmark(list_id, app->pickResultOsmId, namestr, app->pickResultProps, "", app->pickResultCoord);
     Widget* section = getPlaceInfoSubSection(rowid, list_id, namestr, "");
     Widget* bkmks = app->infoContent->selectFirst(".bkmk-content");
-    if(bkmks->containerNode()->children().empty())
-      bkmks->addWidget(createHRule(2, "0 6"));
     bkmks->addWidget(section);
+    app->infoContent->selectFirst(".bkmk-section")->setVisible(true);
   };
 
   createBkmkBtn->onClicked = [=](){ chooseBookmarkList(createBkmkFn); };

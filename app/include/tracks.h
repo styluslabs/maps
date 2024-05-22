@@ -112,7 +112,6 @@ private:
   Widget* wayptTabLabel = NULL;
   Toolbar* editTrackTb = NULL;
   Widget* editTrackContent = NULL;
-  Widget* recordDetailText = NULL;
 
   std::unique_ptr<FileStream> recordGPXStrm;
   Timer* recordTimer = NULL;

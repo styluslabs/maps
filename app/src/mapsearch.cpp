@@ -71,25 +71,18 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
 
 void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData)
 {
-  int64_t rowId = -1;
   auto tileId = task->tileId();
-  searchDB.stmt("SELECT id FROM tiles WHERE z = ? AND x = ? AND y = ?;")
-      .bind(tileId.z, tileId.x, tileId.y).exec([&](int64_t id) { rowId = id; });
-  if(rowId < 0) {
+  int64_t packedId = packTileId(tileId), cnt = -1;
+  if(!searchDB.stmt("SELECT 1 FROM offline_tiles WHERE tile_id = ? LIMIT 1;").bind(packedId).onerow(cnt)) {
     LOGTInit(">>> indexing tile %s", tileId.toString().c_str());
-    const char* query = "INSERT OR IGNORE INTO tiles (z,x,y) VALUES (?,?,?);";
-    searchDB.stmt(query).bind(tileId.z, tileId.x, tileId.y).exec();
-    rowId = searchDB.lastInsertRowId();
-    sqlite3_bind_int64(insertStmt, 6, rowId);  // bind tile_id
-
+    sqlite3_bind_int64(insertStmt, 6, packedId);  //rowId);  // bind tile_id
     searchDB.exec("BEGIN TRANSACTION");
     processTileData(task, insertStmt, searchData);
     searchDB.exec("COMMIT TRANSACTION");
     LOGT("<<< indexing tile %s", tileId.toString().c_str());
     LOGD("Search indexing completed for tile %s", tileId.toString().c_str());
   }
-  if(rowId >= 0)
-    searchDB.stmt("INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(rowId, mapId).exec();
+  searchDB.stmt("INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(packedId, mapId).exec();
 }
 
 void MapsSearch::importPOIs(std::string srcpath, int offlineId)
@@ -113,7 +106,8 @@ void MapsSearch::onDelOfflineMap(int mapId)
   //DELETE FROM tiles WHERE id IN (SELECT tile_id FROM offline_tiles WHERE offline_id = ? AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?));
   // need to use sqlite3_exec for multiple statments in single string
   searchDB.stmt("DELETE FROM offline_tiles WHERE offline_id = ?;").bind(mapId).exec();
-  searchDB.stmt("DELETE FROM tiles WHERE id NOT IN (SELECT tile_id FROM offline_tiles);").exec();
+  searchDB.stmt("DELETE FROM pois WHERE tile_id NOT IN (SELECT tile_id FROM offline_tiles);").exec();
+  //searchDB.stmt("DELETE FROM tiles WHERE id NOT IN (SELECT tile_id FROM offline_tiles);").exec();
 }
 
 std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
@@ -134,8 +128,8 @@ std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
 }
 
 static const char* POI_SCHEMA = R"#(BEGIN;
-CREATE TABLE tiles(id INTEGER PRIMARY KEY, z INTEGER, x INTEGER, y INTEGER, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));
-CREATE UNIQUE INDEX tiles_tile_id ON tiles (z, x, y);
+--CREATE TABLE tiles(id INTEGER PRIMARY KEY, z INTEGER, x INTEGER, y INTEGER, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));
+--CREATE UNIQUE INDEX tiles_tile_id ON tiles (z, x, y);
 CREATE TABLE offline_tiles(tile_id INTEGER, offline_id INTEGER);
 CREATE UNIQUE INDEX offline_index ON offline_tiles (tile_id, offline_id);
 CREATE TABLE pois(name TEXT, tags TEXT, props TEXT, lng REAL, lat REAL, tile_id INTEGER);
@@ -143,9 +137,9 @@ CREATE VIRTUAL TABLE pois_fts USING fts5(name, tags, content='pois');
 CREATE INDEX pois_tile_id ON pois (tile_id);
 
 -- trigger to delete pois when tile row deleted
-CREATE TRIGGER tiles_delete AFTER DELETE ON tiles BEGIN
-  DELETE FROM pois WHERE tile_id = OLD.rowid;
-END;
+--CREATE TRIGGER tiles_delete AFTER DELETE ON tiles BEGIN
+--  DELETE FROM pois WHERE tile_id = OLD.rowid;
+--END;
 
 -- triggers to keep the FTS index up to date.
 CREATE TRIGGER pois_insert AFTER INSERT ON pois BEGIN

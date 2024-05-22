@@ -404,6 +404,11 @@ function way_function(way)
         way:Attribute("trail_visibility", trailvis)
       end
 
+      local mtbscale = way:Find("mtb:scale")  -- mountain biking difficulty rating
+      if mtbscale ~= "" then
+        way:Attribute("mtb_scale", mtbscale)
+      end
+
       if highway == "path" and way:Find("golf") ~= "" then
         way:Attribute("subclass", "golf")
       end

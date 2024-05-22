@@ -601,7 +601,7 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
 
   olinfo.sources.push_back({tileSource->name(), destpath, "file://" + srcpath + "?mode=ro", {}, tileSource->maxZoom(), {}});
   if(hasPois && app->config["storage"]["import_pois"].as<bool>(true))
-    olinfo.sources.back().searchData.push_back(YAML::Load(fstring("[ { layer: __IMPORT__, layers: [\"%s\"] } ]", srcpath.c_str())));
+    olinfo.sources.back().searchData.push_back(YAML::Load(fstring("{ layer: __IMPORT__, fields: [\"%s\"], filter: {} }", srcpath.c_str())));
   else if(!tileSource->isRaster())
     Tangram::YamlPath("application.search_data").get(app->map->getScene()->config(), olinfo.sources.back().searchData);
   //offlinePending.push_back(std::move(olinfo));

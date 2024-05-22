@@ -25,23 +25,18 @@ Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t
   return menu;
 }
 
+Button* createActionbutton(const SvgNode* icon, const char* title, bool showTitle)
+{
+  Button* widget = new Button(widgetNode("#actionbutton"));
+  widget->setIcon(icon);
+  widget->setTitle(title);
+  widget->setShowTitle(showTitle);
+  return widget;
+}
+
 static SvgDocument* createMobileDialogNode()
 {
-  static const char* mobileDialogSVG = R"(
-    <svg id="dialog" class="window dialog" layout="box">
-      <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
-      <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
-        <g class="title-container" box-anchor="hfill" layout="box"></g>
-        <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
-        <g class="body-container" box-anchor="fill" layout="flex" flex-direction="column"></g>
-      </g>
-    </svg>
-  )";
-  static std::unique_ptr<SvgDocument> mobileDialogProto;
-  if(!mobileDialogProto)
-    mobileDialogProto.reset(static_cast<SvgDocument*>(loadSVGFragment(mobileDialogSVG)));
-
-  return setupWindowNode(mobileDialogProto->clone());
+  return setupWindowNode(static_cast<SvgDocument*>(widgetNode("#mobile-dialog")));
 }
 
 static Dialog* setupMobileDialog(Dialog* dialog, const char* title, const char* acceptTitle, Widget* content = NULL)
@@ -52,7 +47,7 @@ static Dialog* setupMobileDialog(Dialog* dialog, const char* title, const char* 
   titleText->node->addClass("dialog-title");
   titleText->node->setAttribute("box-anchor", "hfill");
   Toolbar* titleTb = createToolbar();
-  titleTb->node->addClass("title-toolbar");
+  titleTb->node->addClass("title-toolbar invert-theme");
   dialog->cancelBtn = createToolbutton(uiIcon("cancel"), "Cancel");
   dialog->cancelBtn->onClicked = [=](){ dialog->finish(Dialog::CANCELLED); };
   titleTb->addWidget(dialog->cancelBtn);
@@ -333,6 +328,15 @@ void DragDropList::deleteItem(KeyType key)
   }
 }
 
+Widget* DragDropList::getItem(KeyType key)
+{
+  for(SvgNode* node : content->containerNode()->children()) {
+    if(node->getStringAttr("__sortkey") == key)
+      return static_cast<Widget*>(node->ext(false));
+  }
+  return NULL;
+}
+
 void DragDropList::addItem(KeyType key, Widget* item, KeyType nextkey)
 {
   const auto& children = content->containerNode()->children();
@@ -555,13 +559,8 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
 TextEdit* createTitledTextEdit(const char* title, const char* text)
 {
   static const char* titledTextEditSVG = R"#(
-    <g id="textedit" class="inputbox textbox" layout="flex" flex-direction="column">
+    <g class="inputbox textbox" box-anchor="hfill" layout="flex" flex-direction="column">
       <text class="inputbox-title" font-size="14" box-anchor="left" margin="2 2"></text>
-
-      <g class="textbox-wrapper" box-anchor="fill" layout="box">
-        <rect class="min-width-rect" width="150" height="36" fill="none"/>
-        <rect class="inputbox-bg" box-anchor="fill" width="20" height="20"/>
-      </g>
     </g>
   )#";
   /*static const char* titledTextEditSVG = R"#(
@@ -583,10 +582,13 @@ TextEdit* createTitledTextEdit(const char* title, const char* text)
   if(!proto)
     proto.reset(loadSVGFragment(titledTextEditSVG));
 
-  SvgG* textEditNode = static_cast<SvgG*>(proto->clone());
-  textEditNode->selectFirst(".textbox-wrapper")->asContainerNode()->addChild(textEditInnerNode());
-  textEditNode->setAttribute("box-anchor", "hfill");
-  TextEdit* widget = new TextEdit(textEditNode);
+  SvgNode* titledTextEditNode = proto->clone();
+  SvgNode* textEditNode = widgetNode("#textedit");
+  textEditNode->setXmlClass("textedit-wrapper");
+  textEditNode->setAttribute("box-anchor", "fill");
+  textEditNode->asContainerNode()->addChild(textEditInnerNode());
+  titledTextEditNode->asContainerNode()->addChild(textEditNode);
+  TextEdit* widget = new TextEdit(titledTextEditNode);
   widget->selectFirst(".inputbox-title")->setText(title);
   setupFocusable(widget);
 

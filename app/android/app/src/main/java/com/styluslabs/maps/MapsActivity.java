@@ -272,7 +272,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public static void updateLocation(Location loc)
   {
-    Log.v("Tangram", loc.toString());
+    //Log.v("Tangram", loc.toString());
     double lat = loc.getLatitude();  // degrees
     double lng = loc.getLongitude();  // degrees
     float poserr = loc.getAccuracy();  // accuracy in meters

@@ -14,7 +14,7 @@ public:
   int getListId(const char* listname, bool create = false);
   void onMapEvent(MapEvent_t event);
   Button* createPanel();
-  Widget* getPlaceInfoSection(const std::string& osm_id, LngLat pos);
+  void setPlaceInfoSection(const std::string& osm_id, LngLat pos);
   void addPlaceActions(Toolbar* tb);
 
   Widget* listsPanel = NULL;

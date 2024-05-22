@@ -18,6 +18,7 @@ TileID lngLatTile(LngLat ll, int z);
 LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord);
 LngLat parseLngLat(const char* s);
 std::string lngLatToStr(LngLat ll);
+int64_t packTileId(const TileID& tile);
 
 std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false);
 template<typename T>

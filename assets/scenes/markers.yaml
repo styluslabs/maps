@@ -275,6 +275,7 @@ layers:
                 interactive: true
                 color: function() { return feature.color || '#0000FF'; }
                 width: 2px
+                #join: round
                 order: 5000
 
     selected-track:
@@ -284,10 +285,12 @@ layers:
                 interactive: true
                 color: function() { return feature.color || '#0000FF'; }
                 width: 2px
+                #join: round
                 order: 5000
                 outline:
                     width: 2px
                     color: white
+                    #join: round
 
     recording-track:
         draw:
@@ -296,6 +299,7 @@ layers:
                 interactive: true
                 color: function() { return feature.color || '#FF0000'; }
                 width: 3px
+                #join: round
                 order: 5000
 
     route-step:

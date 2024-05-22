@@ -52,6 +52,9 @@ global:
         motorway_muted: '#eee'
         path: '#fff'
         unpaved_trail: '#B06000'
+        bike_lane: '#008800'
+        bike_path: '#004C00'
+        bike_unpaved: '#306000'
         transit: '#EB322F'
         rail: '#96ABB2'  #[0.588,0.671,0.698]
         rail_tunnel: '#A9C3CB'
@@ -95,6 +98,13 @@ global:
             advanced: '#2E2E2E'  #[0.450,0.450,0.450]
             expert: '#2E2E2E'  #[0.450,0.450,0.450]
             freeride: '#FFA500'
+        mtb:
+            "0": '#2FB439'
+            "1": '#2F76B4'
+            "2": '#F54141'
+            "3": '#2E2E2E'
+            "4": '#2E2E2E'
+            "5": '#FFA500'
         #urban_7: lightgrey
         #urban_9: [.88, .88, .88]
         #motorway_5: '#F89595'
@@ -139,6 +149,8 @@ global:
             const sym = global.piste_symbols[feature.difficulty] || '';
             return feature.name ? (sym + ' ' + feature.name) : sym;
         }
+
+    mtb_color_fn: function() { return global.color.mtb[feature.mtb_scale] || global.color.bike_unpaved; }
 
     transit_color_fn: |
         function() {
@@ -229,8 +241,8 @@ application:
     gui_variables:
         show_polygons: { label: Polygons }
         show_bike: { label: Bike }
-        show_transit: { label: Transit }
         show_trails: { label: Hike }
+        show_transit: { label: Transit }
         show_parking: { label: Parking }
         show_motorways: { label: Motorways }
 
@@ -710,13 +722,14 @@ layers:
                             size: 12px
 
         piste:
+            enabled: global.show_trails
             filter: { class: piste, $zoom: { min: 10 } }
             piste_areas:
                 filter: { $geometry: polygon, $zoom: { min: 13 } }
                 enabled: global.show_polygons
                 draw:
                     polygons:
-                        visible: global.show_trails
+                        #visible: global.show_trails
                         style: global.earth_style
                         order: global.order.landuse
                         color: global.piste_color_fn
@@ -724,7 +737,7 @@ layers:
                 filter: { $geometry: line }
                 draw:
                     lines:
-                        visible: global.show_trails
+                        #visible: global.show_trails
                         order: global.order.piste
                         color: global.piste_color_fn
                         width: [[10,0.5px],[11,1px],[12,1.25px],[13,2px],[18,3m]]
@@ -735,7 +748,7 @@ layers:
                     filter: { $zoom: { min: 12 } }
                     draw: { lines: { visible: true } }
             piste_names:
-                enabled: global.show_trails
+                #enabled: global.show_trails
                 filter: { $geometry: line, $zoom: { min: 13 } }
                 draw:
                     text:
@@ -985,51 +998,49 @@ layers:
     bicycle:
         data: { source: osm, layer: transportation }
         filter:
-            any:
-                - bicycle: [designated, yes]
-                - highway: cycleway
-                - cycleway: true
-                - cycleway_right: true
-                - cycleway_left: true
+            - bicycle: [designated, yes]
+            - highway: cycleway
+            - cycleway: true
+            - cycleway_right: true
+            - cycleway_left: true
+            - mtb_scale: true
         enabled: global.show_bike
         draw:
             lines:
                 style: unlit-lines
-                color: '#008800'  #global.color.road
+                color: global.color.bike_lane
                 width: [[13, 1.5px], [14, 2px]]
                 order: global.order.bicycle
         track:
             exclusive: true
             priority: 1
             filter:
-                any:
-                    - bicycle: [designated, yes]
-                    - highway: cycleway
-                    - cycleway: [track, opposite_track]
-                    - cycleway_left: [track, opposite_track]
-                    - cycleway_right: [track, opposite_track]
-            draw: { lines: { color: '#004C00' } }
+                - bicycle: [designated, yes]
+                - highway: cycleway
+                - cycleway: [track, opposite_track]
+                - cycleway_left: [track, opposite_track]
+                - cycleway_right: [track, opposite_track]
+                - mtb_scale: true
+            draw: { lines: { color: global.color.bike_path } }
             unpaved:
-                filter: { surface: unpaved }
-                draw: { lines: { style: dashed-bike, color: '#B06000' } }
+                filter: [ { surface: unpaved }, { mtb_scale: true } ]
+                draw: { lines: { style: dashed-bike, color: global.mtb_color_fn } }
         lane:
             exclusive: true
             priority: 2
             filter:
-                any:
-                    - cycleway: [lane, opposite_lane]
-                    - cycleway_left: [lane, opposite_lane]
-                    - cycleway_right: [lane, opposite_lane]
-            draw: { lines: { color: '#008800' } }
+                - cycleway: [lane, opposite_lane]
+                - cycleway_left: [lane, opposite_lane]
+                - cycleway_right: [lane, opposite_lane]
+            draw: { lines: { color: global.color.bike_lane } }
         shared:
             exclusive: true
             priority: 3
             filter:
-                any:
-                    - cycleway: [shared_lane, shoulder]
-                    - cycleway_left: [shared_lane, shoulder]
-                    - cycleway_right: [shared_lane, shoulder]
-            draw: { lines: { style: dashed-bike, color: '#008800' } }
+                - cycleway: [shared_lane, shoulder]
+                - cycleway_left: [shared_lane, shoulder]
+                - cycleway_right: [shared_lane, shoulder]
+            draw: { lines: { style: dashed-bike, color: global.color.bike_lane } }
 
     transit:
         data: { source: osm, layer: transit }

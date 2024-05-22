@@ -803,7 +803,7 @@ Button* MapsSources::createPanel()
   titleEdit->onChanged = [this](const char*){ sourceModified(); };
   urlEdit->onChanged = [this](const char*){ sourceModified(); };
 
-  Toolbar* sourceTb = createToolbar({titleEdit, saveBtn});
+  Widget* sourceTb = createRow({titleEdit, saveBtn});  //createToolbar
   sourceTb->node->setAttribute("margin", "0 3");
   varsContent = createColumn();
   varsContent->node->setAttribute("box-anchor", "hfill");

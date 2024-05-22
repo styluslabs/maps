@@ -57,8 +57,8 @@ const char* getResource(const std::string& name)
 
 static std::string uiIconStr;
 
-const char* mapsColorsCSS = R"#(
-svg.window  /* dark theme */
+static const char* darkThemeCSS = R"#(
+svg.window, .invert-theme .menu
 {
   --dark: #101010;
   --window: #303030;
@@ -76,11 +76,34 @@ svg.window  /* dark theme */
   --icon-disabled: #808080;
   --text-sel: #F2F2F2;
   --text-sel-bg: #2E7183;
+  --header: #2940AF;
 }
 
-svg.window.light  /* light theme */
+.invert-theme
 {
-  --dark: #FFFFFF;  /* was #F0F0F0; */
+  --dark: #F0F0F0;
+  --window: #EEEEEE;
+  --light: #CCCCCC;
+  --base: #FFFFFF;
+  --button: #D0D0D0;
+  --hovered: #B8D8F9;
+  --pressed: #B8D8F9;
+  --checked: #A2CAEF;
+  --title: #2EA3CF;
+  --text: #000000;
+  --text-weak: #606060;
+  --text-bg: #F2F2F2;
+  --icon: #404040;
+  --icon-disabled: #A0A0A0;
+  --text-sel: #FFFFFF;
+  --text-sel-bg: #0078D7;
+}
+)#";
+
+static const char* lightThemeCSS = R"#(
+svg.window, .invert-theme .menu
+{
+  --dark: #F0F0F0;
   --window: #EEEEEE;  /* was #DDDDDD */
   --light: #CCCCCC;
   --base: #FFFFFF;
@@ -96,23 +119,61 @@ svg.window.light  /* light theme */
   --icon-disabled: #A0A0A0;
   --text-sel: #FFFFFF;
   --text-sel-bg: #0078D7;
+  --header: #1E2D90;  /* #2940AF */
+}
+
+.invert-theme
+{
+  --dark: #101010;
+  --window: #303030;
+  --light: #505050;
+  --base: #202020;
+  --button: #555555;
+  --hovered: #32809C;
+  --pressed: #32809C;
+  --checked: #0000C0;
+  --title: #2EA3CF;
+  --text: #F2F2F2;
+  --text-weak: #A0A0A0;
+  --text-bg: #000000;
+  --icon: #F2F2F2;
+  --icon-disabled: #808080;
+  --text-sel: #F2F2F2;
+  --text-sel-bg: #2E7183;
 }
 )#";
 
 static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
 .legend text { fill: inherit; }
-.panel-container { fill: var(--dark); }
+.panel-container { fill: var(--base); }
 .menu { fill: var(--window); }  /* same color as menuitem to eliminate dividers */
 .splitter { fill: var(--window); }
 /* .toolbar { fill: var(--base); } */
 .roundbutton { fill: var(--base); }
 .roundbutton .background { stroke: var(--light); stroke-width: 0.5 }
-.inputbox-bg { stroke: var(--light); }  /* show low-contrast border by default for input boxes */
+.inputbox-bg { stroke: var(--light); stroke-width: 1.25 }  /* show low-contrast border by default for input boxes */
 tspan.text-selection { fill: var(--text-sel); }
 .text-selection-bg { fill: var(--text-sel-bg); }
 .checkmark { color: #0078D7; }
 .scroll-handle { fill: #808080; }  /* make scroll handle grey since it's currently not draggable */
+.disabled text { fill: var(--text-weak); }
+.panel-header { fill: var(--header); }
+.title-toolbar { fill: var(--header); }
+.panel-hrule { display: none; }
+/* .section-hrule { display: none; } */
+.hrule.title { display: none; }
+/* rounded corners */
+rect.inputbox-bg { border-radius: 4; }
+rect.dialog-bg { border-radius: 8; }
+.panel-header rect.toolbar-bg { border-radius: 8 8 0 0; }
+.title-toolbar rect.toolbar-bg { border-radius: 8 8 0 0; }
+/* .toolbutton rect.toolbtn-bg { border-radius: 6; margin: 2 0 } */
+/* .panel-header { box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.5); } */
+/* .actionbutton .toolbtn-bg { stroke: var(--light); stroke-width: 1.5; border-radius: 18; } */
+.toolbar.action-bar { fill: none; }
+.actionbutton { --icon: #44F; --text: #44F; }
+.actionbutton .toolbtn-bg { fill: var(--window); border-radius: 4; }
 )#";
 
 static const char* moreWidgetSVG = R"#(
@@ -132,11 +193,19 @@ static const char* moreWidgetSVG = R"#(
   </g>
 
   <g id="toolbutton" class="toolbutton" layout="box">
-    <rect class="background" box-anchor="hfill" width="36" height="42"/>
+    <rect class="toolbtn-bg background" box-anchor="hfill" width="36" height="42"/>
     <rect class="checkmark" box-anchor="bottom hfill" margin="0 2" fill="none" width="36" height="3"/>
     <g class="toolbutton-content" margin="0 5" box-anchor="fill" layout="flex" flex-direction="row">
       <use class="icon" width="30" height="30" xlink:href="" />
       <text class="title" display="none" margin="0 9"></text>
+    </g>
+  </g>
+
+  <g id="actionbutton" class="toolbutton actionbutton" layout="box" margin="0 3">
+    <rect class="toolbtn-bg" box-anchor="hfill" width="36" height="36"/>
+    <g class="toolbutton-content" margin="0 2" box-anchor="fill" layout="flex" flex-direction="row">
+      <use class="icon" width="24" height="24" margin="0 5" xlink:href="" />
+      <text class="title" display="none" font-size="13" font-weight="700" margin="0 6 0 0"></text>
     </g>
   </g>
 
@@ -149,6 +218,15 @@ static const char* moreWidgetSVG = R"#(
     <rect fill="none" width="42" height="42"/>
     <circle class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" cx="21" cy="21" r="15.5" />
   </g>
+
+  <svg id="mobile-dialog" class="window dialog" layout="box">
+    <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
+    <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">
+      <g class="title-container" box-anchor="hfill" layout="box"></g>
+      <rect class="hrule title" box-anchor="hfill" width="20" height="2"/>
+      <g class="body-container" box-anchor="fill" layout="flex" flex-direction="column"></g>
+    </g>
+  </svg>
 </svg>
 )#";
 
@@ -163,13 +241,17 @@ void initResources(const char* baseDir)
   Painter::initFontStash(FONS_DELAY_LOAD | FONS_SUMMED);
 #if PLATFORM_IOS || PLATFORM_OSX
   const char* dfltFont = "scenes/fonts/SanFranciscoDisplay-Regular.otf";
+  const char* boldFont = "scenes/fonts/SanFranciscoDisplay-Bold.otf";
 #else
-  const char* dfltFont = "scenes/fonts/roboto-regular.ttf";
+  const char* dfltFont = "scenes/fonts/Roboto-Regular.ttf";
+  const char* boldFont = "scenes/fonts/Roboto-Bold.ttf";
 #endif
   std::string uiFont = MapsApp::config["ui"]["font"].as<std::string>(dfltFont);
   Painter::loadFont("sans", FSPath(baseDir, uiFont).c_str());
   if(Painter::loadFont("fallback", FSPath(baseDir, "scenes/fonts/DroidSansFallback.ttf").c_str()))
     Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback
+  if(uiFont == dfltFont)
+    Painter::loadFont("sans-bold", FSPath(baseDir, boldFont).c_str());
 
   boundsPainter.reset(new Painter(Painter::PAINT_NULL));
   boundsSvgPainter.reset(new SvgPainter(boundsPainter.get()));
@@ -191,11 +273,6 @@ void initResources(const char* baseDir)
   uiIconStr = readFile(FSPath(baseDir, "res/ui-icons.svg").c_str());
   addStringResources({{"ui-icons.svg", uiIconStr.c_str()}});
 
-  SvgCssStylesheet* styleSheet = new SvgCssStylesheet;
-  styleSheet->parse_stylesheet(mapsColorsCSS);  //defaultColorsCSS
-  styleSheet->parse_stylesheet(defaultStyleCSS);
-  styleSheet->parse_stylesheet(moreCSS);
-  styleSheet->sort_rules();
   SvgDocument* widgetDoc = SvgParser().parseString(defaultWidgetSVG);
 
   std::unique_ptr<SvgDocument> moreWidgets(SvgParser().parseString(moreWidgetSVG));
@@ -220,7 +297,21 @@ void initResources(const char* baseDir)
       usenode->setTarget(target);
   }
 
-  setGuiResources(widgetDoc, styleSheet);
+  setGuiResources(widgetDoc);  //, styleSheet);
+}
+
+SvgCssStylesheet* createStylesheet(bool light)  //const char* darkSel, const char* lightSel)
+{
+  //static const char* dfltSel = "svg.window, .themeable.themed, .invert-theme .themeable";  // ".themeable"
+  //static const char* invSel = ".themeable.invert-theme, .themeable.invert-theme-all";  // ".themeable.invert-theme"
+
+  SvgCssStylesheet* styleSheet = new SvgCssStylesheet;
+  //std::string colors = fstring(mapsColorsCSS, darkSel, lightSel);
+  styleSheet->parse_stylesheet(light ? lightThemeCSS : darkThemeCSS);
+  styleSheet->parse_stylesheet(defaultStyleCSS);
+  styleSheet->parse_stylesheet(moreCSS);
+  styleSheet->sort_rules();
+  return styleSheet;
 }
 
 struct SDFcontext { NVGcontext* vg; std::vector<float> fbuff; int fbuffw, fbuffh; float sdfScale, sdfOffset; };

@@ -147,11 +147,16 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
         <use class="icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
         <text class="currloc-elevation-text" margin="0 6" font-size="14"></text>
       </g>
-      <rect class="separator" margin="0 6" box-anchor="hfill" width="20" height="2"/>
-      <g class="action-container" layout="box" box-anchor="hfill" margin="0 3"></g>
-      <g class="waypt-section" layout="box" box-anchor="hfill"></g>
-      <g class="bkmk-section" layout="box" box-anchor="hfill"></g>
-      <g class="info-section" layout="flex" flex-direction="column" box-anchor="hfill"></g>
+      <g class="action-container" layout="box" box-anchor="hfill" margin="3 0"></g>
+      <g class="waypt-section" display="none" layout="flex" flex-direction="column" box-anchor="hfill">
+        <rect class="separator section-hrule" margin="0 0" box-anchor="hfill" width="20" height="3.5"/>
+      </g>
+      <g class="bkmk-section" display="none" layout="flex" flex-direction="column" box-anchor="hfill">
+        <rect class="separator section-hrule" margin="0 0" box-anchor="hfill" width="20" height="3.5"/>
+      </g>
+      <g class="info-section" display="none" layout="flex" flex-direction="column" box-anchor="hfill">
+        <rect class="separator section-hrule" margin="0 0" box-anchor="hfill" width="20" height="3.5"/>
+      </g>
     </g>
   )#";
 
@@ -203,10 +208,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   mapsTracks->addPlaceActions(toolbar);
   toolbar->addWidget(createStretch());
 
-  Button* shareLocBtn = createToolbutton(MapsApp::uiIcon("share"), "Share");
+  Button* shareLocBtn = createActionbutton(MapsApp::uiIcon("share"), "Share");
   std::string geoquery = Url::escapeReservedCharacters(namestr);
   shareLocBtn->onClicked = [=](){ openURL(fstring("geo:%.7f,%.7f?q=%s", pos.latitude, pos.longitude, geoquery.c_str()).c_str()); };
   toolbar->addWidget(shareLocBtn);
+  toolbar->node->addClass("action-bar");
 
   item->selectFirst(".action-container")->addWidget(toolbar);
 
@@ -215,9 +221,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   titlelabel->setText(namestr.c_str());
   titlelabel->setText(SvgPainter::breakText(static_cast<SvgText*>(titlelabel->node), titlewidth).c_str());
 
-  Widget* bkmkContent = mapsBookmarks->getPlaceInfoSection(osmid, pos);
-  if(bkmkContent)
-    item->selectFirst(".bkmk-section")->addWidget(bkmkContent);
+  mapsBookmarks->setPlaceInfoSection(osmid, pos);
 
   if(currLocPlaceInfo) {
     item->selectFirst(".place-info-row")->setVisible(false);
@@ -271,14 +275,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
         pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, osmid);
 
     };
-    Widget* providerRow = createRow();
-    providerRow->node->setAttribute("margin", "3 6");
-    providerRow->addWidget(new TextBox(createTextNode("Information from ")));
-    providerRow->addWidget(createStretch());
-    providerRow->addWidget(providerSel);
-    infoContent->selectFirst(".info-section")->addWidget(createHRule(2, "0 6"));
-    infoContent->selectFirst(".info-section")->addWidget(providerRow);
-    //infoContent->selectFirst(".info-section")->addWidget(createTitledRow("Information from ", providerSel));
+    Widget* providerRow = createRow({createTextBox("Information from "), createStretch(), providerSel}, "3 6");
+    Widget* infoSection = infoContent->selectFirst(".info-section");
+    infoSection->addWidget(providerRow);
+    infoSection->setVisible(true);
     providerSel->onChanged("");
   }
 
@@ -903,8 +903,12 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
   onApplyLayout = [this](const Rect& src, const Rect& dest){
     if(dest != viewport) {
       Map* map = app->map.get();
-      Rect r = dest * (1/app->gui->inputScale);
-      real y = window()->winBounds().height()/app->gui->inputScale - r.bottom;
+      Rect r0 = dest;
+      real winh = window()->winBounds().height();
+      // expand map down a bit to account for (possibly) rounded corners of UI
+      r0.bottom = std::min(r0.bottom + 10, winh);
+      Rect r = r0 * (1/app->gui->inputScale);
+      real y = winh/app->gui->inputScale - r.bottom;
       int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
       LngLat pos;
       map->screenPositionToLngLat(w/2.0, h/2.0, &pos.longitude, &pos.latitude);
@@ -1128,7 +1132,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
         <g class="maps-container" box-anchor="fill" layout="box"></g>
         <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
         <g class="panel-container panel-container-narrow" display="none" box-anchor="hfill" layout="box">
-          <rect class="background" box-anchor="fill" x="0" y="0" width="20" height="20" />
+          <rect class="panel-bg background" box-anchor="fill" x="0" y="0" width="20" height="20" margin="20 0 0 0" />
           <rect class="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
         </g>
         <g class="main-tb-container" box-anchor="hfill" layout="box"></g>
@@ -1142,7 +1146,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
           </g>
           <rect class="panel-separator hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
           <g class="panel-container panel-container-wide" display="none" box-anchor="hfill" layout="box">
-            <rect class="background" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
+            <rect class="background panel-bg" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
           </g>
         </g>
       </g>
@@ -1193,7 +1197,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
   };
   panelPager->onPageChanged = [this](Widget* page){ showPanel(page); };
-  pagerEventFilter = std::move(panelPager->eventFilter);  // we set event filter on panel toolbar instead
+  // std::move() clears source fn in GCC but not clang - https://bugs.llvm.org/show_bug.cgi?id=33125
+  pagerEventFilter.swap(panelPager->eventFilter);  // we set event filter on panel toolbar instead
 
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
   panelSplitter = new Splitter(winnode->selectFirst(".panel-splitter"),
@@ -1283,12 +1288,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     bool light = !themeCb->checked();
     themeCb->setChecked(light);
     config["ui"]["theme"] = light ? "light" : "dark";
-    light ? win->node->addClass("light") : win->node->removeClass("light");
-    gui->setWindowXmlClass(light ? "light" : "");
+    SvgCssStylesheet* ss = createStylesheet(light);
+    gui->setWindowStylesheet(std::unique_ptr<SvgCssStylesheet>(ss));
   };
   overflowMenu->addItem(themeCb);
-  if(config["ui"]["theme"].as<std::string>("") == "light")
-    themeCb->onClicked();
 
   Menu* debugMenu = createMenu(Menu::HORZ);
   const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
@@ -1479,6 +1482,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();
+  // set window stylesheet
+  themeCb->setChecked(config["ui"]["theme"].as<std::string>("") != "light");
+  themeCb->onClicked();
 
   gui->showWindow(win.get(), NULL);
 }
@@ -1571,6 +1577,7 @@ void MapsApp::maximizePanel(bool maximize)
 Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 {
   Toolbar* toolbar = createToolbar();
+  toolbar->node->addClass("panel-header invert-theme");
   auto backBtn = createToolbutton(MapsApp::uiIcon("back"));
   backBtn->onClicked = [this](){ popPanel(); };
   toolbar->addWidget(backBtn);
@@ -1670,7 +1677,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
   if(canMinimize) panel->node->addClass("can-minimize");
   panel->node->setAttribute("box-anchor", "fill");
   panel->addWidget(header);
-  panel->addWidget(createHRule());
+  panel->addWidget(createHRule(2, "", "panel-hrule"));
   if(fixedContent)
     panel->addWidget(fixedContent);
   if(content) {
@@ -1894,10 +1901,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   while(taskQueue.pop_front(queuedFn))
     queuedFn();
 
-  if(!runApplication) return false;
-
-  if(appSuspended)
-    LOGW("Rendering while application suspended!");
+  if(!runApplication || appSuspended) return false;
 
   if(glNeedsInit) {
     glNeedsInit = false;
