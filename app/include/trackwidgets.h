@@ -25,13 +25,14 @@ public:
   bool plotAlt = true;
   bool plotSpd = false;
   bool vertAxis = false;
+  bool darkMode = false;
 
   real zoomScale = 1;
   real zoomOffset = 0;
   real minOffset = 0;
   real maxZoom = 1;
 
-  //static Color bgColor;
+  TrackSliders* sliders = NULL;
 
 private:
   real prevCOM = 0;
@@ -51,24 +52,65 @@ public:
   Path2D altDistPlot;
   double minAlt, maxAlt;
   double maxDist;
+  bool darkMode = false;
 };
 
-class TrackSliders : public Slider
+/*
+class TrackSliders : public Widget
 {
 public:
   enum {NO_UPDATE = 0, UPDATE = 1, FORCE_UPDATE = 2};
   TrackSliders(SvgNode* n);
   void setEditMode(bool editmode);
   void setCropHandles(real start, real end, int update);
+  void setValue(real val, int update = UPDATE);
   std::function<void()> onStartHandleChanged;
   std::function<void()> onEndHandleChanged;
+  std::function<void(real value)> onValueChanged;
 
+  real sliderPos = 0;
   real startHandlePos = 0;
   real endHandlePos = 0;  // this reflects initial state of widget
+  bool editMode = false;
 
 private:
-  Widget* startHandle;
-  Widget* endHandle;
+  real bgMargin = 0;
+  Widget* sliderBg = NULL;
+  Widget* startHandle = NULL;
+  Widget* endHandle = NULL;
+  Widget* sliderHandle = NULL;
 };
 
 TrackSliders* createTrackSliders();
+*/
+
+class SliderHandle : public Button
+{
+public:
+  enum {NO_UPDATE = 0, UPDATE = 1, FORCE_UPDATE = 2};
+  SliderHandle(SvgNode* n, Widget* bg = NULL, real margin = 0);
+  void setValue(real val, int update = UPDATE);
+  std::function<void(real value)> onValueChanged;
+
+  real sliderPos = 0;
+  real bgMargin = 0;
+  Widget* sliderBg = NULL;
+};
+
+SliderHandle* createSliderHandle(Widget* bg, real margin);
+
+class TrackSliders : public Widget
+{
+public:
+  using Widget::Widget;
+
+  SliderHandle* trackSlider;
+  SliderHandle* startSlider;
+  SliderHandle* endSlider;
+  bool editMode = false;
+
+  void setCropHandles(real start, real end, int update);
+  void setEditMode(bool editmode);
+};
+
+TrackSliders* createTrackSliders(Widget* bg, real lmargin, real bmargin);

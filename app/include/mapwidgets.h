@@ -154,7 +154,6 @@ void showInlineDialogModal(Widget* dialog);
 void showModalCentered(Window* modal, SvgGui* gui);
 void sendKeyPress(SvgGui* gui, Widget* widget, int sdlkey, int mods = 0);
 Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int year, int month, int day)> onChange);
-Widget* createBoxLayout(const char* anchor = "fill");
 Dialog* createMobileDialog(const char* title, const char* acceptTitle, Widget* content = NULL);
 Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* title,
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel = {});

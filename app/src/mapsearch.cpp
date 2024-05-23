@@ -259,7 +259,7 @@ void MapsSearch::clearSearchResults()
   app->pluginManager->cancelRequests(PluginManager::SEARCH);  // cancel any outstanding search requests
   app->gui->deleteContents(resultsContent, ".listitem");
   listResultOffset = 0;
-  resultCountText->setText("");
+  resultCountText->setText(" ");  // use non-empty string to maintain layout height
   mapResults.clear();
   listResults.clear();
   markers->reset();
@@ -646,6 +646,7 @@ Button* MapsSearch::createPanel()
   });
 
   resultCountText = new TextBox(searchHeaderNode->selectFirst(".result-count-text"));
+  resultCountText->setText(" ");  // prevent layout from collapsing
 
   SvgNode* overlayNode = searchBoxNode->selectFirst(".noquery-overlay");
   Button* textEditOverlay = new Button(overlayNode);

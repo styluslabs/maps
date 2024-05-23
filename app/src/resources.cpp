@@ -60,10 +60,10 @@ static std::string uiIconStr;
 static const char* darkThemeCSS = R"#(
 svg.window, .invert-theme .menu
 {
-  --dark: #101010;
-  --window: #303030;
-  --light: #505050;
-  --base: #202020;
+  --dark: #101010;  /* toolbar */
+  --window: #303030;  /* menu, dialog */
+  --light: #505050;  /* separator */
+  --base: #202020;  /* list, inputbox */
   --button: #555555;
   --hovered: #32809C;
   --pressed: #32809C;
@@ -76,7 +76,7 @@ svg.window, .invert-theme .menu
   --icon-disabled: #808080;
   --text-sel: #F2F2F2;
   --text-sel-bg: #2E7183;
-  --header: #2940AF;
+  --header: #6AF;
 }
 
 .invert-theme
@@ -93,7 +93,7 @@ svg.window, .invert-theme .menu
   --text: #000000;
   --text-weak: #606060;
   --text-bg: #F2F2F2;
-  --icon: #404040;
+  --icon: #202020;
   --icon-disabled: #A0A0A0;
   --text-sel: #FFFFFF;
   --text-sel-bg: #0078D7;
@@ -147,7 +147,8 @@ static const char* moreCSS = R"#(
 .listitem.checked { fill: var(--checked); }
 .legend text { fill: inherit; }
 .panel-container { fill: var(--base); }
-.menu { fill: var(--window); }  /* same color as menuitem to eliminate dividers */
+.menu { fill: var(--window); }  /* no (fake) dividers on menus */
+.menuitem { fill: none; }
 .splitter { fill: var(--window); }
 /* .toolbar { fill: var(--base); } */
 .roundbutton { fill: var(--base); }
@@ -165,6 +166,8 @@ tspan.text-selection { fill: var(--text-sel); }
 .hrule.title { display: none; }
 /* rounded corners */
 rect.inputbox-bg { border-radius: 4; }
+rect.menu-bg { border-radius: 6; }
+rect.menuitem-bg { border-radius: 6; }
 rect.dialog-bg { border-radius: 8; }
 .panel-header rect.toolbar-bg { border-radius: 8 8 0 0; }
 .title-toolbar rect.toolbar-bg { border-radius: 8 8 0 0; }
@@ -172,8 +175,11 @@ rect.dialog-bg { border-radius: 8; }
 /* .panel-header { box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.5); } */
 /* .actionbutton .toolbtn-bg { stroke: var(--light); stroke-width: 1.5; border-radius: 18; } */
 .toolbar.action-bar { fill: none; }
-.actionbutton { --icon: #44F; --text: #44F; }
-.actionbutton .toolbtn-bg { fill: var(--window); border-radius: 4; }
+/* .actionbutton { --icon: #44F; --text: #44F; } */
+.actionbutton text { fill: var(--header); }
+.actionbutton .icon { fill: var(--header); color: var(--header); }
+.actionbutton .actionbtn-bg { fill: var(--window); border-radius: 4; }
+.actionbutton .toolbtn-bg { border-radius: 4; }
 )#";
 
 static const char* moreWidgetSVG = R"#(
@@ -189,7 +195,7 @@ static const char* moreWidgetSVG = R"#(
 
   <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
     <use class="panel-icon icon" width="32" height="32" margin="3 9 3 3" xlink:href="" />
-    <text class="panel-title" box-anchor="hfill"></text>
+    <text class="panel-title" font-weight="700" box-anchor="hfill"></text>
   </g>
 
   <g id="toolbutton" class="toolbutton" layout="box">
@@ -202,6 +208,7 @@ static const char* moreWidgetSVG = R"#(
   </g>
 
   <g id="actionbutton" class="toolbutton actionbutton" layout="box" margin="0 3">
+    <rect class="actionbtn-bg" box-anchor="hfill" width="36" height="36"/>
     <rect class="toolbtn-bg" box-anchor="hfill" width="36" height="36"/>
     <g class="toolbutton-content" margin="0 2" box-anchor="fill" layout="flex" flex-direction="row">
       <use class="icon" width="24" height="24" margin="0 5" xlink:href="" />

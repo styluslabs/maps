@@ -24,8 +24,9 @@ global:
         bldg: [.50, .50, .50]
         bldg_3d: [.50, .50, .50, 0.5]
         bldg_3d_line: [.55, .55, .55, 0.5]
-        # lines
-        road: rgba(196, 196, 196, 0.4)
+        # lines ... overlapping segments are a problem when using transparency
+        road: rgba(196, 196, 196, 0.4)  #rgb(130, 130, 130)
+        tunnel: rgba(227, 227, 227, 0.4)  #rgb(160, 160, 160)
         oneway_arrow: '#ddd'
         motorway: rgba(253, 226, 147, 0.4)
         motorway_link: rgba(253, 226, 147, 0.4)
@@ -44,6 +45,8 @@ global:
         park_halo: black
         ferry_name: '#8db3ce'
         ferry_halo: black
+        water_name: hsl(190, 32%, 76%)
+        water_halo: black
 
 # alpha-blending is disabled for default opaque blend mode for lines
 styles:

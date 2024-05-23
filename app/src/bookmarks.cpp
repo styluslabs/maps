@@ -198,17 +198,8 @@ void MapsBookmarks::populateLists(bool archived)
       populateLists(archived);  // count for "Archived" item has to be updated
     });
 
-    // undo?  maybe try https://www.sqlite.org/undoredo.html (using triggers to populate an undo table)
     overflowMenu->addItem("Delete", [=](){
-      FSPath trashinfo(MapsApp::baseDir, ".trash/" + title + ".gpx");
-      exportGpx(trashinfo.c_str(), rowid);
-      app->addUndeleteItem(title, MapsApp::uiIcon("folder"), [=](){ importGpx(trashinfo.c_str()); });
-
-      SQLiteStmt(app->bkmkDB, "DELETE FROM bookmarks WHERE list_id = ?;").bind(rowid).exec();
-      SQLiteStmt(app->bkmkDB, "DELETE FROM lists WHERE id = ?;").bind(rowid).exec();
-      auto it1 = bkmkMarkers.find(rowid);
-      if(it1 != bkmkMarkers.end())
-        bkmkMarkers.erase(it1);
+      deleteList(rowid, title, false);
       yamlRemove(app->config["places"]["visible"], rowid);
       if(archived) listsDirty = true;  // deleting archived item will dirty archive count
       app->gui->deleteWidget(item);
@@ -255,6 +246,22 @@ void MapsBookmarks::deleteBookmark(int listid, int rowid)
   auto it = bkmkMarkers.find(listid);
   if(it != bkmkMarkers.end())
     it->second->deleteMarker(rowid);
+}
+
+void MapsBookmarks::deleteList(int rowid, const std::string& title, bool clearOnly)
+{
+  FSPath trashinfo(MapsApp::baseDir, ".trash/" + std::to_string(mSecSinceEpoch()) + ".gpx");
+  exportGpx(trashinfo.c_str(), rowid);
+  app->addUndeleteItem(title, MapsApp::uiIcon("folder"), [=](){ importGpx(trashinfo.c_str()); });
+
+  SQLiteStmt(app->bkmkDB, "DELETE FROM bookmarks WHERE list_id = ?;").bind(rowid).exec();
+  auto it1 = bkmkMarkers.find(rowid);
+  if(it1 != bkmkMarkers.end())
+    bkmkMarkers.erase(it1);
+  if(!clearOnly) {
+    SQLiteStmt(app->bkmkDB, "DELETE FROM lists WHERE id = ?;").bind(rowid).exec();
+    yamlRemove(app->config["places"]["visible"], rowid);
+  }
 }
 
 void MapsBookmarks::populateBkmks(int list_id, bool createUI)
@@ -742,10 +749,7 @@ Button* MapsBookmarks::createPanel()
   });
 
   listOverflowMenu->addItem("Clear", [=](){
-    SQLiteStmt(app->bkmkDB, "DELETE FROM bookmarks WHERE list_id = ?;").bind(activeListId).exec();
-    auto it1 = bkmkMarkers.find(activeListId);
-    if(it1 != bkmkMarkers.end())
-      it1->second->reset();
+    deleteList(activeListId, activeListTitle, true);
     populateBkmks(activeListId, true);
   });
 

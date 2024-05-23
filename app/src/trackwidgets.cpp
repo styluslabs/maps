@@ -33,6 +33,15 @@ TrackPlot::TrackPlot()  // : CustomWidget()
       prevCOM = event->tfinger.x;
       redraw();
     }
+    else if(event->type == SDL_FINGERUP && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
+      if(gui->fingerClicks > 0 && !sliders->editMode) {
+        sliders->trackSlider->setVisible(true);
+        gui->setPressed(sliders->trackSlider);
+        SDL_Event motion = *event;
+        motion.type = SDL_FINGERMOTION;
+        sliders->trackSlider->sdlEvent(gui, &motion);
+      }
+    }
     else if(event->type == SDL_MOUSEWHEEL) {
       zoomScale = std::min(std::max(1.0, zoomScale*std::exp(0.25*event->wheel.y/120.0)), maxZoom);
       updateZoomOffset(0);
@@ -105,7 +114,7 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
     plotVsDist = true;
 
   // rounding for altitude range
-  real elev = std::max(10.0, maxAlt - minAlt);
+  real elev = std::max(25.0, maxAlt - minAlt);
   real expnt = std::pow(10, std::floor(std::log10(elev)));
   real lead = elev/expnt;
   real quant = lead > 5 ? expnt : lead > 2 ? expnt/2 : expnt/5;
@@ -138,15 +147,25 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
 // should we highlight zoomed region of track on map?
 void TrackPlot::draw(SvgPainter* svgp) const
 {
+  //parseColor(MapsApp::inst->win->node->getStringAttr("--text"))
+  Color textColor = darkMode ? Color::WHITE : Color::BLACK;
+  Color bgColor = darkMode ? Color::BLACK : Color::WHITE;
+  Color gridColor = darkMode ? Color(255, 255, 255, 64) : Color(0, 0, 0, 64);  // Color(128, 128, 128, 128);
+  Color axisColor = darkMode ? Color(100, 200, 255) : Color::BLUE;
+  Color altiColor = axisColor;  //Color::BLUE;  //Color(0, 0, 255, 255);
+  Color spdColor = Color::RED;
+  Color wayptColor = axisColor;  //Color::BLUE;
+  Color sliderColor = darkMode ? Color(128, 128, 128) : Color::BLACK;
+
   Painter* p = svgp->p;
   int w = mBounds.width() - 4;
   int h = mBounds.height() - 4;
   p->translate(2, 2);
   p->clipRect(Rect::wh(w, h));
-  p->fillRect(Rect::wh(w, h), Color::WHITE);
+  //p->fillRect(Rect::wh(w, h), Color::WHITE);
 
   // determine width of vertical axis labels (which will be right aligned!)
-  p->setFillBrush(Color::BLACK);
+  p->setFillBrush(textColor);  //Color::BLACK);
   p->setFontSize(12);
   p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real labelw = 0;
@@ -184,7 +203,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->drawText(wlbl0, h - tmargin, MapsApp::metricUnits ? " km" : " mi");
     // vert grid lines
     p->setFillBrush(Brush::NONE);
-    p->setStroke(Color(0, 0, 0, 64), 0.75);
+    p->setStroke(gridColor, 0.75);
     for(int ii = 0; anchlbl + ii*dxlbl < plotw; ++ii)
       p->drawLine(Point(anchlbl + ii*dxlbl, ploth), Point(anchlbl + ii*dxlbl, 0));
   }
@@ -202,7 +221,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     // vert grid lines
     real dxlbl = plotw/nhorz;
     p->setFillBrush(Brush::NONE);
-    p->setStroke(Color(0, 0, 0, 64), 0.75);
+    p->setStroke(gridColor, 0.75);
     for(int ii = 1; ii*dxlbl < plotw; ++ii)
       p->drawLine(Point(ii*dxlbl, ploth), Point(ii*dxlbl, 0));
   }
@@ -212,7 +231,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
 
   // axes
   //drawCheckerboard(p, w, h, 4, 0x18000000);
-  p->setStroke(Color::BLUE, 1.5);
+  p->setStroke(axisColor, 1.5);
   p->setFillBrush(Brush::NONE);
   if(vertAxis)
     p->drawLine(Point(labelw + 5, h-15), Point(labelw + 5, 0));
@@ -229,8 +248,8 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->save();
     p->scale(1, -ploth/(maxAlt - minAlt));
     p->translate(0, -maxAlt);
-    p->setFillBrush(Color(0, 0, 255, 128));
-    p->setStroke(Color(0, 0, 255, 255), 2.0);  //Color::NONE);
+    p->setFillBrush(Color(altiColor).setAlpha(128));
+    p->setStroke(altiColor, 2.0);  //Color::NONE);
     p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
     p->restore();
   }
@@ -238,16 +257,40 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->scale(1, -ploth/(maxSpd - minSpd));
     p->translate(0, -maxSpd);
     p->setFillBrush(Brush::NONE);
-    p->setStroke(Color::RED, 2.0);
+    p->setStroke(spdColor, 2.0);
     p->drawPath(plotVsDist ? spdDistPlot : spdTimePlot);
   }
   p->restore();
 
+  // draw indicators for sliders
+  if(sliders->editMode) {
+    real start = sliders->startSlider->sliderPos;
+    p->setFillBrush(Brush::NONE);
+    p->setStroke(Color::GREEN, 1.5);
+    p->drawLine(Point(start*plotw, 0), Point(start*plotw, ploth));
+    p->setFillBrush(Color::GREEN);
+    p->drawPath(Path2D().addEllipse(start*plotw, ploth - 15, 10, 10));
+
+    real end = sliders->endSlider->sliderPos;
+    p->setFillBrush(Brush::NONE);
+    p->setStroke(Color::RED, 1.5);
+    p->drawLine(Point(end*plotw, 0), Point(end*plotw, ploth));
+    p->setFillBrush(Color::RED);
+    p->drawPath(Path2D().addEllipse(end*plotw, ploth - 15, 10, 10));
+  }
+  else if(sliders->trackSlider->isVisible()) {
+    real s = sliders->trackSlider->sliderPos;
+    p->setFillBrush(Brush::NONE);
+    p->setStroke(sliderColor, 1.5);
+    p->drawLine(Point(s*plotw, 0), Point(s*plotw, ploth));
+    p->setFillBrush(sliderColor);
+    p->drawPath(Path2D().addEllipse(s*plotw, ploth - 15, 10, 10));
+  }
+
   // draw vertical labels
   if(plotAlt) {
-    p->setFillBrush(Color::BLUE);
-    //p->setStroke(Color::NONE);
-    p->setStroke(Color::WHITE, 4);
+    p->setFillBrush(altiColor);
+    p->setStroke(bgColor, 4);
     p->setStrokeAlign(Painter::StrokeOuter);
     p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
     for(int ii = 0; ii <= nvert; ++ii)
@@ -259,9 +302,8 @@ void TrackPlot::draw(SvgPainter* svgp) const
   }
   if(plotSpd && maxSpd > 0) {
     real dhspd = (maxSpd - minSpd)/nvert;
-    p->setFillBrush(Color::RED);
-    //p->setStroke(Color::NONE);
-    p->setStroke(Color::WHITE, 4);
+    p->setFillBrush(spdColor);
+    p->setStroke(bgColor, 4);
     p->setStrokeAlign(Painter::StrokeOuter);
     p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
     const char* spdlbl = MapsApp::metricUnits ? "%.0f km/h" : "%.0f mph";
@@ -276,15 +318,15 @@ void TrackPlot::draw(SvgPainter* svgp) const
   real texty = 20;
   // lines
   p->setFillBrush(Brush::NONE);
-  p->setStroke(Color::BLUE, 1.5);
+  p->setStroke(wayptColor, 1.5);
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
     if(s < 0 || s > 1) continue;
     p->drawLine(Point(s*plotw, 0), Point(s*plotw, ploth));
   }
   // text (we want text on top of all lines)
-  p->setFillBrush(Color::BLACK);
-  p->setStroke(Color::WHITE, 2);
+  p->setFillBrush(textColor);
+  p->setStroke(bgColor, 2);
   p->setStrokeAlign(Painter::StrokeOuter);
   for(const Waypoint& wpt : waypoints) {
     real s = trackPosToPlotPos(plotVsDist ? wpt.dist/maxDist : (wpt.loc.time - minTime)/(maxTime - minTime));
@@ -318,12 +360,16 @@ void TrackSparkline::setTrack(const std::vector<Waypoint>& locs)
 
 void TrackSparkline::draw(SvgPainter* svgp) const
 {
+  Color textColor = darkMode ? Color::WHITE : Color::BLACK;
+  Color bgColor = darkMode ? Color::BLACK : Color::WHITE;
+  Color plotColor = Color(0, 0, 255, 128);
+
   Painter* p = svgp->p;
   int w = std::max(0.0, mBounds.width() - 4);
   int h = std::max(0.0, mBounds.height() - 4);
   p->translate(2, 2);
   p->clipRect(Rect::wh(w, h));
-  p->fillRect(Rect::wh(w, h), Color::WHITE);
+  //p->fillRect(Rect::wh(w, h), Color::WHITE);
 
   // plot
   real elev = maxAlt - minAlt;
@@ -334,15 +380,15 @@ void TrackSparkline::draw(SvgPainter* svgp) const
   p->scale(plotw/maxDist, -ploth/(maxAlt - minAlt + 0.1*elev));
 
   p->translate(0, -(maxAlt + 0.05*elev));  // + minAlt);
-  p->setFillBrush(Color(0, 0, 255, 128));
+  p->setFillBrush(plotColor);
   p->setStroke(Color::NONE);
   p->drawPath(altDistPlot);
   p->restore();
 
   // vertical scale
-  p->setStroke(Color::WHITE, 2);
+  p->setStroke(bgColor, 2);
   p->setStrokeAlign(Painter::StrokeOuter);
-  p->setFillBrush(Color::BLACK);
+  p->setFillBrush(textColor);
   p->setFontSize(11);
   p->setTextAlign(Painter::AlignLeft | Painter::AlignVCenter);
   p->drawText(2, 8, MapsApp::elevToStr(maxAlt).c_str());
@@ -351,97 +397,83 @@ void TrackSparkline::draw(SvgPainter* svgp) const
 
 // TrackSliders
 
-TrackSliders::TrackSliders(SvgNode* n) : Slider(n)
+void SliderHandle::setValue(real value, int update)
 {
-  startHandle = new Button(containerNode()->selectFirst(".start-handle"));
-  endHandle = new Button(containerNode()->selectFirst(".end-handle"));
-  //startHandle->setLayoutIsolate(true);
-  //endHandle->setLayoutIsolate(true);
+  value = std::min(std::max(value, 0.0), 1.0);
+  if(value == sliderPos && update < FORCE_UPDATE)
+    return;
+ // sliderHandle->setTransform(Transform2D::translate(rect.width()*sliderPos, 0));
+  real w = sliderBg->node->bounds().width() - 2*bgMargin;
+  setLayoutTransform(Transform2D::translating(w*(sliderPos-value), 0)*m_layoutTransform);
+  sliderPos = value;
+  if(update > NO_UPDATE && onValueChanged)
+    onValueChanged(sliderPos);
+}
 
-  startHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == startHandle) {
-      Rect rect = sliderBg->node->bounds();
-      real startpos = (event->tfinger.x - rect.left)/rect.width();
-      setCropHandles(startpos, std::max(startpos, endHandlePos), UPDATE);
+SliderHandle::SliderHandle(SvgNode* n, Widget* bg, real margin) : Button(n), bgMargin(margin), sliderBg(bg)
+{
+  addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == this) {
+      Rect rect = sliderBg->node->bounds().pad(-bgMargin, 0);
+      real pos = (event->tfinger.x - rect.left)/rect.width();
+      setValue(pos);
       return true;
     }
     return false;
   });
 
-  endHandle->addHandler([this](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_FINGERMOTION && gui->pressedWidget == endHandle) {
-      Rect rect = sliderBg->node->bounds();
-      real endpos = (event->tfinger.x - rect.left)/rect.width();
-      setCropHandles(std::min(startHandlePos, endpos), endpos, UPDATE);
-      return true;
-    }
-    return false;
-  });
-
-  auto sliderOnApplyLayout = onApplyLayout;
-  onApplyLayout = [this, sliderOnApplyLayout](const Rect& src, const Rect& dest){
-    sliderOnApplyLayout(src, dest);
-    if(src.toSize() != dest.toSize()) {
-      Rect rect = sliderBg->node->bounds();
-      startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos + 6, 0));
-      endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos + 6, 0));
-    }
-    return false;  // we do not replace the normal layout (although that should be a no-op)
+  onApplyLayout = [this](const Rect& src, const Rect& dest){
+    //if(src != dest) {
+      Point dr = dest.origin() - src.origin();
+      real w = sliderBg->node->bounds().width() - 2*bgMargin;
+      setLayoutTransform(Transform2D::translating(dr.x + w*sliderPos + bgMargin, dr.y)*m_layoutTransform);
+    //}
+    return true;
   };
-  setEditMode(false);
+}
+
+SliderHandle* createSliderHandle(Widget* bg, real lmargin, real bmargin)
+{
+  static const char* slidersSVG = R"#(
+    <g class="slider-handle" box-anchor="left bottom">
+      <rect class="slider-handle-outer" x="-10" y="-2" width="20" height="16"/>
+      <rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/>
+    </g>
+  )#";
+
+  SliderHandle* widget = new SliderHandle(loadSVGFragment(slidersSVG), bg, lmargin);
+  widget->setMargins(0, 0, bmargin, 0);
+  return widget;
+}
+
+TrackSliders* createTrackSliders(Widget* bg, real lmargin, real bmargin)
+{
+  TrackSliders* widget = new TrackSliders(new SvgG);
+  widget->node->setAttribute("box-anchor", "hfill");
+  widget->node->setAttribute("layout", "box");
+
+  widget->trackSlider = createSliderHandle(bg, lmargin, bmargin);
+  widget->startSlider = createSliderHandle(bg, lmargin, bmargin);
+  widget->endSlider = createSliderHandle(bg, lmargin, bmargin);
+
+  widget->addWidget(bg);
+  widget->addWidget(widget->trackSlider);
+  widget->addWidget(widget->startSlider);
+  widget->addWidget(widget->endSlider);
+
+  return widget;
 }
 
 void TrackSliders::setCropHandles(real start, real end, int update)
 {
-  start = std::min(std::max(start, 0.0), 1.0);
-  end = std::min(std::max(end, 0.0), 1.0);
-  Rect rect = sliderBg->node->bounds();
-  if(startHandlePos != start || update > 1) {
-    startHandlePos = start;
-    startHandle->setLayoutTransform(Transform2D().translate(rect.width()*startHandlePos + 6, 0));
-    if(update > 0 && onStartHandleChanged)
-      onStartHandleChanged();
-  }
-  if(endHandlePos != end || update > 1) {
-    endHandlePos = end;
-    endHandle->setLayoutTransform(Transform2D().translate(rect.width()*endHandlePos + 6, 0));
-    if(update > 0 && onEndHandleChanged)
-      onEndHandleChanged();
-  }
+  startSlider->setValue(start, update);
+  endSlider->setValue(end, update);
 }
 
 void TrackSliders::setEditMode(bool editmode)
 {
-  selectFirst(".start-handle")->setVisible(editmode);
-  selectFirst(".end-handle")->setVisible(editmode);
-  selectFirst(".slider-handle")->setVisible(!editmode);
-}
-
-TrackSliders* createTrackSliders()
-{
-  static const char* slidersSVG = R"#(
-    <g id="slider" class="slider" box-anchor="hfill" layout="box">
-      <rect class="slider-bg background" box-anchor="hfill" margin="0 6" fill="blue" width="200" height="4"/>
-      <g class="slider-handle-container" box-anchor="left">
-        <!-- invisible rect to set left edge of box so slider-handle can move freely -->
-        <rect width="1" height="16" fill="none"/>
-        <g class="start-handle">
-          <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
-          <rect fill="green" x="-4" y="0" width="8" height="12"/>
-        </g>
-
-        <g class="slider-handle">
-          <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
-          <rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/>
-        </g>
-
-        <g class="end-handle">
-          <rect class="slider-handle-outer" x="-6" y="-2" width="12" height="16"/>
-          <rect fill="red" x="-4" y="0" width="8" height="12"/>
-        </g>
-      </g>
-    </g>
-  )#";
-
-  return new TrackSliders(loadSVGFragment(slidersSVG));
+  editMode = editmode;
+  startSlider->setVisible(editmode);
+  endSlider->setVisible(editmode);
+  if(editmode) trackSlider->setVisible(false);
 }

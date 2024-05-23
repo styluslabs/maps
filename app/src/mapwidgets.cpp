@@ -738,14 +738,6 @@ Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int
   return row;
 }
 
-Widget* createBoxLayout(const char* anchor)
-{
-  SvgG* box = new SvgG;
-  box->setAttribute("box-anchor", anchor);
-  box->setAttribute("layout", "box");
-  return new Widget(box);
-}
-
 Pager::Pager(SvgNode* _node) : Widget(_node)
 {
   //behaveAsStack = true;
@@ -968,7 +960,7 @@ Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* ti
 
 Rect CrosshairWidget::bounds(SvgPainter* svgp) const
 {
-  return svgp->p->getTransform().mapRect(Rect::wh(40, 40));
+  return svgp->p->getTransform().mapRect(Rect::wh(32, 32));
 }
 
 void CrosshairWidget::directDraw(Painter* p) const
@@ -979,10 +971,12 @@ void CrosshairWidget::directDraw(Painter* p) const
   p->translate(bbox.center());
   bbox.translate(-bbox.center());
   p->setFillBrush(Color::NONE);
-  p->setStroke(Color::RED, 3);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->setStroke(Color::RED, 2.5);  //, Painter::FlatCap, Painter::BevelJoin);
   if(!routePreviewOrigin.isNaN())
     p->drawLine(routePreviewOrigin, Point(0,0));
-  p->drawLine(Point(bbox.left, 0), Point(bbox.right, 0));
-  p->drawLine(Point(0, bbox.top), Point(0, bbox.bottom));
+  p->drawLine(Point(bbox.left, 0), Point(-3, 0));
+  p->drawLine(Point(3, 0), Point(bbox.right, 0));
+  p->drawLine(Point(0, bbox.top), Point(0, -3));
+  p->drawLine(Point(0, 3), Point(0, bbox.bottom));
   p->restore();
 }

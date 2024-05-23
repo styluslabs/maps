@@ -103,7 +103,6 @@ private:
   Widget* sparkStats = NULL;
   TrackSparkline* trackSpark = NULL;
   Button* retryBtn = NULL;
-  TrackSliders* trackSliders = NULL;
   Button* routeEditBtn = NULL;
   Toolbar* routeEditTb = NULL;
   Button* plotVsTimeBtn = NULL;
@@ -112,6 +111,7 @@ private:
   Widget* wayptTabLabel = NULL;
   Toolbar* editTrackTb = NULL;
   Widget* editTrackContent = NULL;
+  TrackSliders* trackSliders = NULL;
 
   std::unique_ptr<FileStream> recordGPXStrm;
   Timer* recordTimer = NULL;

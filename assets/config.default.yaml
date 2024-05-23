@@ -58,6 +58,8 @@ colors:
 ui:
   reverse_map_btns: false
   #font: "scenes/fonts/NotoSans-Regular.ttf"
+  #ui_scale: 0.75
+  #map_scale: 1.0
 
 # for debugging
 num_tile_workers: 2

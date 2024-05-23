@@ -176,13 +176,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 {
   Button* item = createListItem(MapsApp::uiIcon("track"), track->title.c_str(), track->desc.c_str());
   item->node->setAttr("__rowid", track->rowid);
-  item->onClicked = [=](){
-    // make sure track is loaded so we can decide between stats and waypoints
-    if(track->marker <= 0)
-      updateTrackMarker(track);
-    trackSliders->setValue(0);  // reset track slider for new track
-    populateTrack(track);
-  };
+  item->onClicked = [=](){ populateTrack(track); };
   Widget* container = item->selectFirst(".child-container");
 
   Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
@@ -359,8 +353,8 @@ static void updateWayptCount(Widget* w, GpxFile* track)
 
 void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
 {
+  showTrack(track, true);  // this will ensure track is loaded from GPX
   bool istrack = track->routes.empty() && !track->tracks.empty();
-  showTrack(track, true);
   bool isRecTrack = track == &recordedTrack;
   pauseRecordBtn->setVisible(isRecTrack);
   stopRecordBtn->setVisible(isRecTrack);
@@ -385,6 +379,8 @@ void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
       setTrackWidgets(TRACK_PLOT);
     updateWayptCount(wayptTabLabel, track);
     waypointsDirty = true; plotDirty = true;
+    trackSpark->darkMode = trackPlot->darkMode = MapsApp::config["ui"]["theme"].as<std::string>("") != "light";
+    trackSliders->trackSlider->setVisible(false);  // reset track slider for new track
   }
   trackPlot->zoomScale = 1.0;
   updateStats(track);
@@ -581,7 +577,7 @@ void MapsTracks::updateStats(GpxFile* track)
       return 0;
     });
   }
-  else if(track != &recordedTrack) {
+  else if(track != &recordedTrack && !locs.empty()) {
     double t0 = locs.front().loc.time;
     track->desc = t0 > 0 ? ftimestr("%F", t0*1000) + trackSummary : distStr;
   }
@@ -725,7 +721,7 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   track->waypoints.erase(it);
   track->modified = true;
   if(track->waypoints.empty())
-    app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
+    app->crossHair->routePreviewOrigin = {NAN, NAN};
   if(routed)
     createRoute(track);
   updateWayptCount(wayptTabLabel, track);
@@ -981,9 +977,11 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     if(directRoutePreview && activeTrack->routeMode == "direct" && !activeTrack->waypoints.empty()) {
       auto it = insertionWpt.empty() ? activeTrack->waypoints.end() : activeTrack->findWaypoint(insertionWpt);
       LngLat mappos = (--it)->lngLat();
-      Point scrpos, mapcenter(app->map->getViewportWidth()/2, app->map->getViewportHeight()/2);
+      LngLat mapcenter = app->getMapCenter();
+      Point scrpos, scrcenter;
+      app->map->lngLatToScreenPosition(mapcenter.longitude, mapcenter.latitude, &scrcenter.x, &scrcenter.y);
       app->map->lngLatToScreenPosition(mappos.longitude, mappos.latitude, &scrpos.x, &scrpos.y);
-      app->crossHair->routePreviewOrigin = (scrpos - mapcenter)/MapsApp::gui->paintScale;
+      app->crossHair->routePreviewOrigin = (scrpos - scrcenter)/MapsApp::gui->paintScale;
       double distkm = lngLatDist(mappos, app->getMapCenter());
       std::string pvstr = MapsApp::distKmToStr(distkm);
       double bearing = 180*lngLatBearing(mappos, app->getMapCenter())/M_PI;
@@ -1019,7 +1017,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
           closestWpt = &pt;
         }
         if(closestWpt)
-          trackSliders->updateValue(trackPlot->plotVsDist ? closestWpt->dist/trackPlot->maxDist
+          trackSliders->trackSlider->setValue(trackPlot->plotVsDist ? closestWpt->dist/trackPlot->maxDist
               : closestWpt->loc.time - trackPlot->minTime/(trackPlot->maxTime - trackPlot->minTime));
       }
       app->pickedMarkerId = 0;
@@ -1068,7 +1066,7 @@ void MapsTracks::setRouteMode(const std::string& mode)
   if(directRoutePreview && mode == "direct")
     onMapEvent(MAP_CHANGE);
   else
-    app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
+    app->crossHair->routePreviewOrigin = {NAN, NAN};
   app->drawOnMap = routeEditTb->isVisible() && mode == "draw";
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
@@ -1236,7 +1234,7 @@ void MapsTracks::setTrackEdit(bool show)
   trackSliders->setEditMode(show);
   app->map->markerSetVisible(trackHoverMarker, !show);
   if(show)
-    trackSliders->setCropHandles(0, 1, TrackSliders::FORCE_UPDATE);
+    trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
   else {
     app->map->markerSetVisible(trackStartMarker, false);
     app->map->markerSetVisible(trackEndMarker, false);
@@ -1420,11 +1418,12 @@ void MapsTracks::createPlotContent()
 
   trackPlot = new TrackPlot();
   trackPlot->node->setAttribute("box-anchor", "hfill");
+  // trackSliders is container for trackPlot and slider handles
+  trackSliders = createTrackSliders(trackPlot, 17, 15);
+  trackPlot->sliders = trackSliders;
 
-  trackSliders = createTrackSliders();
-
-  trackSliders->onStartHandleChanged = [=](){
-    cropStart = trackPlot->plotPosToTrackPos(trackSliders->startHandlePos);
+  trackSliders->startSlider->onValueChanged = [=](real val){
+    cropStart = trackPlot->plotPosToTrackPos(val);
     Waypoint startloc = interpTrack(activeTrack->activeWay()->pts, cropStart);
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
@@ -1437,8 +1436,8 @@ void MapsTracks::createPlotContent()
     }
   };
 
-  trackSliders->onEndHandleChanged = [=](){
-    cropEnd = trackPlot->plotPosToTrackPos(trackSliders->endHandlePos);
+  trackSliders->endSlider->onValueChanged = [=](real val){
+    cropEnd = trackPlot->plotPosToTrackPos(val);
     Waypoint endloc = interpTrack(activeTrack->activeWay()->pts, cropEnd);
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
@@ -1462,7 +1461,7 @@ void MapsTracks::createPlotContent()
     newlocs.insert(newlocs.end(), locs.begin() + startidx, locs.begin() + endidx);
     newlocs.push_back(endloc);
     activeTrack->activeWay()->pts.swap(newlocs);
-    trackSliders->setCropHandles(0, 1, TrackSliders::FORCE_UPDATE);
+    trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
     updateTrackMarker(activeTrack);  // rebuild marker
     plotDirty = true;
     trackPlot->zoomScale = 1.0;
@@ -1482,7 +1481,7 @@ void MapsTracks::createPlotContent()
     newlocs.push_back(endloc);
     newlocs.insert(newlocs.end(), locs.begin() + endidx, locs.end());
     locs.swap(newlocs);
-    trackSliders->setCropHandles(0, 1, TrackSliders::FORCE_UPDATE);
+    trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
     updateTrackMarker(activeTrack);  // rebuild marker
     plotDirty = true;
     trackPlot->zoomScale = 1.0;
@@ -1538,7 +1537,7 @@ void MapsTracks::createPlotContent()
   editTrackTb = createToolbar({cropTrackBtn, deleteSegmentBtn, createStretch(), moreTrackOptionsBtn});
   editTrackTb->setVisible(false);
 
-  trackSliders->onValueChanged = [=](real s){
+  trackSliders->trackSlider->onValueChanged = [=](real s){
     if(editTrackTb->isVisible()) return;  // disabled when editing
     if(s < 0 || s > 1 || !activeTrack) {
       app->map->markerSetVisible(trackHoverMarker, false);
@@ -1559,11 +1558,12 @@ void MapsTracks::createPlotContent()
   trackPlot->onPanZoom = [=](){
     real start = trackPlot->trackPosToPlotPos(cropStart);
     real end = trackPlot->trackPosToPlotPos(cropEnd);
-    trackSliders->setCropHandles(start, end, TrackSliders::NO_UPDATE);
+    trackSliders->setCropHandles(start, end, SliderHandle::NO_UPDATE);
   };
 
-  auto plotContent = createColumn({axisSelRow, trackPlot, trackSliders, editTrackTb}, "", "", "hfill");
-  auto plotContainer = new ScrollWidget(new SvgDocument(), plotContent);
+  // stack (invisible) sliders on top of plot
+  auto* plotContent = createColumn({axisSelRow, trackSliders, editTrackTb}, "", "", "hfill");
+  auto* plotContainer = new ScrollWidget(new SvgDocument(), plotContent);
   plotContainer->node->setAttribute("box-anchor", "fill");
   trackContainer->addWidget(plotContainer);
   plotWidgets.push_back(plotContainer);
@@ -1712,7 +1712,7 @@ void MapsTracks::createWayptContent()
       directRoutePreview = false;
       app->drawOnMap = false;
       app->crossHair->setVisible(false);
-      app->crossHair->routePreviewOrigin = {NAN, NAN};  //app->map->markerSetVisible(previewMarker, false);
+      app->crossHair->routePreviewOrigin = {NAN, NAN};
     }
     return false;
   });
@@ -1783,13 +1783,13 @@ void MapsTracks::createTrackPanel()
     return false;
   });
 
-  // tab bar for switching between stats, plot, and waypoints
+  // tab bar for switching between stats, plot, and waypoints -- margin="0 0 0 10"
   static const char* sparkStatsSVG = R"(
-    <g layout="flex" flex-direction="column" box-anchor="fill" margin="0 0 0 10" font-size="13">
+    <g layout="flex" flex-direction="column" box-anchor="vfill" font-size="13">
       <text class="spark-dist" box-anchor="left"></text>
       <text class="spark-time" box-anchor="left"></text>
-      <text display="none" class="spark-ascent" box-anchor="left"></text>
-      <text display="none" class="spark-descent" box-anchor="left"></text>
+      <text display="none" class="spark-ascent" box-anchor="right"></text>
+      <text display="none" class="spark-descent" box-anchor="right"></text>
     </g>
   )";
   sparkStats = new Widget(loadSVGFragment(sparkStatsSVG));
@@ -1831,12 +1831,13 @@ void MapsTracks::createTrackPanel()
   createWayptContent();
   setTrackWidgets(TRACK_PLOT);
 
-  // bottom of menu
-  trackOverflow->addItem("Edit", uiIcon("edit"), [=](){
+  // bottom of menu ... need icon on edit since menu needs space for checkbox menu items
+  Button* editItem = trackOverflow->addItem("Edit", uiIcon("edit"), [=](){
     showInlineDialogModal(editTrackContent);
     if(activeTrack != &recordedTrack || recordTrack)
       setTrackEdit(true);
   });
+  static_cast<SvgUse*>(editItem->node->selectFirst("use"))->setViewport(Rect::wh(24, 24));
 
   trackOverflow->addItem("Export", [=](){
     MapsApp::saveFileDialog({{PLATFORM_MOBILE ? "application/gpx+xml" : "GPX file", "gpx"}},
@@ -1858,7 +1859,7 @@ void MapsTracks::createTrackListPanel()
   Widget* newTrackRow = createRow({newTrackTitle, newTrackColor});
 
   newTrackDialog.reset(createInputDialog({newTrackRow}, "New Route", "Create", [=](){
-    tracks.emplace_back(trimStr(newTrackTitle->text()), ftimestr("%F"), "");
+    tracks.emplace_back(trimStr(newTrackTitle->text()), "", "", colorToStr(newTrackColor->color()));
     updateDB(&tracks.back());
     populateTrack(&tracks.back());
     toggleRouteEdit(true);

@@ -78,6 +78,141 @@ static void dumpJSStats(Tangram::Scene* scene)
   jsCallStats.clear();
 }
 
+class MapsWidget : public Widget
+{
+public:
+  MapsWidget(MapsApp* _app);
+
+  void draw(SvgPainter* svgp) const override;
+  Rect bounds(SvgPainter* svgp) const override;
+  Rect dirtyRect() const override;
+
+  MapsApp* app;
+  Rect viewport;
+};
+
+MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
+{
+  onApplyLayout = [this](const Rect& src, const Rect& dest){
+    if(dest != viewport) {
+      Map* map = app->map.get();
+      Rect r0 = dest;
+      real winh = window()->winBounds().height();
+      // expand map down a bit to account for (possibly) rounded corners of UI
+      r0.bottom = std::min(r0.bottom + 10, winh);
+      Rect r = r0 * (1/app->gui->inputScale);
+      real y = winh/app->gui->inputScale - r.bottom;
+      int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
+      LngLat pos;
+      map->screenPositionToLngLat(w/2.0, h/2.0, &pos.longitude, &pos.latitude);
+      map->setViewport(int(r.left + 0.5), int(y + 0.5), w, h);
+      // by default, map center is preserved by resize, but we want upper left corner to be fixed instead
+      // ... but skip on initial layout (detected by Rect viewport not yet set)
+      if(viewport.isValid())
+        map->setPosition(pos.longitude, pos.latitude);
+      app->platform->requestRender();
+    }
+    if(src != dest)
+      node->invalidate(true);
+    viewport = dest;
+    return true;
+  };
+
+  addHandler([this](SvgGui* gui, SDL_Event* event){
+    // dividing by inputScale is a temporary hack - touchHandler should work in device independent coords (and
+    //  why doesn't map's pixel scale apply to coords?)
+    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
+      gui->setPressed(this);
+    return app->touchHandler->sdlEvent(gui, event);
+  });
+}
+
+Rect MapsWidget::bounds(SvgPainter* svgp) const
+{
+  return viewport;  //m_layoutTransform.mapRect(scribbleView->screenRect);
+}
+
+Rect MapsWidget::dirtyRect() const
+{
+  return viewport;
+  //const Rect& dirty = scribbleView->dirtyRectScreen;
+  //return dirty.isValid() ? m_layoutTransform.mapRect(dirty) : Rect();
+}
+
+void MapsWidget::draw(SvgPainter* svgp) const
+{
+  //app->map->render();
+}
+
+class ScaleBarWidget : public Widget
+{
+public:
+  ScaleBarWidget(Map* _map) : Widget(new SvgCustomNode), map(_map) {}
+  void draw(SvgPainter* svgp) const override {}
+  Rect bounds(SvgPainter* svgp) const override;
+  void directDraw(Painter* p) const;
+
+  Map* map;
+};
+
+Rect ScaleBarWidget::bounds(SvgPainter* svgp) const
+{
+  return svgp->p->getTransform().mapRect(Rect::wh(100, 14));
+}
+
+void ScaleBarWidget::directDraw(Painter* p) const
+{
+  //Painter* p = svgp->p;
+  Rect bbox = node->bounds();
+  p->save();
+  p->translate(bbox.origin());
+  //real w = bbox.width(), h = bbox.height();  p->translate(w/2, h/2);
+
+  real y = bbox.center().y;
+  LngLat r0, r1;
+  map->screenPositionToLngLat(bbox.left, y, &r0.longitude, &r0.latitude);
+  map->screenPositionToLngLat(bbox.right, y, &r1.longitude, &r1.latitude);
+
+  // steps are 1, 2, 5, 10, 20, 50, ...
+  const char* format = "%.0f km";
+  real dist = lngLatDist(r0, r1);
+  if(!MapsApp::metricUnits) {
+    dist = dist*0.621371;
+    if(dist < 0.1) {
+      dist = 5280*dist;
+      format = "%.0f ft";
+    }
+    else
+      format = dist < 1 ? "%.1f mi" : "%.0f mi";
+  }
+  else if(dist < 1) {
+    dist *= 1000;
+    format = "%.0f m";
+  }
+  real pow10 = std::pow(10, std::floor(std::log10(dist)));
+  real firstdigit = dist/pow10;
+  real n = firstdigit < 2 ? 1 : firstdigit < 5 ? 2 : 5;
+  real scaledist = n * pow10;
+  std::string str = fstring(format, scaledist);
+#if IS_DEBUG
+  str += fstring("  (z%.2f)", map->getZoom());
+#endif
+
+  real y0 = bbox.height()/2;
+  p->setFillBrush(Color::NONE);
+  p->setStroke(Color::WHITE, 4, Painter::RoundCap);
+  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
+  p->setStroke(Color::BLACK, 2, Painter::RoundCap);
+  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
+  // render text
+  p->setFontSize(12);
+  p->setStroke(Color::WHITE, 2);
+  p->setStrokeAlign(Painter::StrokeOuter);
+  p->setFillBrush(Color::BLACK);
+  p->drawText(0, 0, str.c_str());
+  p->restore();
+}
+
 void MapsApp::runOnMainThread(std::function<void()> fn)
 {
   if(std::this_thread::get_id() == mainThreadId)
@@ -99,7 +234,9 @@ void MapsApp::sdlEvent(SDL_Event* event)
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 {
-  int vieww = map->getViewportWidth(), viewh = map->getViewportHeight();
+  //int vieww = map->getViewportWidth(), viewh = map->getViewportHeight();
+  Rect bounds = mapsWidget->node->bounds()/gui->inputScale;
+  int vieww = int(bounds.width() + 0.5), viewh = int(bounds.height() + 0.5);
   double lng00, lng01, lng10, lng11, lat00, lat01, lat10, lat11;
   map->screenPositionToLngLat(0, 0, &lng00, &lat00);
   map->screenPositionToLngLat(0, viewh, &lng01, &lat01);
@@ -115,7 +252,10 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 LngLat MapsApp::getMapCenter()
 {
   LngLat res;
-  int w = map->getViewportWidth(), h = map->getViewportHeight();
+  // map viewport may extend outside visible area (i.e. MapsWidget) to account for, e.g, rounded corners
+  //int w = map->getViewportWidth(), h = map->getViewportHeight();
+  Rect bounds = mapsWidget->node->bounds()/gui->inputScale;
+  int w = int(bounds.width() + 0.5), h = int(bounds.height() + 0.5);
   map->screenPositionToLngLat(w/2, h/2, &res.longitude, &res.latitude);
   return res;
 }
@@ -398,6 +538,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     Widget* row2 = new Widget(rowProto->clone());
     Widget* content2 = new Widget(row2->containerNode()->selectFirst(".value-container"));
     content2->addWidget(new TextBox(createTextNode(split+1)));
+    content2->node->setAttribute("font-size", "13");  // slightly smaller font
 
     Button* expandBtn = createToolbutton(MapsApp::uiIcon("chevron-down"), "Expand");
     expandBtn->onClicked = [=](){
@@ -883,141 +1024,6 @@ void MapsApp::dumpTileContents(float x, float y)
       src->loadTileData(task, cb);
     }
   }
-}
-
-class MapsWidget : public Widget
-{
-public:
-  MapsWidget(MapsApp* _app);
-
-  void draw(SvgPainter* svgp) const override;
-  Rect bounds(SvgPainter* svgp) const override;
-  Rect dirtyRect() const override;
-
-  MapsApp* app;
-  Rect viewport;
-};
-
-MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
-{
-  onApplyLayout = [this](const Rect& src, const Rect& dest){
-    if(dest != viewport) {
-      Map* map = app->map.get();
-      Rect r0 = dest;
-      real winh = window()->winBounds().height();
-      // expand map down a bit to account for (possibly) rounded corners of UI
-      r0.bottom = std::min(r0.bottom + 10, winh);
-      Rect r = r0 * (1/app->gui->inputScale);
-      real y = winh/app->gui->inputScale - r.bottom;
-      int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
-      LngLat pos;
-      map->screenPositionToLngLat(w/2.0, h/2.0, &pos.longitude, &pos.latitude);
-      map->setViewport(int(r.left + 0.5), int(y + 0.5), w, h);
-      // by default, map center is preserved by resize, but we want upper left corner to be fixed instead
-      // ... but skip on initial layout (detected by Rect viewport not yet set)
-      if(viewport.isValid())
-        map->setPosition(pos.longitude, pos.latitude);
-      app->platform->requestRender();
-    }
-    if(src != dest)
-      node->invalidate(true);
-    viewport = dest;
-    return true;
-  };
-
-  addHandler([this](SvgGui* gui, SDL_Event* event){
-    // dividing by inputScale is a temporary hack - touchHandler should work in device independent coords (and
-    //  why doesn't map's pixel scale apply to coords?)
-    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
-      gui->setPressed(this);
-    return app->touchHandler->sdlEvent(gui, event);
-  });
-}
-
-Rect MapsWidget::bounds(SvgPainter* svgp) const
-{
-  return viewport;  //m_layoutTransform.mapRect(scribbleView->screenRect);
-}
-
-Rect MapsWidget::dirtyRect() const
-{
-  return viewport;
-  //const Rect& dirty = scribbleView->dirtyRectScreen;
-  //return dirty.isValid() ? m_layoutTransform.mapRect(dirty) : Rect();
-}
-
-void MapsWidget::draw(SvgPainter* svgp) const
-{
-  //app->map->render();
-}
-
-class ScaleBarWidget : public Widget
-{
-public:
-  ScaleBarWidget(Map* _map) : Widget(new SvgCustomNode), map(_map) {}
-  void draw(SvgPainter* svgp) const override {}
-  Rect bounds(SvgPainter* svgp) const override;
-  void directDraw(Painter* p) const;
-
-  Map* map;
-};
-
-Rect ScaleBarWidget::bounds(SvgPainter* svgp) const
-{
-  return svgp->p->getTransform().mapRect(Rect::wh(100, 14));
-}
-
-void ScaleBarWidget::directDraw(Painter* p) const
-{
-  //Painter* p = svgp->p;
-  Rect bbox = node->bounds();
-  p->save();
-  p->translate(bbox.origin());
-  //real w = bbox.width(), h = bbox.height();  p->translate(w/2, h/2);
-
-  real y = bbox.center().y;
-  LngLat r0, r1;
-  map->screenPositionToLngLat(bbox.left, y, &r0.longitude, &r0.latitude);
-  map->screenPositionToLngLat(bbox.right, y, &r1.longitude, &r1.latitude);
-
-  // steps are 1, 2, 5, 10, 20, 50, ...
-  const char* format = "%.0f km";
-  real dist = lngLatDist(r0, r1);
-  if(!MapsApp::metricUnits) {
-    dist = dist*0.621371;
-    if(dist < 0.1) {
-      dist = 5280*dist;
-      format = "%.0f ft";
-    }
-    else
-      format = dist < 1 ? "%.1f mi" : "%.0f mi";
-  }
-  else if(dist < 1) {
-    dist *= 1000;
-    format = "%.0f m";
-  }
-  real pow10 = std::pow(10, std::floor(std::log10(dist)));
-  real firstdigit = dist/pow10;
-  real n = firstdigit < 2 ? 1 : firstdigit < 5 ? 2 : 5;
-  real scaledist = n * pow10;
-  std::string str = fstring(format, scaledist);
-#if IS_DEBUG
-  str += fstring("  (z%.2f)", map->getZoom());
-#endif
-
-  real y0 = bbox.height()/2;
-  p->setFillBrush(Color::NONE);
-  p->setStroke(Color::WHITE, 4, Painter::RoundCap);
-  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
-  p->setStroke(Color::BLACK, 2, Painter::RoundCap);
-  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
-  // render text
-  p->setFontSize(12);
-  p->setStroke(Color::WHITE, 2);
-  p->setStrokeAlign(Painter::StrokeOuter);
-  p->setFillBrush(Color::BLACK);
-  p->drawText(0, 0, str.c_str());
-  p->restore();
 }
 
 int MapsApp::getPanelWidth() const
