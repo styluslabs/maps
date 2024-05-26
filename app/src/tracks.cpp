@@ -411,6 +411,12 @@ static std::string durationToStr(double totsecs)
   return fstring("%02d:%02d:%02d", hours, mins, secs);  //fstring("%dh %02dm %02ds", hours, mins, secs);
 }
 
+static std::string speedToStr(double metersPerSec)
+{
+  double spd =  MapsApp::metricUnits ? metersPerSec*3.6 : metersPerSec*2.23694;
+  return MapsApp::metricUnits ? fstring("%.*f km/h", spd < 10 ? 2 : 1, spd) : fstring("%.*f mph", spd < 10 ? 2 : 1, spd);
+}
+
 void MapsTracks::setStatsText(const char* selector, std::string str)
 {
   Widget* widget = statsContent->selectFirst(selector);
@@ -506,8 +512,7 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-altitude", app->elevToStr(app->currLocation.alt));
 
   // m/s -> kph or mph
-  setStatsText(".track-speed",
-      app->metricUnits ? fstring("%.2f km/h", currSpeed*3.6) : fstring("%.2f mph", currSpeed*2.23694));
+  setStatsText(".track-speed", speedToStr(currSpeed));
 
   double slopeDeg = std::atan(currSlope)*180/M_PI;
   setStatsText(".track-slope", fstring("%.*f%% (%.*f\u00B0)",
@@ -527,12 +532,10 @@ void MapsTracks::updateStats(GpxFile* track)
   sparkStats->selectFirst(".spark-dist")->setText(distStr.c_str());
   setStatsText(".track-dist", distStr);
 
-  double distUser = app->metricUnits ? trackDist/1000 : trackDist*0.000621371;
-  std::string avgSpeedStr = fstring(app->metricUnits ? "%.2f km/h" : "%.2f mph", distUser/(movingTime/3600));
-  setStatsText(".track-avg-speed", movingTime > 0 ? avgSpeedStr : notime);
+  setStatsText(".track-avg-speed", movingTime > 0 ? speedToStr(trackDist/movingTime) : notime);
 
   std::string ascentStr = app->elevToStr(trackAscent);
-  sparkStats->selectFirst(".spark-ascent")->setText(("+" + ascentStr).c_str());
+  //sparkStats->selectFirst(".spark-ascent")->setText(("+" + ascentStr).c_str());
   setStatsText(".track-ascent", ascentStr);
 
   std::string ascentSpdStr = app->metricUnits ? fstring("%.0f m/h", trackAscent/(ascentTime/3600))
@@ -540,7 +543,7 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-ascent-speed", ascentTime > 0 ? ascentSpdStr : notime);
 
   std::string descentStr = app->elevToStr(trackDescent);  //app->metricUnits ? fstring("%.0f m", trackDescent) : fstring("%.0f ft", trackDescent*3.28084);
-  sparkStats->selectFirst(".spark-descent")->setText(descentStr.c_str());
+  //sparkStats->selectFirst(".spark-descent")->setText(descentStr.c_str());
   setStatsText(".track-descent", descentStr);
 
   std::string descentSpdStr = app->metricUnits ? fstring("%.0f m/h", trackDescent/(descentTime/3600))
@@ -551,8 +554,7 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-raw-dist", MapsApp::distKmToStr(rawDist/1000));
   setStatsText(".track-moving-dist", MapsApp::distKmToStr(movingDist/1000));
   setStatsText(".track-moving-time-gps", movingTimeGps > 0 ? durationToStr(movingTimeGps) : notime);
-  setStatsText(".track-max-speed", maxSpeed > 0 ?
-      (app->metricUnits ? fstring("%.2f km/h", maxSpeed*3.6) : fstring("%.2f mph", maxSpeed*2.23694)) : notime);
+  setStatsText(".track-max-speed", maxSpeed > 0 ? speedToStr(maxSpeed) : notime);
 
   trackSummary = (ttot > 0 ? " | " + timeStr : "") + " | " + distStr;
   trackSpark->setTrack(locs);
@@ -1098,8 +1100,9 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   else {
     Button* routeBtn = createActionbutton(MapsApp::uiIcon("directions"), "Route", true);
     routeBtn->onClicked = [=](){
+      std::string dst = app->pickResultName.empty() ? lngLatToStr(app->pickResultCoord) : app->pickResultName;
       Waypoint wp1(app->currLocation.lngLat(), "Start");
-      Waypoint wp2(app->pickResultCoord, app->pickResultName, "", app->pickResultProps);
+      Waypoint wp2(app->pickResultCoord, dst, "", app->pickResultProps);
       double km = lngLatDist(wp1.lngLat(), wp2.lngLat());
       navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
       navRoute.title = "Navigation";
@@ -1348,10 +1351,10 @@ void MapsTracks::createStatsContent()
                       "Distance", "track-dist", "Moving speed", "track-avg-speed"}),
       createStatsRow({"Ascent", "track-ascent", "Ascent speed", "track-ascent-speed",
                       "Descent", "track-descent", "Descent speed", "track-descent-speed"}) }, "", "", "hfill");
-
+#ifndef NDEBUG
   statsContent->addWidget(createStatsRow({"Moving time (GPS)", "track-moving-time-gps", "Max speed", "track-max-speed",
       "Raw distance", "track-raw-dist", "Moving distance", "track-moving-dist"}));
-
+#endif
   auto statsContainer = new ScrollWidget(new SvgDocument(), statsContent);
   statsContainer->node->setAttribute("box-anchor", "fill");
   trackContainer->addWidget(statsContainer);
@@ -1419,11 +1422,13 @@ void MapsTracks::createPlotContent()
   trackPlot = new TrackPlot();
   trackPlot->node->setAttribute("box-anchor", "hfill");
   // trackSliders is container for trackPlot and slider handles
-  trackSliders = createTrackSliders(trackPlot, 17, 15);
+  trackSliders = createTrackSliders(trackPlot, 17, 21);
   trackPlot->sliders = trackSliders;
 
-  trackSliders->startSlider->onValueChanged = [=](real val){
-    cropStart = trackPlot->plotPosToTrackPos(val);
+  auto cropSliderChanged = [=](real){
+    cropStart = trackPlot->plotPosToTrackPos(trackSliders->startSlider->sliderPos);
+    cropEnd = trackPlot->plotPosToTrackPos(trackSliders->endSlider->sliderPos);
+    if(cropEnd < cropStart) std::swap(cropStart, cropEnd);
     Waypoint startloc = interpTrack(activeTrack->activeWay()->pts, cropStart);
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
@@ -1434,10 +1439,6 @@ void MapsTracks::createPlotContent()
       app->map->markerSetVisible(trackStartMarker, true);
       app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
     }
-  };
-
-  trackSliders->endSlider->onValueChanged = [=](real val){
-    cropEnd = trackPlot->plotPosToTrackPos(val);
     Waypoint endloc = interpTrack(activeTrack->activeWay()->pts, cropEnd);
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
@@ -1449,6 +1450,9 @@ void MapsTracks::createPlotContent()
       app->map->markerSetPoint(trackEndMarker, endloc.lngLat());
     }
   };
+
+  trackSliders->startSlider->onValueChanged = cropSliderChanged;
+  trackSliders->endSlider->onValueChanged = cropSliderChanged;
 
   Button* cropTrackBtn = createToolbutton(NULL, "Crop to segment", true);
   cropTrackBtn->onClicked = [=](){
@@ -1539,12 +1543,15 @@ void MapsTracks::createPlotContent()
 
   trackSliders->trackSlider->onValueChanged = [=](real s){
     if(editTrackTb->isVisible()) return;  // disabled when editing
-    if(s < 0 || s > 1 || !activeTrack) {
+    if(s < 0 || s > 1 || !activeTrack || !activeTrack->activeWay() || activeTrack->activeWay()->pts.empty()) {
       app->map->markerSetVisible(trackHoverMarker, false);
       return;
     }
     real pos = trackPlot->plotPosToTrackPos(s);
     trackHoverLoc = interpTrack(activeTrack->activeWay()->pts, pos);
+    //trackPlot->sliderLabel = trackPlot->plotVsDist ? MapsApp::distKmToStr(trackHoverLoc.dist/1000)
+    //    : durationToStr(trackHoverLoc.loc.time - trackPlot->minTime);
+    trackPlot->sliderLabel = trackPlot->plotAlt ? app->elevToStr(trackHoverLoc.loc.alt) : speedToStr(trackHoverLoc.loc.spd);
     if(trackHoverMarker == 0) {
       trackHoverMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(trackHoverMarker, "layers.track-marker.draw.marker");
@@ -1785,11 +1792,11 @@ void MapsTracks::createTrackPanel()
 
   // tab bar for switching between stats, plot, and waypoints -- margin="0 0 0 10"
   static const char* sparkStatsSVG = R"(
-    <g layout="flex" flex-direction="column" box-anchor="vfill" font-size="13">
-      <text class="spark-dist" box-anchor="left"></text>
-      <text class="spark-time" box-anchor="left"></text>
-      <text display="none" class="spark-ascent" box-anchor="right"></text>
-      <text display="none" class="spark-descent" box-anchor="right"></text>
+    <g layout="box" box-anchor="fill">
+      <g layout="flex" flex-direction="column" box-anchor="vfill" font-size="13">
+        <text class="spark-dist" box-anchor="left"></text>
+        <text class="spark-time" box-anchor="left"></text>
+      </g>
     </g>
   )";
   sparkStats = new Widget(loadSVGFragment(sparkStatsSVG));
@@ -1878,12 +1885,14 @@ void MapsTracks::createTrackListPanel()
     GpxFile track("", "", filename);
     loadGPX(&track);
     if(track.waypoints.empty() && !track.activeWay()) {
-      MapsApp::messageBox("Load track", fstring("Error reading %s", filename), {"OK"});
+      MapsApp::messageBox("Import error", fstring("Error reading %s", filename), {"OK"});
       return;
     }
+    track.filename.clear();  // we will copy to tracks/ folder
     tracks.push_back(std::move(track));
     updateDB(&tracks.back());
     populateTrack(&tracks.back());
+    saveTrack(&tracks.back());  // save track after updating description with stats
   };
   loadTrackBtn->onClicked = [=](){ MapsApp::openFileDialog({{"GPX files", "gpx"}}, loadTrackFn); };
 

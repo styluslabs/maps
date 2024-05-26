@@ -33,6 +33,7 @@ public:
   real maxZoom = 1;
 
   TrackSliders* sliders = NULL;
+  std::string sliderLabel;
 
 private:
   real prevCOM = 0;
@@ -54,35 +55,6 @@ public:
   double maxDist;
   bool darkMode = false;
 };
-
-/*
-class TrackSliders : public Widget
-{
-public:
-  enum {NO_UPDATE = 0, UPDATE = 1, FORCE_UPDATE = 2};
-  TrackSliders(SvgNode* n);
-  void setEditMode(bool editmode);
-  void setCropHandles(real start, real end, int update);
-  void setValue(real val, int update = UPDATE);
-  std::function<void()> onStartHandleChanged;
-  std::function<void()> onEndHandleChanged;
-  std::function<void(real value)> onValueChanged;
-
-  real sliderPos = 0;
-  real startHandlePos = 0;
-  real endHandlePos = 0;  // this reflects initial state of widget
-  bool editMode = false;
-
-private:
-  real bgMargin = 0;
-  Widget* sliderBg = NULL;
-  Widget* startHandle = NULL;
-  Widget* endHandle = NULL;
-  Widget* sliderHandle = NULL;
-};
-
-TrackSliders* createTrackSliders();
-*/
 
 class SliderHandle : public Button
 {

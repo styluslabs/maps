@@ -523,7 +523,7 @@ void MapsOffline::openForImport(std::string srcpath)
 {
   SQLiteDB srcDB;
   if(sqlite3_open_v2(srcpath.c_str(), &srcDB.db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
-    MapsApp::messageBox("Import map", fstring("Cannot import from %s: cannot open file", srcpath.c_str()), {"OK"});
+    MapsApp::messageBox("Import error", fstring("Cannot import from %s: cannot open file", srcpath.c_str()), {"OK"});
     return;
   }
   std::string srcFmt, desc, pois;
@@ -544,7 +544,7 @@ void MapsOffline::openForImport(std::string srcpath)
   });
   sqlite3_close(srcDB.release());
   if(maxZoom <= 0) {
-    MapsApp::messageBox("Import map", fstring("Cannot import from %s: no tiles found", srcpath.c_str()), {"OK"});
+    MapsApp::messageBox("Import error", fstring("Cannot import from %s: no tiles found", srcpath.c_str()), {"OK"});
     return;
   }
 
@@ -588,7 +588,7 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
   if(destpath.empty())
     destpath = tileSource->offlineInfo().url;
   if(destpath.empty() || Url::getPathExtension(destpath) != "mbtiles") {
-    MapsApp::messageBox("Import map", "Cannot import to selected source: no cache file found", {"OK"});
+    MapsApp::messageBox("Import error", "Cannot import to selected source: no cache file found", {"OK"});
     return false;
   }
 

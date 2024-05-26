@@ -43,6 +43,15 @@ stylus-worldcover:
     updates:
         global.show_trails: true
 
+stylus-bike-hike:
+  title: Stylus Labs OSM Bike & Hike
+  layers:
+    - {source: stylus-osm-terrain}
+    - {source: hillshade}
+  updates:
+    global.show_bike: true
+    global.show_trails: true
+
 opentopomap:
     title: OpenTopoMap
     url: http://{s}.tile.opentopomap.org/{z}/{x}/{y}.png
@@ -54,11 +63,13 @@ opencyclemap:
     url: http://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=a5dd6a2f1c934394bce6b0fb077203eb
     url_subdomains: [a, b, c]
     headers: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
+    archived: true
 
 osm-raster:
     title: OpenStreetMap
     url: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
     url_subdomains: [a, b, c]
+    archived: true
 
 # 512x512 (@2x) tiles w/ same style as openstreetmap.org
 osmand-raster2x:
@@ -70,12 +81,14 @@ ridewithgps-heatmap:
     title: RideWithGPS Heatmap
     layer: true
     url: https://heatmap.ridewithgps.com/v1/map/default/normalized/{z}/{x}/{y}.png?start_color=%23A1E6E6&mid_color=%23E64560&end_color=%23E60026&midpoint=0.2&start_opacity=60&mid_opacity=120&end_opacity=200
+    archived: true
 
 osm-gps-tracks:
     title: OSM GPS Tracks
     layer: true
     url: http://gps-{s}.tile.openstreetmap.org/lines/{z}/{x}/{y}.png
     url_subdomains: [a, b, c]
+    archived: true
 
 # Bing uses quadkey tile index - supported in networkDataSource.cpp, but not documented
 bing-earth:
@@ -95,10 +108,26 @@ usgs-imagery:
     title: USGS Imagery
     url: http://basemap.nationalmap.gov/ArcGIS/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}
 
+usgs-topo:
+    title: USGS Topo
+    url: http://basemap.nationalmap.gov/ArcGIS/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}
+
+usgs-topo-scanned:
+    title: USGS Topo Scanned
+    url: http://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}
+    archived: true
+
+black-marble:
+    title: Earth at Night
+    description: NASA Black Marble 2016
+    url: https://tiles.arcgis.com/tiles/P3ePLMYs2RVChkJx/arcgis/rest/services/Earth_at_Night_2016/MapServer/tile/{z}/{y}/{x}
+    archived: true
+
 waymarked-trails:
     title: Waymarked Trails
     layer: true
     url: http://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png
+    archived: true
 
 enable-contours:
     title: Contours
@@ -119,6 +148,7 @@ enable-slope-angle:
 
 mix-base-raster:
     title: Mix Hillshade Base Raster
+    archived: true
     layer: true
     layers:
         - source: hillshade
@@ -147,6 +177,7 @@ worldcover:
 
 hillshade-png:
     title: Hillshading (Old)
+    archived: true
     layer: true
     layers:
         - source: hillshade

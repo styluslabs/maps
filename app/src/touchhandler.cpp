@@ -7,7 +7,7 @@
 static constexpr float pinchThreshold = 30;  // pixels/xyScale (change in distance between fingers)
 static constexpr float rotateThreshold = 0.25f;  // radians
 static constexpr float shoveThreshold = 100;  // pixels/xyScale (translation of centroid of fingers)
-
+static constexpr float longPressThreshold = 8;  // pixels/xyScale
 //static constexpr float maxTapDist = 20;  // max pixels between start and end points for a tap
 //static constexpr float minFlingDist = 150;
 //static constexpr double maxTapTime = 0.25;  // seconds
@@ -27,7 +27,7 @@ static int actionFromSDLFinger(unsigned int sdltype)
 
 bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
 {
-  if(isLongPressOrRightClick(event)) {
+  if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId != SDL_BUTTON_LMASK) {
     app->longPressEvent(event->tfinger.x*xyScale, event->tfinger.y*xyScale);
   }
   else if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL ||
@@ -79,19 +79,24 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
     touchEvent(0, actionFromSDLFinger(event->type), event->tfinger.timestamp/1000.0,
         event->tfinger.x*xyScale, event->tfinger.y*xyScale, 1.0f);
   }
+  else if(event->type == SvgGui::MULTITOUCH) {
+    SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
+    touchEvent(fevent->tfinger.fingerId, actionFromSDLFinger(fevent->type), fevent->tfinger.timestamp/1000.0,
+        fevent->tfinger.x*xyScale, fevent->tfinger.y*xyScale, 1.0f);
+  }
   else if(event->type == SDL_MOUSEWHEEL) {
     Point p = gui->prevFingerPos;
     uint32_t mods = (PLATFORM_WIN || PLATFORM_LINUX) ? (event->wheel.direction >> 16) : SDL_GetModState();
     app->onMouseWheel(p.x*xyScale, p.y*xyScale,
         event->wheel.x/120.0, event->wheel.y/120.0, mods & KMOD_ALT, mods & KMOD_CTRL);
   }
-  else if(event->type == SvgGui::MULTITOUCH) {
-    SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
-    touchEvent(fevent->tfinger.fingerId, actionFromSDLFinger(fevent->type), fevent->tfinger.timestamp/1000.0,
-        fevent->tfinger.x*xyScale, fevent->tfinger.y*xyScale, 1.0f);
+  else if(event->type == SvgGui::LONG_PRESS && event->tfinger.touchId == SvgGui::LONGPRESSID) {
+    // GUI threshold for long press isn't strict enough for map interaction
+    if(gui->totalFingerDist < longPressThreshold)
+      app->longPressEvent(event->tfinger.x*xyScale, event->tfinger.y*xyScale);
   }
   else if(event->type == SvgGui::OUTSIDE_PRESSED) {
-    sdlEvent(gui, (SDL_Event*)event->user.data1);
+    sdlEvent(gui, (SDL_Event*)event->user.data1);  // just treat as a normal fingerup event
   }
   else
     return false;

@@ -290,6 +290,7 @@ layers:
                 outline:
                     width: 2px
                     color: white
+                    miter_limit: 1.5
                     #join: round
 
     recording-track:

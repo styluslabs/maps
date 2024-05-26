@@ -148,9 +148,9 @@ static const char* moreCSS = R"#(
 .legend text { fill: inherit; }
 .panel-container { fill: var(--base); }
 .menu { fill: var(--window); }  /* no (fake) dividers on menus */
-.menuitem { fill: none; }
+.menuitem, .comboitem { fill: none; }
 .splitter { fill: var(--window); }
-/* .toolbar { fill: var(--base); } */
+.icon.weak { fill: var(--text-weak); color: var(--text-weak); }
 .roundbutton { fill: var(--base); }
 .roundbutton .background { stroke: var(--light); stroke-width: 0.5 }
 .inputbox-bg { stroke: var(--light); stroke-width: 1.25 }  /* show low-contrast border by default for input boxes */
@@ -165,21 +165,25 @@ tspan.text-selection { fill: var(--text-sel); }
 /* .section-hrule { display: none; } */
 .hrule.title { display: none; }
 /* rounded corners */
+.menu { border-radius: 6; }  /* for box-shadow */
+.dialog { border-radius: 8; }  /* for box-shadow */
 rect.inputbox-bg { border-radius: 4; }
 rect.menu-bg { border-radius: 6; }
 rect.menuitem-bg { border-radius: 6; }
+rect.pushbtn-bg { border-radius: 6; }
 rect.dialog-bg { border-radius: 8; }
 .panel-header rect.toolbar-bg { border-radius: 8 8 0 0; }
 .title-toolbar rect.toolbar-bg { border-radius: 8 8 0 0; }
+text.window-title { fill: var(--text); font-size: 17; font-weight: 700; margin: 15 0 4 12; }
 /* .toolbutton rect.toolbtn-bg { border-radius: 6; margin: 2 0 } */
 /* .panel-header { box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.5); } */
 /* .actionbutton .toolbtn-bg { stroke: var(--light); stroke-width: 1.5; border-radius: 18; } */
 .toolbar.action-bar { fill: none; }
-/* .actionbutton { --icon: #44F; --text: #44F; } */
 .actionbutton text { fill: var(--header); }
 .actionbutton .icon { fill: var(--header); color: var(--header); }
 .actionbutton .actionbtn-bg { fill: var(--window); border-radius: 4; }
 .actionbutton .toolbtn-bg { border-radius: 4; }
+.floating { box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.5); }  /* for drag and drop */
 )#";
 
 static const char* moreWidgetSVG = R"#(
@@ -195,7 +199,7 @@ static const char* moreWidgetSVG = R"#(
 
   <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">
     <use class="panel-icon icon" width="32" height="32" margin="3 9 3 3" xlink:href="" />
-    <text class="panel-title" font-weight="700" box-anchor="hfill"></text>
+    <text class="panel-title" font-size="17" box-anchor="hfill"></text>
   </g>
 
   <g id="toolbutton" class="toolbutton" layout="box">

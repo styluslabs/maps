@@ -470,7 +470,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public void pickFolder()
   {
     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
     startActivityForResult(intent, ID_PICK_FOLDER);
   }
 
@@ -482,6 +482,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         try {
           // ref: https://android.googlesource.com/platform/frameworks/support/+/a9ac247af2afd4115c3eb6d16c05bc92737d6305/documentfile/src/main/java/androidx/documentfile/provider/DocumentFile.java
           Uri treeUri = resultData.getData();
+          getContentResolver().takePersistableUriPermission(treeUri, resultData.getFlags() | Intent.FLAG_GRANT_READ_URI_PERMISSION);
           Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
           ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
           MapsLib.openFileDesc(uri.getPath(), pfd.getFd());

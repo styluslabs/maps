@@ -7,9 +7,18 @@ Features include offline search, managing saved places, creating and editing tra
 
 Currently available for Android and Linux; iOS support coming soon.
 
-<img alt="Wikipedia Search" src="https://github.com/styluslabs/maps/assets/1332998/6bf64978-79fb-43d1-ad6e-713cbd44c54a" width="400">
-<img alt="Hiking style" src="https://github.com/styluslabs/maps/assets/1332998/c088c07e-00f3-492e-aad5-a0d335205538" width="400">
+<img alt="Offline POI search" src="https://github.com/styluslabs/maps/assets/1332998/3a05679d-3a00-4c80-9886-253c72a10e07" width="270">
+<img alt="Wikipedia search; Shaded relief" src="https://github.com/styluslabs/maps/assets/1332998/f4f54f7f-9864-4908-9e03-7014879c99ee" width="270">
+<img alt="Ski runs; Slope angle shading; Map legend" src="https://github.com/styluslabs/maps/assets/1332998/2df92e7d-33cf-47e2-89f0-8eb6c2a64a52" width="270">
+<img alt="Saved places; Geotagged photo import; Bike lanes" src="https://github.com/styluslabs/maps/assets/1332998/c8a9cbef-71d4-4ee0-b59e-61617bb43acb" width="270">
+<img alt="3D buildings; POIs; Place info" src="https://github.com/styluslabs/maps/assets/1332998/0eb0c7ad-2f7b-4f36-a1ca-41f4170dac0e" width="270">
+<img alt="Sentinel-2 imagery; Map source GUI variables" src="https://github.com/styluslabs/maps/assets/1332998/e45b6de2-55d1-428c-aedc-ca376f710ce1" width="270">
+<img alt="Heatmap overlay; Trail visibility tag" src="https://github.com/styluslabs/maps/assets/1332998/146881fa-bccc-47d6-9419-02f12b6b4676" width="270">
+<img alt="Track recording" src="https://github.com/styluslabs/maps/assets/1332998/c798a867-9d7f-495a-ad48-4bc6bac73964" width="270">
+<img alt="Routing; MTB trail scale" src="https://github.com/styluslabs/maps/assets/1332998/1a6e79ef-f5c4-4ef2-995d-2986ec9aa68c" width="270">
 
+<!-- img alt="Wikipedia Search" src="https://github.com/styluslabs/maps/assets/1332998/6bf64978-79fb-43d1-ad6e-713cbd44c54a" width="400" -->
+<!-- img alt="Hiking style" src="https://github.com/styluslabs/maps/assets/1332998/c088c07e-00f3-492e-aad5-a0d335205538" width="400" -->
 
 ## Quick start ##
 1. [Build](#building) or [download](https://github.com/styluslabs/maps/releases)
@@ -27,7 +36,7 @@ On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, t
 
 [scripts/tilemaker](scripts/tilemaker) contains the files necessary to generate tiles for the included vector map style [stylus-osm.yaml](assets/scenes/stylus-osm.yaml) using [Tilemaker](https://github.com/systemed/tilemaker).
 
-1. download a OpenStreetMap [extract](https://wiki.openstreetmap.org/wiki/Planet.osm#Country_and_area_extracts), e.g., from [geofabrik](https://download.geofabrik.de/) or [osmtoday](https://osmtoday.com/)
+1. download an OpenStreetMap [extract](https://wiki.openstreetmap.org/wiki/Planet.osm#Country_and_area_extracts), e.g., from [geofabrik](https://download.geofabrik.de/) or [osmtoday](https://osmtoday.com/)
 1. [Setup tilemaker](https://github.com/systemed/tilemaker/blob/master/README.md) and run:
 ```
 tilemaker --config maps/scripts/tilemaker/config.json --process maps/scripts/tilemaker/process.lua <extract>.osm.pbf --output <output>.mbtiles
@@ -58,6 +67,7 @@ The included plugins give a sample of what's possible:
 * [nominatim-search.js](assets/plugins/nominatim-search.js) - search with nominatim service
 * [openroute.js](assets/plugins/openroute.js) - routing with OpenRouteService
 * [osm-place-info.js](assets/plugins/osm-place-info.js) - gather place information (website, opening hours, etc.) from OSM API and Wikipedia
+* [sentinel2.js](assets/plugins/sentinel2.js) - weekly worldwide 10m satellite imagery from ESA Sentinel-2, with data picker in GUI.
 * [transform-query.js](assets/plugins/transform-query.js) - modify search query, e.g., for categorial searches
 * [valhalla-osmde.js](assets/plugins/valhalla-osmde.js) - routing with Valhalla provided by osm.de
 * [wikipedia-search.js](assets/plugins/wikipedia-search.js) - search for geotagged Wikipedia articles
@@ -103,6 +113,11 @@ The schema aims to include more information for transit and for outdoor activiti
 The schema is a work-in-progress.  Suggestions and comments are welcome.
 
 
+### License ###
+
+The application is provided under the GPL-3.0 license.  The modified Tangram-ES library retains the MIT license.
+
+
 ## More ##
 
 ### Roadmap ###
@@ -110,6 +125,7 @@ The schema is a work-in-progress.  Suggestions and comments are welcome.
 * builds for iOS, Windows, and Mac
 * 3D terrain and globe view
 * integrate [Valhalla](https://github.com/valhalla/valhalla/) for offline routing
+* more plugins
 * Use QuickJS javascript engine instead of Duktape
 * pmtiles support
 
@@ -124,15 +140,17 @@ Tangram-ES supports RTL text and complex shaping through Harfbuzz and Freetype. 
 Application data is stored in `~/.config/styluslabs/maps` on Linux and `/Android/media/com.styluslabs.maps/files` on Android (files in this folder can be read and written by other applications, so it is possible to edit config.yaml, etc.).
 
 Contents:
-* cache/*.mbtiles - map tile storage; deleting this folder will delete all map tiles, including offline maps
-* plugins/*.js - plugins
-* res/ - various resources for application, e.g. GUI icons
-* scenes/ - map styles
-* tracks/*.gpx - tracks and routes
-* config.yaml - settings; exit application before editing
-* fts1.sqlite - index for offline search
-* mapsources.yaml - map sources; exit application before editing
-* places.sqlite - saved places, etc.
+* `cache/*.mbtiles` - map tile storage; deleting this folder will delete all map tiles, including offline maps
+* `plugins/*.js` - plugins
+* `res/` - various resources for application, e.g. GUI icons
+* `scenes/` - map styles
+* `tracks/*.gpx` - tracks and routes
+* `config.yaml` - settings; exit application before editing
+* `fts1.sqlite` - index for offline search
+* `mapsources.yaml` - map sources; exit application before editing
+* `places.sqlite` - saved places, etc.
+
+Storage use can be controlled with the `shrink_at` and `shrink_to` values in the `storage` section of `config.yaml`.
 
 
 ### GUI ###
@@ -143,8 +161,8 @@ Contents:
 ### Major features ###
 
 Search: offline search for local vector tiles, online search via plugins
-Saved places (bookmarks): import via plugins, export and import GPX, choose colors in GUI; further customize styling in [markers.yaml](assets/scenes/markers.yaml]
-Tracks and routes: record and edit tracks,  draw direct (straight-line segments) routes or using plugin for routing
+Saved places (bookmarks): import via plugins, export and import GPX, create place list from geotagged photos, choose colors in GUI; further customize styling in [markers.yaml](assets/scenes/markers.yaml]
+Tracks and routes: record and edit tracks, draw direct (straight-line segments) routes or using plugin for routing
 Map sources: create and manage map sources, access GUI controls for current map source, show legends
 Offline maps (via Map sources): create offline map from current source and view, import mbtiles file, manage offline maps
 Plugin console (via overflow menu): reload plugins, execute Javascript in plugin environment.

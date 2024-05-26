@@ -32,6 +32,7 @@ global:
         motorway_link: rgba(253, 226, 147, 0.4)
         motorway_muted: rgba(255, 255, 255, 0.4)
         path: rgba(255, 255, 255, 0.4)
+        unpaved_trail: hsl(33, 100%, 75%)
         # text
         default_label: white
         default_halo: black
@@ -52,3 +53,4 @@ global:
 styles:
     unlit-lines:
         blend: inlay
+        blend_order: -1001

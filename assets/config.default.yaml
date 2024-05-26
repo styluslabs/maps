@@ -13,7 +13,7 @@ fallback_fonts:
   - scenes/fonts/DroidSansFallback.ttf
 
 storage:
-  # cache size thresholds - set to 0 for no limit
+  # cache size thresholds (MB) - set to 0 for no limit
   shrink_at: 600
   shrink_to: 400
   # immediately delete tiles when deleting offline map?
@@ -33,10 +33,10 @@ search:
   hide_bookmarks: false
 
 tracks:
-  # location added to track if min_distance (m) OR min_time (sec) from last point; this sets density of points
+  # point added to track if min_distance (m) OR min_time (sec) from last point; this sets density of points
   min_distance: 0.5
   min_time: 5
-  # Android leaves GPS on continously if sample_period (sec) is less than 10 seconds
+  # Android leaves GPS on continuously if sample_period (sec) is less than 10 seconds
   sample_period: 0.1
 
 metric_units: true

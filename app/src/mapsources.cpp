@@ -54,7 +54,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     updates.emplace_back("+sources." + rasterN + ".type", "Raster");
     for (const auto& attr : src) {
       const std::string& k = attr.first.Scalar();
-      if(k != "title" && k != "archived")
+      if(k != "title" && k != "archived" && k != "updates" && k != "layer")
         updates.emplace_back("+sources." + rasterN + "." + attr.first.Scalar(), yamlToStr(attr.second));
     }
     // if cache file is not explicitly specified, use key since it is guaranteed to be unique

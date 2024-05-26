@@ -114,10 +114,11 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
     plotVsDist = true;
 
   // rounding for altitude range
-  real elev = std::max(25.0, maxAlt - minAlt);
+  real elev = std::max(10.0, maxAlt - minAlt);
   real expnt = std::pow(10, std::floor(std::log10(elev)));
   real lead = elev/expnt;
   real quant = lead > 5 ? expnt : lead > 2 ? expnt/2 : expnt/5;
+  if(quant < 5) quant = 5;
   maxAlt = std::ceil((minAlt + elev)/quant)*quant;
   minAlt = std::floor(minAlt/quant)*quant;
   // assuming 5 vertical divisions
@@ -155,7 +156,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   Color altiColor = axisColor;  //Color::BLUE;  //Color(0, 0, 255, 255);
   Color spdColor = Color::RED;
   Color wayptColor = axisColor;  //Color::BLUE;
-  Color sliderColor = darkMode ? Color(128, 128, 128) : Color::BLACK;
+  Color sliderColor = darkMode ? Color::WHITE : Color::BLACK;
 
   Painter* p = svgp->p;
   int w = mBounds.width() - 4;
@@ -198,7 +199,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     real anchlbl = (anch - xMin)*(plotw/dx);
     for(int ii = 1; anch + ii*dw < xMax; ++ii)
       p->drawText(anchlbl + ii*dxlbl, h - tmargin, fstring("%.*f", prec, anch + ii*dw).c_str());
-    real wlbl0 = p->drawText(anchlbl, h - tmargin, fstring("%.*f", prec, anch).c_str());
+    real wlbl0 = p->drawText(anchlbl, h - tmargin, fstring("%.*f", anch > 0 ? prec : 0, anch).c_str());
     p->setTextAlign(Painter::AlignLeft | Painter::AlignBottom);
     p->drawText(wlbl0, h - tmargin, MapsApp::metricUnits ? " km" : " mi");
     // vert grid lines
@@ -244,13 +245,27 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->scale(plotVsDist ? plotw/maxDist : plotw/(maxTime - minTime), 1);
   p->scale(zoomScale, 1);
   p->translate(zoomOffset, 0);
-  if(plotAlt) {
+  if(plotAlt && !altDistPlot.empty()) {
     p->save();
     p->scale(1, -ploth/(maxAlt - minAlt));
     p->translate(0, -maxAlt);
     p->setFillBrush(Color(altiColor).setAlpha(128));
     p->setStroke(altiColor, 2.0);  //Color::NONE);
-    p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
+    //p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
+
+    real xscale = p->getTransform().xscale();  // note that this includes paint scale
+    auto& path = plotVsDist ? altDistPlot : altTimePlot;
+    int previdx = 0;
+    p->beginPath();
+    nvgMoveTo(p->vg, path.point(0).x, path.point(0).y);
+    for(int ii = 1; ii < path.size(); ++ii) {
+      if((path.point(ii).x - path.point(previdx).x)*xscale > 0.5) {
+        nvgLineTo(p->vg, path.point(ii).x, path.point(ii).y);
+        previdx = ii;
+      }
+    }
+    p->endPath();
+
     p->restore();
   }
   if(plotSpd && maxSpd > 0) {
@@ -265,17 +280,18 @@ void TrackPlot::draw(SvgPainter* svgp) const
   // draw indicators for sliders
   if(sliders->editMode) {
     real start = sliders->startSlider->sliderPos;
+    real end = sliders->endSlider->sliderPos;
+    if(end < start) std::swap(start, end);
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color::GREEN, 1.5);
     p->drawLine(Point(start*plotw, 0), Point(start*plotw, ploth));
-    p->setFillBrush(Color::GREEN);
+    p->setFillBrush(Color(Color::DARKGREEN).setAlpha(128));
     p->drawPath(Path2D().addEllipse(start*plotw, ploth - 15, 10, 10));
 
-    real end = sliders->endSlider->sliderPos;
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color::RED, 1.5);
     p->drawLine(Point(end*plotw, 0), Point(end*plotw, ploth));
-    p->setFillBrush(Color::RED);
+    p->setFillBrush(Color(Color::RED).setAlpha(128));
     p->drawPath(Path2D().addEllipse(end*plotw, ploth - 15, 10, 10));
   }
   else if(sliders->trackSlider->isVisible()) {
@@ -283,8 +299,17 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setFillBrush(Brush::NONE);
     p->setStroke(sliderColor, 1.5);
     p->drawLine(Point(s*plotw, 0), Point(s*plotw, ploth));
-    p->setFillBrush(sliderColor);
+    p->setFillBrush(Color(sliderColor).setAlpha(128));
     p->drawPath(Path2D().addEllipse(s*plotw, ploth - 15, 10, 10));
+
+    if(!sliderLabel.empty()) {
+      p->setFillBrush(altiColor);
+      p->setStroke(bgColor, 4);
+      p->setStrokeAlign(Painter::StrokeOuter);
+      p->setFontSize(11);
+      p->setTextAlign((s > 0.5 ? Painter::AlignRight : Painter::AlignLeft) | Painter::AlignBaseline);
+      p->drawText(s*plotw + (s > 0.5 ? -4 : 4), 20, sliderLabel.c_str());  // note clip rect is still set
+    }
   }
 
   // draw vertical labels
@@ -292,6 +317,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setFillBrush(altiColor);
     p->setStroke(bgColor, 4);
     p->setStrokeAlign(Painter::StrokeOuter);
+    p->setFontSize(12);
     p->setTextAlign(Painter::AlignRight | Painter::AlignVCenter);
     for(int ii = 0; ii <= nvert; ++ii)
       p->drawText(labelw-lmargin, (ii*ploth)/nvert, fstring("%.0f", minAlt + (nvert-ii)*dhalt).c_str());
@@ -362,7 +388,7 @@ void TrackSparkline::draw(SvgPainter* svgp) const
 {
   Color textColor = darkMode ? Color::WHITE : Color::BLACK;
   Color bgColor = darkMode ? Color::BLACK : Color::WHITE;
-  Color plotColor = Color(0, 0, 255, 128);
+  Color plotColor = darkMode ? Color(100, 200, 255, 128) : Color(0, 0, 255, 128);
 
   Painter* p = svgp->p;
   int w = std::max(0.0, mBounds.width() - 4);
@@ -424,7 +450,7 @@ SliderHandle::SliderHandle(SvgNode* n, Widget* bg, real margin) : Button(n), bgM
 
   onApplyLayout = [this](const Rect& src, const Rect& dest){
     //if(src != dest) {
-      Point dr = dest.origin() - src.origin();
+      Point dr = dest.origin() - src.center();
       real w = sliderBg->node->bounds().width() - 2*bgMargin;
       setLayoutTransform(Transform2D::translating(dr.x + w*sliderPos + bgMargin, dr.y)*m_layoutTransform);
     //}
@@ -434,10 +460,11 @@ SliderHandle::SliderHandle(SvgNode* n, Widget* bg, real margin) : Button(n), bgM
 
 SliderHandle* createSliderHandle(Widget* bg, real lmargin, real bmargin)
 {
+  // all sliders hidden intially
   static const char* slidersSVG = R"#(
-    <g class="slider-handle" box-anchor="left bottom">
-      <rect class="slider-handle-outer" x="-10" y="-2" width="20" height="16"/>
-      <rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/>
+    <g class="slider-handle" display="none" box-anchor="left bottom">
+      <rect fill="none" x="-11" y="-11" width="22" height="22"/>
+      <!-- rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/ -->
     </g>
   )#";
 

@@ -401,6 +401,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   else
     getElevation(pos, elevFn);
 
+  Widget* infoSection = infoContent->selectFirst(".info-section");
   if(!osmid.empty() && !pluginManager->placeFns.empty()) {
     std::vector<std::string> cproviders = {"None"};
     for(auto& fn : pluginManager->placeFns)
@@ -416,13 +417,13 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
 
     };
     Widget* providerRow = createRow({createTextBox("Information from "), createStretch(), providerSel}, "3 6");
-    Widget* infoSection = infoContent->selectFirst(".info-section");
     infoSection->addWidget(providerRow);
     infoSection->setVisible(true);
     providerSel->onChanged("");
   }
 
   if(json.IsObject() && json.HasMember("place_info")) {
+    infoSection->setVisible(true);
     for(auto& info : json["place_info"].GetArray())
       addPlaceInfo(info["icon"].GetString(), info["title"].GetString(), info["value"].GetString());
   }
@@ -452,7 +453,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
         <g class="image-container" margin="2 5">
-          <use class="icon" width="30" height="30" xlink:href=""/>
+          <use class="icon weak" width="26" height="26" xlink:href=""/>
         </g>
         <g class="value-container" box-anchor="hfill" layout="box" margin="0 10"></g>
       </g>
@@ -1243,6 +1244,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   infoContent = new Widget(loadSVGFragment(R"#(<g layout="box" box-anchor="hfill"></g>)#"));
   auto infoHeader = createPanelHeader(NULL, "");  //MapsApp::uiIcon("pin"), "");
+  auto infoTitle = infoHeader->selectFirst(".panel-title");
+  infoTitle->node->setAttribute("box-anchor", "left");  // disable elision
+  infoTitle->parent()->addWidget(createStretch());
   infoPanel = createMapPanel(infoHeader, infoContent);
   infoPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_CLOSED)
@@ -1589,10 +1593,10 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   toolbar->addWidget(backBtn);
   Widget* titleWidget = new Widget(widgetNode("#panel-header-title"));
   // need widget to show/hide icon in setWindowLayout()
-  Widget* iconWidget = new Widget(titleWidget->containerNode()->selectFirst(".panel-icon"));
+  Widget* iconWidget = new Widget(titleWidget->node->selectFirst(".panel-icon"));
   if(icon)
     static_cast<SvgUse*>(iconWidget->node)->setTarget(icon);
-  TextLabel* titleLabel = new TextLabel(titleWidget->containerNode()->selectFirst(".panel-title"));
+  TextLabel* titleLabel = new TextLabel(titleWidget->node->selectFirst(".panel-title"));
   titleLabel->setText(title);
   //static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
   toolbar->addWidget(titleWidget);
@@ -1717,8 +1721,11 @@ void MapsApp::messageBox(std::string title, std::string message,
   dialogBody->setMargins(10);
   SvgText* msgNode = createTextNode(message.c_str());
   dialogBody->addWidget(new Widget(msgNode));
+  // stylesheet must be set to measure text
+  dialog->documentNode()->setStylesheet(gui->windowStylesheet);
+  dialog->documentNode()->restyle();
   // wrap message text as needed
-  std::string bmsg = SvgPainter::breakText(msgNode, 0.8*gui->windows.front()->winBounds().width());
+  std::string bmsg = SvgPainter::breakText(msgNode, std::min(800.0, 0.8*gui->windows.front()->winBounds().width()));
   if(bmsg != message) {
     msgNode->clearText();
     msgNode->addText(bmsg.c_str());
@@ -1822,7 +1829,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     markerColors.push_back(parseColor(colorstr.Scalar()));
 
   // DB setup
-  sqlite3_config(SQLITE_CONFIG_URI, 1);  // need to use URI to attach DB as readonly
+  //sqlite3_config(SQLITE_CONFIG_URI, 1);  -- enable at compile time instead (here is too late on Android)
   FSPath dbPath(baseDir, "places.sqlite");
   if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
     logMsg("Error creating %s", dbPath.c_str());

@@ -500,7 +500,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   chooseListBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
     if(isLongPressOrRightClick(event)) {
       app->showPanel(listsPanel);
-      app->panelToSkip = listsPanel;
+      //app->panelToSkip = listsPanel;  -- don't skip so user can more easily toggle list visibility
       populateBkmks(listid, true);
       return true;
     }
@@ -729,7 +729,7 @@ Button* MapsBookmarks::createPanel()
     editListRow->addWidget(listTitle);
     editListRow->addWidget(listColor);
     listColor->node->setAttribute("box-anchor", "bottom");
-    listTitle->onChanged = [=](const char* s){ listTitle->selectFirst(".accept-btn")->setEnabled(s[0]); };
+    listTitle->onChanged = [this](const char* s){ editListDialog->selectFirst(".accept-btn")->setEnabled(s[0]); };
 
     editListDialog.reset(createInputDialog({editListRow}, "Edit Place List", "Apply", [=](){
       SQLiteStmt(app->bkmkDB, "UPDATE lists SET title = ?, color = ? WHERE id = ?;").bind(

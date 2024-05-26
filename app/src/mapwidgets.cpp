@@ -275,7 +275,7 @@ DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)
   scrollWidget->node->setAttribute("box-anchor", "fill");
   addWidget(scrollWidget);
 
-  SvgNode* fnode = loadSVGFragment(R"#(<g display="none" position="absolute"></g>)#");
+  SvgNode* fnode = loadSVGFragment(R"#(<g display="none" class="floating" position="absolute"></g>)#");
   floatWidget = new AbsPosWidget(fnode);
   addWidget(floatWidget);
 }
@@ -386,8 +386,8 @@ void DragDropList::addItem(KeyType key, Widget* item, KeyType nextkey)
         return true;  // once placeholder has been moved, have to wait until layout is recalculated
 
       // if finger > height above or below center, shift position
-      real dy = event->tfinger.y - b.center().y;
-      if(std::abs(dy) > b.height()) {
+      real dy = event->tfinger.y - (b.top + yOffset);  //+ b.height()/2 - b.center().y;
+      if(std::abs(dy) > b.height()/2) {
         SvgContainerNode* parent = content->containerNode();
         auto& items = parent->children();
         auto it = std::find(items.begin(), items.end(), placeholder->node);
