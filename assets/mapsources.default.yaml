@@ -97,16 +97,20 @@ bing-earth:
     url_subdomains: [0, 1, 2, 3]
     zoom_offset: -1
     updates:
-        global.dark_base_map: true
+        application.dark_base_map: true
 
 # historical: https://wayback.maptiles.arcgis.com
 arcgis-satellite:
     title: ArcGIS Satellite
     url: https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}
+    updates:
+        application.dark_base_map: true
 
 usgs-imagery:
     title: USGS Imagery
     url: http://basemap.nationalmap.gov/ArcGIS/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}
+    updates:
+        application.dark_base_map: true
 
 usgs-topo:
     title: USGS Topo
@@ -122,6 +126,8 @@ black-marble:
     description: NASA Black Marble 2016
     url: https://tiles.arcgis.com/tiles/P3ePLMYs2RVChkJx/arcgis/rest/services/Earth_at_Night_2016/MapServer/tile/{z}/{y}/{x}
     archived: true
+    updates:
+        application.dark_base_map: true
 
 waymarked-trails:
     title: Waymarked Trails

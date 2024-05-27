@@ -10,6 +10,7 @@ function nasaWorldView()
   const updates = {
     "global.worldview_date": date,
     "application.gui_variables.worldview_date": { "label": "Date", "type": "date", "onchange": "nasaWorldView" },
+    "application.dark_base_map": true
   };
   const mapSrc = {
     "title": "NASA Worldview " + date,

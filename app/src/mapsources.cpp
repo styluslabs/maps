@@ -433,7 +433,7 @@ void MapsSources::onMapEvent(MapEvent_t event)
   if(!legendsLoaded && app->map->getScene()->isReady()) {
     legendsLoaded = true;
     // adjust status bar color on mobile
-    app->notifyStatusBarBG(!app->readSceneValue("global.dark_base_map").as<bool>(false));
+    app->notifyStatusBarBG(!app->readSceneValue("application.dark_base_map").as<bool>(false));
     // load legend widgets
     app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
     app->gui->deleteContents(app->legendContainer);
@@ -761,7 +761,7 @@ Button* MapsSources::createPanel()
   auto clearAllCachesFn = [this](std::string res){
     if(res == "OK") {
       MapsOffline::queueOfflineTask(0, [this](){
-        int64_t tot = MapsOffline::shrinkCache(20'000'000);
+        int64_t tot = MapsOffline::shrinkCache(0);  //20'000'000);
         app->storageTotal = tot + app->storageOffline;
       });
     }

@@ -145,6 +145,21 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
 //  return std::ceil(x0/quant)*quant;
 //}
 
+static void sparseDrawPath(Painter* p, const Path2D& path)
+{
+  real xscale = p->getTransform().xscale();  // note that this includes paint scale
+  int previdx = 0;
+  p->beginPath();
+  nvgMoveTo(p->vg, path.point(0).x, path.point(0).y);
+  for(int ii = 1; ii < path.size(); ++ii) {
+    if((path.point(ii).x - path.point(previdx).x)*xscale > 0.5) {
+      nvgLineTo(p->vg, path.point(ii).x, path.point(ii).y);
+      previdx = ii;
+    }
+  }
+  p->endPath();
+}
+
 // should we highlight zoomed region of track on map?
 void TrackPlot::draw(SvgPainter* svgp) const
 {
@@ -252,20 +267,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setFillBrush(Color(altiColor).setAlpha(128));
     p->setStroke(altiColor, 2.0);  //Color::NONE);
     //p->drawPath(plotVsDist ? altDistPlot : altTimePlot);
-
-    real xscale = p->getTransform().xscale();  // note that this includes paint scale
-    auto& path = plotVsDist ? altDistPlot : altTimePlot;
-    int previdx = 0;
-    p->beginPath();
-    nvgMoveTo(p->vg, path.point(0).x, path.point(0).y);
-    for(int ii = 1; ii < path.size(); ++ii) {
-      if((path.point(ii).x - path.point(previdx).x)*xscale > 0.5) {
-        nvgLineTo(p->vg, path.point(ii).x, path.point(ii).y);
-        previdx = ii;
-      }
-    }
-    p->endPath();
-
+    sparseDrawPath(p, plotVsDist ? altDistPlot : altTimePlot);
     p->restore();
   }
   if(plotSpd && maxSpd > 0) {
@@ -273,7 +275,8 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->translate(0, -maxSpd);
     p->setFillBrush(Brush::NONE);
     p->setStroke(spdColor, 2.0);
-    p->drawPath(plotVsDist ? spdDistPlot : spdTimePlot);
+    //p->drawPath(plotVsDist ? spdDistPlot : spdTimePlot);
+    sparseDrawPath(p, plotVsDist ? spdDistPlot : spdTimePlot);
   }
   p->restore();
 

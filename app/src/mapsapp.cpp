@@ -1576,7 +1576,7 @@ void MapsApp::maximizePanel(bool maximize)
     panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
     panelSplitter->setEnabled(!maximize);
     notifyStatusBarBG(maximize ?
-        win->node->hasClass("light") : !readSceneValue("global.dark_base_map").as<bool>(false));
+        win->node->hasClass("light") : !readSceneValue("application.dark_base_map").as<bool>(false));
   }
   //Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
   //if(minbtn)
