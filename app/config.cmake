@@ -27,7 +27,7 @@ add_library(maps-app
   ${STYLUSLABS_DEPS}/usvg/svgpainter.cpp
   ${STYLUSLABS_DEPS}/usvg/svgwriter.cpp
   ${STYLUSLABS_DEPS}/usvg/cssparser.cpp
-  ${STYLUSLABS_DEPS}/nanovg-2/src/nanovg.c
+  ${STYLUSLABS_DEPS}/nanovgXC/src/nanovg.c
   ${STYLUSLABS_DEPS}/pugixml/src/pugixml.cpp
   deps/easyexif/exif.cpp
 )
@@ -46,7 +46,7 @@ target_include_directories(maps-app
   tangram-es/core/deps/isect2d/include
   tangram-es/core/deps/stb
   ${STYLUSLABS_DEPS}
-  ${STYLUSLABS_DEPS}/nanovg-2/src
+  ${STYLUSLABS_DEPS}/nanovgXC/src
   ${STYLUSLABS_DEPS}/pugixml/src
   deps/easyexif
 )

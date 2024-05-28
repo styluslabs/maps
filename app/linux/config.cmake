@@ -56,7 +56,7 @@ target_include_directories(tangram
   tangram-es/core/deps/yaml-cpp/include
   app/include
   ${STYLUSLABS_DEPS}
-  ${STYLUSLABS_DEPS}/nanovg-2/src
+  ${STYLUSLABS_DEPS}/nanovgXC/src
   ${STYLUSLABS_DEPS}/pugixml/src
   ${FONTCONFIG_INCLUDE_DIRS}
 )

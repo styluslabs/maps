@@ -27,15 +27,15 @@
 
 #define NVG_LOG PLATFORM_LOG
 #ifndef NO_PAINTER_GL
-#include "nanovg-2/src/nanovg_vtex.h"
-#include "nanovg-2/src/nanovg_gl_utils.h"
+#include "nanovgXC/src/nanovg_vtex.h"
+#include "nanovgXC/src/nanovg_gl_utils.h"
 #endif
 
 #define NANOVG_SW_IMPLEMENTATION
 #define NVGSWU_GLES2
 #define NVGSW_QUIET_FRAME  // suppress axis-aligned scissor warning
-#include "nanovg-2/src/nanovg_sw.h"
-#include "nanovg-2/src/nanovg_sw_utils.h"
+#include "nanovgXC/src/nanovg_sw.h"
+#include "nanovgXC/src/nanovg_sw_utils.h"
 
 #include "ugui/theme.cpp"
 
