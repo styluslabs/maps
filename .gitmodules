@@ -1,19 +1,19 @@
 [submodule "deps/usvg"]
 	path = deps/usvg
 	url = https://github.com/styluslabs/usvg
-  ignore = untracked
+	ignore = untracked
 [submodule "deps/ugui"]
 	path = deps/ugui
 	url = https://github.com/styluslabs/ugui
-  ignore = untracked
+	ignore = untracked
 [submodule "deps/ulib"]
 	path = deps/ulib
 	url = https://github.com/styluslabs/ulib
-  ignore = untracked
+	ignore = untracked
 [submodule "deps/nanovgXC"]
 	path = deps/nanovgXC
 	url = https://github.com/styluslabs/nanovgXC
-  ignore = untracked
+	ignore = untracked
 [submodule "deps/pugixml"]
 	path = deps/pugixml
 	url = https://github.com/zeux/pugixml
@@ -23,4 +23,8 @@
 [submodule "tangram-es"]
 	path = tangram-es
 	url = https://github.com/pbsurf/maps
-  ignore = untracked
+	ignore = untracked
+[submodule "assets/shared"]
+	path = assets/shared
+	url = https://github.com/pbsurf/maps-res
+	ignore = untracked

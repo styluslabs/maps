@@ -14,6 +14,7 @@ public:
   void updateProgress();
   void downloadCompleted(int id, bool canceled);
   void resumeDownloads();
+  void openForImport(std::string srcpath);
   Widget* createPanel();
 
   static void queueOfflineTask(int mapid, std::function<void()>&& fn);
@@ -26,7 +27,6 @@ private:
   MarkerID rectMarker = 0;
   Widget* offlineContent = NULL;
 
-  void openForImport(std::string srcpath);
   bool importFile(std::string destsrc, std::string srcpath, OfflineMapInfo olinfo, bool hasPois);
   void populateOffline();
   bool cancelDownload(int mapid);

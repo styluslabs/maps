@@ -96,11 +96,17 @@ int main(int argc, char* argv[])
 #endif
 
   // config
-  MapsApp::baseDir = canonicalPath("./");  //"/home/mwhite/maps/";  //argc > 0 ? FSPath(argv[0]).parentPath() : ".";
+  MapsApp::baseDir = canonicalPath("./");
+  if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists()) {
+    if(argc > 0)
+      MapsApp::baseDir = canonicalPath(FSPath(argv[0]).parentPath());
+    if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists())
+      MapsApp::baseDir = canonicalPath(FSPath(MapsApp::baseDir, "../../assets/"));
+  }
   FSPath configPath(MapsApp::baseDir, "config.yaml");
   MapsApp::configFile = configPath.c_str();
-  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
-      : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
+  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path :
+      FSPath(MapsApp::baseDir, "config.default.yaml").path);
 
   // command line args
   const char* sceneFile = NULL;  // -f scenes/scene-omt.yaml
@@ -108,6 +114,10 @@ int main(int argc, char* argv[])
     YAML::Node node;
     if(strcmp(argv[argi], "-f") == 0)
       sceneFile = argv[argi+1];
+    else if(strcmp(argv[argi], "--import") == 0) {
+      std::string importfile = argv[argi+1];
+      MapsApp::taskQueue.push_back([=](){ MapsApp::inst->mapsOffline->openForImport(importfile); });
+    }
     else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
       node = argv[argi+1];
     else

@@ -278,12 +278,12 @@ sources:
 fonts:
     Open Sans:
         - weight: 400
-          url: fonts/OpenSans-Regular.ttf
+          url: ../shared/fonts/OpenSans-Regular.ttf
         - weight: 400
           style: italic
-          url: fonts/OpenSans-Italic.ttf
+          url: ../shared/fonts/OpenSans-Italic.ttf
         - weight: 600
-          url: fonts/OpenSans-SemiBold.ttf
+          url: ../shared/fonts/OpenSans-SemiBold.ttf
 
 
 scene:

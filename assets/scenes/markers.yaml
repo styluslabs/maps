@@ -53,7 +53,7 @@ global:
 fonts:
     Open Sans:
         - weight: 600
-          url: fonts/OpenSans-SemiBold.ttf
+          url: ../shared/fonts/OpenSans-SemiBold.ttf
 
 
 textures:
