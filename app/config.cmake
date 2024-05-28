@@ -38,6 +38,7 @@ target_include_directories(maps-app
   app/include
   PRIVATE
   tangram-es/platforms/common
+  tangram-es/platforms/common/glfw/include
   tangram-es/core/src
   tangram-es/core/deps
   tangram-es/core/deps/glm
