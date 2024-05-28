@@ -14,24 +14,18 @@ LINUX_CMAKE_PARAMS = \
 	${CMAKE_OPTIONS}
 
 GITREV := $(shell git rev-parse --short HEAD)
-TGZ = maps-$(GITREV).tar.gz
-TGT = $(LINUX_BUILD_DIR)/tangram
+TGZ = explore-$(GITREV).tar.gz
+TGT = $(LINUX_BUILD_DIR)/explore
 
 DISTRES = \
-  ../scribbleres/fonts/Roboto-Regular.ttf \
-  ../scribbleres/fonts/DroidSansFallback.ttf \
-  ../scribbleres/Intro.svg \
-  ../scribbleres/linux/Write.desktop \
-  ../scribbleres/linux/Write144x144.png \
-  ../scribbleres/linux/setup.sh \
-  ../scribbleres/linux/INSTALL
-
-assets/config.default.yaml \
-assets/mapsources.default.yaml \
-assets/plugins/ \
-assets/res/ \
-assets/scenes/
-
+	assets/config.default.yaml \
+	assets/mapsources.default.yaml \
+	assets/plugins/ \
+	assets/res/ \
+	assets/scenes/ \
+	assets/shared/ \
+	app/linux/install/ \
+	app/linux/INSTALL
 
 # targets
 all: linux
@@ -45,11 +39,9 @@ linux: cmake-linux
 cmake-linux:
 	cmake -H. -B${LINUX_BUILD_DIR} ${LINUX_CMAKE_PARAMS}
 
-tgz: $(TGZ)
-
-$(TGZ): linux
+tgz: linux $(DISTRES)
 	strings $(TGT) | grep "^GLIBC_"
 	mkdir -p $(LINUX_BUILD_DIR)/.dist
 	mv $(TGT) $(LINUX_BUILD_DIR)/.dist
 	cp -R $(DISTRES) $(LINUX_BUILD_DIR)/.dist
-	(cd $(LINUX_BUILD_DIR) && mv .dist $(TARGET) && tar --remove-files -czvf $@ $(TARGET))
+	(cd $(LINUX_BUILD_DIR) && mv .dist Explore && tar --remove-files -czvf $(TGZ) Explore)

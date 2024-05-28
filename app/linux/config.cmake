@@ -77,6 +77,9 @@ target_link_libraries(tangram
   -ldl
 )
 
+# set exe name
+set_target_properties(tangram PROPERTIES OUTPUT_NAME explore)
+
 target_compile_options(tangram
   PRIVATE
   -std=c++14

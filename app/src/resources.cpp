@@ -251,15 +251,15 @@ void initResources(const char* baseDir)
 {
   Painter::initFontStash(FONS_DELAY_LOAD | FONS_SUMMED);
 #if PLATFORM_IOS || PLATFORM_OSX
-  const char* dfltFont = "scenes/fonts/SanFranciscoDisplay-Regular.otf";
-  const char* boldFont = "scenes/fonts/SanFranciscoDisplay-Bold.otf";
+  const char* dfltFont = "shared/fonts/SanFranciscoDisplay-Regular.otf";
+  const char* boldFont = "shared/fonts/SanFranciscoDisplay-Bold.otf";
 #else
-  const char* dfltFont = "scenes/fonts/Roboto-Regular.ttf";
-  const char* boldFont = "scenes/fonts/Roboto-Bold.ttf";
+  const char* dfltFont = "shared/fonts/Roboto-Regular.ttf";
+  const char* boldFont = "shared/fonts/Roboto-Bold.ttf";
 #endif
   std::string uiFont = MapsApp::config["ui"]["font"].as<std::string>(dfltFont);
   Painter::loadFont("sans", FSPath(baseDir, uiFont).c_str());
-  if(Painter::loadFont("fallback", FSPath(baseDir, "scenes/fonts/DroidSansFallback.ttf").c_str()))
+  if(Painter::loadFont("fallback", FSPath(baseDir, "shared/fonts/DroidSansFallback.ttf").c_str()))
     Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback
   if(uiFont == dfltFont)
     Painter::loadFont("sans-bold", FSPath(baseDir, boldFont).c_str());

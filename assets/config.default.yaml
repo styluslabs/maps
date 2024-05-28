@@ -9,8 +9,8 @@ sources:
 
 # use https://github.com/aosp-mirror/platform_frameworks_base/raw/de0fe2daafb769cc37ca922ffef6dbafb8c6cae2/data/fonts/DroidSansFallback.ttf as next version removes a bunch of characters
 fallback_fonts:
-  - scenes/fonts/Roboto-Regular.ttf
-  - scenes/fonts/DroidSansFallback.ttf
+  - shared/fonts/Roboto-Regular.ttf
+  - shared/fonts/DroidSansFallback.ttf
 
 storage:
   # cache size thresholds (MB) - set to 0 for no limit
