@@ -15,6 +15,7 @@ public:
   void downloadCompleted(int id, bool canceled);
   void resumeDownloads();
   void openForImport(std::string srcpath);
+  void populateOffline();
   Widget* createPanel();
 
   static void queueOfflineTask(int mapid, std::function<void()>&& fn);
@@ -28,7 +29,6 @@ private:
   Widget* offlineContent = NULL;
 
   bool importFile(std::string destsrc, std::string srcpath, OfflineMapInfo olinfo, bool hasPois);
-  void populateOffline();
   bool cancelDownload(int mapid);
   std::unique_ptr<SelectDialog> selectDestDialog;
   std::unique_ptr<Dialog> downloadDialog;

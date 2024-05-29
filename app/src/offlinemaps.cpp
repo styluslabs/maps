@@ -480,13 +480,13 @@ static void deleteOfflineMap(int mapid)
     mbtiles.stmt("SELECT sum(length(tile_data)) FROM images WHERE tile_id IN (SELECT tile_id FROM offline_tiles"
         " WHERE offline_id = ?1 AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?1));")
       .bind(mapid).onerow(dsize);
-    if(dsize == 0) continue;
-    if(purge) {
+    if(dsize > 0 && purge) {
       // this can be quite slow
       mbtiles.stmt("DELETE FROM images WHERE tile_id IN (SELECT tile_id FROM offline_tiles WHERE"
           " offline_id = ?1 AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?1));")
         .bind(mapid).exec();
     }
+    // if the same tiles were imported multiple times, we could have dsize == 0 even with offline map present
     mbtiles.stmt("DELETE FROM offline_tiles WHERE offline_id = ?;").bind(mapid).exec();
     if(purge && storageShrinkMax > 0 && dsize > 8*1024*1024)
       mbtiles.stmt("VACUUM");  // also slow, obviously

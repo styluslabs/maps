@@ -1091,6 +1091,7 @@ void MapsApp::setWindowLayout(int fbWidth)
   bool narrow = fbWidth/gui->paintScale < 700;
   if(currLayout && narrow == currLayout->node->hasClass("window-layout-narrow")) return;
 
+  bool wasvis = panelContainer && panelContainer->isVisible();
   if(currLayout) currLayout->setVisible(false);
   currLayout = win->selectFirst(narrow ? ".window-layout-narrow" : ".window-layout-wide");
   currLayout->setVisible(true);
@@ -1120,14 +1121,12 @@ void MapsApp::setWindowLayout(int fbWidth)
     }
   }
 
-  //SvgNode* minicon = MapsApp::uiIcon(narrow ? "chevron-down" : "chevron-up");
-  //auto minbtns = panelContent->select(".minimize-btn");
-  //for(Widget* btn : minbtns)
-  //  static_cast<Button*>(btn)->setIcon(minicon);
   // let's try hiding panel title icons if we also show the main toolbar w/ the same icon
   auto panelicons = panelContent->select(".panel-icon");
   for(Widget* btn : panelicons)
     btn->setVisible(narrow);
+
+  showPanelContainer(wasvis);
 }
 
 void MapsApp::createGUI(SDL_Window* sdlWin)
@@ -1604,10 +1603,10 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   toolbar->eventFilter = [=](SvgGui* gui, Widget* widget, SDL_Event* event){
     if(gui->pressedWidget == panelPager)
       return pagerEventFilter(gui, widget, event);
-    else if(gui->pressedWidget == panelSplitter)
+    if(gui->pressedWidget == panelSplitter)
       return false;
-    else if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
-        && event->tfinger.touchId != SDL_TOUCH_MOUSEID
+    if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
+        //&& event->tfinger.touchId != SDL_TOUCH_MOUSEID  -- at least need to allow splitter!!!
         && (!gui->pressedWidget || (gui->pressedWidget->isDescendantOf(toolbar) && gui->fingerClicks == 0))) {
       if(gui->pressedWidget)
         gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, NULL);  //this);

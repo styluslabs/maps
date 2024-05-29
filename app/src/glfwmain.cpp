@@ -109,17 +109,18 @@ int main(int argc, char* argv[])
       FSPath(MapsApp::baseDir, "config.default.yaml").path);
 
   // command line args
-  const char* sceneFile = NULL;  // -f scenes/scene-omt.yaml
+  std::string sceneFile, importFile;  // -f scenes/scene-omt.yaml
   for(int argi = 1; argi < argc-1; argi += 2) {
     YAML::Node node;
     if(strcmp(argv[argi], "-f") == 0)
-      sceneFile = argv[argi+1];
+      sceneFile = canonicalPath(argv[argi+1]);
     else if(strcmp(argv[argi], "--import") == 0) {
-      std::string importfile = canonicalPath(argv[argi+1]);
+      importFile = canonicalPath(argv[argi+1]);
       MapsApp::taskQueue.push_back([=](){
         MapsApp::inst->setWindowLayout(1000);  // required to show panel
         MapsApp::inst->showPanel(MapsApp::inst->mapsOffline->offlinePanel);
-        MapsApp::inst->mapsOffline->openForImport(importfile);
+        MapsApp::inst->mapsOffline->populateOffline();
+        MapsApp::inst->mapsOffline->openForImport(importFile);
       });
     }
     else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
@@ -176,16 +177,11 @@ int main(int argc, char* argv[])
 
   app->mapsOffline->resumeDownloads();
 
-  if(sceneFile) {
-    Url baseUrl("file:///");
-    char pathBuffer[256] = {0};
-    if (getcwd(pathBuffer, 256) != nullptr) {
-        baseUrl = baseUrl.resolve(Url(std::string(pathBuffer) + "/"));
-    }
-    app->sceneFile = baseUrl.resolve(Url(sceneFile)).string();
+  if(!sceneFile.empty()) {
+    app->sceneFile = "file://" + sceneFile;
     app->loadSceneFile();
   }
-  else
+  else if(importFile.empty())
     app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
 
   // Alamo square

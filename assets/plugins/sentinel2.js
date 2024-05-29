@@ -29,8 +29,7 @@ function esaSentinel2()
   // Sentinel Hub WMTS PopularWebMercator512 needs TILEMATRIX={z+1} !  PopularWebMercator256 would work but
   //  has a 4:1 request to processing unit ratio.
   // 512x512 = 1 processing unit credit, so no advantage to requesting larger image
-  //const tileUrl = "https://sh.dataspace.copernicus.eu/ogc/wms/" + sentinel2_id + "?REQUEST=GetMap&LAYERS=TRUE-COLOR-S2L2A&PREVIEW=2&MAXCC=" + maxcc + "&FORMAT=image/jpeg&VERSION=1.3.0&WIDTH=512&HEIGHT=512&CRS=CRS:84&BBOX={bbox}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
-  const tileUrl = "https://services.sentinel-hub.com/ogc/wms/" + sentinel2_id + "?REQUEST=GetMap&LAYERS=1_TRUE_COLOR&PREVIEW=2&MAXCC=" + maxcc + "&FORMAT=image/jpeg&SHOWLOGO=false&WIDTH=512&HEIGHT=512&VERSION=1.3.0&CRS=CRS:84&BBOX={bbox}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
+  const tileUrl = "https://sh.dataspace.copernicus.eu/ogc/wms/" + sentinel2_id + "?REQUEST=GetMap&LAYERS=TRUE-COLOR-S2L2A&PREVIEW=2&MAXCC=" + maxcc + "&FORMAT=image/jpeg&VERSION=1.3.0&WIDTH=512&HEIGHT=512&CRS=CRS:84&BBOX={bbox}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
 
   const updates = {
     "global.sentinel2_date": date,

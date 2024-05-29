@@ -92,13 +92,15 @@ void MapsSearch::importPOIs(std::string srcpath, int offlineId)
     INSERT INTO main.pois SELECT * FROM poidb.pois;
     INSERT INTO main.offline_tiles SELECT tile_id, %d FROM poidb.pois GROUP BY tile_id;
     COMMIT;
-    DETACH DATABASE poidb;
   )#";
 
   if(searchDB.exec(fstring(poiImportSQL, srcpath.c_str(), offlineId)))
     LOG("POI import from %s completed", srcpath.c_str());
   else
     LOGE("SQL error importing POIs from %s: %s", srcpath.c_str(), searchDB.errMsg());
+  // make sure DB is detached even if import fails
+  if(!searchDB.exec("DETACH DATABASE poidb;"))
+    LOGE("SQL error detaching poidb from search DB: %s", searchDB.errMsg());
 }
 
 void MapsSearch::onDelOfflineMap(int mapId)
