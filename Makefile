@@ -23,7 +23,7 @@ DISTRES = \
 	assets/plugins/ \
 	assets/res/ \
 	assets/scenes/ \
-	assets/shared/ \
+	assets/shared/fonts/ \
 	app/linux/install/ \
 	app/linux/INSTALL
 
@@ -43,5 +43,5 @@ tgz: linux $(DISTRES)
 	strings $(TGT) | grep "^GLIBC_"
 	mkdir -p $(LINUX_BUILD_DIR)/.dist
 	mv $(TGT) $(LINUX_BUILD_DIR)/.dist
-	cp -R $(DISTRES) $(LINUX_BUILD_DIR)/.dist
+	cp -R -L $(DISTRES) $(LINUX_BUILD_DIR)/.dist
 	(cd $(LINUX_BUILD_DIR) && mv .dist Explore && tar --remove-files -czvf $(TGZ) Explore)

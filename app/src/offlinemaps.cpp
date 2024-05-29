@@ -767,9 +767,7 @@ Widget* MapsOffline::createPanel()
     for(auto& src : tileSources)
       maxZoom = std::max(maxZoom, src->maxZoom());
     maxZoomSpin->setLimits(1, maxZoom);
-    if(maxZoomSpin->value() > maxZoom)
-      maxZoomSpin->setValue(maxZoom);
-
+    maxZoomSpin->setValue(std::min(int(std::ceil(app->map->getZoom())) + 1, maxZoom));
     titleEdit->setText(ftimestr("%FT%H.%M.%S").c_str());
 
     LngLat lngLat00, lngLat11;

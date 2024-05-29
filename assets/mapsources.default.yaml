@@ -57,10 +57,10 @@ opentopomap:
     url: http://{s}.tile.opentopomap.org/{z}/{x}/{y}.png
     url_subdomains: [a, b, c]
 
-# usable for testing headers since http (does not upgrade to https)
+# useful for testing headers since http (does not upgrade to https)
 opencyclemap:
     title: OpenCycleMap
-    url: http://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=a5dd6a2f1c934394bce6b0fb077203eb
+    url: http://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png
     url_subdomains: [a, b, c]
     headers: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
     archived: true
@@ -76,6 +76,7 @@ osmand-raster2x:
     title: OsmAnd OSM 2x
     url: https://tile.osmand.net/hd/{z}/{x}/{y}.png
     #headers: "User-Agent: OsmAnd~"
+    archived: true
 
 ridewithgps-heatmap:
     title: RideWithGPS Heatmap

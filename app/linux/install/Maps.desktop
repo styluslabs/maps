@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+# desktop entry spec version
+Version=1.0
+Name=Explore
+Comment=Maps for outdoor activities
+Exec=/opt/Maps/tangram
+Icon=Maps144x144
+MimeType=application/gpx+xml;
+Terminal=false
+Categories=Education
