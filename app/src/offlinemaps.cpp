@@ -528,7 +528,7 @@ void MapsOffline::openForImport(std::string srcpath)
   }
   std::string srcFmt, desc, pois;
   srcDB.stmt("SELECT value FROM metadata WHERE name = 'format';").onerow(srcFmt);
-  srcDB.stmt("SELECT value FROM metadata WHERE name = 'desc';").onerow(desc);
+  srcDB.stmt("SELECT value FROM metadata WHERE name = 'description';").onerow(desc);
   bool hasPois = srcDB.stmt("SELECT name FROM sqlite_master WHERE type='table' AND name='pois';").onerow(pois);
 
   LngLat lngLat00, lngLat11;

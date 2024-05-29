@@ -23,7 +23,7 @@ DISTRES = \
 	assets/plugins/ \
 	assets/res/ \
 	assets/scenes/ \
-	assets/shared/fonts/ \
+	assets/shared/ \
 	app/linux/install/ \
 	app/linux/INSTALL
 
