@@ -1,7 +1,7 @@
 // Sentinel-2 imagery - 10m resolution with 5 day revisit period
 // Create a free account (30K req/month) at https://dataspace.copernicus.eu/ then follow the directions at
 //  https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/OGC.html (choose "Simple WMS Instance") to
-//  get an instance id, which should be added as sentinel2_id in _secrets.js
+//  get an instance id, which should be added as secrets["sentinel2_id"] in _secrets.js
 // - note that other layers are available, e.g., vegetation, and custom layers can be created in the dashboard
 // More:
 // - https://s2maps.eu/ - yearly cloudless tiles
@@ -25,12 +25,12 @@ function esaSentinel2()
   // LAYER=NATURAL-COLOR uses L1C data; TRUE-COLOR-S2L2A uses L2A which adds an atmospheric correction
   //const tileUrl = "https://sh.dataspace.copernicus.eu/ogc/wmts/" + secrets.sentinel2_id + "?REQUEST=GetTile&TILEMATRIXSET=PopularWebMercator256&LAYER=TRUE-COLOR-S2L2A&FORMAT=image/jpeg&PREVIEW=2&MAXCC=" + maxcc + "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
 
+  const sentinel2_id = secrets ? secrets.sentinel2_id : false;
   // Sentinel Hub WMTS PopularWebMercator512 needs TILEMATRIX={z+1} !  PopularWebMercator256 would work but
   //  has a 4:1 request to processing unit ratio.
   // 512x512 = 1 processing unit credit, so no advantage to requesting larger image
-  //const tileUrl = "https://sh.dataspace.copernicus.eu/ogc/wms/" + secrets.sentinel2_id + "?REQUEST=GetMap&LAYERS=TRUE-COLOR-S2L2A&PREVIEW=2&MAXCC=" + maxcc + "&FORMAT=image/jpeg&VERSION=1.3.0&WIDTH=512&HEIGHT=512&CRS=CRS:84&BBOX={bbox}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
-
-  const tileUrl = "https://services.sentinel-hub.com/ogc/wms/" + secrets.sentinel2_id + "?REQUEST=GetMap&LAYERS=1_TRUE_COLOR&PREVIEW=2&MAXCC=" + maxcc + "&FORMAT=image/jpeg&SHOWLOGO=false&WIDTH=512&HEIGHT=512&VERSION=1.3.0&CRS=CRS:84&BBOX={bbox}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
+  //const tileUrl = "https://sh.dataspace.copernicus.eu/ogc/wms/" + sentinel2_id + "?REQUEST=GetMap&LAYERS=TRUE-COLOR-S2L2A&PREVIEW=2&MAXCC=" + maxcc + "&FORMAT=image/jpeg&VERSION=1.3.0&WIDTH=512&HEIGHT=512&CRS=CRS:84&BBOX={bbox}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
+  const tileUrl = "https://services.sentinel-hub.com/ogc/wms/" + sentinel2_id + "?REQUEST=GetMap&LAYERS=1_TRUE_COLOR&PREVIEW=2&MAXCC=" + maxcc + "&FORMAT=image/jpeg&SHOWLOGO=false&WIDTH=512&HEIGHT=512&VERSION=1.3.0&CRS=CRS:84&BBOX={bbox}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
 
   const updates = {
     "global.sentinel2_date": date,
@@ -43,12 +43,13 @@ function esaSentinel2()
   };
   const mapSrc = {
     "title": "Sentinel 2 " + date,
-    "description": secrets.sentinel2_id ? "10m imagery with 5 day revisit period" : "Error: plugin requires sentinel2_id!",
-    "url": tileUrl,
+    "description": sentinel2_id ? "10m imagery with 5 day revisit period" : "Error: secrets.sentinel2_id not set!",
+    "url": sentinel2_id ? tileUrl : "",
     "zoom_offset": 1,  //"tile_size": 512,  -- download fewer tiles since usage is limited
     "max_zoom": 14,  // for 10m resolution
     "cache": false,
-    "updates": updates
+    "updates": updates,
+    "attribution": "Copernicus Sentinel data 2024"
   };
   addMapSource("esa-sentinel2", mapSrc);
 }

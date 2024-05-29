@@ -115,8 +115,12 @@ int main(int argc, char* argv[])
     if(strcmp(argv[argi], "-f") == 0)
       sceneFile = argv[argi+1];
     else if(strcmp(argv[argi], "--import") == 0) {
-      std::string importfile = argv[argi+1];
-      MapsApp::taskQueue.push_back([=](){ MapsApp::inst->mapsOffline->openForImport(importfile); });
+      std::string importfile = canonicalPath(argv[argi+1]);
+      MapsApp::taskQueue.push_back([=](){
+        MapsApp::inst->setWindowLayout(1000);  // required to show panel
+        MapsApp::inst->showPanel(MapsApp::inst->mapsOffline->offlinePanel);
+        MapsApp::inst->mapsOffline->openForImport(importfile);
+      });
     }
     else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
       node = argv[argi+1];

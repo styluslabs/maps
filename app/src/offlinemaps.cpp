@@ -306,11 +306,7 @@ bool OfflineDownloader::mbtilesImport(SQLiteDB& tileDB)
     return false;
   }
 
-  if(searchData.empty()) {}
-  else if(searchData[0].layer == "__IMPORT__") {
-    MapsSearch::importPOIs(searchData[0].fields[0], offlineId);
-  }
-  else {
+  if(!searchData.empty() && searchData[0].layer != "__IMPORT__") {
     const char* newtilesSql = "SELECT tile_data, tile_column, tile_row FROM src.tiles WHERE zoom_level = ?";
     tileDB.stmt(newtilesSql).bind(srcMaxZoom).exec([&](sqlite3_stmt* stmt){
       if(canceled) return;
@@ -335,9 +331,12 @@ bool OfflineDownloader::mbtilesImport(SQLiteDB& tileDB)
       }
     });
   }
-
+  // detach src DB from tile DB before attaching to search index DB
   if(!tileDB.exec("DETACH DATABASE src;")) {
     LOGE("SQL error detaching mbtiles: %s", tileDB.errMsg());
+  }
+  if(!searchData.empty() && searchData[0].layer == "__IMPORT__") {
+    MapsSearch::importPOIs(searchData[0].fields[0], offlineId);
   }
   importRemaining = 0;
   return true;
