@@ -25,7 +25,7 @@ function esaSentinel2()
   // LAYER=NATURAL-COLOR uses L1C data; TRUE-COLOR-S2L2A uses L2A which adds an atmospheric correction
   //const tileUrl = "https://sh.dataspace.copernicus.eu/ogc/wmts/" + secrets.sentinel2_id + "?REQUEST=GetTile&TILEMATRIXSET=PopularWebMercator256&LAYER=TRUE-COLOR-S2L2A&FORMAT=image/jpeg&PREVIEW=2&MAXCC=" + maxcc + "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&TIME=" + startdate.toISOString().slice(0, 10) + "/" + date;
 
-  const sentinel2_id = secrets ? secrets.sentinel2_id : false;
+  const sentinel2_id = (typeof secrets !== "undefined") && secrets ? secrets.sentinel2_id : false;
   // Sentinel Hub WMTS PopularWebMercator512 needs TILEMATRIX={z+1} !  PopularWebMercator256 would work but
   //  has a 4:1 request to processing unit ratio.
   // 512x512 = 1 processing unit credit, so no advantage to requesting larger image

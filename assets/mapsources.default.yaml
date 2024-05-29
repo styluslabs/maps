@@ -10,11 +10,13 @@
 stylus-osm:
     title: Stylus Labs OSM Flat
     scene: scenes/stylus-osm.yaml
+    archived: true
 
 stylus-osm-dark:
     title: Stylus Labs OSM Dark
     layer: true
     scene: scenes/stylus-osm-dark.yaml
+    archived: true
 
 stylus-osm-terrain:
     title: Stylus Labs OSM

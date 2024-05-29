@@ -709,6 +709,9 @@ void MapsTracks::addRouteStep(const char* instr, int rteptidx)
 void MapsTracks::routePluginError(const char* err)
 {
   retryBtn->setVisible(true);
+  // retry btn is on route edit toolbar!
+  if(!routeEditTb->isVisible())
+    routeEditBtn->onClicked();
 }
 
 void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
@@ -1622,11 +1625,12 @@ void MapsTracks::createWayptContent()
     std::vector<std::string> pluginTitles;
     for(auto& fn : app->pluginManager->routeFns)
       pluginTitles.push_back(fn.title.c_str());
+    pluginFn = std::min(int(pluginTitles.size())-1, app->config["tracks"]["plugin"].as<int>(0));
     Menu* routePluginMenu = createRadioMenu(pluginTitles, [=](size_t idx){
-      pluginFn = idx;
+      app->config["tracks"]["plugin"] = pluginFn = idx;
       if(activeTrack && activeTrack->routeMode != "direct")
         createRoute(activeTrack);
-    });
+    }, pluginFn);
     routePluginBtn->setMenu(routePluginMenu);
   }
 

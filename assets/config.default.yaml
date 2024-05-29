@@ -6,6 +6,24 @@ sources:
   common_imports:
     - scenes/secrets.yaml
     - scenes/markers.yaml
+  list_order:
+    - stylus-osm-terrain
+    - stylus-bike-hike
+    - stylus-satellite
+    - stylus-worldcover
+    - enable-slope-angle
+    - enable-contours
+    - hillshade
+    - hillshade-usgs
+    - opentopomap
+    - arcgis-satellite
+    - bing-earth
+    - esa-sentinel2
+    - nasa-worldview
+    - worldcover
+    - usgs-imagery
+    - usgs-topo
+    - archived
 
 # use https://github.com/aosp-mirror/platform_frameworks_base/raw/de0fe2daafb769cc37ca922ffef6dbafb8c6cae2/data/fonts/DroidSansFallback.ttf because next version removes a bunch of characters
 fallback_fonts:
@@ -33,6 +51,8 @@ search:
   hide_bookmarks: false
 
 tracks:
+  # default to valhalla plugin
+  plugin: 1
   # point added to track if min_distance (m) OR min_time (sec) from last point; this sets density of points
   min_distance: 0.5
   min_time: 5
@@ -58,6 +78,7 @@ colors:
 ui:
   reverse_map_btns: false
   #font: "scenes/fonts/NotoSans-Regular.ttf"
+  theme: light
   ui_scale: 0.875
   map_scale: 0.875
 

@@ -2,6 +2,11 @@
 
 function openRouteService(mode, waypoints)
 {
+  if( (typeof secrets === "undefined") || !secrets.openroute_auth ) {
+    notifyError("route", "Open Route Service API key missing - set secrets['openroute_auth'] in plugins/_secrets.js");
+    return;
+  }
+
   const mode0 = mode.split("-")[0];
   const profile = mode0 == "walk" ? "foot-hiking" : mode0 == "bike" ? "cycling-regular" : "driving-car";
   const url = "https://api.openrouteservice.org/v2/directions/" + profile + "/gpx";
