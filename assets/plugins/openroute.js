@@ -1,4 +1,5 @@
-// secrets.openroute_auth should be set in another js file loaded as plugin (and not committed to git)
+// Create an account at https://openrouteservice.org/dev/#/signup to obtain API key, then assign to
+// secrets['openroute_auth'] in another js file loaded before this one (e.g. _secrets.js)
 
 function openRouteService(mode, waypoints)
 {
