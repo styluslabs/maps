@@ -10,7 +10,7 @@ public class MapsLib
     System.loadLibrary("droidmaps");
   }
 
-  public static native void init(MapsActivity mapsActivity, AssetManager assetManager, String extFileDir);
+  public static native void init(MapsActivity mapsActivity, AssetManager assetManager, String extFileDir, int versionCode);
   public static native void surfaceChanged(int width, int height);
   public static native void surfaceCreated(Surface surface, float dpi);
   public static native void surfaceDestroyed();

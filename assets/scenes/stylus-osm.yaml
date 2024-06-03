@@ -266,11 +266,6 @@ sources:
         cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
-        #url: file:///home/mwhite/maps/tilemaker/countries.mbtiles
-        #url: file:///home/mwhite/maps/sf.mbtiles  # maptiler 2017 extract
-        #url: file:///home/mwhite/maps/SanFrancisco-bbbike.mbtiles   # from bbbike.org, but no bike info!
-        #url: http://tiles.basemaps.cartocdn.com/vectortiles/carto.streets/v1/{z}/{x}/{y}.mvt
-        #url: https://6ug7hetxl9.execute-api.us-east-2.amazonaws.com/data/v3/{z}/{x}/{y}.pbf
         max_zoom: 14
         rasters: global.elevation_sources
 

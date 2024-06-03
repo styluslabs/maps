@@ -3,7 +3,7 @@
 
 function openRouteService(mode, waypoints)
 {
-  if( (typeof secrets === "undefined") || !secrets.openroute_auth ) {
+  if(!secrets.openroute_auth) {
     notifyError("route", "Open Route Service API key missing - set secrets['openroute_auth'] in plugins/_secrets.js");
     return;
   }

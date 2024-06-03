@@ -76,6 +76,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private boolean replaceAssets = true;  // for development
   private boolean sensorsEnabled = true;
   private boolean hasGpsFix = false;
+  private String extFilesPath;
 
   public static final int PERM_REQ_LOCATION = 1;
 
@@ -83,13 +84,10 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
-    //String extfiles = getExternalFilesDir(null).getAbsolutePath();
-    String extfiles = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
-    File file = new File(extfiles, "config.default.yaml");
-    if(replaceAssets || !file.exists())
-      extractAssets(getAssets(), "", extfiles + "/");
 
-    MapsLib.init(this, getAssets(), extfiles);
+    //extFilesPath = getExternalFilesDir(null).getAbsolutePath();
+    extFilesPath = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
+    MapsLib.init(this, getAssets(), extFilesPath, BuildConfig.VERSION_CODE);
 
     httpHandler = new DefaultHttpHandler();
 
@@ -411,8 +409,13 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
+  public void extractAssets(AssetManager assetManager, String assetpath, String outpath)
+  {
+    extractAssetPath(getAssets(), "", extFilesPath + "/");
+  }
+
   // assetpath = "" reads from assets/  outpath = "" writes to external files path
-  public boolean extractAssets(AssetManager assetManager, String assetpath, String outpath)
+  private boolean extractAssetPath(AssetManager assetManager, String assetpath, String outpath)
   {
     try {
       if(assetpath.equals("webkit/") || assetpath.equals("images/")) return true;
@@ -423,7 +426,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         String srcpath = assetpath + filename;
         String dstpath = outpath + filename;
         // check for directory
-        if(!extractAssets(assetManager, srcpath + "/", dstpath + "/")) {
+        if(!extractAssetPath(assetManager, srcpath + "/", dstpath + "/")) {
           Log.v("extractAssets", "Copying " + srcpath + " to " + dstpath);
           File dstfile = new File(dstpath);
           if(!replaceAssets && dstfile.exists()) continue;  // don't overwrite existing file

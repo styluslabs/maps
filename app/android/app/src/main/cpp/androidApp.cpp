@@ -332,6 +332,7 @@ static jmethodID notifyStatusBarBGMID = nullptr;
 static jmethodID setSensorsEnabledMID = nullptr;
 static jmethodID setServiceStateMID = nullptr;
 static jmethodID openBatterySettingsMID = nullptr;
+static jmethodID extractAssetsMID = nullptr;
 
 #define TANGRAM_JNI_VERSION JNI_VERSION_1_6
 
@@ -358,6 +359,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
   setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceState", "(IFF)V");
   openBatterySettingsMID = jniEnv->GetMethodID(cls, "openBatterySettings", "()V");
+  extractAssetsMID = jniEnv->GetMethodID(cls, "extractAssets", "()V");
   return TANGRAM_JNI_VERSION;
 }
 
@@ -620,20 +622,35 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
 
 #define JNI_FN(name) extern "C" JNIEXPORT void JNICALL Java_com_styluslabs_maps_MapsLib_##name
 
-JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, jstring extFileDir)
+JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, jstring extFileDir, jint versionCode)
 {
   mapsActivityRef = env->NewWeakGlobalRef(mapsActivity);
 
   MapsApp::baseDir = JniHelpers::stringFromJavaString(env, extFileDir) + "/";
   FSPath configPath(MapsApp::baseDir, "config.yaml");
+  FSPath configDfltPath(MapsApp::baseDir, "config.default.yaml");
   MapsApp::configFile = configPath.c_str();
+  bool firstrun = !configDfltPath.exists();
+  if(firstrun)
+    env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
 
   try {
-    MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path
-        : configPath.parent().childPath(configPath.baseName() + ".default.yaml"));
+    MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
   } catch(...) {
     LOGE("Unable to load config file %s", configPath.c_str());
     *(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
+  }
+
+  if(firstrun)
+    MapsApp::config["prev_version"] = versionCode;
+  else {
+    int prevver = MapsApp::config["prev_version"].as<int>(0);
+    if(prevver < versionCode) {
+      env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
+      // set prev_version to -1 in config file to always replace assets
+      if(prevver >= 0)
+        MapsApp::config["prev_version"] = versionCode;
+    }
   }
 
   MapsApp::platform = new AndroidPlatform(env, mapsActivity, assetManager);

@@ -1607,6 +1607,7 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
       return false;
     if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
         //&& event->tfinger.touchId != SDL_TOUCH_MOUSEID  -- at least need to allow splitter!!!
+       && gui->menuStack.empty()  // don't interfere with menu
         && (!gui->pressedWidget || (gui->pressedWidget->isDescendantOf(toolbar) && gui->fingerClicks == 0))) {
       if(gui->pressedWidget)
         gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, NULL);  //this);
@@ -1877,7 +1878,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // Setup UI panels
   mapsSources = std::make_unique<MapsSources>(this);
   mapsOffline = std::make_unique<MapsOffline>(this);
-  pluginManager = std::make_unique<PluginManager>(this, baseDir + "plugins");
+  pluginManager = std::make_unique<PluginManager>(this);
   // no longer recreated when scene loaded
   mapsTracks = std::make_unique<MapsTracks>(this);
   mapsSearch = std::make_unique<MapsSearch>(this);

@@ -42,6 +42,8 @@ void glfwSDLEvent(SDL_Event* event)
       SvgGui::debugDirty = !SvgGui::debugDirty;
     else if(event->key.keysym.mod & KMOD_ALT)
       debugHovered = true;
+    else if(event->key.keysym.mod & KMOD_SHIFT)
+      MapsApp::gui->pushUserEvent(SvgGui::KEYBOARD_HIDDEN, 0);  // can't use a menu item for this obviously
     else
       SvgGui::debugLayout = true;
   }
@@ -169,7 +171,7 @@ int main(int argc, char* argv[])
       MapsApp::runApplication = false;
     else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
       app->mapsSources->reload();
-      app->pluginManager->reload(MapsApp::baseDir + "plugins");
+      app->pluginManager->reload();
       app->loadSceneFile();  // reload scene
     }
     return false;

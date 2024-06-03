@@ -348,7 +348,9 @@ function walkStyleFile(mbstyle, options) {
         layer.filter = walkFilter(mblayer.filter);
 
         if(mblayer.minzoom || mblayer.maxzoom) {
-            if(layer.filter.all)
+            if(!layer.filter)
+                layer.filter = { all: [ { "$zoom": {} } ] };
+            else if(layer.filter.all)
                 layer.filter.all.unshift({ "$zoom": {} });
             else
                 layer.filter = { all: [ { "$zoom": {} }, layer.filter ] };

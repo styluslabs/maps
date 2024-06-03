@@ -59,9 +59,8 @@ class OfflineDownloader
 public:
     OfflineDownloader(Platform& _platform, const OfflineMapInfo& ofl, const OfflineSourceInfo& src);
     ~OfflineDownloader();
-    size_t remainingTiles() const { return importRemaining < 0 ? m_queued.size() + m_pending.size() : importRemaining; }
+    size_t remainingTiles() const { return m_queued.size() + m_pending.size(); }
     bool fetchNextTile(int maxPending);
-    bool mbtilesImport(SQLiteDB& tileDB);
     void cancel();
     std::string name;
     int maxRetries = 4;
@@ -72,7 +71,6 @@ private:
     int offlineId;
     int srcMaxZoom;
     int64_t offlineSize;
-    int importRemaining = -1;
     bool canceled = false;
     std::deque<TileID> m_queued;
     std::vector<TileID> m_pending;
@@ -95,14 +93,27 @@ static void offlineDLStep()
     auto& olinfo = offlinePending.front();  // safe because only this thread can remove final item from offlinePending
     if(offlineDownloaders.empty()) {
       olinfo.fn();
+      if(!offlineDownloaders.empty()) {
+        for(auto& dl : offlineDownloaders.queue)
+          currTilesTotal += dl->remainingTiles();
+      }
     }
     while(!offlineDownloaders.empty()) {
       //int nreq = std::max(1, maxOfflineDownloads - int(platform.activeUrlRequests()));
-      auto& dl = offlineDownloaders.back();
-      while(dl->fetchNextTile(maxOfflineDownloads)) {}
-      if(dl->remainingTiles())
+      auto& currdl = offlineDownloaders.back();
+      while(currdl->fetchNextTile(maxOfflineDownloads)) {}
+      // update GUI
+      Timestamp t0 = mSecSinceEpoch();
+      if(t0 - prevProgressUpdate > 1000) {
+        int remaining = 0;
+        for(auto& dl : offlineDownloaders.queue)
+          remaining += dl->remainingTiles();
+        prevProgressUpdate = t0;
+        MapsApp::runOnMainThread([=, id=olinfo.id](){ mapsOfflineInst->updateProgress(id, remaining, currTilesTotal); });
+      }
+      if(currdl->remainingTiles())
         return;
-      LOGD("completed offline tile downloads for layer %s", dl->name.c_str());
+      LOGD("completed offline tile downloads for layer %s", currdl->name.c_str());
       offlineDownloaders.pop_back();
     }
     LOG("completed offline tile downloads for map %d", olinfo.id);
@@ -124,21 +135,6 @@ static void offlineDLMain()
   }
 }
 
-#include "util/zlibHelper.h"
-#include "hash-library/md5.h"
-
-static void udf_md5(sqlite3_context* context, int argc, sqlite3_value** argv)
-{
-  if(argc != 1) {
-    sqlite3_result_error(context, "sqlite md5() - Invalid number of arguments (1 required).", -1);
-    return;
-  }
-  MD5 md5;
-  int len = sqlite3_value_bytes(argv[0]);
-  std::string hash = md5(sqlite3_value_blob(argv[0]), len);
-  sqlite3_result_text(context, hash.c_str(), -1, SQLITE_TRANSIENT);
-}
-
 OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& ofl, const OfflineSourceInfo& src)
 {
   mbtiles = std::make_unique<Tangram::MBTilesDataSource>(_platform, src.name, src.cacheFile, "", true);
@@ -148,35 +144,21 @@ OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& 
   offlineSize = mbtiles->getOfflineSize();
   srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
 
-  // SQL import?
-  if(src.url.substr(0, 7) == "file://") {
-    importRemaining = 0;
-    SQLiteDB tileDB(mbtiles->dbHandle());
-    if(tileDB.exec(fstring("ATTACH DATABASE '%s' AS src;", src.url.c_str()))) {
-      const char* nSrcTilesSql = "SELECT count(1) FROM src.tiles WHERE zoom_level = ?";
-      tileDB.stmt(nSrcTilesSql).bind(srcMaxZoom).exec([&](int n){ importRemaining = n; });
+  mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(_platform, src.url, src.urlOptions);
+  // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
+  for(int z = std::min(ofl.zoom, srcMaxZoom); z <= srcMaxZoom; ++z) {
+    TileID tile00 = lngLatTile(ofl.lngLat00, z);
+    TileID tile11 = lngLatTile(ofl.lngLat11, z);
+    for(int x = tile00.x; x <= tile11.x; ++x) {
+      for(int y = tile11.y; y <= tile00.y; ++y)  // note y tile index incr for decr latitude
+        m_queued.emplace_back(x, y, z);
     }
-    else
-      LOGE("SQL error attaching mbtiles: %s", tileDB.errMsg());
-    tileDB.release();
   }
-  else {
-    mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(_platform, src.url, src.urlOptions);
-    // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
-    for(int z = std::min(ofl.zoom, srcMaxZoom); z <= srcMaxZoom; ++z) {
-      TileID tile00 = lngLatTile(ofl.lngLat00, z);
-      TileID tile11 = lngLatTile(ofl.lngLat11, z);
-      for(int x = tile00.x; x <= tile11.x; ++x) {
-        for(int y = tile11.y; y <= tile00.y; ++y)  // note y tile index incr for decr latitude
-          m_queued.emplace_back(x, y, z);
-      }
-    }
-    // queue all z3 tiles so user sees world map when zooming out
-    if(ofl.zoom > 3) {  // && cfg->Bool("offlineWorldMap")
-      for(int x = 0; x < 8; ++x) {
-        for(int y = 0; y < 8; ++y)
-          m_queued.emplace_back(x, y, 3);
-      }
+  // queue all z3 tiles so user sees world map when zooming out
+  if(ofl.zoom > 3) {  // && cfg->Bool("offlineWorldMap")
+    for(int x = 0; x < 8; ++x) {
+      for(int y = 0; y < 8; ++y)
+        m_queued.emplace_back(x, y, 3);
     }
   }
 }
@@ -195,13 +177,6 @@ void OfflineDownloader::cancel()
 
 bool OfflineDownloader::fetchNextTile(int maxPending)
 {
-  if(importRemaining >= 0) {
-    SQLiteDB tileDB(mbtiles->dbHandle());
-    mbtilesImport(tileDB);
-    tileDB.release();
-    return false;
-  }
-
   std::unique_lock<std::mutex> lock(m_mutexQueue);
   if(m_queued.empty() || int(m_pending.size()) >= maxPending) return false;
   auto task = std::make_shared<BinaryTileTask>(m_queued.front(), nullptr);
@@ -245,101 +220,7 @@ void OfflineDownloader::tileTaskCallback(std::shared_ptr<TileTask> task)
       MapsSearch::indexTileData(task.get(), offlineId, searchData);
     LOGD("%s: completed download of offline tile %s", name.c_str(), tileId.toString().c_str());
   }
-  Timestamp t0 = mSecSinceEpoch();
-  if(t0 - prevProgressUpdate > 1000) {
-    prevProgressUpdate = t0;
-    MapsApp::runOnMainThread([](){ mapsOfflineInst->updateProgress(); });
-  }
   semOfflineWorker.post();
-}
-
-bool OfflineDownloader::mbtilesImport(SQLiteDB& tileDB)
-{
-  if(sqlite3_create_function(tileDB.db, "md5", 1, SQLITE_UTF8, 0, udf_md5, 0, 0) != SQLITE_OK) {
-    LOGE("SQL error creating md5() function: %s", tileDB.errMsg());
-    return false;
-  }
-
-  const char* importSql = NULL;
-  bool hasTiles = false, hasMap = false, hasImages = false;
-  tileDB.stmt("SELECT name FROM src.sqlite_master WHERE type = 'table';").exec([&](std::string tblname){
-    if(tblname == "map") hasMap = true;
-    else if(tblname == "images") hasImages = true;
-    else if(tblname == "tiles") hasTiles = true;
-  });
-  if(hasTiles) {
-    // CREATE TRIGGER IF NOT EXISTS insert_tile INSTEAD OF INSERT ON tiles
-    // BEGIN
-    //   INSERT INTO map VALUES(NEW.zoom_level, NEW.tile_column, NEW.tile_row, md5(NEW.tile_data));
-    //   INSERT INTO images VALUES(NEW.tile_data, SELECT tile_id FROM map WHERE
-    //     map.zoom_level = NEW.zoom_level AND map.tile_column = NEW.tile_column AND map.tile_row = NEW.tile_row);
-    //   -- rowid == last_insert_rowid();
-    // END;
-    // since tiles from multiple sources can be merged into dest, we could have mixture of compressed and
-    //  uncompressed (but should mostly be gzip), so set compression=unknown
-    importSql = R"#(BEGIN;
-      REPLACE INTO map SELECT zoom_level, tile_column, tile_row, md5(tile_data) FROM src.tiles;
-      DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM map);  -- delete orphaned tiles
-      REPLACE INTO images SELECT s.tile_data, map.tile_id FROM src.tiles AS s JOIN map ON
-        s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
-      REPLACE INTO offline_tiles SELECT map.tile_id, %d FROM src.tiles AS s JOIN map ON
-        s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
-      REPLACE INTO metadata(name, value) VALUES ('compression', 'unknown');
-      COMMIT;)#";
-  }
-  else if(hasMap && hasImages) {
-    importSql = R"#(BEGIN;
-      REPLACE INTO main.map SELECT * FROM src.map;
-      DELETE FROM main.images WHERE tile_id NOT IN (SELECT tile_id FROM main.map);  -- delete orphaned tiles
-      REPLACE INTO main.images SELECT * FROM src.images;
-      REPLACE INTO main.offline_tiles SELECT tile_id, %d FROM src.map;
-      REPLACE INTO main.metadata(name, value) VALUES ('compression', 'unknown');
-      COMMIT;)#";
-  }
-  else {
-    //MapsApp::messageBox("Import map", fstring("Import failed: unknown MBTiles schema in %s", srcpath.c_str()), {"OK"});
-    LOGE("import source is not a valid mbtiles file");
-    return false;
-  }
-  if(!tileDB.exec(fstring(importSql, offlineId).c_str())) {
-    LOGE("SQL error on tile import: %s", tileDB.errMsg());
-    return false;
-  }
-
-  if(!searchData.empty() && searchData[0].layer != "__IMPORT__") {
-    const char* newtilesSql = "SELECT tile_data, tile_column, tile_row FROM src.tiles WHERE zoom_level = ?";
-    tileDB.stmt(newtilesSql).bind(srcMaxZoom).exec([&](sqlite3_stmt* stmt){
-      if(canceled) return;
-      const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
-      const int length = sqlite3_column_bytes(stmt, 0);
-      const int x = sqlite3_column_int(stmt, 1);
-      const int y = sqlite3_column_int(stmt, 2);
-      BinaryTileTask task(TileID(x, (1 << srcMaxZoom) - 1 - y, srcMaxZoom), nullptr);
-      task.rawTileData = std::make_shared<std::vector<char>>();
-      auto& _data = *task.rawTileData;
-      if(Tangram::zlib_inflate(blob, length, _data) != 0) {
-        _data.resize(length);
-        memcpy(_data.data(), blob, length);
-      }
-      MapsSearch::indexTileData(&task, offlineId, searchData);
-      --importRemaining;
-
-      Timestamp t0 = mSecSinceEpoch();
-      if(t0 - prevProgressUpdate > 1000) {
-        prevProgressUpdate = t0;
-        MapsApp::runOnMainThread([](){ mapsOfflineInst->updateProgress(); });
-      }
-    });
-  }
-  // detach src DB from tile DB before attaching to search index DB
-  if(!tileDB.exec("DETACH DATABASE src;")) {
-    LOGE("SQL error detaching mbtiles: %s", tileDB.errMsg());
-  }
-  if(!searchData.empty() && searchData[0].layer == "__IMPORT__") {
-    MapsSearch::importPOIs(searchData[0].fields[0], offlineId);
-  }
-  importRemaining = 0;
-  return true;
 }
 
 void MapsOffline::runSQL(std::string dbpath, std::string sql)
@@ -427,10 +308,8 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
   //offlinePending.push_back(std::move(olinfo));
 
   queueOfflineTask(mapid, [olinfo=std::move(olinfo)](){
-    for(auto& source : olinfo.sources) {
+    for(auto& source : olinfo.sources)
       offlineDownloaders.emplace_back(new OfflineDownloader(*MapsApp::platform, olinfo, source));
-      currTilesTotal += offlineDownloaders.back()->remainingTiles();
-    }
   });
   //MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
 }
@@ -574,8 +453,135 @@ void MapsOffline::openForImport(std::string srcpath)
   }
 }
 
+#include "util/zlibHelper.h"
+#include "hash-library/md5.h"
+
+static void udf_md5(sqlite3_context* context, int argc, sqlite3_value** argv)
+{
+  if(argc != 1) {
+    sqlite3_result_error(context, "sqlite md5() - Invalid number of arguments (1 required).", -1);
+    return;
+  }
+  MD5 md5;
+  int len = sqlite3_value_bytes(argv[0]);
+  std::string hash = md5(sqlite3_value_blob(argv[0]), len);
+  sqlite3_result_text(context, hash.c_str(), -1, SQLITE_TRANSIENT);
+}
+
+static bool mbtilesImport(SQLiteDB& tileDB, int offlineId)
+{
+  if(sqlite3_create_function(tileDB.db, "md5", 1, SQLITE_UTF8, 0, udf_md5, 0, 0) != SQLITE_OK) {
+    LOGE("SQL error creating md5() function: %s", tileDB.errMsg());
+    return false;
+  }
+
+  const char* importSql = NULL;
+  bool hasTiles = false, hasMap = false, hasImages = false;
+  tileDB.stmt("SELECT name FROM src.sqlite_master WHERE type = 'table';").exec([&](std::string tblname){
+    if(tblname == "map") hasMap = true;
+    else if(tblname == "images") hasImages = true;
+    else if(tblname == "tiles") hasTiles = true;
+  });
+  if(hasTiles) {
+    // CREATE TRIGGER IF NOT EXISTS insert_tile INSTEAD OF INSERT ON tiles
+    // BEGIN
+    //   INSERT INTO map VALUES(NEW.zoom_level, NEW.tile_column, NEW.tile_row, md5(NEW.tile_data));
+    //   INSERT INTO images VALUES(NEW.tile_data, SELECT tile_id FROM map WHERE
+    //     map.zoom_level = NEW.zoom_level AND map.tile_column = NEW.tile_column AND map.tile_row = NEW.tile_row);
+    //   -- rowid == last_insert_rowid();
+    // END;
+    // since tiles from multiple sources can be merged into dest, we could have mixture of compressed and
+    //  uncompressed (but should mostly be gzip), so set compression=unknown
+    importSql = R"#(BEGIN;
+      REPLACE INTO map SELECT zoom_level, tile_column, tile_row, md5(tile_data) FROM src.tiles;
+      DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM map);  -- delete orphaned tiles
+      REPLACE INTO images SELECT s.tile_data, map.tile_id FROM src.tiles AS s JOIN map ON
+        s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
+      REPLACE INTO offline_tiles SELECT map.tile_id, %d FROM src.tiles AS s JOIN map ON
+        s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
+      REPLACE INTO metadata(name, value) VALUES ('compression', 'unknown');
+      COMMIT;)#";
+  }
+  else if(hasMap && hasImages) {
+    importSql = R"#(BEGIN;
+      REPLACE INTO main.map SELECT * FROM src.map;
+      DELETE FROM main.images WHERE tile_id NOT IN (SELECT tile_id FROM main.map);  -- delete orphaned tiles
+      REPLACE INTO main.images SELECT * FROM src.images;
+      REPLACE INTO main.offline_tiles SELECT tile_id, %d FROM src.map;
+      REPLACE INTO main.metadata(name, value) VALUES ('compression', 'unknown');
+      COMMIT;)#";
+  }
+  else {
+    //MapsApp::messageBox("Import map", fstring("Import failed: unknown MBTiles schema in %s", srcpath.c_str()), {"OK"});
+    LOGE("import source is not a valid mbtiles file");
+    return false;
+  }
+  if(!tileDB.exec(fstring(importSql, offlineId).c_str())) {
+    LOGE("SQL error on tile import: %s", tileDB.errMsg());
+    return false;
+  }
+  return true;
+}
+
+static void indexImportedTiles(SQLiteDB& tileDB, int offlineId, const YAML::Node& searchYaml, int idxzoom)
+{
+  bool& canceled = offlinePending.front().canceled;
+  if(canceled) return;
+  auto searchData = MapsSearch::parseSearchFields(searchYaml);
+  int total = 0, remaining = 0;
+  const char* nSrcTilesSql = "SELECT count(1) FROM src.tiles WHERE zoom_level = ?";
+  tileDB.stmt(nSrcTilesSql).bind(idxzoom).exec([&](int n){ remaining = total = n; });
+  const char* newtilesSql = "SELECT tile_data, tile_column, tile_row FROM src.tiles WHERE zoom_level = ?";
+  tileDB.stmt(newtilesSql).bind(idxzoom).exec([&](sqlite3_stmt* stmt){
+    if(canceled) return;
+    const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
+    const int length = sqlite3_column_bytes(stmt, 0);
+    const int x = sqlite3_column_int(stmt, 1);
+    const int y = sqlite3_column_int(stmt, 2);
+    BinaryTileTask task(TileID(x, (1 << idxzoom) - 1 - y, idxzoom), nullptr);
+    task.rawTileData = std::make_shared<std::vector<char>>();
+    auto& _data = *task.rawTileData;
+    if(Tangram::zlib_inflate(blob, length, _data) != 0) {
+      _data.resize(length);
+      memcpy(_data.data(), blob, length);
+    }
+    MapsSearch::indexTileData(&task, offlineId, searchData);
+    --remaining;
+
+    Timestamp t0 = mSecSinceEpoch();
+    if(t0 - prevProgressUpdate > 1000) {
+      prevProgressUpdate = t0;
+      MapsApp::runOnMainThread([=](){ mapsOfflineInst->updateProgress(offlineId, remaining, total); });
+    }
+  });
+}
+
+static void exportPOIs(const char* dest, int offlineId)
+{
+  static const char* poiExportSQL = R"#(ATTACH DATABASE 'file://%s?mode=ro' AS searchdb;
+    BEGIN;
+    DROP TABLE IF EXISTS main.pois;
+    CREATE TABLE main.pois AS SELECT * FROM searchdb.pois WHERE tile_id IN
+        (SELECT tile_id FROM searchdb.offline_tiles WHERE offline_id = %d);
+    COMMIT;
+    DETACH DATABASE searchdb;
+  )#";
+  FSPath searchDB(MapsApp::baseDir, "fts1.sqlite");
+  SQLiteDB poiOutDB;
+  if(sqlite3_open_v2(dest, &poiOutDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
+    LOGE("Error opening %s for POI export", dest);
+    return;
+  }
+  if(poiOutDB.exec(fstring(poiExportSQL, searchDB.c_str(), offlineId)))
+    LOG("POI export to %s completed", dest);
+  else
+    LOGE("SQL error exporting POIs to %s: %s", dest, poiOutDB.errMsg());
+}
+
 bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMapInfo olinfo, bool hasPois)
 {
+  bool poiimport = hasPois && app->config["storage"]["import_pois"].as<bool>(true);
+  bool poiexport = !hasPois && app->config["storage"]["export_pois"].as<bool>(false);
   // loading source will ensure mbtiles cache is created if enabled for source
   if(destsrc != app->mapsSources->currSource)
     app->mapsSources->rebuildSource(destsrc, false);
@@ -598,72 +604,49 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
       olinfo.lngLat11.longitude, olinfo.lngLat11.latitude, olinfo.maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
   app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(olinfo.lngLat00, olinfo.lngLat11, {32}), 0.5f);
 
-  olinfo.sources.push_back({tileSource->name(), destpath, "file://" + srcpath + "?mode=ro", {}, tileSource->maxZoom(), {}});
-  if(hasPois && app->config["storage"]["import_pois"].as<bool>(true))
-    olinfo.sources.back().searchData.push_back(YAML::Load(fstring("{ layer: __IMPORT__, fields: [\"%s\"], filter: {} }", srcpath.c_str())));
-  else if(!tileSource->isRaster())
-    Tangram::YamlPath("application.search_data").get(app->map->getScene()->config(), olinfo.sources.back().searchData);
-  //offlinePending.push_back(std::move(olinfo));
+  YAML::Node searchYaml;
+  if(!poiimport && !tileSource->isRaster())
+    Tangram::YamlPath("application.search_data").get(app->map->getScene()->config(), searchYaml);
 
-  queueOfflineTask(olinfo.id, [olinfo=std::move(olinfo)](){
-    offlineDownloaders.emplace_back(new OfflineDownloader(*MapsApp::platform, olinfo, olinfo.sources.back()));
-    currTilesTotal += offlineDownloaders.back()->remainingTiles();
+  int offlineId = olinfo.id, srcMaxZoom = tileSource->maxZoom();
+  queueOfflineTask(offlineId, [=](){
+    SQLiteDB tileDB;
+    if(sqlite3_open_v2(destpath.c_str(), &tileDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
+      LOGE("Error opening cache DB %s for import: %s", destpath.c_str(), tileDB.errMsg());
+      return;
+    }
+    if(!tileDB.exec(fstring("ATTACH DATABASE 'file://%s?mode=ro' AS src;", srcpath.c_str()))) {
+      LOGE("SQL error attaching mbtiles: %s", tileDB.errMsg());
+      return;
+    }
+    if(!mbtilesImport(tileDB, offlineId))
+      return;
+    // refresh map to show new tiles
+    app->mapsSources->rebuildSource(destsrc);
+    if(!poiimport)
+      indexImportedTiles(tileDB, offlineId, searchYaml, srcMaxZoom);
+    // detach src DB from tile DB before attaching to search index DB
+    if(!tileDB.exec("DETACH DATABASE src;"))
+      LOGE("SQL error detaching mbtiles: %s", tileDB.errMsg());
+    if(poiimport)
+      MapsSearch::importPOIs(srcpath, offlineId);
+    else if(poiexport)
+      exportPOIs(srcpath.c_str(), offlineId);
   });
-
-  if(!hasPois && app->config["storage"]["export_pois"].as<bool>(false)) {
-    // queue task to run after import completed
-    queueOfflineTask(-1, [srcpath, offlineId=olinfo.id](){
-      static const char* poiExportSQL = R"#(ATTACH DATABASE 'file://%s?mode=ro' AS searchdb;
-        BEGIN;
-        DROP TABLE IF EXISTS main.pois;
-        CREATE TABLE main.pois AS SELECT * FROM searchdb.pois WHERE tile_id IN
-            (SELECT tile_id FROM searchdb.offline_tiles WHERE offline_id = %d);
-        COMMIT;
-        DETACH DATABASE searchdb;
-      )#";
-      std::string searchDB = MapsApp::baseDir + "fts1.sqlite";
-      SQLiteDB poiOutDB;
-      if(sqlite3_open_v2(srcpath.c_str(), &poiOutDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
-        LOGE("Error opening %s for POI export", srcpath.c_str());
-        return;
-      }
-      if(poiOutDB.exec(fstring(poiExportSQL, searchDB.c_str(), offlineId)))
-        LOG("POI export to %s completed", srcpath.c_str());
-      else
-        LOGE("SQL error exporting POIs to %s: %s", srcpath.c_str(), poiOutDB.errMsg());
-    });
-  }
 
   return true;
 }
 
 // GUI
 
-void MapsOffline::updateProgress()
+void MapsOffline::updateProgress(int mapid, int remaining, int total)
 {
   if(!offlinePanel->isVisible()) return;
-  std::unique_lock<std::mutex> lock(offlinePending.mutex);
-
   for(Widget* item : offlineContent->select(".listitem")) {
-    int mapid = item->node->getIntAttr("__mapid");
-    int ii = 0;
-    for(auto& ol : offlinePending.queue) {
-      if(ol.id == mapid) {
-        if(ol.canceled)
-          item->selectFirst(".detail-text")->setText("Canceling...");
-        else if(ii == 0) {
-          std::unique_lock<std::mutex> lock2(offlineDownloaders.mutex);
-          int total = currTilesTotal, remaining = 0;
-          for(auto& dl : offlineDownloaders.queue)
-            remaining += dl->remainingTiles();
-          item->selectFirst(".detail-text")->setText(fstring("%d/%d tiles downloaded", total - remaining, total).c_str());
-        }
-        else
-          item->selectFirst(".detail-text")->setText("Download pending");
-        //item->selectFirst(".delete-btn")->setText("Cancel");
-        break;
-      }
-      ++ii;
+    if(item->node->getIntAttr("__mapid") == mapid) {
+      //setText("Canceling..."); setText("Download pending");
+      item->selectFirst(".detail-text")->setText(fstring("%d/%d tiles downloaded", total - remaining, total).c_str());
+      return;
     }
   }
 }
@@ -671,14 +654,14 @@ void MapsOffline::updateProgress()
 void MapsOffline::populateOffline()
 {
   app->gui->deleteContents(offlineContent, ".listitem");
-
-  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title, timestamp FROM offlinemaps ORDER BY timestamp DESC;";
+  const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title, timestamp, done FROM offlinemaps ORDER BY timestamp DESC;";
   SQLiteStmt(app->bkmkDB, query).exec([&](int mapid, double lng0, double lat0, double lng1, double lat1,
-      std::string sourcestr, std::string titlestr, int64_t timestamp){
+      std::string sourcestr, std::string titlestr, int64_t timestamp, int done){
     auto srcinfo = app->mapsSources->mapSources[sourcestr];
     std::string detail = srcinfo ? srcinfo["title"].Scalar() : sourcestr;
     detail.append(u8" \u2022 ").append(ftimestr("%F %H:%M:%S", timestamp*1000));
-    Button* item = createListItem(MapsApp::uiIcon("fold-map"), titlestr.c_str(), detail.c_str());
+    Button* item = createListItem(
+        MapsApp::uiIcon("fold-map"), titlestr.c_str(), done ? detail.c_str() : "Download pending");
     Widget* container = item->selectFirst(".child-container");
     item->node->setAttr("__mapid", mapid);
     item->onClicked = [=](){
@@ -704,23 +687,26 @@ void MapsOffline::populateOffline()
 
     Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
     Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
-    overflowMenu->addItem("Delete", [=](){
+    overflowMenu->addItem(done ? "Delete" : "Cancel", [=](){
       if(rectMarker)
         app->map->markerSetVisible(rectMarker, false);
       if(cancelDownload(mapid)) {
         MapsOffline::queueOfflineTask(-1, [=](){ deleteOfflineMap(mapid); });
         item->selectFirst(".detail-text")->setText("Deleting...");
-        //populateOffline();
       }
       else
-        updateProgress();
+        item->selectFirst(".detail-text")->setText("Canceling...");
     });
     overflowBtn->setMenu(overflowMenu);
     container->addWidget(overflowBtn);
 
     offlineContent->addWidget(item);
   });
-  updateProgress();
+  // wake up download thread to update progress
+  if(!offlinePending.empty()) {
+    prevProgressUpdate = 0;
+    semOfflineWorker.post();
+  }
 }
 
 Widget* MapsOffline::createPanel()

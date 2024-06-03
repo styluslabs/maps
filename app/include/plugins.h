@@ -17,9 +17,9 @@ class PluginManager : public MapsComponent
 public:
   enum UrlReqType { NONE, SEARCH, PLACE, ROUTE } inState = NONE;
 
-  PluginManager(MapsApp* _app, const std::string& pluginDir);
+  PluginManager(MapsApp* _app);
   ~PluginManager();
-  void reload(const std::string& pluginDir);
+  void reload();
   Button* createPanel();
   void createFns(duk_context* ctx);
   std::string evalJS(const char* s);

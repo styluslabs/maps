@@ -31,13 +31,13 @@ bool PluginManager::dukTryCall(duk_context* ctx, int nargs)
   return false;
 }
 
-PluginManager::PluginManager(MapsApp* _app, const std::string& pluginDir) : MapsComponent(_app)
+PluginManager::PluginManager(MapsApp* _app) : MapsComponent(_app)
 {
   inst = this;
-  reload(pluginDir);
+  reload();
 }
 
-void PluginManager::reload(const std::string& pluginDir)
+void PluginManager::reload()
 {
   cancelRequests(NONE);
   searchFns.clear();
@@ -50,11 +50,19 @@ void PluginManager::reload(const std::string& pluginDir)
   jsContext = duk_create_heap_default();  //(NULL, NULL, NULL, NULL, dukErrorHander);
   createFns(jsContext);
   duk_context* ctx = jsContext;
-  auto files = lsDirectory(pluginDir);
-  std::sort(files.begin(), files.end());  // load plugins alphabetically
-  for(auto& file : files) {
-    if(file.substr(file.size() - 3) != ".js") continue;
-    std::string js = readFile((pluginDir + "/" + file).c_str());
+
+  FSPath sharedDir(app->baseDir, "plugins");
+  FSPath localDir(app->baseDir, "plugins_local");
+  std::vector<FSPath> files;
+  for(auto& f : lsDirectory(sharedDir))
+    files.push_back(sharedDir.child(f));
+  for(auto& f : lsDirectory(localDir))
+    files.push_back(localDir.child(f));
+   // load plugins alphabetically
+  std::sort(files.begin(), files.end(), [](FSPath& a, FSPath& b){ return a.baseName() < b.baseName(); });
+  for(FSPath& file : files) {
+    if(file.extension() != "js") continue;
+    std::string js = readFile(file.c_str());
     duk_push_string(ctx, file.c_str());
     if(duk_pcompile_lstring_filename(ctx, 0, js.data(), js.size()) != 0)
       LOGW("JS compile error: %s\n%s\n---", duk_safe_to_string(ctx, -1), file.c_str());
@@ -446,6 +454,9 @@ void PluginManager::createFns(duk_context* ctx)
   duk_push_c_function(ctx, consoleLog, 1);
   duk_put_prop_string(ctx, consoleObj, "log");
   duk_put_global_string(ctx, "console");
+  // empty secrets object for pugins don't have to check for existence
+  duk_push_object(ctx);
+  duk_put_global_string(ctx, "secrets");
 }
 
 // for now, we need somewhere to put TextEdit for entering JS commands; probably would be opened from
@@ -474,7 +485,7 @@ Button* PluginManager::createPanel()
   pluginContent->addWidget(createStretch());
 
   Button* refreshBtn = createToolbutton(MapsApp::uiIcon("refresh"), "Reload plugins");
-  refreshBtn->onClicked = [=](){ reload(MapsApp::baseDir + "plugins"); };
+  refreshBtn->onClicked = [=](){ reload(); };
   auto toolbar = app->createPanelHeader(MapsApp::uiIcon("textbox"), "Plugins");
   toolbar->addWidget(createStretch());
   toolbar->addWidget(refreshBtn);

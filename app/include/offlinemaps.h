@@ -11,7 +11,7 @@ public:
   ~MapsOffline();
   int numOfflinePending() const;
   void saveOfflineMap(int mapid, Tangram::LngLat lngLat00, Tangram::LngLat lngLat11, int maxZoom);
-  void updateProgress();
+  void updateProgress(int mapid, int remaining, int total);
   void downloadCompleted(int id, bool canceled);
   void resumeDownloads();
   void openForImport(std::string srcpath);

@@ -5,7 +5,10 @@ android {
 
   defaultConfig {
     applicationId 'com.styluslabs.maps'
-    minSdkVersion 14
+    versionCode 1
+    versionName "0.0.1"
+
+    minSdkVersion 21
     targetSdkVersion 29
     externalNativeBuild {
       cmake {

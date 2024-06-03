@@ -402,8 +402,9 @@ void MapsSearch::resultsUpdated(int flags)
 {
   populateResults();
   int nresults = std::max(mapResults.size(), listResults.size());
+  bool more = mapResults.size() > listResults.size() ? moreMapResultsAvail : moreListResultsAvail;
   resultCountText->setText(nresults == 1 ? "1 result" :
-      fstring("%s%d results", moreMapResultsAvail || moreListResultsAvail ? "over " : "" , nresults).c_str());
+      fstring("%s%d results", more ? "over " : "" , nresults).c_str());
 
   // zoom out if necessary to show first 5 results
   if(flags & FLY_TO) {
@@ -779,6 +780,8 @@ Button* MapsSearch::createPanel()
         app->gui->setFocused(searchBox);
         searchText("", EDITING);  // show history
       }
+      else if(providerIdx > 0 && !queryText->isEnabled())
+        searchText("", RETURN);
     }
     else if(event->type == MapsApp::PANEL_CLOSED)
       clearSearch();
@@ -805,10 +808,7 @@ Button* MapsSearch::createPanel()
       gui->deleteContents(searchMenu->selectFirst(".child-container"));
       if(providerIdx > 0 && !queryText->isEnabled()) {  // noquery plugin
         const char* title = app->pluginManager->searchFns[providerIdx-1].title.c_str();
-        searchMenu->addItem(title, MapsApp::uiIcon("search"), [=](){
-          app->showPanel(searchPanel);
-          searchText("", RETURN);
-        });
+        searchMenu->addItem(title, MapsApp::uiIcon("search"), [=](){ app->showPanel(searchPanel); });
       }
       else {
         // TODO: pinned searches - timestamp column = INF?
