@@ -216,6 +216,10 @@ styles:
                     if(top.y) { h02 = 2.*h01 - h00; h12 = 2.*h11 - h10; h22 = 2.*h21 - h20; }
                     // proj meters per elevation tile pixel (u_tile_origin.z is tile zoom, u_map_position.z is real zoom)
                     vec2 dxy_elev = 2.*3.141592*6378137.0*exp2(-u_tile_origin.w)*duv/u_raster_offsets[ELEVATION_INDEX].z;
+                    // convert projected meters to actual meters - Mercator scale factor is cos(latitude); we recover
+                    //  latitude from Mercator y (projected meters): lat = 2*atan(exp(y/R)) - M_PI/2;
+                    float unproj = exp(u_map_position.y/6378137.0);
+                    float coslat = 2.0/(unproj + 1.0/unproj);
                     // offset from pixel center
                     vec2 f = ij - cen_ij;
                     // 2nd order finite diff - mixed partials needed to (almost) eliminate hillshading pixelation
@@ -227,7 +231,7 @@ styles:
                     float elev = h11 + dot(f, grad0) + 0.5*dot(f, curv*f);  // 2nd order does help a bit w/ contour lines
                     // no underwater terrain for now
                     float hscale = elev > 0. ? u_exaggerate : 0.;  // /pow(u_meters_per_pixel, 0.7)/65536.;
-                    normal = normalize(vec3(-hscale*grad, 1.));
+                    normal = normalize(vec3(-hscale*grad/coslat, 1.));
 
                 color: |
                     #if ELEVATION_INDEX
@@ -272,7 +276,7 @@ styles:
                         ddn = abs(1. - fract(hc/coarse))*coarse/slope / u_meters_per_pixel;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
                     #ifdef SHOW_ANGLE
-                        float degs = atan(slope)*180.0/3.14159;
+                        float degs = atan(slope/coslat)*180.0/3.14159;
                         vec4 tint = texture2D(u_slope_angle, vec2(degs/90.0, 0.5));
                         base_color = mix(base_color, tint, elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
                     #endif
@@ -281,7 +285,7 @@ styles:
                     }
                     #else
                     #ifdef SHOW_ANGLE
-                        float degs = atan(length(grad))*180.0/3.14159;
+                        float degs = atan(length(grad)/coslat)*180.0/3.14159;
                         vec4 tint = texture2D(u_slope_angle, vec2(degs/90.0, 0.5));
                         base_color = mix(base_color, tint, elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
                     #endif

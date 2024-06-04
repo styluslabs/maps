@@ -64,6 +64,8 @@ The default configuration includes [markers.yaml](assets/scenes/markers.yaml) fo
 
 Application data is stored in the executable's folder on Linux (will be changed to `~/.config/styluslabs/maps` in the future) and in `/Android/media/com.styluslabs.maps/files` on Android (this folder can be read and written by other applications, so it is possible to edit files).  Currently, there are only a few configuration options available in the GUI, but many more can be set by editing `config.yaml` (after exiting the app) in the application data folder.  See `config.default.yaml` for documentation.
 
+On Android, all files created by the application (except `config.yaml` and `mapsources.yaml`) will be replaced when a newer APK is installed, so edits should only be made to copies, not the original files.
+
 
 ## Plugin system ##
 

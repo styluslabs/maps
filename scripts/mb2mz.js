@@ -142,8 +142,11 @@ function walkStyle(mblayer, order) {
 
     // properties directly on the style object, not the draw object.
     let style = walkProps(mbprops, {
-        'line-dasharray':           [ 'dash', x => x.map(d => Math.max(d,0.1)), true ]
+        'line-dasharray':           [ 'dash', x => x.map(d => Math.max(d,0.1)), false ]
     });
+    // tangram doesn't support stops for dash, so just take first one
+    if(style.dash && Array.isArray(style.dash[0]))
+      style.dash = style.dash[0][1];
     //let style = {};
 
     // https://mapzen.com/documentation/tangram/Styles-Overview/#using-styles
@@ -166,7 +169,7 @@ function walkStyle(mblayer, order) {
         //line-translate, line-translate-anchor
         'line-width':               [ 'width', px ],
         //line-gap-width
-        //line-offset
+        'line-offset':                'offset',
         //line-pattern
         'fill-color':                 'color',
         'fill-opacity':               'alpha',
@@ -265,7 +268,7 @@ function walkStyle(mblayer, order) {
         draw.order = order;
 
     // for function or array of stops, Number() will return NaN and NaN != 1 is true
-    if (draw.alpha && Number(draw.alpha) != 1) {
+    if ((typeof(draw.color)==="string" && draw.color.startsWith("rgba")) || (draw.alpha && Number(draw.alpha) != 1)) {
         if(style.dash)
             style.blend = 'inlay';
         else if(style.base == 'lines')

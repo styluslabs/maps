@@ -338,6 +338,9 @@ void MapsSources::populateSources()
         }
         else
           currLayers.push_back(key);
+        // treat as new source (to edit an existing multi-layer source, user can go to edit sources directly)
+        currSource = "";
+        titleEdit->setText("Untitled");
         rebuildSource();  //currLayers
       };
       container->addWidget(showBtn);

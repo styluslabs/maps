@@ -311,6 +311,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   std::string placetype = !propstr.empty() ? pluginManager->jsCallFn("getPlaceType", propstr) : "";
   if(namestr.empty()) namestr = getPlaceTitle(props);
   if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
+  if(namestr.empty()) {
+    for(auto& prop : props.items()) {
+      if(prop.key.find("name") != std::string::npos) {
+        namestr = props.getString(prop.key);
+        break;
+      }
+    }
+  }
 
   std::string osmid = osmIdFromJson(json);
   pickResultCoord = pos;
