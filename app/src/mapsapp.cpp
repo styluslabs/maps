@@ -1504,6 +1504,11 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   themeCb->onClicked();
 
   gui->showWindow(win.get(), NULL);
+  // on desktop, command line options could override startup behavior
+#if PLATFORM_MOBILE
+  mapsOffline->resumeDownloads();
+  mapsSources->rebuildSource(config["sources"]["last_source"].Scalar());
+#endif
 }
 
 void MapsApp::showPanelContainer(bool show)
@@ -1782,6 +1787,27 @@ bool MapsApp::openURL(const char* url)
 #endif
 }
 #endif
+
+bool MapsApp::loadConfig()
+{
+  static constexpr int versionCode = 1;
+
+  FSPath configPath(baseDir, "config.yaml");
+  FSPath configDfltPath(baseDir, "config.default.yaml");
+  try {
+    config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
+  } catch(...) {
+    LOGE("Unable to load config file %s", configPath.c_str());
+    *(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
+  }
+
+  configFile = configPath.c_str();
+  int prevver = config["prev_version"].as<int>(0);
+  bool updateassets = prevver < versionCode && prevver >= 0;
+  if(updateassets)
+    config["prev_version"] = versionCode;
+  return updateassets;
+}
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)

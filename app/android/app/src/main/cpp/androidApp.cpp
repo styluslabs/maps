@@ -592,8 +592,6 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
   if(!app) {
     app = new MapsApp(MapsApp::platform);
     app->createGUI(&sdlWin);
-    app->mapsOffline->resumeDownloads();
-    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
   }
   app->setDpi(dpi);
   MapsApp::runApplication = true;
@@ -633,25 +631,8 @@ JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, js
   bool firstrun = !configDfltPath.exists();
   if(firstrun)
     env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
-
-  try {
-    MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
-  } catch(...) {
-    LOGE("Unable to load config file %s", configPath.c_str());
-    *(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
-  }
-
-  if(firstrun)
-    MapsApp::config["prev_version"] = versionCode;
-  else {
-    int prevver = MapsApp::config["prev_version"].as<int>(0);
-    if(prevver < versionCode) {
-      env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
-      // set prev_version to -1 in config file to always replace assets
-      if(prevver >= 0)
-        MapsApp::config["prev_version"] = versionCode;
-    }
-  }
+  if(MapsApp::loadConfig() && !firstrun)
+    env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
 
   MapsApp::platform = new AndroidPlatform(env, mapsActivity, assetManager);
 }

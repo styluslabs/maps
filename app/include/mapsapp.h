@@ -173,6 +173,7 @@ public:
   static void setSensorsEnabled(bool enabled);
   static void setServiceState(int state, float intervalSec = 0, float minDist = 0);
   static void openBatterySettings();
+  static bool loadConfig();
   static void sdlEvent(SDL_Event* event);
 
   static std::string elevToStr(double meters);
