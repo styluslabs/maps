@@ -39,15 +39,16 @@
       NSLog(@"Failed to set current OpenGL context");
       exit(1);
   }
+  glGenRenderbuffers(1, &_colorRenderBuffer);
+  glGenRenderbuffers(1, &_depthRenderBuffer);
+  glGenFramebuffers(1, &_frameBuffer);
 }
 
 - (void)setupBuffers
 {
-  glGenRenderbuffers(1, &_colorRenderBuffer);
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);
   [_context renderbufferStorage:GL_RENDERBUFFER fromDrawable:_eaglLayer];
   
-  glGenFramebuffers(1, &_frameBuffer);
   glBindFramebuffer(GL_FRAMEBUFFER, _frameBuffer);
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, _colorRenderBuffer);
 
@@ -55,32 +56,34 @@
   glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &height);
 
   // depth,stencil buffer
-  //glGenRenderbuffers(1, &_depthRenderBuffer);
-  //glBindRenderbuffer(GL_RENDERBUFFER, _depthRenderBuffer);
-  ////glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, depthBufferFormat, backingWidth, backingHeight);
-  //glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-  //glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
-  //glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
+  glBindRenderbuffer(GL_RENDERBUFFER, _depthRenderBuffer);
+  //glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, depthBufferFormat, backingWidth, backingHeight);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
 
-  //if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-  //  NSLog(@"Error creating GLES framebuffer.");
+  glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);
+  if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    NSLog(@"Error creating GLES framebuffer.");
 }
 
 - (void)destroyBuffers
 {
   glDeleteFramebuffers(1, &_frameBuffer);
   _frameBuffer = 0;
+  glDeleteRenderbuffers(1, &_depthRenderBuffer);
+  _depthRenderBuffer = 0;
   glDeleteRenderbuffers(1, &_colorRenderBuffer);
   _colorRenderBuffer = 0;
 }
 
-- (void)swapBuffers {
-  //glClearColor(0, 1.0, 0, 1.0);
-  //glClear(GL_COLOR_BUFFER_BIT);
+- (void)swapBuffers 
+{
   [_context presentRenderbuffer:GL_RENDERBUFFER];
 }
 
-- (void)makeContextCurrent {
+- (void)makeContextCurrent 
+{
   [EAGLContext setCurrentContext:_context];
 }
 
@@ -88,6 +91,8 @@
 {
   self = [super initWithFrame:frame];
   if (self) {
+    width = 0;
+    height = 0;
     self.contentScaleFactor = [[UIScreen mainScreen] scale];
     self.multipleTouchEnabled = YES;
     [self setupLayer];
@@ -96,14 +101,21 @@
   return self;
 }
 
+- (void)dealloc
+{
+  [self destroyBuffers];
+}
+
 - (void)layoutSubviews 
 {
-  iosApp_stopLoop();
-  [self makeContextCurrent];
-  [self destroyBuffers];
-  [self setupBuffers];
-  iosApp_startLoop(width, height, 326);  //dpi);
-  //[self render];
+  int w = (int)(self.bounds.size.width * self.contentScaleFactor);
+  int h = (int)(self.bounds.size.height * self.contentScaleFactor);
+  if(w != width || h != height) {
+    iosApp_stopLoop();
+    [self makeContextCurrent];
+    [self setupBuffers];
+    iosApp_startLoop(width, height, self.contentScaleFactor*163);
+  }
 }
 // touch input
 

@@ -594,6 +594,8 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
     app->setDpi(dpi);
     app->createGUI(&sdlWin);
   }
+  else
+    MapsApp::mainThreadId = std::this_thread::get_id();
   MapsApp::runApplication = true;
   //LOGW("Starting event loop");
   while(MapsApp::runApplication) {

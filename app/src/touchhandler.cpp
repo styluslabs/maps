@@ -77,7 +77,8 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
       }
     }
     // hack because fingerId gets replaced for single touch events
-    int fingerId = gui->pressEvent.tfinger.fingerId;
+    int fingerId = !gui->touchPoints.empty() ? gui->touchPoints[0].id : (!touchPoints.empty() ? touchPoints[0].id : 0);
+    //int fingerId = gui->pressEvent.tfinger.fingerId;  -- this doesn't work
     touchEvent(fingerId, actionFromSDLFinger(event->type), event->tfinger.timestamp/1000.0,
         event->tfinger.x*xyScale, event->tfinger.y*xyScale, 1.0f);
   }

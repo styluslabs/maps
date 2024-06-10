@@ -153,7 +153,10 @@ int mainLoop(int width, int height, float dpi)
     app->setDpi(dpi);
     app->createGUI(sdlWin);
   }
-  app->glNeedsInit = true;
+  else
+    MapsApp::mainThreadId = std::this_thread::get_id();
+  //app->glNeedsInit = true;
+  LOGW("Entering main loop");
   MapsApp::runApplication = true;
   while(MapsApp::runApplication) {
     MapsApp::taskQueue.wait();
@@ -168,6 +171,7 @@ int mainLoop(int width, int height, float dpi)
     //  initialQuery.clear();
     //}
   }
+  LOGW("Exiting main loop");
   return 0;
 }
 
