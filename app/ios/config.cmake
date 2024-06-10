@@ -1,4 +1,10 @@
 add_definitions(-DTANGRAM_IOS)
+add_compile_options(--target=arm64-apple-ios12.0)
+add_compile_options(-g)
+add_link_options(--target=arm64-apple-ios12.0)
+
+# seems to be the only way to get cmake to combine all the static libs; we'll be switching to plain makefiles soon
+#set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_AR> rcT libmaps-ios.a <OBJECTS> <LINK_LIBRARIES>")
 
 #set(TANGRAM_FRAMEWORK_VERSION "0.17.2-dev")
 #set(TANGRAM_BUNDLE_IDENTIFIER "com.mapzen.TangramMap")
@@ -12,10 +18,11 @@ add_definitions(-DTANGRAM_IOS)
 # Set 'marker' for other configs to make debug builds install-able on devices.
 #set(CMAKE_XCODE_ATTRIBUTE_BITCODE_GENERATION_MODE "$<IF:$<CONFIG:Release>,bitcode,marker>")
 
+enable_language(OBJC)
 enable_language(OBJCXX)
 set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -fobjc-arc")
 set(CMAKE_OBJC_FLAGS "${CMAKE_OBJC_FLAGS} -fobjc-arc")
-  
+
 set(TANGRAM_FRAMEWORK_SOURCES
   tangram-es/platforms/common/appleAllowedFonts.h
   tangram-es/platforms/common/appleAllowedFonts.mm
@@ -25,31 +32,30 @@ set(TANGRAM_FRAMEWORK_SOURCES
   tangram-es/platforms/ios/framework/src/TGURLHandler.mm
   app/ios/AppDelegate.m
   app/ios/OpenGLView.m
+  app/ios/GLViewController.m
   app/ios/iosApp.cpp
 )
 
 ### Configure static library build target.
 
-add_library(app-ios STATIC
+add_executable(maps-ios
   ${TANGRAM_FRAMEWORK_SOURCES}
 )
+# partial linking to produce an object file instead of an executable
+target_link_options(maps-ios PRIVATE "-r" "-nodefaultlibs")
 
-target_include_directories(app-ios PRIVATE
+target_include_directories(maps-ios PRIVATE
   tangram-es/platforms/common
   tangram-es/platforms/ios/framework/src
   tangram-es/core/deps/stb
   ${STYLUSLABS_DEPS}
 )
 
-target_link_libraries(app-ios PRIVATE
-  tangram-core
-  maps-app
-)
+target_compile_definitions(maps-ios PRIVATE GLES_SILENCE_DEPRECATION)
 
-add_library(maps-ios STATIC
-  $<TARGET_OBJECTS:tangram-core>
-  $<TARGET_OBJECTS:maps-app>
-  $<TARGET_OBJECTS:app-ios>
+target_link_libraries(maps-ios PRIVATE
+  maps-app
+  tangram-core
 )
 
 # Set properties common between dynamic and static framework targets.

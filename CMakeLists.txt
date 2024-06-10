@@ -17,10 +17,10 @@ else()
   add_definitions(-DLOG_LEVEL=2)
 endif()
 
+# executable
+include("app/${TANGRAM_PLATFORM}/config.cmake")
+# app library
+include("app/config.cmake")
 # tangram library
 add_subdirectory(tangram-es)
 target_include_directories(tangram-core PRIVATE "${STYLUSLABS_DEPS}/nanovgXC/src")
-# app library
-include("app/config.cmake")
-# executable
-include("app/${TANGRAM_PLATFORM}/config.cmake")

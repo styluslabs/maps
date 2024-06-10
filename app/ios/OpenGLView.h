@@ -7,8 +7,13 @@
   CAEAGLLayer* _eaglLayer;
   EAGLContext* _context;
   GLuint _colorRenderBuffer;
+  GLuint _depthRenderBuffer;
   GLuint _frameBuffer;
   int width;
   int height;
 }
+
+- (void)swapBuffers;
+- (void)makeContextCurrent;
+
 @end

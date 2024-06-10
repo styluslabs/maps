@@ -229,7 +229,10 @@ void MapsApp::runOnMainThread(std::function<void()> fn)
 void MapsApp::sdlEvent(SDL_Event* event)
 {
   //LOGW("%s", sdlEventLog(event).c_str());
-  runOnMainThread([_event = *event]() mutable { gui->sdlEvent(&_event); });
+  if(std::this_thread::get_id() == mainThreadId)
+    gui->sdlEvent(event);
+  else
+    runOnMainThread([_event = *event]() mutable { gui->sdlEvent(&_event); });
 }
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
@@ -844,6 +847,9 @@ void MapsApp::updateLocation(const Location& _loc)
     mapsTracks->onMapEvent(LOC_UPDATE);
     return;
   }
+#if PLATFORM_IOS
+  hasLocation = _loc.poserr > 0 && _loc.poserr < 30;  // no GPS status on iOS
+#endif
   //hasLocation = gpsSatsUsed > 0 || (_loc.poserr > 0 && _loc.poserr < 10);
   updateLocMarker();
 

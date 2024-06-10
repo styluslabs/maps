@@ -591,9 +591,9 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
   sdlWin = {display, surface, nativeWin};
   if(!app) {
     app = new MapsApp(MapsApp::platform);
+    app->setDpi(dpi);
     app->createGUI(&sdlWin);
   }
-  app->setDpi(dpi);
   MapsApp::runApplication = true;
   //LOGW("Starting event loop");
   while(MapsApp::runApplication) {

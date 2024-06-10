@@ -17,11 +17,12 @@ LINUX_CMAKE_PARAMS = \
 IOS_CMAKE_PARAMS = \
 	-DTANGRAM_PLATFORM=ios \
 	-DCMAKE_SYSTEM_NAME=iOS \
-	-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-	-DCMAKE_OSX_ARCHITECTURES=arm64 \
 	${CMAKE_OPTIONS}
 #	-G Xcode \
 #	-DCMAKE_XCODE_GENERATE_SCHEME=0 \
+# -- these seems to give arm64 Mac not iOS - need to use --target=arm64-apple-ios12.0
+#	-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+#	-DCMAKE_OSX_ARCHITECTURES=arm64 \
 
 GITREV := $(shell git rev-parse --short HEAD)
 TGZ = explore-$(GITREV).tar.gz

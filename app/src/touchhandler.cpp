@@ -76,7 +76,9 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
           app->map->handleFlingGesture(prevCOM.x, prevCOM.y, v.x, v.y);
       }
     }
-    touchEvent(0, actionFromSDLFinger(event->type), event->tfinger.timestamp/1000.0,
+    // hack because fingerId gets replaced for single touch events
+    int fingerId = gui->pressEvent.tfinger.fingerId;
+    touchEvent(fingerId, actionFromSDLFinger(event->type), event->tfinger.timestamp/1000.0,
         event->tfinger.x*xyScale, event->tfinger.y*xyScale, 1.0f);
   }
   else if(event->type == SvgGui::MULTITOUCH) {

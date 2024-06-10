@@ -1,9 +1,6 @@
 #import "OpenGLView.h"
 
-#include "ugui/svggui_platform.h"
-extern void iosApp_startLoop(void* glView, int width, int height, float dpi);
-extern void iosApp_stopLoop();
-extern void iosApp_startApp();
+#include "iosApp.h"
 
 @interface OpenGLView()
 
@@ -11,8 +8,6 @@ extern void iosApp_startApp();
 - (void)setupContext;
 - (void)setupBuffers;
 - (void)destroyBuffers;
-- (void)swapBuffers;
-- (void)makeContextCurrent;
 
 @end
 
@@ -51,13 +46,24 @@ extern void iosApp_startApp();
   glGenRenderbuffers(1, &_colorRenderBuffer);
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);
   [_context renderbufferStorage:GL_RENDERBUFFER fromDrawable:_eaglLayer];
-
-  glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &width);
-  glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &height);
   
   glGenFramebuffers(1, &_frameBuffer);
   glBindFramebuffer(GL_FRAMEBUFFER, _frameBuffer);
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, _colorRenderBuffer);
+
+  glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &width);
+  glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &height);
+
+  // depth,stencil buffer
+  //glGenRenderbuffers(1, &_depthRenderBuffer);
+  //glBindRenderbuffer(GL_RENDERBUFFER, _depthRenderBuffer);
+  ////glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, depthBufferFormat, backingWidth, backingHeight);
+  //glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+  //glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
+  //glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
+
+  //if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+  //  NSLog(@"Error creating GLES framebuffer.");
 }
 
 - (void)destroyBuffers
@@ -82,10 +88,11 @@ extern void iosApp_startApp();
 {
   self = [super initWithFrame:frame];
   if (self) {
+    self.contentScaleFactor = [[UIScreen mainScreen] scale];
+    self.multipleTouchEnabled = YES;
     [self setupLayer];
     [self setupContext];
   }
-  iosApp_startApp();
   return self;
 }
 
@@ -95,7 +102,7 @@ extern void iosApp_startApp();
   [self makeContextCurrent];
   [self destroyBuffers];
   [self setupBuffers];
-  iosApp_startLoop((__bridge void*)self, width, height, 250);  //dpi);
+  iosApp_startLoop(width, height, 326);  //dpi);
   //[self render];
 }
 // touch input
@@ -112,17 +119,18 @@ extern void iosApp_startApp();
   float pressure = (touchId == PenPointerPen || touch.force > 0) ? (float)touch.force/2 : 1.0f;
   // we'll use diameter instead of radius (closer to Windows, Android)
   float w = 2*touch.majorRadius;
+  float scale = self.contentScaleFactor;
 
   SDL_Event event = {0};
   event.type = eventType;
   event.tfinger.timestamp = ts;  //SDL_GetTicks();  // normally done by SDL_PushEvent()
   event.tfinger.touchId = touchId;
   event.tfinger.fingerId = touchId == PenPointerPen ? SDL_BUTTON_LMASK : (SDL_FingerID)fingerId;
-  event.tfinger.x = pos.x;
-  event.tfinger.y = pos.y;
+  event.tfinger.x = pos.x * scale;
+  event.tfinger.y = pos.y * scale;
   // size of touch point
-  event.tfinger.dx = w;
-  event.tfinger.dy = w - 2*touch.majorRadiusTolerance;  // for now, Write just uses larger axis, so this has no effect
+  event.tfinger.dx = w * scale;
+  event.tfinger.dy = (w - 2*touch.majorRadiusTolerance)*scale;
   event.tfinger.pressure = pressure;
   // PeepEvents bypasses gesture recognizer and event filters
   SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);  //SDL_PushEvent(&event);
@@ -160,18 +168,6 @@ extern void iosApp_startApp();
 }
 
 @end
-
-void OpenGLView_swapBuffers(void* _view)
-{
-  OpenGLView* view = (__bridge OpenGLView*)_view;
-  [view swapBuffers];
-}
-
-void OpenGLView_setContextCurrent(void* _view)
-{
-  OpenGLView* view = (__bridge OpenGLView*)_view;
-  [view makeContextCurrent];
-}
 
 // main loop
 /*static CFRunLoopRef mainRunLoop = NULL;
