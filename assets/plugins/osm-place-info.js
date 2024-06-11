@@ -138,7 +138,8 @@ function osmPlaceInfoCb(_content, _error)
   // start a wikidata request if needed
   const wikidata = tags["wikidata"];
   if(wikidata) {
-    const wdurl = "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=claims|sitelinks/urls&sitefilter=enwiki&ids=" + wikidata;
+    // '/' -> %2F - iOS NSURLSession doesn't like the slash
+    const wdurl = "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=claims|sitelinks%2Furls&sitefilter=enwiki&ids=" + wikidata;
     httpRequest(wdurl, wikiDataCb);
   }
 

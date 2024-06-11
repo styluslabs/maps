@@ -450,6 +450,7 @@ void MapsApp::placeInfoPluginError(const char* err)
 {
   Button* retryBtn = createToolbutton(MapsApp::uiIcon("retry"), "Retry", true);
   retryBtn->onClicked = [=](){
+    gui->deleteContents(infoContent->selectFirst(".info-section"), ".listitem");
     pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, pickResultOsmId);
     retryBtn->setVisible(false);
   };

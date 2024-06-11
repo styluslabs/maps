@@ -79,6 +79,7 @@
 
 - (void)swapBuffers 
 {
+  glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);  // make sure correct renderbuffer is bound
   [_context presentRenderbuffer:GL_RENDERBUFFER];
 }
 

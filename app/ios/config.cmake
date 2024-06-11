@@ -58,6 +58,11 @@ target_link_libraries(maps-ios PRIVATE
   tangram-core
 )
 
+# tangram won't add duktape if using JSCore
+if (TANGRAM_USE_JSCORE)
+  target_link_libraries(maps-ios PRIVATE duktape)
+endif()
+
 # Set properties common between dynamic and static framework targets.
 #set_target_properties(tangram-static PROPERTIES
 #  #XCODE_GENERATE_SCHEME TRUE

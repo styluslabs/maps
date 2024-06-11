@@ -369,6 +369,7 @@ static int notifyError(duk_context* ctx)
 {
   std::string type = duk_require_string(ctx, 0);
   const char* msg = duk_require_string(ctx, 1);
+  LOGW("Plugin error (%s): %s", type.c_str(), msg);
   if(type == "search")
     MapsApp::inst->mapsSearch->searchPluginError(msg);
   else if(type == "place")

@@ -279,10 +279,12 @@ static void sendKeyEvent(int keycode, int action)
 {
   if(picker.documentPickerMode != UIDocumentPickerModeOpen) return;
   NSURL* url = urls.firstObject;
+  NSLog(@"Picked document URL: %@ Path: %@", url.absoluteString, url.path);
   if (access([url.path UTF8String], R_OK) == 0) {
     iosApp_filePicked([url.path UTF8String]);
   } else {
-    //[url startAccessingSecurityScopedResource];
+    [url startAccessingSecurityScopedResource];
+    iosApp_filePicked([url.path UTF8String]);
     //NSData* data = [NSData dataWithContentsOfURL:url];  // options:NSDataReadingMappedAlways error:nil];
 
     //void* buffer = malloc(data.length);
