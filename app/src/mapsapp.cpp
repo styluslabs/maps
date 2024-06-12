@@ -23,6 +23,9 @@
 #include "usvg/svgparser.h"
 #include "mapwidgets.h"
 #include "resources.h"
+#if PLATFORM_IOS
+#include "../ios/iosApp.h"
+#endif
 
 //#define UTRACE_ENABLE
 #define UTRACE_IMPLEMENTATION
@@ -521,6 +524,21 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
     else if(node->type() == SvgNode::IMAGE) {
       // this will be revisited when we have multiple images for display
       auto* imgnode = static_cast<SvgImage*>(node);
+#if PLATFORM_IOS
+      std::string imgkey = "iOS-" + imgnode->m_linkStr;
+      imgnode->setXmlId(imgkey.c_str());
+      iosPlatform_getPhotoData(imgnode->m_linkStr.c_str(), [=](void* data, size_t len){
+        Image image = Image::decodeBuffer(data, len);
+        Image* pimg = new Image(std::move(image));  // std::function must be copyable
+        MapsApp::runOnMainThread([=]() mutable {
+          SvgNode* keynode = infoContent->containerNode()->selectFirst(("#" + imgkey).c_str());
+          if(!pimg || keynode != imgnode) return;
+          imgnode->m_image = std::move(*pimg);
+          imgnode->invalidate(false);  // redraw
+          delete pimg;  pimg = NULL;
+        });
+      });
+#endif
       Button* b = new Button(node);
       b->onClicked = [imgnode](){
         MapsApp::openURL(imgnode->m_linkStr.c_str());

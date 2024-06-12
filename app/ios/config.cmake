@@ -32,7 +32,7 @@ set(TANGRAM_FRAMEWORK_SOURCES
   tangram-es/platforms/ios/framework/src/TGURLHandler.mm
   app/ios/AppDelegate.m
   app/ios/OpenGLView.m
-  app/ios/GLViewController.m
+  app/ios/GLViewController.mm
   app/ios/iosApp.cpp
 )
 

@@ -79,8 +79,8 @@ ui:
   reverse_map_btns: false
   #font: "scenes/fonts/NotoSans-Regular.ttf"
   theme: light
-  ui_scale: 0.875
-  map_scale: 0.875
+  ui_scale: 0.95
+  map_scale: 0.95
 
 # for debugging
 num_tile_workers: 2

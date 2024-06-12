@@ -96,7 +96,7 @@ osm-gps-tracks:
 # Bing uses quadkey tile index - supported in networkDataSource.cpp, but not documented
 bing-earth:
     title: Bing Satellite
-    url: http://a{s}.ortho.tiles.virtual%65arth.net/tiles/a{q}.JPG?g=45&mkt=en
+    url: http://a{s}.ortho.tiles.virtualearth.net/tiles/a{q}.JPG?g=45&mkt=en
     url_subdomains: [0, 1, 2, 3]
     zoom_offset: -1
     updates:

@@ -1,6 +1,7 @@
 #include "iosApp.h"
 #include "mapsapp.h"
 
+#include "yaml-cpp/yaml.h"
 #include "ugui/svggui_platform.h"
 #include "ulib/fileutil.h"
 
@@ -28,7 +29,7 @@ Uint32 SDL_GetTicks()
 
 char* SDL_GetClipboardText()
 {
-  return NULL;  //TODO
+  return iosPlatform_getClipboardText();
 }
 
 SDL_bool SDL_HasClipboardText()
@@ -40,6 +41,7 @@ SDL_bool SDL_HasClipboardText()
 
 int SDL_SetClipboardText(const char* text)
 {
+  iosPlatform_setClipboardText(text);
   return 0;
 }
 
@@ -126,7 +128,7 @@ bool MapsApp::openURL(const char* url)
 
 void MapsApp::notifyStatusBarBG(bool isLight)
 {
-  //iosPlatform_setStatusBarBG(sdlWin, isLight);
+  iosPlatform_setStatusBarBG(sdlWin, isLight);
 }
 
 void MapsApp::setSensorsEnabled(bool enabled)
@@ -136,7 +138,7 @@ void MapsApp::setSensorsEnabled(bool enabled)
 
 void MapsApp::setServiceState(int state, float intervalSec, float minDist)
 {
-  //TODO
+  iosPlatform_setServiceState(sdlWin, state, intervalSec, minDist);
 }
 
 void MapsApp::openBatterySettings() {}
@@ -220,6 +222,11 @@ void iosApp_stopLoop()
     MapsApp::runOnMainThread([=](){ MapsApp::runApplication = false; });
     mainThread.join();
   }
+}
+
+void iosApp_getGLConfig(int* samplesOut)
+{
+  *samplesOut = MapsApp::config["msaa_samples"].as<int>(2);
 }
 
 void iosApp_imeTextUpdate(const char* text, int selStart, int selEnd)

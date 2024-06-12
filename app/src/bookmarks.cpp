@@ -17,6 +17,9 @@
 #include "mapwidgets.h"
 #include "gpxfile.h"
 #include "offlinemaps.h"
+#if PLATFORM_IOS
+#include "../ios/iosApp.h"
+#endif
 
 // bookmarks (saved places)
 
@@ -559,6 +562,19 @@ void MapsBookmarks::importGpx(const char* filename)
 
 void MapsBookmarks::importImages(int64_t list_id, const char* path)
 {
+  size_t nimages = 0;
+#if PLATFORM_IOS
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
+      "VALUES (?,?,?,?,?,?,?,?);";
+  SQLiteStmt insbkmk(app->bkmkDB, query);
+  auto photoCallback = [&](const char* name, const char* path, double lat, double lng, double alt, double ctime){
+    std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'/>"}]})", alt, path);
+    insbkmk.bind(list_id, 0, name, props, "", lng, lat, ctime).exec();
+    ++nimages;
+  };
+  iosPlatform_getGeoTaggedPhotos(0, photoCallback);
+  path = "Photo Library";
+#else
   std::vector<uint8_t> buf(2048);
   const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
       "VALUES (?,?,?,?,?,?,?, CAST(strftime('%s', datetime(?)) AS INTEGER));";
@@ -566,7 +582,6 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
   //sqlite3_exec(app->bkmkDB, "BEGIN TRANSACTION", NULL, NULL, NULL);  -- would this lock DB for all threads?
   easyexif::EXIFInfo exif;
   exif.acceptTruncated = true;
-  size_t nimages = 0;
   auto files = lsDirectory(path);
   std::sort(files.begin(), files.end());  // not really necessary since bookmarks never sorted by rowid
   for(auto& file : files) {
@@ -591,10 +606,11 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
     insbkmk.bind(list_id, 0, fpath.baseName(), props, "", exif.GeoLocation.Longitude, exif.GeoLocation.Latitude, date).exec();
     ++nimages;
   }
-  std::string pathstr(path);
+#endif
+  std::string errmsg = fstring("No geotagged images found in %s", path);
   MapsApp::runOnMainThread([=](){
     if(!nimages)
-      MapsApp::messageBox("Import images", fstring("No geotagged images found in %s", pathstr.c_str()), {"OK"});
+      MapsApp::messageBox("Import images", errmsg, {"OK"});
     else {
       listsDirty = true;
       if(activeListId == list_id)

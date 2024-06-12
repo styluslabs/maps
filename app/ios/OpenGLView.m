@@ -1,11 +1,19 @@
 #import "OpenGLView.h"
+#import <QuartzCore/QuartzCore.h>
+#include <OpenGLES/ES3/gl.h>
+#include <OpenGLES/ES3/glext.h>
 
 #include "iosApp.h"
 
-@interface OpenGLView()
+@interface OpenGLView() {
+  CAEAGLLayer* _eaglLayer;
+  EAGLContext* _context;
+  GLuint _colorRenderBuffer, _depthRenderBuffer, _msaaRenderBuffer;
+  GLuint _frameBuffer, _msaaFrameBuffer;
+  int width, height, samples;
+}
 
-- (void)setupLayer;
-- (void)setupContext;
+- (void)setupLayerAndContext;
 - (void)setupBuffers;
 - (void)destroyBuffers;
 
@@ -18,20 +26,19 @@
   return [CAEAGLLayer class];
 }
 
-- (void)setupLayer
+- (void)setupLayerAndContext
 {
+  iosApp_getGLConfig(&samples);  // in the future this could also provide, e.g., sRGB setting
+
   _eaglLayer = (CAEAGLLayer*) self.layer;
   _eaglLayer.opaque = YES;
   _eaglLayer.drawableProperties = [NSDictionary dictionaryWithObjectsAndKeys:
-      [NSNumber numberWithBool:NO], kEAGLDrawablePropertyRetainedBacking, 
+      [NSNumber numberWithBool:NO], kEAGLDrawablePropertyRetainedBacking,
       kEAGLColorFormatRGBA8, kEAGLDrawablePropertyColorFormat, nil];
-}
 
-- (void)setupContext 
-{
   _context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
   if (!_context) {
-      NSLog(@"Failed to initialize OpenGLES 2.0 context");
+      NSLog(@"Failed to initialize OpenGL context");
       exit(1);
   }
   if (![EAGLContext setCurrentContext:_context]) {
@@ -41,7 +48,9 @@
   }
   glGenRenderbuffers(1, &_colorRenderBuffer);
   glGenRenderbuffers(1, &_depthRenderBuffer);
+  glGenRenderbuffers(1, &_msaaRenderBuffer);
   glGenFramebuffers(1, &_frameBuffer);
+  glGenFramebuffers(1, &_msaaFrameBuffer);
 }
 
 - (void)setupBuffers
@@ -55,10 +64,18 @@
   glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &width);
   glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &height);
 
+  // multisample buffer
+  if (samples > 1) {
+    glBindFramebuffer(GL_FRAMEBUFFER, _msaaFrameBuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, _msaaRenderBuffer);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, _msaaRenderBuffer);
+  }
+
   // depth,stencil buffer
   glBindRenderbuffer(GL_RENDERBUFFER, _depthRenderBuffer);
-  //glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, depthBufferFormat, backingWidth, backingHeight);
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+  glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, width, height);
+  //glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _depthRenderBuffer);
 
@@ -70,15 +87,23 @@
 - (void)destroyBuffers
 {
   glDeleteFramebuffers(1, &_frameBuffer);
-  _frameBuffer = 0;
+  glDeleteFramebuffers(1, &_msaaFrameBuffer);
+  _frameBuffer = 0; _msaaFrameBuffer = 0;
   glDeleteRenderbuffers(1, &_depthRenderBuffer);
-  _depthRenderBuffer = 0;
   glDeleteRenderbuffers(1, &_colorRenderBuffer);
-  _colorRenderBuffer = 0;
+  glDeleteRenderbuffers(1, &_msaaRenderBuffer);
+  _depthRenderBuffer = 0; _colorRenderBuffer = 0; _msaaRenderBuffer = 0;
 }
 
 - (void)swapBuffers 
 {
+  if (samples > 1) {
+    const GLenum attachments[] = {GL_COLOR_ATTACHMENT0};  //GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _frameBuffer);
+    glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 1, attachments);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _msaaFrameBuffer);
+  }
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);  // make sure correct renderbuffer is bound
   [_context presentRenderbuffer:GL_RENDERBUFFER];
 }
@@ -96,8 +121,7 @@
     height = 0;
     self.contentScaleFactor = [[UIScreen mainScreen] scale];
     self.multipleTouchEnabled = YES;
-    [self setupLayer];
-    [self setupContext];
+    [self setupLayerAndContext];
   }
   return self;
 }

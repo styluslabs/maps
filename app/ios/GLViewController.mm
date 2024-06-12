@@ -30,6 +30,7 @@
     if(!self.locationManager) {
         self.locationManager = [[CLLocationManager alloc] init];
         self.locationManager.delegate = self;
+        self.locationManager.showsBackgroundLocationIndicator = YES;
     }
     //self.locationManager.desiredAccuracy = kCLLocationAccuracyBest;
     //self.locationManager.distanceFilter = 1.0;
@@ -44,6 +45,13 @@
 - (void)stopSensors {
     [self.locationManager stopUpdatingLocation];
     [self.locationManager stopUpdatingHeading];
+}
+
+- (void)setBackgroundState:(BOOL)enabled {
+  if(enabled && [CLLocationManager authorizationStatus] != kCLAuthorizationStatusAuthorizedAlways)
+    [self.locationManager requestAlwaysAuthorization];
+  self.locationManager.allowsBackgroundLocationUpdates = enabled;
+  self.locationManager.pausesLocationUpdatesAutomatically = !enabled;
 }
 
 - (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
@@ -231,6 +239,7 @@ static void sendKeyEvent(int keycode, int action)
   @public OpenGLView* glView;
   @public MapsLocationMgr* mapsLocationMgr;
   @public TextFieldMgr* textFieldMgr;
+  @public BOOL statusBarBGisLight;
 }
 @end
 
@@ -243,6 +252,7 @@ static void sendKeyEvent(int keycode, int action)
   mapsLocationMgr = [[MapsLocationMgr alloc] init];
   textFieldMgr = [[TextFieldMgr alloc] init];
   [mapsLocationMgr startSensors];
+  statusBarBGisLight = YES;
   return self;
 }
 
@@ -258,10 +268,10 @@ static void sendKeyEvent(int keycode, int action)
     //if (keyboardVisible) { [self showKeyboard]; }
 }
 
-//- (UIStatusBarStyle)preferredStatusBarStyle
-//{
-//  return statusBarBGisLight ? UIStatusBarStyleDarkContent : UIStatusBarStyleLightContent;
-//}
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+  return statusBarBGisLight ? UIStatusBarStyleDarkContent : UIStatusBarStyleLightContent;
+}
 
 @end
 
@@ -331,6 +341,15 @@ void iosPlatform_setSensorsEnabled(void* _vc, int enabled)
   });
 }
 
+void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float minDist)
+{
+  GLViewController* vc = (__bridge GLViewController*)_vc;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [vc->mapsLocationMgr setBackgroundState:(state ? YES : NO)]
+  });
+}
+allowsBackgroundLocationUpdates
+
 void iosPlatform_swapBuffers(void* _vc)
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;
@@ -368,7 +387,52 @@ void iosPlatform_openURL(const char* url)
   });
 }
 
-//void iosPlatform_setStatusBarBG(void* _vc, BOOL isLight)
-//{
-//  GLViewController* vc = (__bridge GLViewController*)_vc;
-//}
+void iosPlatform_setStatusBarBG(void* _vc, int isLight)
+{
+  GLViewController* vc = (__bridge GLViewController*)_vc;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    vc->statusBarBGisLight = isLight;
+    [vc setNeedsStatusBarAppearanceUpdate];
+  });
+}
+
+// should be safe to access pasteboard from non-UI thread
+char* iosPlatform_getClipboardText()
+{
+  NSString* string = UIPasteboard.generalPasteboard.string;
+  if(!string) return NULL;
+  char* res = (char*)malloc(string.length+1);  // caller frees w/ SDL_free()
+  strcpy(res, string.UTF8String);
+  return res;
+}
+
+void iosPlatform_setClipboardText(const char* text)
+{
+  UIPasteboard.generalPasteboard.string = @(text);
+}
+
+// photos
+void* iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback))
+{
+  PHFetchOptions* options = [[PHFetchOptions alloc] init];
+  //options.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES]];
+  options.predicate = [NSPredicate predicateWithFormat:@"creationDate > %@",  //AND creationDate < %@
+      [NSDate dateWithTimeIntervalSince1970:sinceTimestamp]];
+  PHFetchResult<PHAsset*>* results = [PHAsset fetchAssetsWithMediaType:PHAssetMediaTypeImage options:options];
+  for (PHAsset* asset in results) {
+    CLLocationCoordinate2D loc = asset.location.coordinate;
+    callback([asset valueForKey:@"filename"].UTF8String, asset.localIdentifier.UTF8String,
+        loc.longitude, loc.latitude, asset.location.altitude, asset.creationDate.timeIntervalSince1970);
+  }
+}
+
+void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback)
+{
+  PHFetchResult<PHAsset*>* result = [PHAsset fetchAssetsWithLocalIdentifiers:@[@(localId)] options:nil];
+  if(result.count == 0) return;
+
+  [[PHImageManager defaultManager] requestImageDataAndOrientationForAsset:result.firstObject options:nil
+      resultHandler:^(NSData* imageData, NSString* dataUTI, CGImagePropertyOrientation orientation, NSDictionary* info) {
+        callback(imageData.bytes, imageData.length);
+      }];
+}];

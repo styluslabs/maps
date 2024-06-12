@@ -1,10 +1,11 @@
 #pragma once
 
 #include "ugui/svggui_platform.h"
+#include <functional>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+//#ifdef __cplusplus
+//extern "C" {
+//#endif
 
 // iOS -> app
 void iosApp_startApp(void* glView, const char* bundlePath);
@@ -18,6 +19,7 @@ void iosApp_onResume();
 void iosApp_updateLocation(double time, double lat, double lng, float poserr,
     double alt, float alterr, float dir, float direrr, float spd, float spderr);
 void iosApp_updateOrientation(float azimuth, float pitch, float roll);
+void iosApp_getGLConfig(int* samplesOut);
 
 // app -> iOS; in GLViewController.m
 void iosPlatform_pickDocument(void* _vc);
@@ -29,7 +31,16 @@ void iosPlatform_setImeText(void*_vc, const char* text, int selStart, int selEnd
 void iosPlatform_showKeyboard(void* _vc, SDL_Rect* rect);
 void iosPlatform_hideKeyboard(void* _vc);
 void iosPlatform_openURL(const char* url);
+void iosPlatform_setStatusBarBG(void* _vc, int isLight);
+void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float minDist);
+char* iosPlatform_getClipboardText();
+void iosPlatform_setClipboardText(const char* text);
 
-#ifdef __cplusplus
-}
-#endif
+typedef std::function<void(const char* name, const char* path, double lat, double lng, double alt, double ctime)> AddGeoTaggedPhotoFn;
+void* iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback);
+typedef std::function<void(void* data, size_t len)> GetPhotoFn;
+void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback);
+
+//#ifdef __cplusplus
+//}
+//#endif
