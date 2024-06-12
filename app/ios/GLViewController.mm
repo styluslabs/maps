@@ -2,8 +2,10 @@
 #import "OpenGLView.h"
 #include "iosApp.h"
 
-#pragma mark "Location manager"
 #import <CoreLocation/CoreLocation.h>
+#import <Photos/Photos.h>
+
+#pragma mark "Location manager"
 
 @interface MapsLocationMgr : NSObject<CLLocationManagerDelegate>
   @property (nonatomic, strong) CLLocationManager *locationManager;
@@ -270,7 +272,7 @@ static void sendKeyEvent(int keycode, int action)
 
 - (UIStatusBarStyle)preferredStatusBarStyle
 {
-  return statusBarBGisLight ? UIStatusBarStyleDarkContent : UIStatusBarStyleLightContent;
+  return statusBarBGisLight ? UIStatusBarStyleDefault : UIStatusBarStyleLightContent;  //UIStatusBarStyleDarkContent
 }
 
 @end
@@ -345,10 +347,9 @@ void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float 
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;
   dispatch_async(dispatch_get_main_queue(), ^{
-    [vc->mapsLocationMgr setBackgroundState:(state ? YES : NO)]
+    [vc->mapsLocationMgr setBackgroundState:(state ? YES : NO)];
   });
 }
-allowsBackgroundLocationUpdates
 
 void iosPlatform_swapBuffers(void* _vc)
 {
@@ -412,18 +413,33 @@ void iosPlatform_setClipboardText(const char* text)
 }
 
 // photos
-void* iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback))
+int iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback)
 {
+  if([PHPhotoLibrary authorizationStatus] != PHAuthorizationStatusAuthorized) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {}];
+    });
+    return 0;
+  }
+  else if(sinceTimestamp < 0)
+    return 1;  // access check
+
+  NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
+  [dateFormatter setDateFormat:@"YYYY-MM-dd HH:mm:ss"];
   PHFetchOptions* options = [[PHFetchOptions alloc] init];
   //options.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES]];
   options.predicate = [NSPredicate predicateWithFormat:@"creationDate > %@",  //AND creationDate < %@
       [NSDate dateWithTimeIntervalSince1970:sinceTimestamp]];
   PHFetchResult<PHAsset*>* results = [PHAsset fetchAssetsWithMediaType:PHAssetMediaTypeImage options:options];
   for (PHAsset* asset in results) {
+    if(!asset.location) continue;  // location property is marked as nullable
     CLLocationCoordinate2D loc = asset.location.coordinate;
-    callback([asset valueForKey:@"filename"].UTF8String, asset.localIdentifier.UTF8String,
+    if(loc.longitude == 0 && loc.latitude == 0) continue;
+    NSString* name = [dateFormatter stringFromDate:asset.creationDate];  //[asset valueForKey:@"filename"];
+    callback(name.UTF8String, asset.localIdentifier.UTF8String,
         loc.longitude, loc.latitude, asset.location.altitude, asset.creationDate.timeIntervalSince1970);
   }
+  return 1;
 }
 
 void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback)
@@ -431,8 +447,8 @@ void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback)
   PHFetchResult<PHAsset*>* result = [PHAsset fetchAssetsWithLocalIdentifiers:@[@(localId)] options:nil];
   if(result.count == 0) return;
 
-  [[PHImageManager defaultManager] requestImageDataAndOrientationForAsset:result.firstObject options:nil
-      resultHandler:^(NSData* imageData, NSString* dataUTI, CGImagePropertyOrientation orientation, NSDictionary* info) {
+  [[PHImageManager defaultManager] requestImageDataForAsset:result.firstObject options:nil
+      resultHandler:^(NSData* imageData, NSString* dataUTI, UIImageOrientation orientation, NSDictionary* info) {
         callback(imageData.bytes, imageData.length);
       }];
-}];
+}

@@ -527,7 +527,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
 #if PLATFORM_IOS
       std::string imgkey = "iOS-" + imgnode->m_linkStr;
       imgnode->setXmlId(imgkey.c_str());
-      iosPlatform_getPhotoData(imgnode->m_linkStr.c_str(), [=](void* data, size_t len){
+      iosPlatform_getPhotoData(imgnode->m_linkStr.c_str(), [=](const void* data, size_t len){
         Image image = Image::decodeBuffer(data, len);
         Image* pimg = new Image(std::move(image));  // std::function must be copyable
         MapsApp::runOnMainThread([=]() mutable {

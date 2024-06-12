@@ -1,11 +1,18 @@
 #pragma once
 
 #include "ugui/svggui_platform.h"
+
+#ifdef __cplusplus
 #include <functional>
 
-//#ifdef __cplusplus
-//extern "C" {
-//#endif
+// C++ fns available only in GLViewController.mm
+typedef std::function<void(const char* name, const char* path, double lat, double lng, double alt, double ctime)> AddGeoTaggedPhotoFn;
+int iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback);
+typedef std::function<void(const void* data, size_t len)> GetPhotoFn;
+void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback);
+
+extern "C" {
+#endif
 
 // iOS -> app
 void iosApp_startApp(void* glView, const char* bundlePath);
@@ -36,11 +43,6 @@ void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float 
 char* iosPlatform_getClipboardText();
 void iosPlatform_setClipboardText(const char* text);
 
-typedef std::function<void(const char* name, const char* path, double lat, double lng, double alt, double ctime)> AddGeoTaggedPhotoFn;
-void* iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback);
-typedef std::function<void(void* data, size_t len)> GetPhotoFn;
-void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback);
-
-//#ifdef __cplusplus
-//}
-//#endif
+#ifdef __cplusplus
+}
+#endif

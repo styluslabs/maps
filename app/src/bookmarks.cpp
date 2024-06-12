@@ -573,7 +573,7 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
     ++nimages;
   };
   iosPlatform_getGeoTaggedPhotos(0, photoCallback);
-  path = "Photo Library";
+  std::string errmsg = "No geotagged images found in Photo Library.  Perhaps Camera app does not have location permission?";
 #else
   std::vector<uint8_t> buf(2048);
   const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
@@ -678,12 +678,19 @@ Button* MapsBookmarks::createPanel()
     MapsApp::openFileDialog({{"GPX files", "gpx"}}, [this](const char* path){ importGpx(path); });
   });
   overflowMenu->addItem("Import photos", [=](){
+#if PLATFORM_IOS
+    if(!iosPlatform_getGeoTaggedPhotos(-1, {})) return;  // no access
+    int64_t list_id = insertNewList("Photo Library", nextListColor());
+    populateLists(false);
+    MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, "Photo Library"); });
+#else
     MapsApp::pickFolderDialog([this](const char* path){
       FSPath pathinfo(path);
       int64_t list_id = insertNewList(pathinfo.baseName(), nextListColor());
       populateLists(false);
       MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, pathinfo.c_str()); });
     });
+#endif
   });
   listHeader->addWidget(overflowBtn);
 

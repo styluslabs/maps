@@ -2,7 +2,6 @@
 #import <QuartzCore/QuartzCore.h>
 #include <OpenGLES/ES3/gl.h>
 #include <OpenGLES/ES3/glext.h>
-
 #include "iosApp.h"
 
 @interface OpenGLView() {
