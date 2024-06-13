@@ -6,9 +6,9 @@
 #include <functional>
 
 // C++ fns available only in GLViewController.mm
-typedef std::function<void(const char* name, const char* path, double lat, double lng, double alt, double ctime)> AddGeoTaggedPhotoFn;
+typedef std::function<void(const char* name, const char* path, double lng, double lat, double alt, double ctime)> AddGeoTaggedPhotoFn;
 int iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback);
-typedef std::function<void(const void* data, size_t len)> GetPhotoFn;
+typedef std::function<void(const void* data, size_t len, float orientation)> GetPhotoFn;
 void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback);
 
 extern "C" {

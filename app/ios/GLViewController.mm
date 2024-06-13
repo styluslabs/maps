@@ -413,6 +413,7 @@ void iosPlatform_setClipboardText(const char* text)
 }
 
 // photos
+
 int iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback)
 {
   if([PHPhotoLibrary authorizationStatus] != PHAuthorizationStatusAuthorized) {
@@ -435,11 +436,27 @@ int iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn c
     if(!asset.location) continue;  // location property is marked as nullable
     CLLocationCoordinate2D loc = asset.location.coordinate;
     if(loc.longitude == 0 && loc.latitude == 0) continue;
+    double alti = asset.location.altitude;
     NSString* name = [dateFormatter stringFromDate:asset.creationDate];  //[asset valueForKey:@"filename"];
     callback(name.UTF8String, asset.localIdentifier.UTF8String,
-        loc.longitude, loc.latitude, asset.location.altitude, asset.creationDate.timeIntervalSince1970);
+        loc.longitude, loc.latitude, std::isnan(alti) ? 0 : alti, asset.creationDate.timeIntervalSince1970);
   }
   return 1;
+}
+
+static float angleFromOrientation(UIImageOrientation imageOrientation)
+{
+  switch(imageOrientation) {
+    case UIImageOrientationUp: return 0;
+    case UIImageOrientationDown: return 180;
+    case UIImageOrientationLeft: return 270;
+    case UIImageOrientationRight: return 90;
+    case UIImageOrientationUpMirrored: return -360;
+    case UIImageOrientationDownMirrored: return -180;
+    case UIImageOrientationLeftMirrored: return -90;
+    case UIImageOrientationRightMirrored: return -270;
+  }
+  return 0;
 }
 
 void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback)
@@ -449,6 +466,6 @@ void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback)
 
   [[PHImageManager defaultManager] requestImageDataForAsset:result.firstObject options:nil
       resultHandler:^(NSData* imageData, NSString* dataUTI, UIImageOrientation orientation, NSDictionary* info) {
-        callback(imageData.bytes, imageData.length);
+        callback(imageData.bytes, imageData.length, angleFromOrientation(orientation));
       }];
 }

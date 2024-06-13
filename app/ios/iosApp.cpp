@@ -203,9 +203,9 @@ void iosApp_startApp(void* glView, const char* bundlePath)
   bool firstrun = !FSPath(MapsApp::baseDir, "config.default.yaml").exists();
   FSPath assetPath(bundlePath, "assets/");
   if(firstrun)
-    copyRecursive(assetPath, MapsApp::baseDir);
+    copyRecursive(assetPath, MapsApp::baseDir, true);
   if(MapsApp::loadConfig() && !firstrun)
-    copyRecursive(assetPath, MapsApp::baseDir);
+    copyRecursive(assetPath, MapsApp::baseDir, true);
 
   MapsApp::platform = Tangram::createiOSPlatform();
 }

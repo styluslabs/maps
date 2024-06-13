@@ -525,14 +525,19 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
       // this will be revisited when we have multiple images for display
       auto* imgnode = static_cast<SvgImage*>(node);
 #if PLATFORM_IOS
-      std::string imgkey = "iOS-" + imgnode->m_linkStr;
+      std::string imgkey = randomStr(16);
       imgnode->setXmlId(imgkey.c_str());
-      iosPlatform_getPhotoData(imgnode->m_linkStr.c_str(), [=](const void* data, size_t len){
+      iosPlatform_getPhotoData(imgnode->m_linkStr.c_str(), [=](const void* data, size_t len, float angle){
         Image image = Image::decodeBuffer(data, len);
         Image* pimg = new Image(std::move(image));  // std::function must be copyable
         MapsApp::runOnMainThread([=]() mutable {
           SvgNode* keynode = infoContent->containerNode()->selectFirst(("#" + imgkey).c_str());
           if(!pimg || keynode != imgnode) return;
+          if(angle != 0) {
+            auto tf = Transform2D::rotating(std::abs(angle)*M_PI/180.0);
+            if(angle < 0) tf.scale(-1, 0);
+            imgnode->setTransform(tf);
+          }
           imgnode->m_image = std::move(*pimg);
           imgnode->invalidate(false);  // redraw
           delete pimg;  pimg = NULL;
@@ -1828,10 +1833,9 @@ bool MapsApp::loadConfig()
 
   configFile = configPath.c_str();
   int prevver = config["prev_version"].as<int>(0);
-  bool updateassets = prevver < versionCode && prevver >= 0;
-  if(updateassets)
+  if(prevver < versionCode && prevver >= 0)
     config["prev_version"] = versionCode;
-  return updateassets;
+  return prevver < versionCode;  // set prev_version < 0 to update assets every run
 }
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just

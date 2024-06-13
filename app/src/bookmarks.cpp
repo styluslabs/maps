@@ -567,7 +567,7 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
   const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
       "VALUES (?,?,?,?,?,?,?,?);";
   SQLiteStmt insbkmk(app->bkmkDB, query);
-  auto photoCallback = [&](const char* name, const char* path, double lat, double lng, double alt, double ctime){
+  auto photoCallback = [&](const char* name, const char* path, double lng, double lat, double alt, double ctime){
     std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'/>"}]})", alt, path);
     insbkmk.bind(list_id, 0, name, props, "", lng, lat, ctime).exec();
     ++nimages;
@@ -606,8 +606,8 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
     insbkmk.bind(list_id, 0, fpath.baseName(), props, "", exif.GeoLocation.Longitude, exif.GeoLocation.Latitude, date).exec();
     ++nimages;
   }
-#endif
   std::string errmsg = fstring("No geotagged images found in %s", path);
+#endif
   MapsApp::runOnMainThread([=](){
     if(!nimages)
       MapsApp::messageBox("Import images", errmsg, {"OK"});

@@ -749,7 +749,7 @@ Button* MapsSources::createPanel()
   });
   overflowMenu->addItem("Restore default sources", [=](){
     FSPath path = FSPath(app->configFile).parent().child("mapsources.default.yaml");
-    importSources(path.path);
+    importSources("file://" + path.path);
   });
 
   overflowMenu->addItem("Clear cache", [=](){
