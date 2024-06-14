@@ -1,6 +1,7 @@
 #include "mapsapp.h"
 #include "tangram.h"
 #include "scene/scene.h"
+#include "gl/shaderSource.h"  // to set GLSL version
 #include "util.h"
 #include "pugixml.hpp"
 #include "rapidjson/document.h"
@@ -1932,6 +1933,10 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     }
   };
 
+  // GLES 3 needed on iOS for highp float textures
+#if PLATFORM_MOBILE
+  Tangram::ShaderSource::glesVersion = 300;
+#endif
   map.reset(new Tangram::Map(std::unique_ptr<Platform>(_platform)));
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});

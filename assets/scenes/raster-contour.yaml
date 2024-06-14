@@ -120,6 +120,8 @@ styles:
                 SHOW_ANGLE: false
                 FLOAT_TEX: true
                 RASTER_BASE_COLOR: 'sampleRaster(0)'
+                # sampler2D default is lowp!
+                TANGRAM_RASTER_PRECISION: 'highp'
             uniforms:
                 u_exaggerate: 4.5
                 CONTOUR_COLOR: global.contour_color
@@ -171,7 +173,7 @@ styles:
             blocks:
                 global: |
                     #ifdef TANGRAM_FRAGMENT_SHADER
-                    float getElevation(sampler2D tex, vec2 uv) {  // in meters
+                    float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters
                         vec4 h = texture2D(tex, uv);
                     #ifdef FLOAT_TEX
                         return h.r;
