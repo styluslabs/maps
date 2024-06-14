@@ -17,7 +17,7 @@ function wikipediaSearch(query, bounds, flags)
   if(radkm <= 10) {
     // much faster than sparql query but limited to 10km radius; seems returned dist is sometime a bit off
     const url = "https://en.wikipedia.org/w/api.php?action=query&format=json&list=geosearch&gslimit=500&gsradius="
-        + (radkm*1000).toFixed(0) + "&gscoord=" + lat + '|' + lng;
+        + (radkm*1000).toFixed(0) + "&gscoord=" + lat + "%7C" + lng;  // | -> %7C
 
     httpRequest(url, function(_content, _error) {
       if(!_content) { notifyError("search", "Wikipedia Search error: " + _error); return; }
@@ -39,7 +39,7 @@ function wikipediaSearch(query, bounds, flags)
     // some wikidata entries have multiple entries for P625 (coordinates); GROUP_CONCAT instead of SAMPLE
     //  breaks ordering by dist; queries attempting to extract numerical lng, lat timed out
     // seems wikidata does not store wikipedia pageid, only title and URL
-    const url = 'https://query.wikidata.org/sparql?query=' + encodeURI(
+    const url = 'https://query.wikidata.org/sparql?query=' + encodeURIComponent(
       'SELECT ?item ?itemLabel (SAMPLE(?wikiTitle) AS ?wikiTitle)' +
       '    (SAMPLE(?where) AS ?lnglat) (SAMPLE(?dists) AS ?dist) ?url WHERE {' +
       '  ?url schema:about ?item; schema:name ?wikiTitle; schema:inLanguage "en";' +

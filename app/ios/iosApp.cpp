@@ -91,6 +91,7 @@ int SDL_PeepEvents(SDL_Event* events, int numevents, SDL_eventaction action, Uin
 
 void PLATFORM_setImeText(const char* text, int selStart, int selEnd)
 {
+  //LOGW("app -> iOS SEND: '%s', %d,%d ", text, selStart, selEnd);
   iosPlatform_setImeText(sdlWin, text, selStart, selEnd);
 }
 
@@ -232,6 +233,7 @@ void iosApp_getGLConfig(int* samplesOut)
 void iosApp_imeTextUpdate(const char* text, int selStart, int selEnd)
 {
   std::string str(text);
+  //LOGW("iOS -> app RECV: '%s', %d,%d ", text, selStart, selEnd);
   MapsApp::runOnMainThread([=]() {
     SDL_Event event = {0};
     event.type = SVGGUI_IME_TEXT_UPDATE;

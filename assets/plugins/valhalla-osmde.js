@@ -22,7 +22,7 @@ function valhallaOsmde(mode, waypoints)
 
   const req = {"costing": profile, "costing_options": valhalla_options[profile], "locations": locations, "exclude_polygons":[], "directions_options":{"units":"kilometers"}, "id":"valhalla_directions"};
 
-  httpRequest(url + JSON.stringify(req), hdrs, function(_content, _error) {
+  httpRequest(url + encodeURIComponent(JSON.stringify(req)), hdrs, function(_content, _error) {
     if(!_content)
       notifyError("route", "Valhalla osm.de error");
     else {

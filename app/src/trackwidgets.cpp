@@ -8,15 +8,18 @@ TrackPlot::TrackPlot()  // : CustomWidget()
   addHandler([this](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::MULTITOUCH) {
       auto points = static_cast<std::vector<SDL_Finger>*>(event->user.data2);
-      if(points->size() != 2) return false;
+      if(points->size() != 2) {
+        prevPinchDist = 0;
+        return false;
+      }
       SDL_Finger& pt1 = points->front();
       SDL_Finger& pt2 = points->back();
       real pinchcenter = (pt1.x - pt2.x)/2;
       real pinchdist = std::abs(pt1.x - pt2.x);
       SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
-      if(fevent->tfinger.type == SDL_FINGERMOTION) {
+      if(prevPinchDist > 0 && fevent->tfinger.type == SDL_FINGERMOTION) {
         //zoomOffset += pinchcenter - prevCOM;
-        zoomScale = std::max(1.0, zoomScale*pinchdist/prevPinchDist);
+        zoomScale = std::min(std::max(1.0, zoomScale*pinchdist/prevPinchDist), maxZoom);
         updateZoomOffset(pinchcenter - prevCOM);
         redraw();
       }
@@ -25,6 +28,7 @@ TrackPlot::TrackPlot()  // : CustomWidget()
     }
     else if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
       prevCOM = event->tfinger.x;
+      prevPinchDist = 0;
       gui->setPressed(this);
     }
     else if(event->type == SDL_FINGERMOTION && gui->pressedWidget == this) {

@@ -94,34 +94,37 @@ static void sendKeyEvent(int keycode, int action)
 }
 @end
 
-@implementation TextFieldMgr
+@implementation TextFieldMgr {
+  GLViewController* viewCtrl;
+  int inputBottom;
+  int keyboardHeight;
+  BOOL enableUpdate;
+}
 
-//@synthesize textInputRect;
-//@synthesize keyboardHeight;
-//@synthesize keyboardVisible;
-
-- (instancetype)init
+- (instancetype)initWithViewCtrl:(GLViewController*)_vc
 {
-    self = [super init];
-    textField = [[UITextField alloc] initWithFrame:CGRectZero];
-    textField.delegate = self;
-    //textField.text = @"";
-    /* set UITextInputTrait properties, mostly to defaults */
-    //textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    //textField.autocorrectionType = UITextAutocorrectionTypeNo;
-    //textField.enablesReturnKeyAutomatically = NO;
-    //textField.keyboardAppearance = UIKeyboardAppearanceDefault;
-    //textField.keyboardType = UIKeyboardTypeDefault;
-    //textField.returnKeyType = UIReturnKeyDefault;
-    //textField.secureTextEntry = NO;
-    textField.hidden = YES;
-    //keyboardVisible = NO;
+  self = [super init];
+  enableUpdate = YES;
+  viewCtrl = _vc;
+  textField = [[UITextField alloc] initWithFrame:CGRectZero];
+  textField.delegate = self;
+  //textField.text = @"";
+  /* set UITextInputTrait properties, mostly to defaults */
+  //textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+  //textField.autocorrectionType = UITextAutocorrectionTypeNo;
+  //textField.enablesReturnKeyAutomatically = NO;
+  //textField.keyboardAppearance = UIKeyboardAppearanceDefault;
+  //textField.keyboardType = UIKeyboardTypeDefault;
+  //textField.returnKeyType = UIReturnKeyDefault;
+  //textField.secureTextEntry = NO;
+  textField.hidden = YES;
+  //keyboardVisible = NO;
 
-    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
-    [center addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
-    [center addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
-    [center addObserver:self selector:@selector(textFieldTextDidChange:) name:UITextFieldTextDidChangeNotification object:nil];
-    return self;
+  NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+  [center addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
+  [center addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
+  [center addObserver:self selector:@selector(textFieldTextDidChange:) name:UITextFieldTextDidChangeNotification object:nil];
+  return self;
 }
 
 - (void)dealloc
@@ -132,56 +135,47 @@ static void sendKeyEvent(int keycode, int action)
     [center removeObserver:self name:UITextFieldTextDidChangeNotification object:nil];
 }
 
-- (void)showKeyboard
+- (void)showKeyboard:(int)_inputBottom
 {
-    //keyboardVisible = YES;
-    if (textField.window) {
-        [textField becomeFirstResponder];
-    }
+  inputBottom = _inputBottom;
+  //keyboardVisible = YES;
+  if (textField.window) {
+    [textField becomeFirstResponder];
+  }
 }
 
 - (void)hideKeyboard
 {
-    //keyboardVisible = NO;
-    [textField resignFirstResponder];
+  //keyboardVisible = NO;
+  [textField resignFirstResponder];
 }
 
-- (void)setImeText:(const char*)text selStart:(int)selStart selEnd:(int)selEnd
+- (void)setImeText:(const char*)text selStart:(int)start selEnd:(int)end
 {
+  enableUpdate = NO;
+  //NSLog(@"app -> iOS RECV: '%@', %d,%d", currText, start, end);
   textField.text = @(text);
   // unbelievable
-  UITextPosition *beginning = textField.beginningOfDocument;
-  UITextPosition *start = [textField positionFromPosition:beginning offset:selStart];
-  UITextPosition *end = [textField positionFromPosition:beginning offset:selEnd];
-  textField.selectedTextRange = [textField textRangeFromPosition:start toPosition:end];
-}
-
-- (void)keyboardWillShow:(NSNotification *)notification
-{
-    //CGRect kbrect = [[notification userInfo][UIKeyboardFrameEndUserInfoKey] CGRectValue];
-    //kbrect = [self.view convertRect:kbrect fromView:nil];
-    //[self setKeyboardHeight:(int)kbrect.size.height];
-}
-
-- (void)keyboardWillHide:(NSNotification *)notification
-{
-    //if (!rotatingOrientation) { SDL_StopTextInput(); }
-    //[self setKeyboardHeight:0];
+  UITextPosition* pos0 = textField.beginningOfDocument;
+  UITextPosition* posStart = [textField positionFromPosition:pos0 offset:start];
+  UITextPosition* posEnd = [textField positionFromPosition:pos0 offset:end];
+  textField.selectedTextRange = [textField textRangeFromPosition:posStart toPosition:posEnd];
+  enableUpdate = YES;
 }
 
 - (void)imeTextUpdate
 {
-  const char* text = [textField.text UTF8String];
+  if(!enableUpdate) return;
   // unbelievable
   UITextRange* sel = textField.selectedTextRange;
+  int start = 0, end = 0;
   if(sel) {
-    UITextPosition *beginning = textField.beginningOfDocument;
-    const NSInteger start = [textField offsetFromPosition:beginning toPosition:sel.start];
-    const NSInteger end = [textField offsetFromPosition:beginning toPosition:sel.end];
-    iosApp_imeTextUpdate(text, start, end);
+    UITextPosition* pos0 = textField.beginningOfDocument;
+    start = [textField offsetFromPosition:pos0 toPosition:sel.start];
+    end = [textField offsetFromPosition:pos0 toPosition:sel.end];
   }
-  else
-    iosApp_imeTextUpdate(text, 0, 0);
+  //NSLog(@"iOS -> app SEND: '%@', %d,%d", currText, start, end);
+  iosApp_imeTextUpdate(textField.text.UTF8String, start, end);
 }
 
 - (void)textFieldTextDidChange:(NSNotification *)notification
@@ -194,32 +188,35 @@ static void sendKeyEvent(int keycode, int action)
   [self imeTextUpdate];
 }
 
-/*- (void)updateKeyboard
+- (void)keyboardWillShow:(NSNotification *)notification
 {
-    CGAffineTransform t = self.view.transform;
-    CGPoint offset = CGPointMake(0.0, 0.0);
-    CGRect frame = UIKit_ComputeViewFrame(window, self.view.window.screen);
-    if (self.keyboardHeight) {
-        int rectbottom = self.textInputRect.y + self.textInputRect.h;
-        int keybottom = self.view.bounds.size.height - self.keyboardHeight;
-        if (keybottom < rectbottom) {
-            offset.y = keybottom - rectbottom;
-        }
-    }
-    t.tx = 0.0;
-    t.ty = 0.0;
-    offset = CGPointApplyAffineTransform(offset, t);
-    frame.origin.x += offset.x;
-    frame.origin.y += offset.y;
-    self.view.frame = frame;
+  CGRect kbrect = [[notification userInfo][UIKeyboardFrameEndUserInfoKey] CGRectValue];
+  kbrect = [viewCtrl.view convertRect:kbrect fromView:nil];
+  [self setKeyboardHeight:(int)kbrect.size.height];
+}
+
+- (void)keyboardWillHide:(NSNotification *)notification
+{
+  //if (!rotatingOrientation) { SDL_StopTextInput(); }
+  [self setKeyboardHeight:0];
+}
+
+- (void)updateKeyboard
+{
+  CGRect bounds = [[UIApplication sharedApplication] keyWindow].bounds;
+  int kbbottom = bounds.size.height - keyboardHeight;
+  if(keyboardHeight > 0 && inputBottom > kbbottom)
+    viewCtrl.view.frame = CGRectOffset(bounds, 0, kbbottom - inputBottom);
+  else
+    viewCtrl.view.frame = bounds;
 }
 
 - (void)setKeyboardHeight:(int)height
 {
-    keyboardVisible = height > 0;
-    keyboardHeight = height;
-    [self updateKeyboard];
-}*/
+  //keyboardVisible = height > 0;
+  keyboardHeight = height;
+  [self updateKeyboard];
+}
 
 //- (BOOL)textField:(UITextField *)_textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string
 //{
@@ -252,7 +249,7 @@ static void sendKeyEvent(int keycode, int action)
   NSString* bundlePath = [[NSBundle mainBundle] bundlePath];
   iosApp_startApp((__bridge void*)self, [bundlePath UTF8String]);
   mapsLocationMgr = [[MapsLocationMgr alloc] init];
-  textFieldMgr = [[TextFieldMgr alloc] init];
+  textFieldMgr = [[TextFieldMgr alloc] initWithViewCtrl:self];
   [mapsLocationMgr startSensors];
   statusBarBGisLight = YES;
   return self;
@@ -325,8 +322,8 @@ void iosPlatform_pickDocument(void* _vc)  //long mode)
 void iosPlatform_exportDocument(void* _vc, const char* filename)
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;
+  NSURL* url = [NSURL fileURLWithPath:@(filename)];
   dispatch_async(dispatch_get_main_queue(), ^{
-    NSURL* url = [NSURL fileURLWithPath:@(filename)];
     DocumentPicker *documentPicker = [[DocumentPicker alloc]
                                       initWithURL:url inMode:UIDocumentPickerModeExportToService];
     documentPicker.delegate = documentPicker;
@@ -366,13 +363,19 @@ void iosPlatform_setContextCurrent(void* _vc)
 void iosPlatform_setImeText(void*_vc, const char* text, int selStart, int selEnd)
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;
-  dispatch_async(dispatch_get_main_queue(), ^{ [vc->textFieldMgr setImeText:text selStart:selStart selEnd:selEnd]; });
+  NSString* str = @(text);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [vc->textFieldMgr setImeText:str.UTF8String selStart:selStart selEnd:selEnd];
+  });
 }
 
 void iosPlatform_showKeyboard(void* _vc, SDL_Rect* rect)
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;
-  dispatch_async(dispatch_get_main_queue(), ^{ [vc->textFieldMgr showKeyboard]; });
+  int bottom = (rect->y + rect->h);  // get contentScaleFactor on main thread to avoid UIKit complaint
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [vc->textFieldMgr showKeyboard:(bottom/vc.view.contentScaleFactor)];
+  });
 }
 
 void iosPlatform_hideKeyboard(void* _vc)
@@ -383,8 +386,9 @@ void iosPlatform_hideKeyboard(void* _vc)
 
 void iosPlatform_openURL(const char* url)
 {
+  NSURL* nsurl = [NSURL URLWithString:@(url)];
   dispatch_async(dispatch_get_main_queue(), ^{
-    [UIApplication.sharedApplication openURL:[NSURL URLWithString:@(url)] options:@{} completionHandler:nil];
+    [UIApplication.sharedApplication openURL:nsurl options:@{} completionHandler:nil];
   });
 }
 
@@ -451,7 +455,7 @@ static float angleFromOrientation(UIImageOrientation imageOrientation)
     case UIImageOrientationDown: return 180;
     case UIImageOrientationLeft: return 270;
     case UIImageOrientationRight: return 90;
-    case UIImageOrientationUpMirrored: return -360;
+    case UIImageOrientationUpMirrored: return -360;  // we use negative angle to indicate mirrored image
     case UIImageOrientationDownMirrored: return -180;
     case UIImageOrientationLeftMirrored: return -90;
     case UIImageOrientationRightMirrored: return -270;
