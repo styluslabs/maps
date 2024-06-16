@@ -17,7 +17,7 @@
     android:hardwareAccelerated="true"
     android:usesCleartextTraffic="true"
     android:icon="@mipmap/ic_launcher"
-    android:label="Explore">
+    android:label="Ascend">
 
     <!-- Required to enable sharing of files -->
     <provider

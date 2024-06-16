@@ -28,8 +28,8 @@ IOS_CMAKE_PARAMS = \
 #	-DCMAKE_OSX_ARCHITECTURES=arm64 \
 
 GITREV := $(shell git rev-parse --short HEAD)
-TGZ = explore-$(GITREV).tar.gz
-TGT = $(LINUX_BUILD_DIR)/explore
+TGZ = ascend-$(GITREV).tar.gz
+TGT = $(LINUX_BUILD_DIR)/ascend
 
 DISTRES = \
 	assets/config.default.yaml \
@@ -58,7 +58,7 @@ tgz: linux $(DISTRES)
 	mkdir -p $(LINUX_BUILD_DIR)/.dist
 	mv $(TGT) $(LINUX_BUILD_DIR)/.dist
 	cp -R -L $(DISTRES) $(LINUX_BUILD_DIR)/.dist
-	(cd $(LINUX_BUILD_DIR) && mv .dist Explore && tar --remove-files -czvf $(TGZ) Explore)
+	(cd $(LINUX_BUILD_DIR) && mv .dist Ascend && tar --remove-files -czvf $(TGZ) Ascend)
 
 clean-ios:
 	rm -rf ${IOS_BUILD_DIR}

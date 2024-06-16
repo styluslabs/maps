@@ -2,9 +2,9 @@
 Type=Application
 # desktop entry spec version
 Version=1.0
-Name=Explore
+Name=Ascend
 Comment=Maps for outdoor activities
-Exec=/opt/Maps/tangram
+Exec=/opt/Maps/ascend
 Icon=Maps144x144
 MimeType=application/gpx+xml;
 Terminal=false

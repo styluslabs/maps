@@ -92,8 +92,8 @@ public class MapsService extends Service implements LocationListener
     PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
 
     Notification notification = new Notification.Builder(this, CHANNEL_ID)  //NotificationCompat
-        .setContentTitle("Explore")
-        .setContentText("Explore is recording a track")
+        .setContentTitle("Ascend")
+        .setContentText("Ascend Maps is recording a track")
         .setSmallIcon(R.mipmap.ic_launcher)
         .setContentIntent(pendingIntent)
         .build();

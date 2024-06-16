@@ -8,18 +8,18 @@
 #  name used for raster cache file name unless overridden (cache: false to disable)
 
 stylus-osm:
-    title: Stylus Labs OSM Flat
+    title: Ascend OSM Base
     scene: scenes/stylus-osm.yaml
     archived: true
 
 stylus-osm-dark:
-    title: Stylus Labs OSM Dark
+    title: Ascend OSM Dark
     layer: true
     scene: scenes/stylus-osm-dark.yaml
     archived: true
 
 stylus-osm-terrain:
-    title: Stylus Labs OSM
+    title: Ascend OSM
     layer: true
     layers:
         - source: stylus-osm
@@ -29,7 +29,7 @@ stylus-osm-terrain:
         styles.hillshade.shaders.defines.SHOW_CONTOURS: global.show_trails
 
 stylus-satellite:
-    title: Stylus Labs OSM + Satellite
+    title: Ascend OSM + Satellite
     layers:
         - source: bing-earth
         - source: stylus-osm-dark
@@ -37,7 +37,7 @@ stylus-satellite:
         global.show_polygons: false
 
 stylus-worldcover:
-    title: Stylus Labs OSM + Worldcover
+    title: Ascend OSM + Worldcover
     layers:
         - {source: worldcover}
         - {source: stylus-osm-terrain}
@@ -46,7 +46,7 @@ stylus-worldcover:
         global.show_trails: true
 
 stylus-bike-hike:
-  title: Stylus Labs OSM Bike & Hike
+  title: Ascend OSM Bike & Hike
   layers:
     - {source: stylus-osm-terrain}
     - {source: hillshade}

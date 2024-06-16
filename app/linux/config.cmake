@@ -76,7 +76,7 @@ target_link_libraries(tangram
 )
 
 # set exe name
-set_target_properties(tangram PROPERTIES OUTPUT_NAME explore)
+set_target_properties(tangram PROPERTIES OUTPUT_NAME ascend)
 
 target_compile_options(tangram
   PRIVATE

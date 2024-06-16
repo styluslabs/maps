@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 14)
 
-project(explore)
+project(ascend)
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/styluslabs")
   set(STYLUSLABS_DEPS "styluslabs")
