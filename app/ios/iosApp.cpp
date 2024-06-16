@@ -107,7 +107,7 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, OpenFileFn_t callb
 
 void MapsApp::pickFolderDialog(OpenFileFn_t callback)
 {
-  //TODO
+  // ... not used on iOS (photos are loaded with PhotoKit API)
 }
 
 void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback)
@@ -156,9 +156,16 @@ int mainLoop(int width, int height, float dpi)
     app->setDpi(dpi);
     app->createGUI(sdlWin);
   }
-  else
+  else {
     MapsApp::mainThreadId = std::this_thread::get_id();
-  //app->glNeedsInit = true;
+    SDL_Event event = {0};
+    event.type = SDL_WINDOWEVENT;
+    event.window.event = SDL_WINDOWEVENT_SIZE_CHANGED;
+    event.window.data1 = width;
+    event.window.data2 = height;
+    MapsApp::sdlEvent(&event);
+    //app->win->redraw();  // even if window size is unchanged, we want to redraw
+  }
   LOGW("Entering main loop");
   MapsApp::runApplication = true;
   while(MapsApp::runApplication) {
@@ -195,7 +202,7 @@ void copyRecursive(FSPath src, FSPath dest, bool replace = false)
 void iosApp_startApp(void* glView, const char* bundlePath)
 {
   static const int versionCode = 1;
-  
+
   sdlWin = (SDL_Window*)glView;
   const char* ioshome = getenv("HOME");
   MapsApp::baseDir = FSPath(ioshome, "Documents/").path;

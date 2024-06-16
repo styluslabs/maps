@@ -157,3 +157,5 @@ Widget* createDatePicker(int year0, int month0, int day0, std::function<void(int
 Dialog* createMobileDialog(const char* title, const char* acceptTitle, Widget* content = NULL);
 Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* title,
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel = {});
+class ScrollWidget;
+ScrollWidget* createScrollWidget(Widget* contents, real minHeight = 120, real maxHeight = -160);

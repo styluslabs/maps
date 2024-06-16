@@ -34,6 +34,26 @@ Button* createActionbutton(const SvgNode* icon, const char* title, bool showTitl
   return widget;
 }
 
+ScrollWidget* createScrollWidget(Widget* contents, real minHeight, real maxHeight)  //real minw, real maxw
+{
+  auto scrollWidget = new ScrollWidget(new SvgDocument(), contents);
+  scrollWidget->node->setAttribute("box-anchor", "fill");
+  if(minHeight == 0 && maxHeight == 0) return scrollWidget;
+
+  scrollWidget->node->addClass("scrollwidget-var-height");
+  auto oldPrepLayout = scrollWidget->onPrepareLayout;
+  scrollWidget->onPrepareLayout = [=](){
+    if((scrollWidget->layBehave & LAY_VFILL) == LAY_VFILL) return oldPrepLayout();
+    // set height to percent units to force relayout
+    static_cast<SvgDocument*>(scrollWidget->node)->setHeight(SvgLength(100, SvgLength::PERCENT));
+    Rect bbox = oldPrepLayout();
+    real minh = minHeight < 0 ? scrollWidget->window()->winBounds().height() + minHeight : minHeight;
+    real maxh = maxHeight < 0 ? scrollWidget->window()->winBounds().height() + maxHeight : maxHeight;
+    return Rect::wh(bbox.width(), bbox.height() > 0 ? std::min(std::max(bbox.height(), minh), maxh) : 0);
+  };
+  return scrollWidget;
+}
+
 static SvgDocument* createMobileDialogNode()
 {
   return setupWindowNode(static_cast<SvgDocument*>(widgetNode("#mobile-dialog")));
@@ -78,8 +98,7 @@ SelectDialog::SelectDialog(SvgDocument* n, const std::vector<std::string>& _item
   Button* cancelBtn = new Button(containerNode()->selectFirst(".cancel-btn"));
   cancelBtn->onClicked = [=](){ finish(Dialog::CANCELLED); };
   Widget* dialogBody = selectFirst(".body-container");
-  ScrollWidget* scrollWidget = new ScrollWidget(new SvgDocument(), content);
-  scrollWidget->node->setAttribute("box-anchor", "fill");
+  ScrollWidget* scrollWidget = createScrollWidget(content, 0, 0);
   dialogBody->addWidget(scrollWidget);
 
   if(!_items.empty())
@@ -270,9 +289,8 @@ DragDropList::DragDropList(Widget* _content) : Widget(new SvgG)
   node->setAttribute("layout", "box");
   content = _content ? _content->selectFirst(".list-container") : createColumn();
   Widget* scroll_content = _content ? _content : content;
-  scrollWidget = new ScrollWidget(new SvgDocument(), scroll_content);
+  scrollWidget = createScrollWidget(scroll_content);
   scroll_content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
-  scrollWidget->node->setAttribute("box-anchor", "fill");
   addWidget(scrollWidget);
 
   SvgNode* fnode = loadSVGFragment(R"#(<g display="none" class="floating" position="absolute"></g>)#");
@@ -526,7 +544,7 @@ Button* createListItem(SvgNode* icon, const char* title, const char* note)
   // previously used margin="0 5", but I think any margin should be on container
   static const char* listItemProtoSVG = R"(
     <g class="listitem" margin="0 0" layout="box" box-anchor="hfill">
-      <rect box-anchor="hfill" width="48" height="42"/>
+      <rect class="listitem-bg" box-anchor="hfill" width="48" height="42"/>
       <use class="drag-indicator icon" display="none" box-anchor="left" opacity="0.7" width="8" height="32" xlink:href=":/ui-icons.svg#drag-indicator"/>
       <g class="child-container" layout="flex" flex-direction="row" box-anchor="fill">
         <g class="toolbutton drag-btn" margin="2 3 2 7">

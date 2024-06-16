@@ -1358,8 +1358,7 @@ void MapsTracks::createStatsContent()
   statsContent->addWidget(createStatsRow({"Moving time (GPS)", "track-moving-time-gps", "Max speed", "track-max-speed",
       "Raw distance", "track-raw-dist", "Moving distance", "track-moving-dist"}));
 #endif
-  auto statsContainer = new ScrollWidget(new SvgDocument(), statsContent);
-  statsContainer->node->setAttribute("box-anchor", "fill");
+  auto* statsContainer = createScrollWidget(statsContent);
   trackContainer->addWidget(statsContainer);
   statsWidgets.push_back(statsContainer);
 }
@@ -1573,8 +1572,7 @@ void MapsTracks::createPlotContent()
 
   // stack (invisible) sliders on top of plot
   auto* plotContent = createColumn({axisSelRow, trackSliders, editTrackTb}, "", "", "hfill");
-  auto* plotContainer = new ScrollWidget(new SvgDocument(), plotContent);
-  plotContainer->node->setAttribute("box-anchor", "fill");
+  auto* plotContainer = createScrollWidget(plotContent);
   trackContainer->addWidget(plotContainer);
   plotWidgets.push_back(plotContainer);
 

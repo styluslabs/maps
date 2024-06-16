@@ -15,15 +15,33 @@
 #define GL_GLEXT_PROTOTYPES
 #include "ugui/example/glfwSDL.h"
 #include "ugui/svggui_util.h"  // sdlEventLog for debugging
+#include "stb_image_write.h"
 
 
 static bool debugHovered = false;
+static bool takeScreenshot = false;
 
 void PLATFORM_WakeEventLoop() { glfwPostEmptyEvent(); }
 void TANGRAM_WakeEventLoop() { glfwPostEmptyEvent(); }
 
 // only needed for mobile
 void PLATFORM_setImeText(const char* text, int selStart, int selEnd) {}
+
+// spent more time trying to get xwd, maim, scrot, etc. working than it took to write this
+static void screenshotPng(int width, int height)
+{
+  Image img(width, height);
+  glReadBuffer(GL_FRONT);  // to get MSAA resolve ... in general reading front buffer not guaranteed to work
+  glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, img.pixels());
+  glReadBuffer(GL_BACK);
+  auto pngname = std::to_string(mSecSinceEpoch()/1000) + ".png";
+  FileStream fstrm(pngname.c_str(), "wb");
+  stbi_flip_vertically_on_write(1);
+  auto encoded = img.encodePNG();
+  stbi_flip_vertically_on_write(0);
+  fstrm.write((char*)encoded.data(), encoded.size());
+  PLATFORM_LOG("Screenshot written to %s\n", pngname.c_str());
+}
 
 void glfwSDLEvent(SDL_Event* event)
 {
@@ -38,12 +56,16 @@ void glfwSDLEvent(SDL_Event* event)
   }
   //LOGW("%s", sdlEventLog(event).c_str());
   if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_PRINTSCREEN) {
-    if(event->key.keysym.mod & KMOD_CTRL)
+    if((event->key.keysym.mod & KMOD_CTRL) && (event->key.keysym.mod & KMOD_SHIFT))
+      MapsApp::gui->pushUserEvent(SvgGui::KEYBOARD_HIDDEN, 0);  // can't use a menu item for this obviously
+    else if(event->key.keysym.mod & KMOD_CTRL)
       SvgGui::debugDirty = !SvgGui::debugDirty;
     else if(event->key.keysym.mod & KMOD_ALT)
       debugHovered = true;
-    else if(event->key.keysym.mod & KMOD_SHIFT)
-      MapsApp::gui->pushUserEvent(SvgGui::KEYBOARD_HIDDEN, 0);  // can't use a menu item for this obviously
+    else if(event->key.keysym.mod & KMOD_SHIFT) {
+      takeScreenshot = true;
+      MapsApp::platform->requestRender();
+    }
     else
       SvgGui::debugLayout = true;
   }
@@ -119,7 +141,7 @@ int main(int argc, char* argv[])
     else if(strcmp(argv[argi], "--import") == 0) {
       importFile = canonicalPath(argv[argi+1]);
       MapsApp::taskQueue.push_back([=](){
-        MapsApp::inst->setWindowLayout(1000);  // required to show panel
+        MapsApp::inst->setWindowLayout(1000, 1000);  // required to show panel
         MapsApp::inst->showPanel(MapsApp::inst->mapsOffline->offlinePanel);
         MapsApp::inst->mapsOffline->populateOffline();
         MapsApp::inst->mapsOffline->openForImport(importFile);
@@ -200,6 +222,10 @@ int main(int argc, char* argv[])
     if(app->drawFrame(fbWidth, fbHeight))
       glfwSwapBuffers(glfwWin);
 
+    if(takeScreenshot) {
+      screenshotPng(fbWidth, fbHeight);
+      takeScreenshot = false;
+    }
     if(debugHovered && MapsApp::gui->hoveredWidget) {
       XmlStreamWriter xmlwriter;
       SvgWriter::DEBUG_CSS_STYLE = true;

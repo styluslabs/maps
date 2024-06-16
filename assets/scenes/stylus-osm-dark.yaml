@@ -24,7 +24,7 @@ global:
         bldg: [.50, .50, .50]
         bldg_3d: [.50, .50, .50, 0.5]
         bldg_3d_line: [.55, .55, .55, 0.5]
-        # lines ... overlapping segments are a problem when using transparency
+        # lines
         road: rgba(196, 196, 196, 0.4)  #rgb(130, 130, 130)
         tunnel: rgba(227, 227, 227, 0.4)  #rgb(160, 160, 160)
         oneway_arrow: '#ddd'
@@ -33,6 +33,9 @@ global:
         motorway_muted: rgba(255, 255, 255, 0.4)
         path: rgba(255, 255, 255, 0.4)
         unpaved_trail: hsl(33, 100%, 75%)
+        bike_lane: '#408840'
+        bike_path: '#60C060'
+        bike_unpaved: '#60C000'
         # text
         default_label: white
         default_halo: black
@@ -49,8 +52,8 @@ global:
         water_name: hsl(190, 32%, 76%)
         water_halo: black
 
-# alpha-blending is disabled for default opaque blend mode for lines
+# two-pass method used by translucent blend mode eliminates issue w/ overlapping line segments when alpha < 1
 styles:
     unlit-lines:
-        blend: inlay
+        blend: translucent
         blend_order: -1001

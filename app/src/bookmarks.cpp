@@ -121,8 +121,7 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
 
   Widget* dialogBody = chooseListDialog->selectFirst(".body-container");
   dialogBody->addWidget(newListContent);
-  auto scrollWidget = new ScrollWidget(new SvgDocument(), content);
-  scrollWidget->node->setAttribute("box-anchor", "fill");
+  auto* scrollWidget = createScrollWidget(content, 0, 0);
   dialogBody->addWidget(scrollWidget);
   showModalCentered(chooseListDialog.get(), MapsApp::gui);
 }

@@ -19,8 +19,6 @@ endif()
 add_compile_options(-Werror=return-type)
 #add_compile_options(-Werror=incompatible-pointer-types) -- only for C
 
-check_unsupported_compiler_version()
-
 add_definitions(-DTANGRAM_LINUX)
 
 set(OpenGL_GL_PREFERENCE GLVND)

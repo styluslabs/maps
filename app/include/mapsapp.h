@@ -115,7 +115,7 @@ public:
 
   // GUI
   void createGUI(SDL_Window* sdlWin);
-  void setWindowLayout(int fbWidth);
+  void setWindowLayout(int fbWidth, int fbHeight);
   void showPanel(Widget* panel, bool isSubPanel = false);
   void maximizePanel(bool maximize);
   bool popPanel();

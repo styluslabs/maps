@@ -1125,9 +1125,9 @@ Button* MapsApp::addUndeleteItem(const std::string& title, const SvgNode* icon, 
   return item;
 }
 
-void MapsApp::setWindowLayout(int fbWidth)
+void MapsApp::setWindowLayout(int fbWidth, int fbHeight)
 {
-  bool narrow = fbWidth/gui->paintScale < 700;
+  bool narrow = fbHeight > fbWidth && fbWidth/gui->paintScale < 700;
   if(currLayout && narrow == currLayout->node->hasClass("window-layout-narrow")) return;
 
   bool wasvis = panelContainer && panelContainer->isVisible();
@@ -1148,6 +1148,11 @@ void MapsApp::setWindowLayout(int fbWidth)
 
   mapsContent->removeFromParent();
   currLayout->selectFirst(".maps-container")->addWidget(mapsContent);
+
+  // adjust scrollwidgets
+  auto scrollWidgets = panelContent->select(".scrollwidget-var-height");
+  for(Widget* sw : scrollWidgets)
+    sw->node->setAttribute("box-anchor", narrow ? "fill" : "hfill");
 
   // adjust menu alignment
   auto menubtns = mainToolbar->select(".toolbutton");
@@ -1173,7 +1178,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout-narrow" display="none" box-anchor="fill" layout="flex" flex-direction="column">
-        <rect class="statusbar-bg toolbar" display="none" box-anchor="hfill" x="0" y="0" width="20" height="30" />
+        <rect class="statusbar-bg panel-header" display="none" box-anchor="hfill" x="0" y="0" width="20" height="30" />
         <g class="maps-container" box-anchor="fill" layout="box"></g>
         <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
         <g class="panel-container panel-container-narrow" display="none" box-anchor="hfill" layout="box">
@@ -1191,7 +1196,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
           </g>
           <rect class="panel-separator hrule title background" display="none" box-anchor="hfill" width="20" height="2"/>
           <g class="panel-container panel-container-wide" display="none" box-anchor="hfill" layout="box">
-            <rect class="background panel-bg" box-anchor="hfill" x="0" y="0" width="20" height="800"/>
+            <rect class="background panel-bg" box-anchor="fill" x="0" y="0" width="20" height="20"/>
           </g>
         </g>
       </g>
@@ -1226,6 +1231,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win.reset(new Window(winnode));
   win->sdlWindow = sdlWin;
   win->isFocusable = true;  // top level window should always be focusable
+#if PLATFORM_IOS
+  static_cast<SvgRect*>(winnode->selectFirst(".statusbar-bg"))->setRect(Rect::wh(20, 54));
+#endif
 
   panelContent = createBoxLayout();
 
@@ -1618,8 +1626,9 @@ void MapsApp::maximizePanel(bool maximize)
     currLayout->selectFirst(".statusbar-bg")->setVisible(PLATFORM_MOBILE && maximize);
     panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
     panelSplitter->setEnabled(!maximize);
-    notifyStatusBarBG(maximize ?
-        win->node->hasClass("light") : !readSceneValue("application.dark_base_map").as<bool>(false));
+    bool isLight = config["ui"]["theme"].as<std::string>("") == "light";
+    // statusbar-bg uses panel header color, which is inverted from theme
+    notifyStatusBarBG(maximize ? !isLight : !readSceneValue("application.dark_base_map").as<bool>(false));
   }
   //Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
   //if(minbtn)
@@ -1736,8 +1745,7 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
     panel->addWidget(fixedContent);
   if(content) {
     content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
-    auto scrollWidget = new ScrollWidget(new SvgDocument(), content);
-    scrollWidget->node->setAttribute("box-anchor", "fill");
+    auto* scrollWidget = createScrollWidget(content);
     panel->addWidget(scrollWidget);
   }
 
@@ -1995,7 +2003,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
   }
 
-  setWindowLayout(fbWidth);
+  setWindowLayout(fbWidth, fbHeight);
 
   // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
   //  we expect the vast majority of all frames drawn by app to be map changes (panning, zooming), the total
