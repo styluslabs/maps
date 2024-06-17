@@ -290,9 +290,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
     real end = sliders->endSlider->sliderPos;
     if(end < start) std::swap(start, end);
     p->setFillBrush(Brush::NONE);
-    p->setStroke(Color::GREEN, 1.5);
+    p->setStroke(Color(0, 0xC0, 0), 1.5);
     p->drawLine(Point(start*plotw, 0), Point(start*plotw, ploth));
-    p->setFillBrush(Color(Color::DARKGREEN).setAlpha(128));
+    p->setFillBrush(Color(0, 0xC0, 0, 128));
     p->drawPath(Path2D().addEllipse(start*plotw, ploth - 15, 10, 10));
 
     p->setFillBrush(Brush::NONE);

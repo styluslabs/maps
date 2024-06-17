@@ -80,6 +80,10 @@ bool MapsTracks::saveTrack(GpxFile* track)
 {
   if(track == &recordedTrack)
     recordGPXStrm.reset();
+  if(track == activeTrack && track->activeWay() && !track->activeWay()->pts.empty()) {
+    double t0 = track->activeWay()->pts.front().loc.time;
+    track->desc = (t0 > 0 ? (ftimestr("%F", t0*1000) + " | ") : "") + trackSummary;
+  }
   SQLiteStmt(app->bkmkDB, "UPDATE tracks SET notes = ? WHERE rowid = ?;").bind(track->desc, track->rowid).exec();
   return saveGPX(track);
 }
@@ -228,8 +232,10 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
           app->addUndeleteItem(track->title, MapsApp::uiIcon("track"), [=](){
             GpxFile restored("", "", trashinfo.path);
             loadGPX(&restored);
+            restored.filename.clear();
             tracks.push_back(std::move(restored));
             updateDB(&tracks.back());
+            saveTrack(&tracks.back());
             populateTrackList();
           });
           yamlRemove(app->config["tracks"]["visible"], track->rowid);
@@ -252,7 +258,10 @@ void MapsTracks::loadTracks(bool archived)
       " FROM tracks WHERE archived = ? ORDER BY timestamp;";
   SQLiteStmt(app->bkmkDB, query).bind(archived).exec(
       [&](int rowid, std::string title, std::string filename, std::string date, std::string style) {
-    tracks.emplace_back(title, date, filename, style, rowid, archived);
+    FSPath fileinfo(filename);
+    if(!fileinfo.isAbsolute())
+      fileinfo = FSPath(MapsApp::baseDir, filename);
+    tracks.emplace_back(title, date, fileinfo.path, style, rowid, archived);
   });
 }
 
@@ -454,7 +463,7 @@ void MapsTracks::updateStats(GpxFile* track)
     rawDist += dist;
     disterr = disterr > 0 ? disterr : 10;
     // be more generous with distance than vert
-    if(dist > disterr/2) {
+    if(dist > disterr/2 || ii == locs.size() - 1) {
       double tdist = loc.time - locs[prevDistLoc].loc.time;
       trackDist += dist;
       movingTime += std::min(10.0, tdist);
@@ -463,6 +472,9 @@ void MapsTracks::updateStats(GpxFile* track)
         double a = std::exp(-dt*speedInvTau);
         estSpeed = a*estSpeed + (1-a)*dist/tdist;
       }
+      //double dd = dist/(ii - prevDistLoc);  -- this isn't really correct
+      //for(++prevDistLoc; prevDistLoc < ii; ++prevDistLoc)
+      //  locs[prevDistLoc].dist = locs[prevDistLoc-1].dist + dd;
       prevDistLoc = ii;
     }
     locs[ii].dist = trackDist;  //if(!origLocs.empty())
@@ -556,7 +568,7 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-moving-time-gps", movingTimeGps > 0 ? durationToStr(movingTimeGps) : notime);
   setStatsText(".track-max-speed", maxSpeed > 0 ? speedToStr(maxSpeed) : notime);
 
-  trackSummary = (ttot > 0 ? " | " + timeStr : "") + " | " + distStr;
+  trackSummary = (ttot > 0 ? (timeStr + " | ") : "") + distStr;
   trackSpark->setTrack(locs);
   plotVsTimeBtn->setVisible(ttot > 0);
 
@@ -569,7 +581,7 @@ void MapsTracks::updateStats(GpxFile* track)
   }
 
   if(isRecording) {
-    recordedTrack.desc = "Recording" + trackSummary;
+    recordedTrack.desc = "Recording | " + trackSummary;
     // set timer so as to update time as close to second boundary as possible
     int dt = std::max((std::floor(ttot) + 1 - ttot)*1000, 10.0);
     recordTimer = app->gui->setTimer(dt, trackPanel, recordTimer, [this](){
@@ -578,10 +590,6 @@ void MapsTracks::updateStats(GpxFile* track)
         updateStats(&recordedTrack);
       return 0;
     });
-  }
-  else if(track != &recordedTrack && !locs.empty()) {
-    double t0 = locs.front().loc.time;
-    track->desc = t0 > 0 ? ftimestr("%F", t0*1000) + trackSummary : distStr;
   }
 }
 
@@ -1159,6 +1167,7 @@ static Waypoint interpTrackDist(const std::vector<Waypoint>& locs, double s, siz
   size_t jj = 0;
   while(locs[jj].dist < sd) ++jj;
   if(idxout) *idxout = jj;
+  if(jj == 0) return locs[0];
   double f = (sd - locs[jj-1].dist)/(locs[jj].dist - locs[jj-1].dist);
   return interpLoc(locs[jj-1], locs[jj], f);
 }
@@ -1182,20 +1191,21 @@ Waypoint MapsTracks::interpTrack(const std::vector<Waypoint>& locs, double s, si
 void MapsTracks::updateDB(GpxFile* track)
 {
   if(track->filename.empty()) {
-    FSPath file(MapsApp::baseDir, "tracks/" + track->title + ".gpx");
+    FSPath file(MapsApp::baseDir, "tracks/" + toValidFilename(track->title) + ".gpx");
     std::string basepath = file.basePath();
     for(int ii = 1; file.exists(); ++ii)
       file = basepath + fstring(" (%d).gpx", ii);
     track->filename = file.path;
   }
+  std::string relpath = FSPath(track->filename).relativeTo(MapsApp::baseDir);
   if(track->rowid < 0) {
     SQLiteStmt(app->bkmkDB, "INSERT INTO tracks (title, style, filename) VALUES (?,?,?);")
-        .bind(track->title, track->style, track->filename).exec();
+        .bind(track->title, track->style, relpath).exec();
     track->rowid = sqlite3_last_insert_rowid(app->bkmkDB);
   }
   else
     SQLiteStmt(app->bkmkDB, "UPDATE tracks SET title = ?, style = ?, filename = ? WHERE rowid = ?;")
-        .bind(track->title, track->style, track->filename, track->rowid).exec();
+        .bind(track->title, track->style, relpath, track->rowid).exec();
   track->loaded = true;
   tracksDirty = true;
 }
@@ -1427,21 +1437,18 @@ void MapsTracks::createPlotContent()
   trackSliders = createTrackSliders(trackPlot, 17, 21);
   trackPlot->sliders = trackSliders;
 
-  auto cropSliderChanged = [=](real){
-    cropStart = trackPlot->plotPosToTrackPos(trackSliders->startSlider->sliderPos);
-    cropEnd = trackPlot->plotPosToTrackPos(trackSliders->endSlider->sliderPos);
-    if(cropEnd < cropStart) std::swap(cropStart, cropEnd);
-    Waypoint startloc = interpTrack(activeTrack->activeWay()->pts, cropStart);
+  auto cropSliderChanged = [=](){
+    Waypoint startloc = interpTrack(activeTrack->activeWay()->pts, std::min(cropStart, cropEnd));
     if(trackStartMarker == 0) {
       trackStartMarker = app->map->markerAdd();
       app->map->markerSetPoint(trackStartMarker, startloc.lngLat());  // must set geometry before properties
-      app->map->markerSetProperties(trackStartMarker, {{{"color", "#008000"}}});
+      app->map->markerSetProperties(trackStartMarker, {{{"color", "#00C000"}}});
       app->map->markerSetStylingFromPath(trackStartMarker, "layers.track-marker.draw.marker");
     } else {
       app->map->markerSetVisible(trackStartMarker, true);
       app->map->markerSetPoint(trackStartMarker, startloc.lngLat());
     }
-    Waypoint endloc = interpTrack(activeTrack->activeWay()->pts, cropEnd);
+    Waypoint endloc = interpTrack(activeTrack->activeWay()->pts, std::max(cropStart, cropEnd));
     if(trackEndMarker == 0) {
       trackEndMarker = app->map->markerAdd();
       app->map->markerSetPoint(trackEndMarker, endloc.lngLat());  // must set geometry before properties
@@ -1453,8 +1460,14 @@ void MapsTracks::createPlotContent()
     }
   };
 
-  trackSliders->startSlider->onValueChanged = cropSliderChanged;
-  trackSliders->endSlider->onValueChanged = cropSliderChanged;
+  trackSliders->startSlider->onValueChanged = [=](real val){
+    cropStart = trackPlot->plotPosToTrackPos(val);
+    cropSliderChanged();
+  };
+  trackSliders->endSlider->onValueChanged = [=](real val){
+    cropEnd = trackPlot->plotPosToTrackPos(val);
+    cropSliderChanged();
+  };
 
   Button* cropTrackBtn = createToolbutton(NULL, "Crop to segment", true);
   cropTrackBtn->onClicked = [=](){
@@ -1462,15 +1475,16 @@ void MapsTracks::createPlotContent()
     auto& locs = activeTrack->activeWay()->pts;
     std::vector<Waypoint> newlocs;
     size_t startidx, endidx;
-    newlocs.push_back(interpTrack(locs, cropStart, &startidx));
-    auto endloc = interpTrack(locs, cropEnd, &endidx);
+    newlocs.push_back(interpTrack(locs, std::min(cropStart, cropEnd), &startidx));
+    auto endloc = interpTrack(locs, std::max(cropStart, cropEnd), &endidx);
     newlocs.insert(newlocs.end(), locs.begin() + startidx, locs.begin() + endidx);
     newlocs.push_back(endloc);
-    activeTrack->activeWay()->pts.swap(newlocs);
-    trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
-    updateTrackMarker(activeTrack);  // rebuild marker
+    locs.swap(newlocs);
     plotDirty = true;
     trackPlot->zoomScale = 1.0;
+    cropStart = 0;  cropEnd = 1;
+    //trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
+    updateTrackMarker(activeTrack);  // rebuild marker
     updateStats(activeTrack);
   };
 
@@ -1480,22 +1494,27 @@ void MapsTracks::createPlotContent()
     auto& locs = activeTrack->activeWay()->pts;
     std::vector<Waypoint> newlocs;
     size_t startidx, endidx;
-    auto startloc = interpTrack(locs, cropStart, &startidx);
-    auto endloc = interpTrack(locs, cropEnd, &endidx);
-    newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + startidx);
-    newlocs.push_back(startloc);
-    newlocs.push_back(endloc);
-    newlocs.insert(newlocs.end(), locs.begin() + endidx, locs.end());
+    if(std::min(cropStart, cropEnd) > 0) {
+      auto startloc = interpTrack(locs, std::min(cropStart, cropEnd), &startidx);
+      newlocs.insert(newlocs.end(), locs.begin(), locs.begin() + startidx);
+      newlocs.push_back(startloc);
+    }
+    if(std::max(cropStart, cropEnd) < 1) {
+      auto endloc = interpTrack(locs, std::max(cropStart, cropEnd), &endidx);
+      newlocs.push_back(endloc);
+      newlocs.insert(newlocs.end(), locs.begin() + endidx, locs.end());
+    }
     locs.swap(newlocs);
-    trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
-    updateTrackMarker(activeTrack);  // rebuild marker
     plotDirty = true;
     trackPlot->zoomScale = 1.0;
+    cropStart = 0; cropEnd = 1;
+    //trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
+    updateTrackMarker(activeTrack);  // rebuild marker
     updateStats(activeTrack);
   };
 
   Button* moreTrackOptionsBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
-  Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT);
+  Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT, false);
   moreTrackOptionsBtn->setMenu(trackPlotOverflow);
 
   trackPlotOverflow->addItem("Append track", [this](){
@@ -1743,7 +1762,7 @@ void MapsTracks::createTrackPanel()
 
   pauseRecordBtn->onClicked = [=](){
     recordTrack = !recordTrack;
-    recordedTrack.desc = (recordTrack ? "Recording" : "Paused") + trackSummary;
+    recordedTrack.desc = (recordTrack ? "Recording | " : "Paused | ") + trackSummary;
     tracksDirty = true;
     pauseRecordBtn->setChecked(!recordTrack);  // should actually toggle between play and pause icons
     // show/hide track editing controls
@@ -1755,7 +1774,7 @@ void MapsTracks::createTrackPanel()
   stopRecordBtn->onClicked = [=](){
     app->gui->removeTimer(recordTimer);
     recordTimer = NULL;
-    recordedTrack.desc = ftimestr("%F") + trackSummary;
+    recordedTrack.desc = ftimestr("%F") + " | " + trackSummary;
     saveTrack(&recordedTrack);
     if(recordTrack)
       app->setServiceState(0);

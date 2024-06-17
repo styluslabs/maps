@@ -144,8 +144,8 @@ svg.window, .invert-theme .menu
 )#";
 
 static const char* moreCSS = R"#(
+.listitem { fill: none }
 .listitem.checked { fill: var(--checked); }
-.listitem-bg { display: none; }
 .legend text { fill: inherit; }
 .panel-container { fill: var(--base); }
 .menu { fill: var(--window); }  /* no (fake) dividers on menus */

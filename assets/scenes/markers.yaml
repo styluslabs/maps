@@ -86,6 +86,10 @@ styles:
         mix: poi-points
         blend_order: 1000
 
+    track-markers:
+        base: points
+        blend_order: 999
+
     poi-points:
         base: points
         # make sure this is drawn over search dots
@@ -258,7 +262,7 @@ layers:
     track-marker:
         draw:
             marker:
-                style: points
+                style: track-markers
                 interactive: true
                 collide: false
                 size: 12px
