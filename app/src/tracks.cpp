@@ -102,8 +102,8 @@ static void addRouteStepMarker(Map* map, Waypoint& wp, GpxFile* track)
 
 void MapsTracks::updateTrackMarker(GpxFile* track)
 {
-  if(!track->loaded && !track->filename.empty())
-    loadGPX(track);
+  if(!track->loaded && !track->filename.empty() && !loadGPX(track))
+    MapsApp::messageBox("File not found", fstring("Error opening %s", track->filename.c_str()), {"OK"});
 
   if(!track->marker)
     track->marker = std::make_unique<TrackMarker>(app->map.get(), "layers.track.draw.track");
@@ -443,11 +443,17 @@ void MapsTracks::updateStats(GpxFile* track)
   static const char* notime = u8"\u2014";  // emdash
   static std::vector<Waypoint> nolocs;
   std::vector<Waypoint>& locs = track->activeWay() ? track->activeWay()->pts : nolocs;
-  if(!locs.empty())
-    locs.front().dist = 0;
-  double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0, movingTime = 0;
+  bool isRecording = recordTrack && track == &recordedTrack;
+  bool isTrack = track->routes.empty() && !track->tracks.empty();
+  double totalTime = locs.empty() ? 0 : locs.back().loc.time - locs.front().loc.time;
+  if(isRecording)
+    totalTime += (mSecSinceEpoch() - lastTrackPtTime)/1000.0;
+
+  double movingTime = isTrack ? 0 : totalTime;
+  double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0;
   double estSpeed = 0, maxSpeed = 0, currSlope = 0, movingTimeGps = 0, rawDist = 0, movingDist = 0;  //currSpeed = 0,
   size_t prevDistLoc = 0, prevVertLoc = 0;
+  if(!locs.empty()) locs.front().dist = 0;
   for(size_t ii = 1; ii < locs.size(); ++ii) {
     Location& loc = locs[ii].loc;
     double dt = loc.time - locs[ii-1].loc.time;
@@ -460,10 +466,11 @@ void MapsTracks::updateStats(GpxFile* track)
       movingTimeGps += dt;
     //if(dist > minTrackDist || vert > minTrackDist) {  // dt < minTrackTime
 
-    rawDist += dist;
+    rawDist += 1000*lngLatDist(loc.lngLat(), locs[ii-1].lngLat());
     disterr = disterr > 0 ? disterr : 10;
-    // be more generous with distance than vert
-    if(dist > disterr/2 || ii == locs.size() - 1) {
+    if(!isTrack)
+      trackDist = rawDist;
+    else if(dist > disterr/2 || ii == locs.size() - 1) {  // be more generous with distance than vert
       double tdist = loc.time - locs[prevDistLoc].loc.time;
       trackDist += dist;
       movingTime += std::min(10.0, tdist);
@@ -512,14 +519,14 @@ void MapsTracks::updateStats(GpxFile* track)
     }
   }
 
-  bool isRecording = recordTrack && track == &recordedTrack;
   liveStatsRow->setVisible(isRecording);
   nonliveStatsRow->setVisible(!isRecording);
 
+  bool hasTime = !locs.empty() && locs.front().loc.time > 0;  // && istrack?
   statsContent->selectFirst(".track-start-date")->setText(
-      locs.empty() ? notime : ftimestr("%F %H:%M:%S", locs.front().loc.time*1000).c_str());
+      hasTime ? ftimestr("%F %H:%M:%S", locs.front().loc.time*1000).c_str() : notime);
   statsContent->selectFirst(".track-end-date")->setText(
-      locs.empty() ? notime : ftimestr("%F %H:%M:%S", locs.back().loc.time*1000).c_str());
+      hasTime ? ftimestr("%F %H:%M:%S", locs.back().loc.time*1000).c_str() : notime);
 
   setStatsText(".track-altitude", app->elevToStr(app->currLocation.alt));
 
@@ -533,9 +540,7 @@ void MapsTracks::updateStats(GpxFile* track)
   float dir = app->currLocation.dir;
   setStatsText(".track-direction", (dir >= 0 && dir <= 360) ? fstring("%.0f\u00B0", dir) : notime);
 
-  double ttot = locs.empty() ? 0 : locs.back().loc.time - locs.front().loc.time;
-  if(isRecording) ttot += (mSecSinceEpoch() - lastTrackPtTime)/1000.0;
-  auto timeStr = durationToStr(ttot);
+  auto timeStr = durationToStr(totalTime);
   sparkStats->selectFirst(".spark-time")->setText(timeStr.c_str());
   setStatsText(".track-time", timeStr);
   setStatsText(".track-moving-time", durationToStr(movingTime));
@@ -568,9 +573,9 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-moving-time-gps", movingTimeGps > 0 ? durationToStr(movingTimeGps) : notime);
   setStatsText(".track-max-speed", maxSpeed > 0 ? speedToStr(maxSpeed) : notime);
 
-  trackSummary = (ttot > 0 ? (timeStr + " | ") : "") + distStr;
+  trackSummary = (totalTime > 0 ? (timeStr + " | ") : "") + distStr;
   trackSpark->setTrack(locs);
-  plotVsTimeBtn->setVisible(ttot > 0);
+  plotVsTimeBtn->setVisible(totalTime > 0);
 
   if(plotDirty && plotWidgets[0]->isVisible()) {
     plotDirty = false;
@@ -583,7 +588,7 @@ void MapsTracks::updateStats(GpxFile* track)
   if(isRecording) {
     recordedTrack.desc = "Recording | " + trackSummary;
     // set timer so as to update time as close to second boundary as possible
-    int dt = std::max((std::floor(ttot) + 1 - ttot)*1000, 10.0);
+    int dt = std::max((std::floor(totalTime) + 1 - totalTime)*1000, 10.0);
     recordTimer = app->gui->setTimer(dt, trackPanel, recordTimer, [this](){
       recordTimer = NULL;
       if(activeTrack == &recordedTrack || tracksPanel->isVisible())
@@ -774,7 +779,7 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   TextBox* noteText = new TextBox(loadSVGFragment(
       R"(<text class="note-text weak" box-anchor="left" margin="0 10" font-size="12"></text>)"));
   noteText->setText(wpt.desc.c_str());
-  noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), 250).c_str());
+  noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), app->getPanelWidth() - 20).c_str());
 
   Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), track->title.c_str(), true);
   Button* removeBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete");

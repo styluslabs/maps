@@ -568,7 +568,7 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
   SvgText* textnode = createTextNode(valuestr.c_str());
   textnode->setAttribute("box-anchor", "left");
   //if(!strchr(valuestr.c_str(), '\n'))
-  textnode->setText(SvgPainter::breakText(textnode, 250).c_str());
+  textnode->setText(SvgPainter::breakText(textnode, getPanelWidth() - 70).c_str());
   content->addWidget(new TextBox(textnode));
   if(split) {
     // collapsible section
@@ -794,6 +794,11 @@ void MapsApp::onLowMemory()
 
 void MapsApp::onSuspend()
 {
+  // send events here instead of from androidApp/iosApp.cpp just to eliminate cut and paste code
+  SDL_Event event = {0};
+  event.type = SDL_WINDOWEVENT;  // also send SDL_APP_WILLENTERBACKGROUND? SDL_APP_DIDENTERBACKGROUND?
+  event.window.event = SDL_WINDOWEVENT_FOCUS_LOST;  // closes menus, among other things
+  gui->sdlEvent(&event);
   appSuspended = true;
   sendMapEvent(SUSPEND);
   saveConfig();
@@ -801,6 +806,10 @@ void MapsApp::onSuspend()
 
 void MapsApp::onResume()
 {
+  SDL_Event event = {0};
+  event.type = SDL_WINDOWEVENT;  // also send SDL_APP_WILLENTERFOREGROUND? SDL_APP_DIDENTERFOREGROUND?
+  event.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
+  gui->sdlEvent(&event);
   appSuspended = false;
   sendMapEvent(RESUME);
 }
@@ -1178,7 +1187,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   static const char* mainWindowSVG = R"#(
     <svg class="window" layout="box">
       <g class="window-layout-narrow" display="none" box-anchor="fill" layout="flex" flex-direction="column">
-        <rect class="statusbar-bg panel-header" display="none" box-anchor="hfill" x="0" y="0" width="20" height="30" />
         <g class="maps-container" box-anchor="fill" layout="box"></g>
         <rect class="panel-splitter background splitter" display="none" box-anchor="hfill" width="10" height="0"/>
         <g class="panel-container panel-container-narrow" display="none" box-anchor="hfill" layout="box">
@@ -1186,6 +1194,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
           <rect class="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
         </g>
         <g class="main-tb-container" box-anchor="hfill" layout="box"></g>
+        <rect class="bottom-inset" box-anchor="hfill" width="20" height="0"/>
       </g>
 
       <g class="window-layout-wide" display="none" box-anchor="fill" layout="box">
@@ -1231,12 +1240,20 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win.reset(new Window(winnode));
   win->sdlWindow = sdlWin;
   win->isFocusable = true;  // top level window should always be focusable
-#if PLATFORM_IOS
-  static_cast<SvgRect*>(winnode->selectFirst(".statusbar-bg"))->setRect(Rect::wh(20, 54));
-#endif
+
+  win->addHandler([=](SvgGui* gui, SDL_Event* event) {
+    if(event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+      getSafeAreaInsets(&topInset, &bottomInset);
+      if(currLayout && !currLayout->selectFirst(".maps-container")->isVisible())
+        maximizePanel(true);  // adjust top inset
+      if(bottomInset > 0)
+        static_cast<SvgRect*>(winnode->selectFirst(".bottom-inset"))->setRect(Rect::wh(20, bottomInset));
+      return true;
+    }
+    return false;
+  });
 
   panelContent = createBoxLayout();
-
   panelPager = new Pager(winnode->selectFirst(".panel-container-narrow"));
   panelPager->getNextPage = [=](bool left) {
     for(size_t ii = 0; ii < panelPages.size(); ++ii) {
@@ -1303,6 +1320,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // toolbar w/ buttons for search, bookmarks, tracks, sources
   mainToolbar = createMenubar();  //createToolbar();
   mainToolbar->selectFirst(".child-container")->node->setAttribute("justify-content", "space-between");
+  mainToolbar->selectFirst(".child-container")->setMargins(0, 10);
   Button* searchBtn = mapsSearch->createPanel();
   Button* bkmkBtn = mapsBookmarks->createPanel();
   Button* tracksBtn = mapsTracks->createPanel();
@@ -1325,9 +1343,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   Menu* overflowMenu = createMenu(Menu::VERT);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem(pluginBtn);
-  undeleteMenu = createMenu(Menu::HORZ);
-  overflowMenu->addSubmenu("Undelete", undeleteMenu);
-  undeleteMenu->parent()->setVisible(false);  // hidden when empty
   Button* metricCb = createCheckBoxMenuItem("Use metric units");
   metricCb->onClicked = [=](){
     metricUnits = !metricUnits;
@@ -1349,73 +1364,79 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   };
   overflowMenu->addItem(themeCb);
 
-  Menu* debugMenu = createMenu(Menu::HORZ);
-  const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
-      "Tile info", "Label bounds", "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer"};
-  for(int ii = 0; ii < 9; ++ii) {
-    Button* debugCb = createCheckBoxMenuItem(debugFlags[ii]);
-    debugCb->onClicked = [=](){
-      debugCb->setChecked(!debugCb->isChecked());
-      setDebugFlag(Tangram::DebugFlags(ii), debugCb->isChecked());
-      //loadSceneFile();  -- most debug flags shouldn't require scene reload
+  undeleteMenu = createMenu(Menu::HORZ);
+  overflowMenu->addSubmenu("Undelete", undeleteMenu);
+  undeleteMenu->parent()->setVisible(false);  // hidden when empty
+
+  if(config["ui"]["show_debug"].as<bool>(false)) {
+    Menu* debugMenu = createMenu(Menu::HORZ);
+    const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
+        "Tile info", "Label bounds", "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer"};
+    for(int ii = 0; ii < 9; ++ii) {
+      Button* debugCb = createCheckBoxMenuItem(debugFlags[ii]);
+      debugCb->onClicked = [=](){
+        debugCb->setChecked(!debugCb->isChecked());
+        setDebugFlag(Tangram::DebugFlags(ii), debugCb->isChecked());
+        //loadSceneFile();  -- most debug flags shouldn't require scene reload
+      };
+      debugMenu->addItem(debugCb);
+    }
+    overflowMenu->addSubmenu("Tangram debug", debugMenu);
+
+    // fake location updates to test track recording
+    auto fakeLocFn = [this](){
+      real lat = currLocation.lat + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
+      real lng = currLocation.lng + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
+      real alt = currLocation.alt + 10*std::rand()/real(RAND_MAX);
+      updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 10, alt, 10, NAN, 0, NAN, 0});
     };
-    debugMenu->addItem(debugCb);
+
+    Menu* appDebugMenu = createMenu(Menu::HORZ);
+  #if PLATFORM_DESKTOP
+    Button* simTouchCb = createCheckBoxMenuItem("Simulate touch");
+    simTouchCb->onClicked = [=](){
+      simTouchCb->setChecked(!simTouchCb->isChecked());
+      MapsApp::simulateTouch = simTouchCb->isChecked();
+    };
+    appDebugMenu->addItem(simTouchCb);
+  #endif
+    Button* offlineCb = createCheckBoxMenuItem("Offline");
+    offlineCb->onClicked = [=](){
+      offlineCb->setChecked(!offlineCb->isChecked());
+      platform->isOffline = offlineCb->isChecked();
+    };
+    appDebugMenu->addItem(offlineCb);
+
+    Timer* fakeLocTimer = NULL;
+    Button* fakeLocCb = createCheckBoxMenuItem("Simulate motion");
+    fakeLocCb->onClicked = [=]() mutable {
+      fakeLocCb->setChecked(!fakeLocCb->isChecked());
+      if(fakeLocTimer) {
+        gui->removeTimer(fakeLocTimer);
+        fakeLocTimer = NULL;
+      }
+      if(fakeLocCb->isChecked())
+        fakeLocTimer = gui->setTimer(2000, win.get(), [&](){ MapsApp::runOnMainThread(fakeLocFn); return 2000; });
+    };
+    appDebugMenu->addItem(fakeLocCb);
+
+    // dump contents of tile in middle of screen
+    appDebugMenu->addItem("Dump tile", [this](){
+      dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
+    });
+    appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
+    appDebugMenu->addItem("Set location", [this](){
+      Location loc(currLocation);
+      if(!std::isnan(pickResultCoord.latitude)) {
+        loc.lng = pickResultCoord.longitude;
+        loc.lat = pickResultCoord.latitude;
+      }
+      else
+        map->getPosition(loc.lng, loc.lat);
+      updateLocation(loc);
+    });
+    overflowMenu->addSubmenu("App debug", appDebugMenu);
   }
-  overflowMenu->addSubmenu("Tangram debug", debugMenu);
-
-  // fake location updates to test track recording
-  auto fakeLocFn = [this](){
-    real lat = currLocation.lat + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
-    real lng = currLocation.lng + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
-    real alt = currLocation.alt + 10*std::rand()/real(RAND_MAX);
-    updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 10, alt, 10, NAN, 0, NAN, 0});
-  };
-
-  Menu* appDebugMenu = createMenu(Menu::HORZ);
-#if PLATFORM_DESKTOP
-  Button* simTouchCb = createCheckBoxMenuItem("Simulate touch");
-  simTouchCb->onClicked = [=](){
-    simTouchCb->setChecked(!simTouchCb->isChecked());
-    MapsApp::simulateTouch = simTouchCb->isChecked();
-  };
-  appDebugMenu->addItem(simTouchCb);
-#endif
-  Button* offlineCb = createCheckBoxMenuItem("Offline");
-  offlineCb->onClicked = [=](){
-    offlineCb->setChecked(!offlineCb->isChecked());
-    platform->isOffline = offlineCb->isChecked();
-  };
-  appDebugMenu->addItem(offlineCb);
-
-  Timer* fakeLocTimer = NULL;
-  Button* fakeLocCb = createCheckBoxMenuItem("Simulate motion");
-  fakeLocCb->onClicked = [=]() mutable {
-    fakeLocCb->setChecked(!fakeLocCb->isChecked());
-    if(fakeLocTimer) {
-      gui->removeTimer(fakeLocTimer);
-      fakeLocTimer = NULL;
-    }
-    if(fakeLocCb->isChecked())
-      fakeLocTimer = gui->setTimer(2000, win.get(), [&](){ MapsApp::runOnMainThread(fakeLocFn); return 2000; });
-  };
-  appDebugMenu->addItem(fakeLocCb);
-
-  // dump contents of tile in middle of screen
-  appDebugMenu->addItem("Dump tile", [this](){
-    dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
-  });
-  appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
-  appDebugMenu->addItem("Set location", [this](){
-    Location loc(currLocation);
-    if(!std::isnan(pickResultCoord.latitude)) {
-      loc.lng = pickResultCoord.longitude;
-      loc.lat = pickResultCoord.latitude;
-    }
-    else
-      map->getPosition(loc.lng, loc.lat);
-    updateLocation(loc);
-  });
-  overflowMenu->addSubmenu("App debug", appDebugMenu);
 
   mainToolbar->addButton(overflowBtn);
 
@@ -1621,15 +1642,20 @@ bool MapsApp::popPanel()
 
 void MapsApp::maximizePanel(bool maximize)
 {
-  if(currLayout->node->hasClass("window-layout-narrow") && !panelHistory.empty()) {
-    currLayout->selectFirst(".maps-container")->setVisible(!maximize);
-    currLayout->selectFirst(".statusbar-bg")->setVisible(PLATFORM_MOBILE && maximize);
-    panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
-    panelSplitter->setEnabled(!maximize);
-    bool isLight = config["ui"]["theme"].as<std::string>("") == "light";
-    // statusbar-bg uses panel header color, which is inverted from theme
-    notifyStatusBarBG(maximize ? !isLight : !readSceneValue("application.dark_base_map").as<bool>(false));
-  }
+  if(!currLayout->node->hasClass("window-layout-narrow") || panelHistory.empty()) return;
+#if PLATFORM_MOBILE
+  Widget* panelhdr = panelHistory.back()->selectFirst(".panel-header");
+  if(panelhdr)
+    panelhdr->selectFirst(".child-container")->setMargins(maximize ? topInset : 0, 0, 0, 0);
+#endif
+  currLayout->selectFirst(".maps-container")->setVisible(!maximize);
+  //currLayout->selectFirst(".top-inset")->setVisible(PLATFORM_MOBILE && maximize);
+  panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
+  panelSplitter->setEnabled(!maximize);
+  bool isLight = config["ui"]["theme"].as<std::string>("") == "light";
+  // top-inset uses panel header color, which is inverted from theme
+  notifyStatusBarBG(maximize ? !isLight : !readSceneValue("application.dark_base_map").as<bool>(false));
+
   //Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
   //if(minbtn)
   //  minbtn->setVisible(!maximize);
@@ -1638,8 +1664,7 @@ void MapsApp::maximizePanel(bool maximize)
 // make this a static method or standalone fn?
 Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
 {
-  Toolbar* toolbar = createToolbar();
-  toolbar->node->addClass("panel-header invert-theme");
+  Toolbar* toolbar = new Toolbar(widgetNode("#panel-header"));
   auto backBtn = createToolbutton(MapsApp::uiIcon("back"));
   backBtn->onClicked = [this](){ popPanel(); };
   toolbar->addWidget(backBtn);

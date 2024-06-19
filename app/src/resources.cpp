@@ -144,10 +144,13 @@ svg.window, .invert-theme .menu
 )#";
 
 static const char* moreCSS = R"#(
+.main-tb-container .toolbar { fill: var(--base); }
 .listitem { fill: none }
+.floating .listitem { fill: var(--base); }
 .listitem.checked { fill: var(--checked); }
 .legend text { fill: inherit; }
 .panel-container { fill: var(--base); }
+.bottom-inset { fill: var(--base); }
 .menu { fill: var(--window); }  /* no (fake) dividers on menus */
 .menuitem, .comboitem { fill: none; }
 .splitter { fill: var(--window); }
@@ -161,6 +164,7 @@ tspan.text-selection { fill: var(--text-sel); }
 .scroll-handle { fill: #808080; }  /* make scroll handle grey since it's currently not draggable */
 .disabled text { fill: var(--text-weak); }
 .panel-header { fill: var(--header); }
+.top-inset { fill: var(--header); }
 .title-toolbar { fill: var(--header); }
 .panel-hrule { display: none; }
 /* .section-hrule { display: none; } */
@@ -196,6 +200,12 @@ static const char* moreWidgetSVG = R"#(
   <g id="listitem-text-2" layout="box" box-anchor="fill">
     <text class="title-text" box-anchor="hfill" margin="0 10"></text>
     <text class="note-text weak" box-anchor="hfill bottom" margin="0 10" font-size="12"></text>
+  </g>
+
+  <g id="panel-header" class="toolbar panel-header invert-theme" box-anchor="hfill" layout="box">
+    <rect class="toolbar-bg background" box-anchor="fill" width="20" height="20"/>
+    <g class="child-container" box-anchor="fill" layout="flex" flex-direction="row">
+    </g>
   </g>
 
   <g id="panel-header-title" margin="0 3" layout="flex" flex-direction="row" box-anchor="hfill">

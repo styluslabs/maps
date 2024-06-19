@@ -76,6 +76,7 @@ colors:
   - "#D35400"
 
 ui:
+  #show_debug: true
   reverse_map_btns: false
   #font: "scenes/fonts/NotoSans-Regular.ttf"
   theme: light

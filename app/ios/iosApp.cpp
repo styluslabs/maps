@@ -142,6 +142,11 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
   iosPlatform_setServiceState(sdlWin, state, intervalSec, minDist);
 }
 
+void MapsApp::getSafeAreaInsets(float *top, float *bottom)
+{
+  iosPlatform_getSafeAreaInsets(sdlWin, top, bottom);
+}
+
 void MapsApp::openBatterySettings() {}
 
 // main loop
@@ -155,17 +160,18 @@ int mainLoop(int width, int height, float dpi)
     app = new MapsApp(MapsApp::platform);
     app->setDpi(dpi);
     app->createGUI(sdlWin);
+    // docs say ~/Library/Caches can be cleared by iOS, so tiles should not be stored there!
+    iosPlatform_excludeFromBackup(FSPath(MapsApp::baseDir, "cache/").c_str());
   }
-  else {
+  else
     MapsApp::mainThreadId = std::this_thread::get_id();
-    SDL_Event event = {0};
-    event.type = SDL_WINDOWEVENT;
-    event.window.event = SDL_WINDOWEVENT_SIZE_CHANGED;
-    event.window.data1 = width;
-    event.window.data2 = height;
-    MapsApp::sdlEvent(&event);
+  SDL_Event event = {0};
+  event.type = SDL_WINDOWEVENT;
+  event.window.event = SDL_WINDOWEVENT_SIZE_CHANGED;
+  event.window.data1 = width;
+  event.window.data2 = height;
+  MapsApp::sdlEvent(&event);
     //app->win->redraw();  // even if window size is unchanged, we want to redraw
-  }
   LOGW("Entering main loop");
   MapsApp::runApplication = true;
   while(MapsApp::runApplication) {

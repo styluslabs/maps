@@ -6,6 +6,7 @@
 #include "tracks.h"
 #include "util.h"
 #include "util/yamlPath.h"
+#include "mapwidgets.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -465,25 +466,17 @@ void PluginManager::createFns(duk_context* ctx)
 
 Button* PluginManager::createPanel()
 {
-  Widget* pluginContent = createColumn();
-  pluginContent->node->setAttribute("box-anchor", "fill");
-
-  TextEdit* jsEdit = createTextEdit();
-  jsEdit->node->setAttribute("box-anchor", "hfill");
+  TextEdit* jsEdit = createTitledTextEdit("Javascript command");
   Button* runBtn = createPushbutton("Run");
   SvgText* resultTextNode = createTextNode("");
   TextBox* resultText = new TextBox(resultTextNode);
 
   runBtn->onClicked = [=](){
     resultText->setText( evalJS(jsEdit->text().c_str()).c_str() );
-    resultText->setText( SvgPainter::breakText(resultTextNode, 300).c_str() );
+    resultText->setText( SvgPainter::breakText(resultTextNode, app->getPanelWidth() - 20).c_str() );
   };
 
-  pluginContent->addWidget(new TextBox(createTextNode("Javascript command:")));
-  pluginContent->addWidget(jsEdit);
-  pluginContent->addWidget(runBtn);
-  pluginContent->addWidget(resultText);
-  pluginContent->addWidget(createStretch());
+  Widget* pluginContent = createColumn({jsEdit, runBtn, resultText}, "", "", "fill");
 
   Button* refreshBtn = createToolbutton(MapsApp::uiIcon("refresh"), "Reload plugins");
   refreshBtn->onClicked = [=](){ reload(); };

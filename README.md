@@ -36,7 +36,7 @@ On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, i
 [scripts/tilemaker](scripts/tilemaker) contains the files necessary to generate tiles for the included vector map style [stylus-osm.yaml](assets/scenes/stylus-osm.yaml) using [Tilemaker](https://github.com/systemed/tilemaker).
 
 1. download an OpenStreetMap [extract](https://wiki.openstreetmap.org/wiki/Planet.osm#Country_and_area_extracts), e.g., from [geofabrik](https://download.geofabrik.de/) or [osmtoday](https://osmtoday.com/)
-1. [Setup tilemaker](https://github.com/systemed/tilemaker/blob/master/README.md) and run:
+1. Download [tilemaker v2.4.0](https://github.com/systemed/tilemaker/releases/tag/v2.4.0) and run:
 ```
 tilemaker --config maps/scripts/tilemaker/config.json --process maps/scripts/tilemaker/process.lua <extract>.osm.pbf --output <output>.mbtiles
 ```

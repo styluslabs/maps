@@ -348,6 +348,18 @@ void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float 
   });
 }
 
+void iosPlatform_getSafeAreaInsets(void* _vc, float* top, float* bottom)
+{
+  //if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
+  //  return 0;
+  UIWindow *window = UIApplication.sharedApplication.keyWindow;
+  CGFloat topInset = window.safeAreaInsets.top;
+  CGFloat bottomInset = window.safeAreaInsets.bottom;
+  if(top) *top = (float)topInset;
+  if(bottom) *bottom = (float)bottomInset;
+  //return 1;
+}
+
 void iosPlatform_swapBuffers(void* _vc)
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;
@@ -390,6 +402,12 @@ void iosPlatform_openURL(const char* url)
   dispatch_async(dispatch_get_main_queue(), ^{
     [UIApplication.sharedApplication openURL:nsurl options:@{} completionHandler:nil];
   });
+}
+
+void iosPlatform_excludeFromBackup(const char* url)
+{
+  NSURL* nsurl = [NSURL URLWithString:@(url)];
+  [nsurl setResourceValue:YES forKey:NSURLIsExcludedFromBackupKey error:nil];
 }
 
 void iosPlatform_setStatusBarBG(void* _vc, int isLight)

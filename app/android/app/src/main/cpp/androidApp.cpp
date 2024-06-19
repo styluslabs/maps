@@ -527,6 +527,8 @@ void MapsApp::openBatterySettings()
   jniEnv->CallVoidMethod(mapsActivityRef, openBatterySettingsMID);
 }
 
+void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 30; *bottom = 0; }
+
 // EGL setup and main loop
 
 bool chooseConfig(EGLDisplay display, int depth, int samples, EGLConfig* config)
@@ -674,35 +676,12 @@ JNI_FN(surfaceChanged)(JNIEnv* env, jclass, jint w, jint h)
 
 JNI_FN(onPause)(JNIEnv* env, jclass)
 {
-  MapsApp::runOnMainThread([=](){
-    app->onSuspend();
-
-    //SDL_Event event = {0};
-    //event.type = SDL_APP_WILLENTERBACKGROUND;
-    //app->gui->sdlEvent(&event);
-    //event.type = SDL_APP_DIDENTERBACKGROUND;
-    //app->gui->sdlEvent(&event);
-    //event.type = SDL_WINDOWEVENT;
-    //event.window.event = SDL_WINDOWEVENT_FOCUS_LOST;
-    //app->gui->sdlEvent(&event);
-  });
+  MapsApp::runOnMainThread([=](){ app->onSuspend(); });
 }
 
 JNI_FN(onResume)(JNIEnv* env, jclass)
 {
-  MapsApp::runOnMainThread([=]() {
-    app->onResume();
-
-  //  SDL_Event event = {0};
-  //  event.type = SDL_APP_WILLENTERFOREGROUND;
-  //  app->gui->sdlEvent(&event);
-  //  event.type = SDL_APP_DIDENTERFOREGROUND;
-  //  app->gui->sdlEvent(&event);
-  //  event.type = SDL_WINDOWEVENT;
-  //  event.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
-  //  app->gui->sdlEvent(&event);
-  //  //app->win->redraw();  -- looks like surfaceChanged is called on resume, so no need for this
-  });
+  MapsApp::runOnMainThread([=](){ app->onResume(); });
 }
 
 JNI_FN(onLowMemory)(JNIEnv* env, jclass)
