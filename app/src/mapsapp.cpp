@@ -1139,6 +1139,10 @@ void MapsApp::setWindowLayout(int fbWidth, int fbHeight)
   bool narrow = fbHeight > fbWidth && fbWidth/gui->paintScale < 700;
   if(currLayout && narrow == currLayout->node->hasClass("window-layout-narrow")) return;
 
+  if(currLayout && !narrow && panelMaximized) {
+    maximizePanel(false);  // un-maximize if going from narrow to wide
+    panelMaximized = true;  // will restore when going back to narrow layout
+  }
   bool wasvis = panelContainer && panelContainer->isVisible();
   if(currLayout) currLayout->setVisible(false);
   currLayout = win->selectFirst(narrow ? ".window-layout-narrow" : ".window-layout-wide");
@@ -1180,6 +1184,8 @@ void MapsApp::setWindowLayout(int fbWidth, int fbHeight)
     btn->setVisible(narrow);
 
   showPanelContainer(wasvis);
+  if(narrow && panelMaximized)
+    maximizePanel(true);
 }
 
 void MapsApp::createGUI(SDL_Window* sdlWin)
@@ -1244,8 +1250,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
       getSafeAreaInsets(&topInset, &bottomInset);
-      if(currLayout && !currLayout->selectFirst(".maps-container")->isVisible())
-        maximizePanel(true);  // adjust top inset
       if(bottomInset > 0)
         static_cast<SvgRect*>(winnode->selectFirst(".bottom-inset"))->setRect(Rect::wh(20, bottomInset));
       return true;
@@ -1642,6 +1646,7 @@ bool MapsApp::popPanel()
 
 void MapsApp::maximizePanel(bool maximize)
 {
+  panelMaximized = maximize;
   if(!currLayout->node->hasClass("window-layout-narrow") || panelHistory.empty()) return;
 #if PLATFORM_MOBILE
   Widget* panelhdr = panelHistory.back()->selectFirst(".panel-header");

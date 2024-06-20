@@ -1577,7 +1577,8 @@ void MapsTracks::createPlotContent()
     trackHoverLoc = interpTrack(activeTrack->activeWay()->pts, pos);
     //trackPlot->sliderLabel = trackPlot->plotVsDist ? MapsApp::distKmToStr(trackHoverLoc.dist/1000)
     //    : durationToStr(trackHoverLoc.loc.time - trackPlot->minTime);
-    trackPlot->sliderLabel = trackPlot->plotAlt ? app->elevToStr(trackHoverLoc.loc.alt) : speedToStr(trackHoverLoc.loc.spd);
+    trackPlot->sliderAlt = app->elevToStr(trackHoverLoc.loc.alt);
+    trackPlot->sliderSpd = speedToStr(trackHoverLoc.loc.spd);
     if(trackHoverMarker == 0) {
       trackHoverMarker = app->map->markerAdd();
       app->map->markerSetStylingFromPath(trackHoverMarker, "layers.track-marker.draw.marker");

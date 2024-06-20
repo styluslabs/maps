@@ -33,7 +33,8 @@ public:
   real maxZoom = 1;
 
   TrackSliders* sliders = NULL;
-  std::string sliderLabel;
+  std::string sliderAlt;
+  std::string sliderSpd;
 
 private:
   real prevCOM = 0;

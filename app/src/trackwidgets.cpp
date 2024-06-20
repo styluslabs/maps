@@ -308,15 +308,6 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->drawLine(Point(s*plotw, 0), Point(s*plotw, ploth));
     p->setFillBrush(Color(sliderColor).setAlpha(128));
     p->drawPath(Path2D().addEllipse(s*plotw, ploth - 15, 10, 10));
-
-    if(!sliderLabel.empty()) {
-      p->setFillBrush(altiColor);
-      p->setStroke(bgColor, 4);
-      p->setStrokeAlign(Painter::StrokeOuter);
-      p->setFontSize(11);
-      p->setTextAlign((s > 0.5 ? Painter::AlignRight : Painter::AlignLeft) | Painter::AlignBaseline);
-      p->drawText(s*plotw + (s > 0.5 ? -4 : 4), 20, sliderLabel.c_str());  // note clip rect is still set
-    }
   }
 
   // draw vertical labels
@@ -368,6 +359,18 @@ void TrackPlot::draw(SvgPainter* svgp) const
     //real textw = p->textBounds(x0, ploth - 20, wpt.name.c_str(), NULL);
     p->drawText(s*plotw + 4, texty, wpt.name.c_str());  // note clip rect is still set
     texty += 16;
+  }
+  // slider label on top of everything
+  if(sliders->trackSlider->isVisible()) {
+    real s = sliders->trackSlider->sliderPos;
+    p->setStroke(bgColor, 4);
+    p->setStrokeAlign(Painter::StrokeOuter);
+    p->setFontSize(11);
+    p->setTextAlign((s > 0.5 ? Painter::AlignRight : Painter::AlignLeft) | Painter::AlignBaseline);
+    p->setFillBrush(altiColor);
+    if(plotAlt) p->drawText(s*plotw + (s > 0.5 ? -4 : 4), 20, sliderAlt.c_str());  // note clip rect is still set
+    p->setFillBrush(spdColor);
+    if(plotSpd) p->drawText(s*plotw + (s > 0.5 ? -4 : 4), 34, sliderSpd.c_str());
   }
 }
 
