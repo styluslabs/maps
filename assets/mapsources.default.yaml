@@ -10,6 +10,7 @@
 stylus-osm:
     title: Ascend OSM Base
     scene: scenes/stylus-osm.yaml
+    download_url: "https://github.com/styluslabs/maps/?tab=readme-ov-file#generating-tiles"
     archived: true
 
 stylus-osm-dark:

@@ -5,6 +5,7 @@
 #include "style/style.h"  // for making uniforms avail as GUI variables
 #include "data/mbtilesDataSource.h"
 #include "data/networkDataSource.h"
+#include "sqlitepp.h"
 
 #include "usvg/svgpainter.h"
 #include "ugui/svggui.h"
@@ -54,7 +55,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     updates.emplace_back("+sources." + rasterN + ".type", "Raster");
     for (const auto& attr : src) {
       const std::string& k = attr.first.Scalar();
-      if(k != "title" && k != "archived" && k != "updates" && k != "layer")
+      if(k != "title" && k != "archived" && k != "updates" && k != "layer" && k != "download_url")
         updates.emplace_back("+sources." + rasterN + "." + attr.first.Scalar(), yamlToStr(attr.second));
     }
     // if cache file is not explicitly specified, use key since it is guaranteed to be unique
@@ -168,6 +169,23 @@ void MapsSources::sourceModified()
   saveBtn->setEnabled(!trimStr(titleEdit->text()).empty() && (!urlEdit->isVisible() || !urlEdit->text().empty()));
 }
 
+void MapsSources::promptDownload(const std::vector<std::string>& keys)
+{
+  for(auto& key : keys) {
+    auto src = mapSources[key];
+    if(src["download_url"]) {
+      int hit = 0;
+      SQLiteStmt(app->bkmkDB, "SELECT COUNT(1) FROM offlinemaps WHERE source = ?;").bind(key).onerow(hit);
+      if(!hit) {
+        std::string dlurl = src["download_url"].Scalar();
+        MapsApp::messageBox("Download tiles",
+            fstring("No map tiles downloaded yet for source %s.", src["title"].Scalar().c_str()), {"Get Tiles", "Cancel"},
+            [=](std::string res){ if(res != "Cancel") { MapsApp::openURL(dlurl.c_str()); } });
+      }
+    }
+  }
+}
+
 void MapsSources::rebuildSource(const std::string& srcname, bool async)
 {
   SourceBuilder builder(mapSources);
@@ -225,6 +243,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
         showbtn->setChecked(key != currSource && shown);
       }
     }
+    promptDownload(builder.layerkeys);
   }
 
   saveBtn->setEnabled(srcname.empty());  // for existing source, don't enable saveBtn until edited

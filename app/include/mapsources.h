@@ -27,6 +27,7 @@ private:
   void sourceModified();
   void saveSources();
   void importSources(const std::string& src);
+  void promptDownload(const std::vector<std::string>& keys);
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;

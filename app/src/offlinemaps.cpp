@@ -2,9 +2,7 @@
 #include "mapsapp.h"
 #include "mapsearch.h"
 #include "util.h"
-//#include "imgui.h"
 #include <deque>
-//#include "sqlite3/sqlite3.h"
 #include "sqlitepp.h"
 // "private" headers
 #include "scene/scene.h"

@@ -49,6 +49,7 @@ view:
 search:
   min_poi_zoom: 19
   hide_bookmarks: false
+  download_url: "https://github.com/styluslabs/maps/?tab=readme-ov-file#generating-tiles"
 
 tracks:
   # default to valhalla plugin

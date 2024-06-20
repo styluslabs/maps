@@ -466,7 +466,7 @@ void PluginManager::createFns(duk_context* ctx)
 
 Button* PluginManager::createPanel()
 {
-  TextEdit* jsEdit = createTitledTextEdit("Javascript command");
+  TextEdit* jsEdit = createTitledTextEdit("Command");
   Button* runBtn = createPushbutton("Run");
   SvgText* resultTextNode = createTextNode("");
   TextBox* resultText = new TextBox(resultTextNode);

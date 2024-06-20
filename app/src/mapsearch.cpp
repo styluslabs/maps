@@ -636,6 +636,7 @@ Button* MapsSearch::createPanel()
   SvgG* searchHeaderNode = static_cast<SvgG*>(loadSVGFragment(searchHeaderSVG));
   SvgG* searchBoxNode = static_cast<SvgG*>(searchHeaderNode->selectFirst(".searchbox"));
   SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
+  Widget* searchHeader = new Widget(searchHeaderNode);
   textEditNode->addChild(textEditInnerNode());
   queryText = new TextEdit(textEditNode);
   setMinWidth(queryText, 100);
@@ -650,6 +651,13 @@ Button* MapsSearch::createPanel()
 
   resultCountText = new TextBox(searchHeaderNode->selectFirst(".result-count-text"));
   resultCountText->setText(" ");  // prevent layout from collapsing
+
+  SvgText* msgnode = createTextNode("No offline search data. Tap here to download or select a different search plugin.");
+  Button* noDataMsg = new Button(msgnode);
+  noDataMsg->onClicked = [](){ MapsApp::openURL(MapsApp::config["search"]["download_url"].as<std::string>("").c_str()); };
+  searchHeader->addWidget(noDataMsg);
+  msgnode->setText(SvgPainter::breakText(msgnode, 250).c_str());  //app->getPanelWidth() - 70
+  noDataMsg->setVisible(false);
 
   SvgNode* overlayNode = searchBoxNode->selectFirst(".noquery-overlay");
   Button* textEditOverlay = new Button(overlayNode);
@@ -716,6 +724,10 @@ Button* MapsSearch::createPanel()
   };
 
   auto onSetProvider = [=](int idx) {
+    int npois = 0;
+    if(idx == 0)
+      searchDB.stmt("SELECT COUNT(1) FROM pois;").onerow(npois);
+    noDataMsg->setVisible(idx == 0 && npois == 0);
     std::string typestr = idx > 0 ? app->pluginManager->searchFns[idx-1].type : "";
     StringRef type(typestr);
     searchOnMapMove = !type.contains("-slow");
@@ -772,7 +784,7 @@ Button* MapsSearch::createPanel()
   searchTb->addWidget(sortBtn);
 
   resultsContent = createColumn();
-  searchPanel = app->createMapPanel(searchTb, resultsContent, new Widget(searchHeaderNode));
+  searchPanel = app->createMapPanel(searchTb, resultsContent, searchHeader);
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_OPENED) {
