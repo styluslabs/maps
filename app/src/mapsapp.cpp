@@ -914,10 +914,10 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
     updateLocMarker();
 }
 
+// values should be in degrees, not radians
 void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
 {
-  float deg = azimuth*180.0f/float(M_PI);
-  deg = deg - 360*std::floor(deg/360);
+  float deg = azimuth - 360*std::floor(azimuth/360);
   if(std::abs(deg - orientation) < (followState == FOLLOW_ACTIVE ? 0.1f : 1.0f)) return;
   orientation = deg;
   // we might have to add a low-pass for this
@@ -1147,6 +1147,10 @@ void MapsApp::setWindowLayout(int fbWidth, int fbHeight)
   if(currLayout) currLayout->setVisible(false);
   currLayout = win->selectFirst(narrow ? ".window-layout-narrow" : ".window-layout-wide");
   currLayout->setVisible(true);
+#if PLATFORM_IOS
+  if(!narrow)
+    currLayout->selectFirst(".panel-layout")->setMargins(12, 0, 0, 50);
+#endif
 
   panelSplitter->setEnabled(narrow);
   panelSeparator = currLayout->selectFirst(".panel-separator");  // may be NULL

@@ -1,10 +1,16 @@
 add_definitions(-DTANGRAM_IOS)
-add_compile_options(--target=arm64-apple-ios12.0)
-add_compile_options(-g)
-add_link_options(--target=arm64-apple-ios12.0)
+add_compile_options(-g)  # always include debug info
+
+if(TANGRAM_IOS_SIM)
+  add_compile_options(--target=x86_64-apple-ios12.0-simulator)
+  add_link_options(--target=x86_64-apple-ios12.0-simulator)
+else()
+  add_compile_options(--target=arm64-apple-ios12.0)
+  add_link_options(--target=arm64-apple-ios12.0)
+endif()
 
 # seems to be the only way to get cmake to combine all the static libs; we'll be switching to plain makefiles soon
-#set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_AR> rcT libmaps-ios.a <OBJECTS> <LINK_LIBRARIES>")
+#set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_AR> rcT libmaps-ios.a <OBJECTS> <LINK_LIBRARIES>") -- doesn't work
 
 #set(TANGRAM_FRAMEWORK_VERSION "0.17.2-dev")
 #set(TANGRAM_BUNDLE_IDENTIFIER "com.mapzen.TangramMap")

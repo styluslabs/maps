@@ -43,4 +43,10 @@
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
 }
 
+// for now, we've disabled GPX file type (since GPX could be bookmarks or track/route), so this should never be called
+- (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options
+{
+  return NO;
+}
+
 @end

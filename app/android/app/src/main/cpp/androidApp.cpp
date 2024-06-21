@@ -784,7 +784,7 @@ JNI_FN(updateLocation)(JNIEnv* env, jclass, long time, double lat, double lng, f
 
 JNI_FN(updateOrientation)(JNIEnv* env, jclass, jfloat azimuth, jfloat pitch, jfloat roll)
 {
-  MapsApp::runOnMainThread([=](){ app->updateOrientation(azimuth, pitch, roll); });
+  MapsApp::runOnMainThread([=](){ app->updateOrientation(azimuth*180/M_PI, pitch*180/M_PI, roll*180/M_PI); });
 }
 
 JNI_FN(updateGpsStatus)(JNIEnv* env, jclass, int satsVisible, int satsUsed)

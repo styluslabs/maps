@@ -137,17 +137,21 @@ static void sendKeyEvent(int keycode, int action)
 
 - (void)showKeyboard:(int)_inputBottom
 {
+  NSLog(@"showKeyboard");
   inputBottom = _inputBottom;
   //keyboardVisible = YES;
   if (textField.window) {
+    textField.userInteractionEnabled = YES;
     [textField becomeFirstResponder];
   }
 }
 
 - (void)hideKeyboard
 {
+  NSLog(@"hideKeyboard");
   //keyboardVisible = NO;
   [textField resignFirstResponder];
+  textField.userInteractionEnabled = NO;
 }
 
 - (void)setImeText:(const char*)text selStart:(int)start selEnd:(int)end
@@ -190,6 +194,7 @@ static void sendKeyEvent(int keycode, int action)
 
 - (void)keyboardWillShow:(NSNotification *)notification
 {
+  NSLog(@"keyboardWillShow");
   CGRect kbrect = [[notification userInfo][UIKeyboardFrameEndUserInfoKey] CGRectValue];
   kbrect = [viewCtrl.view convertRect:kbrect fromView:nil];
   [self setKeyboardHeight:(int)kbrect.size.height];
@@ -197,8 +202,13 @@ static void sendKeyEvent(int keycode, int action)
 
 - (void)keyboardWillHide:(NSNotification *)notification
 {
+  NSLog(@"keyboardWillHide");
   //if (!rotatingOrientation) { SDL_StopTextInput(); }
   [self setKeyboardHeight:0];
+  // keyboard sometime randomly hides on resume
+  SDL_Event event = {0};
+  event.type = SVGGUI_KEYBOARD_HIDDEN;
+  SDL_PushEvent(&event);
 }
 
 - (void)updateKeyboard
@@ -348,18 +358,6 @@ void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float 
   });
 }
 
-void iosPlatform_getSafeAreaInsets(void* _vc, float* top, float* bottom)
-{
-  //if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
-  //  return 0;
-  UIWindow *window = UIApplication.sharedApplication.keyWindow;
-  CGFloat topInset = window.safeAreaInsets.top;
-  CGFloat bottomInset = window.safeAreaInsets.bottom;
-  if(top) *top = (float)topInset;
-  if(bottom) *bottom = (float)bottomInset;
-  //return 1;
-}
-
 void iosPlatform_swapBuffers(void* _vc)
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;
@@ -407,7 +405,7 @@ void iosPlatform_openURL(const char* url)
 void iosPlatform_excludeFromBackup(const char* url)
 {
   NSURL* nsurl = [NSURL URLWithString:@(url)];
-  [nsurl setResourceValue:YES forKey:NSURLIsExcludedFromBackupKey error:nil];
+  [nsurl setResourceValue:@(YES) forKey:NSURLIsExcludedFromBackupKey error:nil];
 }
 
 void iosPlatform_setStatusBarBG(void* _vc, int isLight)

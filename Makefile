@@ -7,6 +7,7 @@ BUILD_TYPE ?= Release
 
 LINUX_BUILD_DIR = build/${BUILD_TYPE}
 IOS_BUILD_DIR = build/${BUILD_TYPE}
+IOS_SIM_BUILD_DIR = build/Sim${BUILD_TYPE}
 
 LINUX_CMAKE_PARAMS = \
 	-DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
@@ -68,3 +69,9 @@ ios: cmake-ios
 
 cmake-ios:
 	cmake -H. -B${IOS_BUILD_DIR} ${IOS_CMAKE_PARAMS}
+
+ios-sim: cmake-ios-sim
+	cmake --build ${IOS_SIM_BUILD_DIR} ${CMAKE_BUILD_OPTIONS}
+
+cmake-ios-sim:
+	cmake -H. -B${IOS_SIM_BUILD_DIR} ${IOS_CMAKE_PARAMS} -DTANGRAM_IOS_SIM=ON -DCMAKE_OSX_SYSROOT=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk

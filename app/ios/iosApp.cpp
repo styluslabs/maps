@@ -14,6 +14,8 @@ static std::thread mainThread;
 static SDL_Window* sdlWin = NULL;
 static int fbWidth = 0;
 static int fbHeight = 0;
+static float _topInset = 0;
+static float _bottomInset = 0;
 static std::string initialQuery;
 
 // since event loop waits on MapsApp::taskQueue, no need for PLATFORM_WakeEventLoop
@@ -144,16 +146,17 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
 
 void MapsApp::getSafeAreaInsets(float *top, float *bottom)
 {
-  iosPlatform_getSafeAreaInsets(sdlWin, top, bottom);
+  if(top) *top = _topInset;
+  if(bottom) *bottom = _bottomInset;
 }
 
 void MapsApp::openBatterySettings() {}
 
 // main loop
 
-int mainLoop(int width, int height, float dpi)
+static int mainLoop(int width, int height, float dpi, float topinset, float botinset)
 {
-  fbWidth = width;  fbHeight = height;
+  fbWidth = width;  fbHeight = height;  _topInset = topinset;  _bottomInset = botinset;
   iosPlatform_setContextCurrent(sdlWin);
 
   if(!app) {
@@ -224,10 +227,10 @@ void iosApp_startApp(void* glView, const char* bundlePath)
   MapsApp::platform = Tangram::createiOSPlatform();
 }
 
-void iosApp_startLoop(int width, int height, float dpi)
+void iosApp_startLoop(int width, int height, float dpi, float topinset, float botinset)
 {
   if(mainThread.joinable()) return;
-  mainThread = std::thread(mainLoop, width, height, dpi);
+  mainThread = std::thread(mainLoop, width, height, dpi, topinset, botinset);
 }
 
 void iosApp_stopLoop()

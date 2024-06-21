@@ -16,7 +16,7 @@ extern "C" {
 
 // iOS -> app
 void iosApp_startApp(void* glView, const char* bundlePath);
-void iosApp_startLoop(int width, int height, float dpi);
+void iosApp_startLoop(int width, int height, float dpi, float topinset, float botinset);
 void iosApp_stopLoop();
 
 void iosApp_filePicked(const char* path);
@@ -42,7 +42,6 @@ void iosPlatform_setStatusBarBG(void* _vc, int isLight);
 void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float minDist);
 char* iosPlatform_getClipboardText();
 void iosPlatform_setClipboardText(const char* text);
-void iosPlatform_getSafeAreaInsets(void* _vc, float* top, float* bottom);
 void iosPlatform_excludeFromBackup(const char* url);
 
 #ifdef __cplusplus

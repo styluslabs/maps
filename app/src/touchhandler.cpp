@@ -35,10 +35,12 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
     if(event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK)
       return false;
     if(app->drawOnMap) {
-      app->fingerEvent(actionFromSDLFinger(event->type), event->tfinger.x*xyScale, event->tfinger.y*xyScale);
-      return true;
+      int action = actionFromSDLFinger(event->type);
+      app->fingerEvent(action, event->tfinger.x*xyScale, event->tfinger.y*xyScale);
+      if(action == 0)  // need to forward finger down so multitouch works properly
+        return true;
     }
-    if(event->type == SDL_FINGERDOWN) {
+    else if(event->type == SDL_FINGERDOWN) {
       tapState = gui->fingerClicks == 2 ? DBL_TAP_DRAG_PENDING : TAP_NONE;
     }
     else if(event->type == SDL_FINGERMOTION) {

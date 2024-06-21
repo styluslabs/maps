@@ -135,10 +135,14 @@
   int w = (int)(self.bounds.size.width * self.contentScaleFactor);
   int h = (int)(self.bounds.size.height * self.contentScaleFactor);
   if(w != width || h != height) {
+    UIWindow *window = UIApplication.sharedApplication.keyWindow;
+    CGFloat topInset = window.safeAreaInsets.top;
+    CGFloat bottomInset = window.safeAreaInsets.bottom;
+
     iosApp_stopLoop();
     [self makeContextCurrent];
     [self setupBuffers];
-    iosApp_startLoop(width, height, self.contentScaleFactor*163);
+    iosApp_startLoop(width, height, self.contentScaleFactor*163, (float)topInset, (float)bottomInset);
   }
 }
 // touch input
