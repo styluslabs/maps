@@ -1,0 +1,455 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		EF50547B2C23FA5800065499 /* maps-ios in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E662C16197700317BC9 /* maps-ios */; };
+		EF5D42DA240F4B8500BA10F4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42CF240F4B8400BA10F4 /* Foundation.framework */; };
+		EF5D42DC240F4B8500BA10F4 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D1240F4B8500BA10F4 /* QuartzCore.framework */; };
+		EF5D42DE240F4B8500BA10F4 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D3240F4B8500BA10F4 /* CoreMotion.framework */; };
+		EF5D42E1240F4B8500BA10F4 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D6240F4B8500BA10F4 /* CoreGraphics.framework */; };
+		EF5D42E2240F4B8500BA10F4 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */; };
+		EF5D42E3240F4B8500BA10F4 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D8240F4B8500BA10F4 /* UIKit.framework */; };
+		EFE14E282C12AE5300317BC9 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E272C12AE5300317BC9 /* CoreLocation.framework */; };
+		EFE14E2A2C12AEBF00317BC9 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = EFE14E292C12AEBF00317BC9 /* main.m */; settings = {COMPILER_FLAGS = "-I."; }; };
+		EFE14E692C16226700317BC9 /* LaunchView.xib in Resources */ = {isa = PBXBuildFile; fileRef = EFE14E2F2C12B08C00317BC9 /* LaunchView.xib */; };
+		EFE14E6A2C162D2600317BC9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EFE14E2B2C12B08C00317BC9 /* Assets.xcassets */; };
+		EFE14E6C2C1630D600317BC9 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = EFE14E6B2C1630D500317BC9 /* assets */; };
+		EFE14E752C1A09AA00317BC9 /* Photos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E742C1A09AA00317BC9 /* Photos.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		EF5054782C2147B200065499 /* maps-ios */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; name = "maps-ios"; path = "../../build/SimRelease/maps-ios.app/maps-ios"; sourceTree = "<group>"; };
+		EF5D42CF240F4B8400BA10F4 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		EF5D42D0240F4B8400BA10F4 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		EF5D42D1240F4B8500BA10F4 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		EF5D42D2240F4B8500BA10F4 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		EF5D42D3240F4B8500BA10F4 /* CoreMotion.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMotion.framework; path = System/Library/Frameworks/CoreMotion.framework; sourceTree = SDKROOT; };
+		EF5D42D4240F4B8500BA10F4 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		EF5D42D5240F4B8500BA10F4 /* GameController.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameController.framework; path = System/Library/Frameworks/GameController.framework; sourceTree = SDKROOT; };
+		EF5D42D6240F4B8500BA10F4 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGLES.framework; path = System/Library/Frameworks/OpenGLES.framework; sourceTree = SDKROOT; };
+		EF5D42D8240F4B8500BA10F4 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		EF5D42D9240F4B8500BA10F4 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		EFE14E252C12ADF300317BC9 /* libmaps-ios.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libmaps-ios.a"; path = "../../build/Release/libmaps-ios.a"; sourceTree = "<group>"; };
+		EFE14E272C12AE5300317BC9 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
+		EFE14E292C12AEBF00317BC9 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = main.m; path = maps/main.m; sourceTree = "<group>"; };
+		EFE14E2B2C12B08C00317BC9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		EFE14E2D2C12B08C00317BC9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		EFE14E2F2C12B08C00317BC9 /* LaunchView.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = LaunchView.xib; sourceTree = "<group>"; };
+		EFE14E302C12B08C00317BC9 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		EFE14E632C12D04B00317BC9 /* Ascend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ascend.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EFE14E642C155C2100317BC9 /* libmaps-ios.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; name = "libmaps-ios.o"; path = "../../build/Release/libmaps-ios.o"; sourceTree = "<group>"; };
+		EFE14E662C16197700317BC9 /* maps-ios */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; name = "maps-ios"; path = "../../build/Release/maps-ios.app/maps-ios"; sourceTree = "<group>"; };
+		EFE14E682C16208B00317BC9 /* Explore-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Explore-Info.plist"; sourceTree = "<group>"; };
+		EFE14E6B2C1630D500317BC9 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = ../../assets; sourceTree = "<group>"; };
+		EFE14E6D2C163C3F00317BC9 /* maps */ = {isa = PBXFileReference; lastKnownFileType = text; name = maps; path = ../../../../../../../../maps; sourceTree = BUILT_PRODUCTS_DIR; };
+		EFE14E722C17AD0300317BC9 /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		EFE14E742C1A09AA00317BC9 /* Photos.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Photos.framework; path = System/Library/Frameworks/Photos.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		EF612E5E23C2FB01000BB825 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EF50547B2C23FA5800065499 /* maps-ios in Frameworks */,
+				EFE14E752C1A09AA00317BC9 /* Photos.framework in Frameworks */,
+				EF5D42DA240F4B8500BA10F4 /* Foundation.framework in Frameworks */,
+				EF5D42DC240F4B8500BA10F4 /* QuartzCore.framework in Frameworks */,
+				EFE14E282C12AE5300317BC9 /* CoreLocation.framework in Frameworks */,
+				EF5D42DE240F4B8500BA10F4 /* CoreMotion.framework in Frameworks */,
+				EF5D42E1240F4B8500BA10F4 /* CoreGraphics.framework in Frameworks */,
+				EF5D42E2240F4B8500BA10F4 /* OpenGLES.framework in Frameworks */,
+				EF5D42E3240F4B8500BA10F4 /* UIKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		EF5D42CE240F4B8400BA10F4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				EF5054782C2147B200065499 /* maps-ios */,
+				EFE14E742C1A09AA00317BC9 /* Photos.framework */,
+				EFE14E722C17AD0300317BC9 /* JavaScriptCore.framework */,
+				EFE14E662C16197700317BC9 /* maps-ios */,
+				EFE14E642C155C2100317BC9 /* libmaps-ios.o */,
+				EFE14E272C12AE5300317BC9 /* CoreLocation.framework */,
+				EFE14E252C12ADF300317BC9 /* libmaps-ios.a */,
+				EF5D42D4240F4B8500BA10F4 /* AudioToolbox.framework */,
+				EF5D42D9240F4B8500BA10F4 /* AVFoundation.framework */,
+				EF5D42D2240F4B8500BA10F4 /* CoreAudio.framework */,
+				EF5D42D6240F4B8500BA10F4 /* CoreGraphics.framework */,
+				EF5D42D3240F4B8500BA10F4 /* CoreMotion.framework */,
+				EF5D42CF240F4B8400BA10F4 /* Foundation.framework */,
+				EF5D42D5240F4B8500BA10F4 /* GameController.framework */,
+				EF5D42D0240F4B8400BA10F4 /* Metal.framework */,
+				EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */,
+				EF5D42D1240F4B8500BA10F4 /* QuartzCore.framework */,
+				EF5D42D8240F4B8500BA10F4 /* UIKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		EF612E5823C2FB01000BB825 = {
+			isa = PBXGroup;
+			children = (
+				EFE14E6D2C163C3F00317BC9 /* maps */,
+				EFE14E6B2C1630D500317BC9 /* assets */,
+				EFE14E682C16208B00317BC9 /* Explore-Info.plist */,
+				EFE14E292C12AEBF00317BC9 /* main.m */,
+				EFE14E312C12B08C00317BC9 /* maps */,
+				EF5D42CE240F4B8400BA10F4 /* Frameworks */,
+				EFE14E632C12D04B00317BC9 /* Ascend.app */,
+			);
+			sourceTree = "<group>";
+		};
+		EFE14E312C12B08C00317BC9 /* maps */ = {
+			isa = PBXGroup;
+			children = (
+				EFE14E2B2C12B08C00317BC9 /* Assets.xcassets */,
+				EFE14E2E2C12B08C00317BC9 /* LaunchScreen.storyboard */,
+				EFE14E2F2C12B08C00317BC9 /* LaunchView.xib */,
+				EFE14E302C12B08C00317BC9 /* main.m */,
+			);
+			path = maps;
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		EF612E6023C2FB01000BB825 /* Ascend */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EF612E7A23C2FB04000BB825 /* Build configuration list for PBXNativeTarget "Ascend" */;
+			buildPhases = (
+				EF5D42CD240F4A5000BA10F4 /* ShellScript */,
+				EF612E5D23C2FB01000BB825 /* Sources */,
+				EF612E5E23C2FB01000BB825 /* Frameworks */,
+				EF612E5F23C2FB01000BB825 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Ascend;
+			productName = Write;
+			productReference = EFE14E632C12D04B00317BC9 /* Ascend.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		EF612E5923C2FB01000BB825 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1530;
+				ORGANIZATIONNAME = mwhite;
+				TargetAttributes = {
+					EF612E6023C2FB01000BB825 = {
+						CreatedOnToolsVersion = 11.3;
+					};
+				};
+			};
+			buildConfigurationList = EF612E5C23C2FB01000BB825 /* Build configuration list for PBXProject "maps" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = EF612E5823C2FB01000BB825;
+			productRefGroup = EF612E5823C2FB01000BB825;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EF612E6023C2FB01000BB825 /* Ascend */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		EF612E5F23C2FB01000BB825 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EFE14E6C2C1630D600317BC9 /* assets in Resources */,
+				EFE14E692C16226700317BC9 /* LaunchView.xib in Resources */,
+				EFE14E6A2C162D2600317BC9 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		EF5D42CD240F4A5000BA10F4 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n(cd $HOME/maps && make ios)\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		EF612E5D23C2FB01000BB825 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EFE14E2A2C12AEBF00317BC9 /* main.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		EFE14E2E2C12B08C00317BC9 /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				EFE14E2D2C12B08C00317BC9 /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		EF612E7823C2FB04000BB825 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		EF612E7923C2FB04000BB825 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		EF612E7B23C2FB04000BB825 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1.0;
+				DEVELOPMENT_TEAM = 8U8646Y4MM;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 8U8646Y4MM;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Explore-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Ascend;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Access is needed to show your current location and for track recording.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Background location access is required for track recording.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Access is needed to show your current location on the map";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Access is needed to import geotagged photos";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchView;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
+				INFOPLIST_OUTPUT_FORMAT = XML;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = /Users/mwhite/maps/build/Release;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					StoreKit,
+					"-lc++",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.styluslabs.maps;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "mwhite iOS Dev 2024";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "mwhite iOS Dev 2024";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		EF612E7C23C2FB04000BB825 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Distribution";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1.0;
+				DEVELOPMENT_TEAM = 8U8646Y4MM;
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 8U8646Y4MM;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Explore-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Ascend;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Access is needed to show your current location and for track recording.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Background location access is required for track recording.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Access is needed to show your current location on the map";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Access is needed to import geotagged photos";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchView;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
+				INFOPLIST_OUTPUT_FORMAT = XML;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = /Users/mwhite/maps/build/Release;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					StoreKit,
+					"-lc++",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.styluslabs.maps;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Stylus Labs App Store 2024";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Stylus Labs App Store 2024";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		EF612E5C23C2FB01000BB825 /* Build configuration list for PBXProject "maps" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EF612E7823C2FB04000BB825 /* Debug */,
+				EF612E7923C2FB04000BB825 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EF612E7A23C2FB04000BB825 /* Build configuration list for PBXNativeTarget "Ascend" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EF612E7B23C2FB04000BB825 /* Debug */,
+				EF612E7C23C2FB04000BB825 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = EF612E5923C2FB01000BB825 /* Project object */;
+}

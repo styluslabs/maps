@@ -4,7 +4,7 @@ A cross-platform application for displaying vector and raster maps, built on [Ta
 
 Features include offline search, managing saved places, creating and editing tracks and routes, and saving map tiles for offline use.
 
-Currently available for Android and Linux; iOS support coming soon.
+Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](https://github.com/styluslabs/maps/releases), and iOS [Testflight](https://testflight.apple.com/join/3N1AUhj9).
 
 <img alt="Offline POI search" src="https://github.com/styluslabs/maps/assets/1332998/3a05679d-3a00-4c80-9886-253c72a10e07" width="270">
 <img alt="Wikipedia search; Shaded relief" src="https://github.com/styluslabs/maps/assets/1332998/f4f54f7f-9864-4908-9e03-7014879c99ee" width="270">

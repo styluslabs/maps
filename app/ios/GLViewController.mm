@@ -137,7 +137,7 @@ static void sendKeyEvent(int keycode, int action)
 
 - (void)showKeyboard:(int)_inputBottom
 {
-  NSLog(@"showKeyboard");
+  //NSLog(@"showKeyboard");
   inputBottom = _inputBottom;
   //keyboardVisible = YES;
   if (textField.window) {
@@ -148,7 +148,7 @@ static void sendKeyEvent(int keycode, int action)
 
 - (void)hideKeyboard
 {
-  NSLog(@"hideKeyboard");
+  //NSLog(@"hideKeyboard");
   //keyboardVisible = NO;
   [textField resignFirstResponder];
   textField.userInteractionEnabled = NO;
@@ -194,7 +194,7 @@ static void sendKeyEvent(int keycode, int action)
 
 - (void)keyboardWillShow:(NSNotification *)notification
 {
-  NSLog(@"keyboardWillShow");
+  //NSLog(@"keyboardWillShow");
   CGRect kbrect = [[notification userInfo][UIKeyboardFrameEndUserInfoKey] CGRectValue];
   kbrect = [viewCtrl.view convertRect:kbrect fromView:nil];
   [self setKeyboardHeight:(int)kbrect.size.height];
@@ -202,7 +202,7 @@ static void sendKeyEvent(int keycode, int action)
 
 - (void)keyboardWillHide:(NSNotification *)notification
 {
-  NSLog(@"keyboardWillHide");
+  //NSLog(@"keyboardWillHide");
   //if (!rotatingOrientation) { SDL_StopTextInput(); }
   [self setKeyboardHeight:0];
   // keyboard sometime randomly hides on resume
