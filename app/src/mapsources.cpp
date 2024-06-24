@@ -243,7 +243,8 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
         showbtn->setChecked(key != currSource && shown);
       }
     }
-    promptDownload(builder.layerkeys);
+    if(async)  // don't prompt for download when importing tiles!
+      promptDownload(builder.layerkeys);
   }
 
   saveBtn->setEnabled(srcname.empty());  // for existing source, don't enable saveBtn until edited

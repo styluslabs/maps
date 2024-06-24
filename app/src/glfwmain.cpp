@@ -32,14 +32,17 @@ static void screenshotPng(int width, int height)
 {
   Image img(width, height);
   glReadBuffer(GL_FRONT);  // to get MSAA resolve ... in general reading front buffer not guaranteed to work
-  glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, img.pixels());
+  // GL_RGB, not GL_RGBA (alpha channel not allowed in screenshots)
+  glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.pixels());
   glReadBuffer(GL_BACK);
   auto pngname = std::to_string(mSecSinceEpoch()/1000) + ".png";
-  FileStream fstrm(pngname.c_str(), "wb");
   stbi_flip_vertically_on_write(1);
-  auto encoded = img.encodePNG();
+  // initial value of GL_PACK_ALIGNMENT is 4
+  stbi_write_png(pngname.c_str(), width, height, 3, img.pixels(), (3*width + 0x3) & ~0x3);
   stbi_flip_vertically_on_write(0);
-  fstrm.write((char*)encoded.data(), encoded.size());
+  //FileStream fstrm(pngname.c_str(), "wb");
+  //auto encoded = img.encodePNG();
+  //fstrm.write((char*)encoded.data(), encoded.size());
   PLATFORM_LOG("Screenshot written to %s\n", pngname.c_str());
 }
 

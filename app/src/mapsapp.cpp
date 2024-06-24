@@ -174,8 +174,8 @@ void ScaleBarWidget::directDraw(Painter* p) const
 
   real y = bbox.center().y;
   LngLat r0, r1;
-  map->screenPositionToLngLat(bbox.left, y, &r0.longitude, &r0.latitude);
-  map->screenPositionToLngLat(bbox.right, y, &r1.longitude, &r1.latitude);
+  map->screenPositionToLngLat(bbox.left*MapsApp::gui->paintScale, y, &r0.longitude, &r0.latitude);
+  map->screenPositionToLngLat(bbox.right*MapsApp::gui->paintScale, y, &r1.longitude, &r1.latitude);
 
   // steps are 1, 2, 5, 10, 20, 50, ...
   const char* format = "%.0f km";
@@ -1592,6 +1592,7 @@ void MapsApp::showPanelContainer(bool show)
   }
   if(!panelHistory.empty() && show)
     panelHistory.back()->setVisible(true);  // to send VISIBLE event to panel
+  panelMinimized = !panelHistory.empty() && !show;
 }
 
 void MapsApp::showPanel(Widget* panel, bool isSubPanel)
@@ -1616,9 +1617,11 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
     else  // remove previous instance from history (should only apply to place info panel)
       panelHistory.erase(std::remove(panelHistory.begin(), panelHistory.end(), panel), panelHistory.end());
   }
+  bool wasminimized = panelMinimized && !panelHistory.empty();  // preserve minimized state
   panel->setVisible(true);
   panelHistory.push_back(panel);
   showPanelContainer(true);
+  panelMinimized = wasminimized;
   panel->sdlUserEvent(gui, PANEL_OPENED);
 }
 
@@ -1631,20 +1634,16 @@ bool MapsApp::popPanel()
   panelHistory.pop_back();
   popped->sdlUserEvent(gui, PANEL_CLOSED);
 
-  if(panelHistory.empty())
-    showPanelContainer(false);
-  else if(panelHistory.back() == panelToSkip) {
+  if(!panelHistory.empty() && panelHistory.back() == panelToSkip) {
     // hack to handle the few cases where we want to go directly to a subpanel (e.g. directions)
     panelToSkip = NULL;
-    popPanel();
+    return popPanel();
   }
+  if(panelHistory.empty() || panelMinimized)
+    showPanelContainer(false);
   else
     panelHistory.back()->setVisible(true);
 
-  if(!panelHistory.empty())
-    panelHistory.back()->setVisible(true);
-  else
-    showPanelContainer(false);
   return true;
 }
 
@@ -1751,8 +1750,12 @@ Button* MapsApp::createPanelButton(const SvgNode* icon, const char* title, Widge
   });
 
   btn->onClicked = [=](){
-    if(btn->isChecked())  // && !panelContainer->isVisible())
-      showPanelContainer(!panelContainer->isVisible());
+    if(btn->isChecked()) {
+      if(panelHistory.back()->node->hasClass("can-minimize"))
+        showPanelContainer(!panelContainer->isVisible());
+      else
+        while(!panelHistory.empty()) popPanel();
+    }
     else
       showPanel(panel);
   };
@@ -1778,8 +1781,9 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
   if(fixedContent)
     panel->addWidget(fixedContent);
   if(content) {
+    real fixedh = fixedContent ? fixedContent->node->bounds().height() : 0;
     content->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
-    auto* scrollWidget = createScrollWidget(content);
+    auto* scrollWidget = createScrollWidget(content, 120, -160 - fixedh);
     panel->addWidget(scrollWidget);
   }
 

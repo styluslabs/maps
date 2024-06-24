@@ -81,8 +81,17 @@ bool MapsTracks::saveTrack(GpxFile* track)
   if(track == &recordedTrack)
     recordGPXStrm.reset();
   if(track == activeTrack && track->activeWay() && !track->activeWay()->pts.empty()) {
-    double t0 = track->activeWay()->pts.front().loc.time;
-    track->desc = (t0 > 0 ? (ftimestr("%F", t0*1000) + " | ") : "") + trackSummary;
+    bool istrack = track->routes.empty() && !track->tracks.empty();
+    if(istrack) {
+      double t0 = track->activeWay()->pts.front().loc.time;
+      track->desc = (t0 > 0 ? (ftimestr("%F", t0*1000) + " | ") : "") + trackSummary;
+    }
+    else {
+      auto parts = splitStr<std::vector>(track->routeMode.c_str(), '-');
+      std::string mode = !parts.empty() && !parts[0].empty() ? parts[0] : "direct";
+      mode[0] = char(toupper(mode[0]));
+      track->desc = mode + " | " + trackSummary;
+    }
   }
   SQLiteStmt(app->bkmkDB, "UPDATE tracks SET notes = ? WHERE rowid = ?;").bind(track->desc, track->rowid).exec();
   return saveGPX(track);
@@ -893,6 +902,7 @@ void MapsTracks::fingerEvent(int action, LngLat pos)
       activeTrack->routes.pop_back();
   }
   else {
+    activeTrack->modified = true;
     if(action > 0 || activeTrack->routes.empty())
       activeTrack->routes.emplace_back();
     activeTrack->routes.back().pts.push_back(Waypoint(pos));
@@ -1073,7 +1083,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
 void MapsTracks::setRouteMode(const std::string& mode)
 {
   auto parts = splitStr<std::vector>(mode.c_str(), '-');
-  const char* icon = "segment";
+  const char* icon = "segment";  // mode == "direct"
   if(parts.empty()) {}
   else if(parts[0] == "draw") icon = "scribble";
   else if(parts[0] == "walk") icon = "walk";
@@ -1314,7 +1324,7 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
 
   Button* saveBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
   saveBtn->setIcon(uiIcon("save"));
-  Button* saveCopyBtn = createToolbutton(NULL, "Save Copy", true);
+  Button* saveCopyBtn = createToolbutton(uiIcon("save-copy"), "Save Copy", true);
   saveCopyBtn->onClicked = [=](){ saveTrackContent->setVisible(false); saveTrackFn(true); };
   saveBtn->parent()->containerNode()->addChild(saveCopyBtn->node, saveBtn->node);
 

@@ -207,6 +207,7 @@ private:
   bool flyToPickResult = false;
   bool sensorsEnabled = true;
   bool panelMaximized = false;
+  bool panelMinimized = false;
   int shuffleSeed = 0;
   float topInset = 0, bottomInset = 0;
 };
