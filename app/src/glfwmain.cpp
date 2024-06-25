@@ -78,17 +78,54 @@ void glfwSDLEvent(SDL_Event* event)
     MapsApp::gui->sdlEvent(event);
 }
 
-void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn_t callback)
+class DesktopFile : public PlatformFile
+{
+public:
+  std::string mPath;
+  DesktopFile(std::string _path) : mPath(_path) {}
+  std::string fsPath() const override { return mPath; }
+  std::string sqliteURI() const override { return "file://" + mPath + "?mode=ro"; }
+  std::vector<char> readAll() const override {
+    std::vector<char> buff;
+    readFile(&buff, mPath.c_str());
+    return buff;
+  }
+};
+
+// for testing sqlite_fdvfs (used for Android)
+/*#include <fcntl.h>
+class DesktopFile : public PlatformFile
+{
+public:
+  std::string mPath;
+  int fd = -1;
+  DesktopFile(std::string _path) : mPath(_path) { fd = open(_path.c_str(), O_RDONLY); }
+  ~DesktopFile() override { if(fd >= 0) close(fd); fd = -1; }
+  std::string fsPath() const override { return mPath; }
+  std::string sqliteURI() const override {
+    return fd >= 0 ? "file:///dev/fd/" + std::to_string(fd) + "?vfs=fdvfs&immutable=1&mode=ro" : "file://" + mPath + "?mode=ro";
+  }
+  std::vector<char> readAll() const override {
+    std::vector<char> buff;
+    size_t n = lseek(fd, 0, SEEK_END);
+    buff.resize(n, 0);
+    lseek(fd, 0, SEEK_SET);
+    read(fd, buff.data(), n);
+    return buff;
+  }
+};*/
+
+void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFileFn_t callback)
 {
   nfdchar_t* outPath;
   nfdresult_t result = NFD_OpenDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL);
   if(result == NFD_OKAY) {
-    callback(outPath);
+    callback(std::make_unique<DesktopFile>(outPath));
     NFD_FreePath(outPath);
   }
 }
 
-void MapsApp::pickFolderDialog(OpenFileFn_t callback)
+void MapsApp::pickFolderDialog(FilePathFn_t callback)
 {
   nfdchar_t* outPath;
   nfdresult_t result = NFD_PickFolder(&outPath, NULL);
@@ -98,7 +135,7 @@ void MapsApp::pickFolderDialog(OpenFileFn_t callback)
   }
 }
 
-void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback)
+void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback)
 {
   ASSERT(!filters.empty() && "saveFileDialog requires filters!");  // filters required for Android, so test here
   nfdchar_t* outPath;
@@ -148,7 +185,7 @@ int main(int argc, char* argv[])
         MapsApp::inst->setWindowLayout(1000, 1000);  // required to show panel
         MapsApp::inst->showPanel(MapsApp::inst->mapsOffline->offlinePanel);
         MapsApp::inst->mapsOffline->populateOffline();
-        MapsApp::inst->mapsOffline->openForImport(importFile);
+        MapsApp::inst->mapsOffline->openForImport(std::make_unique<DesktopFile>(importFile));
       });
     }
     else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))

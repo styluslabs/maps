@@ -395,11 +395,11 @@ void MapsOffline::resumeDownloads()
   });
 }
 
-void MapsOffline::openForImport(std::string srcpath)
+void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
 {
   SQLiteDB srcDB;
-  if(sqlite3_open_v2(srcpath.c_str(), &srcDB.db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
-    MapsApp::messageBox("Import error", fstring("Cannot import from %s: cannot open file", srcpath.c_str()), {"OK"});
+  if(sqlite3_open_v2(srcfile->sqliteURI().c_str(), &srcDB.db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
+    MapsApp::messageBox("Import error", fstring("Cannot import from %s: cannot open file", srcfile->fsPath().c_str()), {"OK"});
     return;
   }
   std::string srcFmt, desc, pois;
@@ -420,7 +420,7 @@ void MapsOffline::openForImport(std::string srcpath)
   });
   sqlite3_close(srcDB.release());
   if(maxZoom <= 0) {
-    MapsApp::messageBox("Import error", fstring("Cannot import from %s: no tiles found", srcpath.c_str()), {"OK"});
+    MapsApp::messageBox("Import error", fstring("Cannot import from %s: no tiles found", srcfile->fsPath().c_str()), {"OK"});
     return;
   }
 
@@ -428,7 +428,7 @@ void MapsOffline::openForImport(std::string srcpath)
   OfflineMapInfo olinfo = {offlineId, lngLat00, lngLat11, 0, maxZoom, {}, false};
 
   if(app->mapsSources->mapSources[desc]) {
-    if(importFile(desc, srcpath, olinfo, hasPois))
+    if(importFile(desc, std::move(srcfile), olinfo, hasPois))
       populateOffline();
   }
   else {
@@ -443,8 +443,8 @@ void MapsOffline::openForImport(std::string srcpath)
     if(!selectDestDialog)
       selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
     selectDestDialog->addItems(layerTitles);
-    selectDestDialog->onSelected = [=](int idx){
-      if(importFile(layerKeys[idx], srcpath, olinfo, hasPois))
+    selectDestDialog->onSelected = [=, _srcfile=srcfile.release()](int idx){
+      if(importFile(layerKeys[idx], std::unique_ptr<PlatformFile>(_srcfile), olinfo, hasPois))
         populateOffline();
     };
     showModalCentered(selectDestDialog.get(), MapsApp::gui);
@@ -576,7 +576,7 @@ static void exportPOIs(const char* dest, int offlineId)
     LOGE("SQL error exporting POIs to %s: %s", dest, poiOutDB.errMsg());
 }
 
-bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMapInfo olinfo, bool hasPois)
+bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> srcfile, OfflineMapInfo olinfo, bool hasPois)
 {
   bool poiimport = hasPois && app->config["storage"]["import_pois"].as<bool>(true);
   bool poiexport = !hasPois && app->config["storage"]["export_pois"].as<bool>(false);
@@ -596,7 +596,7 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
   }
 
   // note that we set done = 1 since import is not resumable
-  std::string maptitle = FSPath(srcpath).baseName();
+  std::string maptitle = FSPath(srcfile->fsPath()).baseName();
   const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title,done) VALUES (?,?,?,?,?,?,?,?,?);";
   SQLiteStmt(app->bkmkDB, query).bind(olinfo.id, olinfo.lngLat00.longitude, olinfo.lngLat00.latitude,
       olinfo.lngLat11.longitude, olinfo.lngLat11.latitude, olinfo.maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
@@ -607,13 +607,14 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
     Tangram::YamlPath("application.search_data").get(app->map->getScene()->config(), searchYaml);
 
   int offlineId = olinfo.id, srcMaxZoom = tileSource->maxZoom();
-  queueOfflineTask(offlineId, [=](){
+  queueOfflineTask(offlineId, [=, _srcfile=srcfile.release()](){
+    std::unique_ptr<PlatformFile> srcfile(_srcfile);
     SQLiteDB tileDB;
     if(sqlite3_open_v2(destpath.c_str(), &tileDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
       LOGE("Error opening cache DB %s for import: %s", destpath.c_str(), tileDB.errMsg());
       return;
     }
-    if(!tileDB.exec(fstring("ATTACH DATABASE 'file://%s?mode=ro' AS src;", srcpath.c_str()))) {
+    if(!tileDB.exec(fstring("ATTACH DATABASE '%s' AS src;", srcfile->sqliteURI().c_str()))) {
       LOGE("SQL error attaching mbtiles: %s", tileDB.errMsg());
       return;
     }
@@ -627,9 +628,9 @@ bool MapsOffline::importFile(std::string destsrc, std::string srcpath, OfflineMa
     if(!tileDB.exec("DETACH DATABASE src;"))
       LOGE("SQL error detaching mbtiles: %s", tileDB.errMsg());
     if(poiimport)
-      MapsSearch::importPOIs(srcpath, offlineId);
+      MapsSearch::importPOIs(srcfile->sqliteURI(), offlineId);
     else if(poiexport)
-      exportPOIs(srcpath.c_str(), offlineId);
+      exportPOIs(srcfile->fsPath().c_str(), offlineId);  // sqliteURI is read-only, use path!
   });
 
   return true;
@@ -740,7 +741,7 @@ Widget* MapsOffline::createPanel()
   downloadDialog.reset(createInputDialog({downloadText, titleEdit, maxZoomRow}, "Download", "Start", downloadFn));
 
   Button* openBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Install Offline Map");
-  auto openMapFn = [this](const char* outPath){ openForImport(outPath); };
+  auto openMapFn = [this](std::unique_ptr<PlatformFile> file){ openForImport(std::move(file)); };
   openBtn->onClicked = [=](){ MapsApp::openFileDialog({{"MBTiles files", "mbtiles"}}, openMapFn); };
 
   Button* saveBtn = createToolbutton(MapsApp::uiIcon("download"), "Save Offline Map");

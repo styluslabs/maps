@@ -98,21 +98,21 @@ void PLATFORM_setImeText(const char* text, int selStart, int selEnd)
 }
 
 // open file dialog
-static MapsApp::OpenFileFn_t openFileCallback;
+static MapsApp::PlatformFileFn_t openFileCallback;
 
 // filters ignored for now
-void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, OpenFileFn_t callback)
+void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, PlatformFileFn_t callback)
 {
   openFileCallback = callback;
   iosPlatform_pickDocument(sdlWin);
 }
 
-void MapsApp::pickFolderDialog(OpenFileFn_t callback)
+void MapsApp::pickFolderDialog(FilePathFn_t callback)
 {
   // ... not used on iOS (photos are loaded with PhotoKit API)
 }
 
-void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback)
+void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback)
 {
   if(filters.empty()) return;
   FSPath filePath(MapsApp::baseDir, "temp/" + name + "." + filters.front().spec);
@@ -269,11 +269,28 @@ void iosApp_onResume()
   MapsApp::runOnMainThread([=](){ app->onResume(); });
 }
 
-void iosApp_filePicked(const char* path)
+
+class IOSFile : public PlatformFile
 {
-  std::string s(path);
+public:
+  std::string mPath;
+  std::string securedURL;
+  IOSFile(std::string _path, std::string _url = "") : mPath(_path), securedURL(_url) {}
+  ~IOSFile() override { if(!securedURL.empty()) iosPlatform_releaseSecuredURL(securedURL.c_str()) }
+  std::string fsPath() const override { return mPath; }
+  std::string sqliteURI() const override { return "file://" + mPath + "?mode=ro"; }
+  std::vector<char> readAll() const override {
+    std::vector<char> buff;
+    readFile(&buff, mPath.c_str());
+    return buff;
+  }
+};
+
+void iosApp_filePicked(const char* path, const char* url)
+{
+  auto* file = new IOSFile(path, url);
   if(openFileCallback)
-    MapsApp::runOnMainThread([s, cb=std::move(openFileCallback)](){ cb(s.c_str()); });
+    MapsApp::runOnMainThread([file, cb=std::move(openFileCallback)](){ cb(std::unique_ptr<IOSFile>(file)); });
   openFileCallback = {};
 }
 

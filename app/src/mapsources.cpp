@@ -727,9 +727,9 @@ Button* MapsSources::createPanel()
   importTb->addWidget(importFileBtn);
   importTb->addWidget(importEdit);
 
-  auto importFileFn = [=](const char* outPath){
+  auto importFileFn = [=](std::unique_ptr<PlatformFile> file){
     importDialog->finish(Dialog::CANCELLED);
-    importSources(std::string("file://") + outPath);
+    importSources(file->readAll().data());
   };
   importFileBtn->onClicked = [=](){ MapsApp::openFileDialog({{"YAML files", "yaml,yml"}}, importFileFn); };
 

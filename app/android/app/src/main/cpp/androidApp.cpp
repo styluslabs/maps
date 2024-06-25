@@ -463,24 +463,25 @@ void PLATFORM_setImeText(const char* text, int selStart, int selEnd)
 }
 
 // open file dialog
-static MapsApp::OpenFileFn_t openFileCallback;
+static MapsApp::PlatformFileFn_t openFileCallback;
+static MapsApp::FilePathFn_t pickFolderCallback;
 
 // filters ignored for now
-void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, OpenFileFn_t callback)
+void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, PlatformFileFn_t callback)
 {
   openFileCallback = callback;
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jniEnv->CallVoidMethod(mapsActivityRef, openFileMID);
 }
 
-void MapsApp::pickFolderDialog(OpenFileFn_t callback)
+void MapsApp::pickFolderDialog(FilePathFn_t callback)
 {
-  openFileCallback = callback;
+  pickFolderCallback = callback;
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jniEnv->CallVoidMethod(mapsActivityRef, pickFolderMID);
 }
 
-void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback)
+void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback)
 {
   if(filters.empty()) return;
   FSPath filePath(MapsApp::baseDir, "temp/" + name + "." + filters.front().spec);
@@ -804,6 +805,29 @@ JNI_FN(handleUri)(JNIEnv* env, jclass, jstring juri)
   env->ReleaseStringUTFChars(juri, uri);
 }
 
+class AndroidFile : public PlatformFile
+{
+public:
+  std::string mPath;
+  int fd = -1;
+  AndroidFile(std::string _path, int _fd = -1) : mPath(_path), fd(_fd) {
+    if(fd >= 0 && FSPath(mPath).exists()) { close(fd); fd = -1; }  // don't need fd if we can access by name
+  }
+  ~AndroidFile() override { if(fd >= 0) close(fd); fd = -1; }
+  std::string fsPath() const override { return mPath; }
+  std::string sqliteURI() const override {
+    return fd >= 0 ? "file:///dev/fd/" + std::to_string(fd) + "?vfs=fdvfs&immutable=1&mode=ro" : "file://" + mPath + "?mode=ro";
+  }
+  std::vector<char> readAll() const override {
+    std::vector<char> buff;
+    size_t n = lseek(fd, 0, SEEK_END);
+    buff.resize(n, 0);
+    lseek(fd, 0, SEEK_SET);
+    read(fd, buff.data(), n);
+    return buff;
+  }
+};
+
 JNI_FN(openFileDesc)(JNIEnv* env, jclass, jstring jfilename, jint jfd)
 {
   char buff[256];
@@ -819,8 +843,13 @@ JNI_FN(openFileDesc)(JNIEnv* env, jclass, jstring jfilename, jint jfd)
       s.replace(pos, sizeof("/mnt/user/0/") - 1, "/storage/");
     PLATFORM_LOG("readlink returned: %s\n", buff);
     //const char* filename = env->GetStringUTFChars(jfilename, 0);
-    if(openFileCallback)
-      MapsApp::runOnMainThread([s, cb=std::move(openFileCallback)](){ cb(s.c_str()); });
+    if(openFileCallback) {
+      MapsApp::runOnMainThread([s, jfd, cb=std::move(openFileCallback)](){
+        cb(std::make_unique<AndroidFile>(s, jfd));
+      });
+    }
+    else if(pickFolderCallback)
+      MapsApp::runOnMainThread([s, jfd, cb=std::move(pickFolderCallback)](){ cb(s.c_str()); });
     //env->ReleaseStringUTFChars(jfilename, filename);
   }
   openFileCallback = {};  // clear

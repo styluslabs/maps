@@ -1920,6 +1920,8 @@ void MapsApp::setDpi(float dpi)
   map->setPixelScale(config["ui"]["map_scale"].as<float>(1.0f) * dpi/150.0f);
 }
 
+#include "../android/tangram/src/main/cpp/sqlite_fdvfs.h"
+
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
   TRACE_INIT();
@@ -1939,6 +1941,9 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     markerColors.push_back(parseColor(colorstr.Scalar()));
 
   // DB setup
+#if 1  //PLATFORM_ANDROID
+  sqlite3_fdvfs_init("fdvfs", 0, NULL);
+#endif
   //sqlite3_config(SQLITE_CONFIG_URI, 1);  -- enable at compile time instead (here is too late on Android)
   FSPath dbPath(baseDir, "places.sqlite");
   if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {

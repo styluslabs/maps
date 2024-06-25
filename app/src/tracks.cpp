@@ -1918,14 +1918,14 @@ void MapsTracks::createTrackListPanel()
   };
 
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
-  auto loadTrackFn = [=](const char* filename){
-    GpxFile track("", "", filename);
-    loadGPX(&track);
+  auto loadTrackFn = [=](std::unique_ptr<PlatformFile> file){
+    GpxFile track("", "", "");
+    loadGPX(&track, file->readAll().data());
     if(track.waypoints.empty() && !track.activeWay()) {
-      MapsApp::messageBox("Import error", fstring("Error reading %s", filename), {"OK"});
+      MapsApp::messageBox("Import error", fstring("Error reading %s", file->fsPath().c_str()), {"OK"});
       return;
     }
-    track.filename.clear();  // we will copy to tracks/ folder
+    //track.filename.clear();  // we will copy to tracks/ folder
     tracks.push_back(std::move(track));
     updateDB(&tracks.back());
     populateTrack(&tracks.back());

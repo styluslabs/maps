@@ -36,6 +36,17 @@ union SDL_Event;
 
 namespace YAML { class Node; }
 
+class PlatformFile
+{
+public:
+  PlatformFile() {}
+  PlatformFile(const PlatformFile& other) = delete;
+  virtual ~PlatformFile() {}
+  virtual std::string sqliteURI() const = 0;
+  virtual std::string fsPath() const = 0;
+  virtual std::vector<char> readAll() const = 0;
+};
+
 class MapsApp
 {
 public:
@@ -164,11 +175,12 @@ public:
   static void runOnMainThread(std::function<void()> fn);
   static void messageBox(std::string title, std::string message,
       std::vector<std::string> buttons = {"OK"}, std::function<void(std::string)> callback = {});
-  typedef std::function<void(const char*)> OpenFileFn_t;
+  typedef std::function<void(std::unique_ptr<PlatformFile>)> PlatformFileFn_t;
   struct FileDialogFilter_t { const char* name; const char* spec; };
-  static void openFileDialog(std::vector<FileDialogFilter_t> filters, OpenFileFn_t callback);
-  static void pickFolderDialog(OpenFileFn_t callback);
-  static void saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, OpenFileFn_t callback);
+  static void openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFileFn_t callback);
+  typedef std::function<void(const char*)> FilePathFn_t;
+  static void pickFolderDialog(FilePathFn_t callback);
+  static void saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback);
   static void notifyStatusBarBG(bool isLight);
   static void setSensorsEnabled(bool enabled);
   static void setServiceState(int state, float intervalSec = 0, float minDist = 0);

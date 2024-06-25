@@ -506,8 +506,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
             //getContentResolver().takePersistableUriPermission(resultData.getData(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
             ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(resultData.getData(), "r");
-            MapsLib.openFileDesc(resultData.getData().getPath(), pfd.getFd());
-            pfd.close();
+            MapsLib.openFileDesc(resultData.getData().getPath(), pfd.detachFd());
+            //pfd.close();
           } catch(Exception e) {
             Log.v("Tangram", "Error opening document: " + resultData.getData().toString(), e);
           }

@@ -19,7 +19,7 @@ void iosApp_startApp(void* glView, const char* bundlePath);
 void iosApp_startLoop(int width, int height, float dpi, float topinset, float botinset);
 void iosApp_stopLoop();
 
-void iosApp_filePicked(const char* path);
+void iosApp_filePicked(const char* path, const char* url);
 void iosApp_imeTextUpdate(const char* text, int selStart, int selEnd);
 void iosApp_onPause();
 void iosApp_onResume();
@@ -43,6 +43,7 @@ void iosPlatform_setServiceState(void* _vc, int state, float intervalSec, float 
 char* iosPlatform_getClipboardText();
 void iosPlatform_setClipboardText(const char* text);
 void iosPlatform_excludeFromBackup(const char* url);
+void iosPlatform_releaseSecuredURL(const char* url);
 
 #ifdef __cplusplus
 }

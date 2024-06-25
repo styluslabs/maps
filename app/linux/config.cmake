@@ -38,6 +38,7 @@ pkg_check_modules(FONTCONFIG REQUIRED "fontconfig")
 find_package(CURL REQUIRED)
 
 add_executable(tangram
+  tangram-es/platforms/android/tangram/src/main/cpp/sqlite_fdvfs.c
   tangram-es/platforms/linux/src/linuxPlatform.cpp
   tangram-es/platforms/common/platform_gl.cpp
   tangram-es/platforms/common/urlClient.cpp

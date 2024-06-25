@@ -85,19 +85,19 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
   searchDB.stmt("INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(packedId, mapId).exec();
 }
 
-void MapsSearch::importPOIs(std::string srcpath, int offlineId)
+void MapsSearch::importPOIs(std::string srcuri, int offlineId)
 {
-  static const char* poiImportSQL = R"#(ATTACH DATABASE 'file://%s?mode=ro' AS poidb;
+  static const char* poiImportSQL = R"#(ATTACH DATABASE '%s' AS poidb;
     BEGIN;
     INSERT INTO main.pois SELECT * FROM poidb.pois;
     INSERT INTO main.offline_tiles SELECT tile_id, %d FROM poidb.pois GROUP BY tile_id;
     COMMIT;
   )#";
 
-  if(searchDB.exec(fstring(poiImportSQL, srcpath.c_str(), offlineId)))
-    LOG("POI import from %s completed", srcpath.c_str());
+  if(searchDB.exec(fstring(poiImportSQL, srcuri.c_str(), offlineId)))
+    LOG("POI import from %s completed", srcuri.c_str());
   else
-    LOGE("SQL error importing POIs from %s: %s", srcpath.c_str(), searchDB.errMsg());
+    LOGE("SQL error importing POIs from %s: %s", srcuri.c_str(), searchDB.errMsg());
   // make sure DB is detached even if import fails
   if(!searchDB.exec("DETACH DATABASE poidb;"))
     LOGE("SQL error detaching poidb from search DB: %s", searchDB.errMsg());

@@ -27,7 +27,7 @@ private:
   void chooseBookmarkList(std::function<void(int, std::string)> callback);
   void deleteBookmark(int listid, int rowid);
   Color nextListColor();
-  void importGpx(const char* filename);
+  void importGpx(const char* filename, const char* gpxsrc = NULL);
   void importImages(int64_t list_id, const char* path);
   void exportGpx(const char* filename, int listid);
   void editBookmark(int rowid, int listid, std::function<void()> callback);

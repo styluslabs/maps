@@ -3,6 +3,7 @@
 #include "mapscomponent.h"
 
 struct OfflineMapInfo;
+class PlatformFile;
 
 class MapsOffline : public MapsComponent
 {
@@ -14,7 +15,7 @@ public:
   void updateProgress(int mapid, int remaining, int total);
   void downloadCompleted(int id, bool canceled);
   void resumeDownloads();
-  void openForImport(std::string srcpath);
+  void openForImport(std::unique_ptr<PlatformFile> srcfile);
   void populateOffline();
   Widget* createPanel();
 
@@ -28,7 +29,7 @@ private:
   MarkerID rectMarker = 0;
   Widget* offlineContent = NULL;
 
-  bool importFile(std::string destsrc, std::string srcpath, OfflineMapInfo olinfo, bool hasPois);
+  bool importFile(std::string destsrc, std::unique_ptr<PlatformFile> srcfile, OfflineMapInfo olinfo, bool hasPois);
   bool cancelDownload(int mapid);
   std::unique_ptr<SelectDialog> selectDestDialog;
   std::unique_ptr<Dialog> downloadDialog;

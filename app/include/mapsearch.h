@@ -52,7 +52,7 @@ public:
   enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, FLY_TO = 0x8, UPDATE_RESULTS = 0x4000, MORE_RESULTS = 0x8000 };
 
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
-  static void importPOIs(std::string srcpath, int offlineId);
+  static void importPOIs(std::string srcuri, int offlineId);
   static void onDelOfflineMap(int mapId);
   static std::vector<SearchData> parseSearchFields(const YAML::Node& node);
 

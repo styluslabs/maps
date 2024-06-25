@@ -5,6 +5,7 @@ add_library(droidmaps SHARED
   tangram-es/platforms/common/platform_gl.cpp
   tangram-es/platforms/android/tangram/src/main/cpp/JniHelpers.cpp
   tangram-es/platforms/android/tangram/src/main/cpp/AndroidPlatform.cpp
+  tangram-es/platforms/android/tangram/src/main/cpp/sqlite_fdvfs.c
 )
 
 target_include_directories(droidmaps PRIVATE

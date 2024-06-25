@@ -535,7 +535,7 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
   tb->addWidget(createBkmkBtn);
 }
 
-void MapsBookmarks::importGpx(const char* filename)
+void MapsBookmarks::importGpx(const char* filename, const char* gpxsrc)
 {
   GpxFile gpx("", "", filename);
   loadGPX(&gpx);
@@ -674,7 +674,9 @@ Button* MapsBookmarks::createPanel()
   Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem("Import places", [=](){
-    MapsApp::openFileDialog({{"GPX files", "gpx"}}, [this](const char* path){ importGpx(path); });
+    MapsApp::openFileDialog({{"GPX files", "gpx"}}, [this](std::unique_ptr<PlatformFile> file){
+      importGpx(file->fsPath().c_str(), file->readAll().data());
+    });
   });
   overflowMenu->addItem("Import photos", [=](){
 #if PLATFORM_IOS
