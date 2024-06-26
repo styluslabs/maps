@@ -38,7 +38,6 @@ pkg_check_modules(FONTCONFIG REQUIRED "fontconfig")
 find_package(CURL REQUIRED)
 
 add_executable(tangram
-  tangram-es/platforms/android/tangram/src/main/cpp/sqlite_fdvfs.c
   tangram-es/platforms/linux/src/linuxPlatform.cpp
   tangram-es/platforms/common/platform_gl.cpp
   tangram-es/platforms/common/urlClient.cpp
@@ -98,5 +97,6 @@ endif()
 #add_resources(tangram "${PROJECT_SOURCE_DIR}/scenes" "res")
 
 # native file dialogs library
+set(NFD_PORTAL ON)
 add_subdirectory(deps/nfd)
 target_link_libraries(tangram PRIVATE nfd)

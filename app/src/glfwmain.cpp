@@ -222,7 +222,8 @@ int main(int argc, char* argv[])
   // - https://github.com/samhocevar/portable-file-dialogs (no GTK)
   // - https://sourceforge.net/projects/tinyfiledialogs (no GTK)
   // - https://github.com/Geequlim/NativeDialogs - last commit 2018
-  NFD_Init();
+  if(NFD_Init() != NFD_OKAY)
+    LOGE("NFD error: %s", NFD_GetError());
 
   MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
   app->setDpi(dpi);

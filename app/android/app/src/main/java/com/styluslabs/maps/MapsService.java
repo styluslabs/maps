@@ -89,7 +89,7 @@ public class MapsService extends Service implements LocationListener
     Intent intent = new Intent(this, MapsActivity.class);
     intent.setAction(Intent.ACTION_MAIN);
     intent.addCategory(Intent.CATEGORY_LAUNCHER);
-    PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+    PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
     Notification notification = new Notification.Builder(this, CHANNEL_ID)  //NotificationCompat
         .setContentTitle("Ascend")

@@ -109,15 +109,20 @@ void MapsBookmarks::chooseBookmarkList(std::function<void(int, std::string)> cal
   Toolbar* titleTb = static_cast<Toolbar*>(chooseListDialog->selectFirst(".title-toolbar"));
   titleTb->addWidget(newListBtn);
 
-  const char* query = "SELECT id, title FROM lists WHERE archived = 0 ORDER BY id;";
-  SQLiteStmt(app->bkmkDB, query).exec([&](int rowid, std::string listname){
+  if(listsDirty)
+    populateLists(false);
+  for(SvgNode* node : listsContent->content->containerNode()->children()) {
+    const char* sortkey = node->getStringAttr("__sortkey", "");
+    if(!std::isdigit(sortkey[0])) continue;
+    int rowid = std::atoi(sortkey);
+    std::string listname = node->getStringAttr("__listname");
     Button* item = createListItem(MapsApp::uiIcon("folder"), listname.c_str());  //new Button(listSelectProto->clone());
     item->onClicked = [=](){
       chooseListDialog->finish(Dialog::ACCEPTED);
       callback(rowid, listname);
     };
     content->addWidget(item);
-  });
+  }
 
   Widget* dialogBody = chooseListDialog->selectFirst(".body-container");
   dialogBody->addWidget(newListContent);
@@ -150,6 +155,7 @@ void MapsBookmarks::populateLists(bool archived)
       .exec([=](int rowid, std::string title, std::string color, int nplaces){
     Button* item = createListItem(MapsApp::uiIcon("folder"),
         title.c_str(), nplaces == 1 ? "1 place" : fstring("%d places", nplaces).c_str());  //new Button(bkmkListProto->clone());
+    item->node->setAttr("__listname", title.c_str());
     item->onClicked = [=](){ populateBkmks(rowid, true); };
     Widget* container = item->selectFirst(".child-container");
 

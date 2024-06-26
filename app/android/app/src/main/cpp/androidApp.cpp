@@ -849,7 +849,7 @@ JNI_FN(openFileDesc)(JNIEnv* env, jclass, jstring jfilename, jint jfd)
       });
     }
     else if(pickFolderCallback)
-      MapsApp::runOnMainThread([s, jfd, cb=std::move(pickFolderCallback)](){ cb(s.c_str()); });
+      MapsApp::runOnMainThread([s, cb=std::move(pickFolderCallback)](){ cb(s.c_str()); });
     //env->ReleaseStringUTFChars(jfilename, filename);
   }
   openFileCallback = {};  // clear

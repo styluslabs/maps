@@ -386,10 +386,9 @@ void TrackSparkline::setTrack(const std::vector<Waypoint>& locs)
   altDistPlot.addPoint(locs.front().dist, -1000);
   for(auto& wpt : locs) {
     const Location& tpt = wpt.loc;
-    double alt = MapsApp::metricUnits ? tpt.alt : tpt.alt*3.28084;
-    altDistPlot.addPoint(Point(wpt.dist, alt));
-    minAlt = std::min(minAlt, alt);
-    maxAlt = std::max(maxAlt, alt);
+    altDistPlot.addPoint(Point(wpt.dist, tpt.alt));
+    minAlt = std::min(minAlt, tpt.alt);
+    maxAlt = std::max(maxAlt, tpt.alt);
   }
   altDistPlot.addPoint(locs.back().dist, -1000);
 }

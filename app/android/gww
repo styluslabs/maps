@@ -11,8 +11,8 @@ if [ "$1" = "--install-sdk" ]; then
   mkdir $HOME/android-sdk && pushd $HOME/android-sdk
   curl https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip --output cmdline-tools.zip
   unzip cmdline-tools.zip
-  #cmdline-tools/bin/sdkmanager --sdk_root=. --install 'build-tools;34.0.0' 'platforms;android-34' 'platform-tools' 'ndk;26.3.11579264' 'cmake;3.22.1'
-  cmdline-tools/bin/sdkmanager --sdk_root=. --install 'build-tools;30.0.3' 'platforms;android-30' 'platform-tools' 'ndk;23.1.7779620' 'cmake;3.18.1'
+  cmdline-tools/bin/sdkmanager --sdk_root=. --install 'build-tools;34.0.0' 'platforms;android-34' 'platform-tools' 'ndk;26.3.11579264' 'cmake;3.18.1'
+  #cmdline-tools/bin/sdkmanager --sdk_root=. --install 'build-tools;30.0.3' 'platforms;android-30' 'platform-tools' 'ndk;23.1.7779620' 'cmake;3.18.1'
   popd
   exit 0
 fi

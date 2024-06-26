@@ -15,6 +15,7 @@ target_include_directories(droidmaps PRIVATE
   tangram-es/core/deps/glm
   tangram-es/core/deps/yaml-cpp/include
   tangram-es/core/deps/stb
+  tangram-es/core/deps/sqlite3
   ${STYLUSLABS_DEPS}
   ${STYLUSLABS_DEPS}/nanovgXC/src
   ${STYLUSLABS_DEPS}/pugixml/src

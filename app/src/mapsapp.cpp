@@ -26,6 +26,8 @@
 #include "resources.h"
 #if PLATFORM_IOS
 #include "../ios/iosApp.h"
+#elif PLATFORM_ANDROID
+#include "../android/tangram/src/main/cpp/sqlite_fdvfs.h"
 #endif
 
 //#define UTRACE_ENABLE
@@ -1920,8 +1922,6 @@ void MapsApp::setDpi(float dpi)
   map->setPixelScale(config["ui"]["map_scale"].as<float>(1.0f) * dpi/150.0f);
 }
 
-#include "../android/tangram/src/main/cpp/sqlite_fdvfs.h"
-
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 {
   TRACE_INIT();
@@ -1941,7 +1941,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     markerColors.push_back(parseColor(colorstr.Scalar()));
 
   // DB setup
-#if 1  //PLATFORM_ANDROID
+#if PLATFORM_ANDROID
   sqlite3_fdvfs_init("fdvfs", 0, NULL);
 #endif
   //sqlite3_config(SQLITE_CONFIG_URI, 1);  -- enable at compile time instead (here is too late on Android)

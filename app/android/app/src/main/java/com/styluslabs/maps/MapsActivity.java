@@ -511,7 +511,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         try {
           // ref: https://android.googlesource.com/platform/frameworks/support/+/a9ac247af2afd4115c3eb6d16c05bc92737d6305/documentfile/src/main/java/androidx/documentfile/provider/DocumentFile.java
           Uri treeUri = resultData.getData();
-          getContentResolver().takePersistableUriPermission(treeUri, resultData.getFlags() | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+          getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
           Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
           ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
           MapsLib.openFileDesc(uri.getPath(), pfd.getFd());
@@ -526,11 +526,9 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         if(resultData.getData().toString().startsWith("content://")) {
           try {
             // openFileDescriptor only works for mode="r", but /proc/self/fd/<fd> gives us symlink to actual
-            //  file which we can open for writing
-            // an alternative would be to use android.system.Os.readlink here instead of in androidhelper.cpp
-
+            //  file which we can open for writing if we have manage storage permission; w/o manage storage
+            //  access is only possible via file description from content resolver; takePersistableUriPermission() does not help
             //getContentResolver().takePersistableUriPermission(resultData.getData(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
             ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(resultData.getData(), "r");
             MapsLib.openFileDesc(resultData.getData().getPath(), pfd.detachFd());
             //pfd.close();
