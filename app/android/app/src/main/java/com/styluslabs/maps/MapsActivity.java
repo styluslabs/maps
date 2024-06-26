@@ -48,6 +48,7 @@ import android.content.ClipData;
 import android.location.Location;
 import android.location.LocationManager;
 import android.location.LocationListener;
+import android.location.GnssStatus;
 import android.location.GpsStatus;
 import android.location.GpsSatellite;
 import android.hardware.SensorManager;
@@ -67,6 +68,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private DummyEdit mTextEdit;
   private LocationManager locationManager;
   private SensorManager mSensorManager;
+  private GnssStatus.Callback mGnssStatusCallback;
   //private Sensor mAccelSensor;
   //private Sensor mMagSensor;
   private Sensor mOrientSensor;
@@ -103,6 +105,12 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     if(!canGetLocation()) {
       requestPermissions(//this,  //ActivityCompat
           new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERM_REQ_LOCATION);
+    }
+    if(Build.VERSION.SDK_INT >= 24) {
+      mGnssStatusCallback = new GnssStatus.Callback() {
+        @Override
+        public void onSatelliteStatusChanged(GnssStatus status) { onSatelliteStatus(status); }
+      };
     }
 
     mMapsView = new MapsView(getApplication());
@@ -207,9 +215,12 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       }
       else
         onLocationChanged(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER));
-      onGpsStatusChanged(0);
-      locationManager.addGpsStatusListener(this);  //catch (SecurityException e)
-
+      if(mGnssStatusCallback != null)
+        locationManager.registerGnssStatusCallback(mGnssStatusCallback);  //catch (SecurityException e)
+      else {
+        onGpsStatusChanged(0);
+        locationManager.addGpsStatusListener(this);  //catch (SecurityException e)
+      }
     }
     //mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
     //mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
@@ -220,7 +231,10 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     if(canGetLocation()) {
       locationManager.removeUpdates(this);
-      locationManager.removeGpsStatusListener(this);
+      if(mGnssStatusCallback != null)
+        locationManager.unregisterGnssStatusCallback(mGnssStatusCallback);
+      else
+        locationManager.removeGpsStatusListener(this);
     }
     mSensorManager.unregisterListener(this);
   }
@@ -311,6 +325,18 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
 
+  //@TargetApi(Build.VERSION_CODES.N)
+  public void onSatelliteStatus(GnssStatus status)
+  {
+    int satsUsed = 0;
+    int satsVisible = status.getSatelliteCount();
+    for(int ii = 0; ii < satsVisible; ii++) {
+      if(status.usedInFix(ii))
+        satsUsed++;
+    }
+    hasGpsFix = satsUsed > 0;
+    MapsLib.updateGpsStatus(satsVisible, satsUsed);
+  }
   //private float[] mGravity;
   //private float[] mGeomagnetic;
 
@@ -409,7 +435,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
-  public void extractAssets(AssetManager assetManager, String assetpath, String outpath)
+  public void extractAssets()
   {
     extractAssetPath(getAssets(), "", extFilesPath + "/");
   }

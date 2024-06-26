@@ -33,6 +33,7 @@
     <activity android:name="MapsActivity"
       android:theme="@android:style/Theme.NoTitleBar"
       android:launchMode="singleTask"
+      android:exported="true"
       android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|fontScale|uiMode|density">
 
       <intent-filter>

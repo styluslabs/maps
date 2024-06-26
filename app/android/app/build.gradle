@@ -1,15 +1,14 @@
 apply plugin: 'com.android.application'
 
 android {
-  compileSdkVersion 30
-
+  compileSdkVersion 34
+  namespace 'com.styluslabs.maps'
   defaultConfig {
     applicationId 'com.styluslabs.maps'
     versionCode 1
     versionName "0.0.1"
-
     minSdkVersion 21
-    targetSdkVersion 29
+    targetSdkVersion 33
     externalNativeBuild {
       cmake {
         // Available arguments are inside ${SDK}/cmake/.../android.toolchain.cmake file
@@ -52,10 +51,11 @@ android {
 
   externalNativeBuild {
     cmake {
-      version '3.24.2'
+      version '3.29.3'
       path '../../../CMakeLists.txt'
     }
   }
+  ndkVersion '26.3.11579264'
 
   sourceSets.main {
     assets.srcDirs = ['../../../assets']
@@ -63,6 +63,10 @@ android {
 
   androidResources {
     ignoreAssetsPattern '!old-*:!tilemaker'
+  }
+
+  buildFeatures {
+    buildConfig true
   }
 
   lintOptions {
