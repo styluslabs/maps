@@ -42,8 +42,8 @@ storage:
   #export_pois: true  -- default is false
 
 view:
-  lng: -122.434668
-  lat: 37.776444
+  #lng: -122.434668
+  #lat: 37.776444
   zoom: 15
 
 search:

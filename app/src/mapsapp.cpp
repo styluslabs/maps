@@ -894,10 +894,13 @@ void MapsApp::updateLocation(const Location& _loc)
     prevCamPos.latitude = _loc.lat;
     map->setCameraPosition(prevCamPos);
   }
-
   if(currLocPlaceInfo) {
     updateLocPlaceInfo();
     pickResultCoord = _loc.lngLat();  // update coords for use when saving bookmark, waypoint, etc
+  }
+  if(initToCurrLoc) {
+    recenterBtn->onClicked();
+    initToCurrLoc = false;
   }
 
   sendMapEvent(LOC_UPDATE);
@@ -2010,6 +2013,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   pos.zoom = config["view"]["zoom"].as<float>(15);
   pos.rotation = config["view"]["rotation"].as<float>(0);
   pos.tilt = config["view"]["tilt"].as<float>(0);
+  if(!config["view"]["lng"]) initToCurrLoc = true;
   map->setCameraPosition(pos);
 }
 

@@ -25,6 +25,7 @@ public:
   std::vector<std::string> imports;
   std::vector<SceneUpdate> updates;
   int order = 0;
+  bool vectorBase = true;
 
   std::vector<std::string> layerkeys;
 
@@ -70,6 +71,8 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
       updates.emplace_back("+styles." + rasterN,
           fstring("{base: raster, lighting: false, blend: translucent, blend_order: %d}", order-100));
     }
+    else
+      vectorBase = false;
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order > 0 ? rasterN : "raster");
@@ -80,6 +83,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
   else if(src["scene"]) {  // vector map
     imports.push_back(src["scene"].Scalar());
     layerkeys.push_back(key);
+    if(order == 0) vectorBase = true;
     ++order;  //order = 9001;  // subsequent rasters should be drawn on top of the vector map
   }
   else {  // update only
@@ -89,7 +93,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
   for(const auto& update : src["updates"])
     updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
   // raster/vector only updates
-  const char* updkey = sources[layerkeys[0]]["url"] ? "updates_raster" : "updates_vector";
+  const char* updkey = vectorBase ? "updates_vector" : "updates_raster";
   for(const auto& update : src[updkey])
     updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
 }

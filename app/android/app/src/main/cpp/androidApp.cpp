@@ -331,7 +331,6 @@ static jmethodID shareFileMID = nullptr;
 static jmethodID notifyStatusBarBGMID = nullptr;
 static jmethodID setSensorsEnabledMID = nullptr;
 static jmethodID setServiceStateMID = nullptr;
-static jmethodID openBatterySettingsMID = nullptr;
 static jmethodID extractAssetsMID = nullptr;
 
 #define TANGRAM_JNI_VERSION JNI_VERSION_1_6
@@ -358,7 +357,6 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
   setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceState", "(IFF)V");
-  openBatterySettingsMID = jniEnv->GetMethodID(cls, "openBatterySettings", "()V");
   extractAssetsMID = jniEnv->GetMethodID(cls, "extractAssets", "()V");
   return TANGRAM_JNI_VERSION;
 }
@@ -520,12 +518,6 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
 {
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jniEnv->CallVoidMethod(mapsActivityRef, setServiceStateMID, state, intervalSec, minDist);
-}
-
-void MapsApp::openBatterySettings()
-{
-  JniThreadBinding jniEnv(JniHelpers::getJVM());
-  jniEnv->CallVoidMethod(mapsActivityRef, openBatterySettingsMID);
 }
 
 void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 30; *bottom = 0; }

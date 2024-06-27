@@ -580,7 +580,7 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
   iosPlatform_getGeoTaggedPhotos(0, photoCallback);
   std::string errmsg = "No geotagged images found in Photo Library.  Perhaps Camera app does not have location permission?";
 #else
-  std::vector<uint8_t> buf(2048);
+  std::vector<uint8_t> buf(65536);  // GPS data offset is ~20KB for Pixel 3 images
   const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
       "VALUES (?,?,?,?,?,?,?, CAST(strftime('%s', datetime(?)) AS INTEGER));";
   SQLiteStmt insbkmk(app->bkmkDB, query);

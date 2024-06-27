@@ -184,7 +184,7 @@ public:
   static void notifyStatusBarBG(bool isLight);
   static void setSensorsEnabled(bool enabled);
   static void setServiceState(int state, float intervalSec = 0, float minDist = 0);
-  static void openBatterySettings();
+  //static void openBatterySettings();
   static void getSafeAreaInsets(float* top, float* bottom);
   static bool loadConfig();
   static void sdlEvent(SDL_Event* event);
@@ -217,6 +217,7 @@ private:
   void customizeColors(Color initialColor, std::function<void(Color)> callback);
 
   bool flyToPickResult = false;
+  bool initToCurrLoc = false;
   bool sensorsEnabled = true;
   bool panelMaximized = false;
   bool panelMinimized = false;

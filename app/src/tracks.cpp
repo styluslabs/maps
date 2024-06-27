@@ -263,14 +263,14 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
 void MapsTracks::loadTracks(bool archived)
 {
   // order by timestamp for Archived
-  const char* query = "SELECT rowid, title, filename, strftime('%Y-%m-%d', timestamp, 'unixepoch'), style"
+  const char* query = "SELECT rowid, title, filename, notes, style"  //strftime('%Y-%m-%d', timestamp, 'unixepoch')
       " FROM tracks WHERE archived = ? ORDER BY timestamp;";
   SQLiteStmt(app->bkmkDB, query).bind(archived).exec(
-      [&](int rowid, std::string title, std::string filename, std::string date, std::string style) {
+      [&](int rowid, std::string title, std::string filename, std::string desc, std::string style) {
     FSPath fileinfo(filename);
     if(!fileinfo.isAbsolute())
       fileinfo = FSPath(MapsApp::baseDir, filename);
-    tracks.emplace_back(title, date, fileinfo.path, style, rowid, archived);
+    tracks.emplace_back(title, desc, fileinfo.path, style, rowid, archived);
   });
 }
 
@@ -1247,14 +1247,6 @@ void MapsTracks::startRecording()
   populateTrack(&recordedTrack);
   setTrackWidgets(TRACK_STATS);  // plot isn't very useful until there are enough points
   editTrackContent->setVisible(true);
-#if PLATFORM_ANDROID
-  if(app->config["tracks"]["battery_prompt"].as<bool>(true)) {
-    app->config["tracks"]["battery_prompt"] = false;
-    MapsApp::messageBox("Disable battery optimization",
-        "Battery optimization must be disabled for background track recording.", {"Open Settings", "Cancel"},
-        [this](std::string res){ if(res != "Cancel") { app->openBatterySettings(); } });
-  }
-#endif
 }
 
 void MapsTracks::setTrackEdit(bool show)
@@ -1583,8 +1575,8 @@ void MapsTracks::createPlotContent()
       app->map->markerSetVisible(trackHoverMarker, false);
       return;
     }
-    real pos = trackPlot->plotPosToTrackPos(s);
-    trackHoverLoc = interpTrack(activeTrack->activeWay()->pts, pos);
+    sliderPos = trackPlot->plotPosToTrackPos(s);
+    trackHoverLoc = interpTrack(activeTrack->activeWay()->pts, sliderPos);
     //trackPlot->sliderLabel = trackPlot->plotVsDist ? MapsApp::distKmToStr(trackHoverLoc.dist/1000)
     //    : durationToStr(trackHoverLoc.loc.time - trackPlot->minTime);
     trackPlot->sliderAlt = app->elevToStr(trackHoverLoc.loc.alt);
@@ -1602,6 +1594,8 @@ void MapsTracks::createPlotContent()
   trackPlot->onPanZoom = [=](){
     real start = trackPlot->trackPosToPlotPos(cropStart);
     real end = trackPlot->trackPosToPlotPos(cropEnd);
+    real pos = trackPlot->trackPosToPlotPos(sliderPos);
+    trackSliders->trackSlider->setValue(pos, SliderHandle::NO_UPDATE);
     trackSliders->setCropHandles(start, end, SliderHandle::NO_UPDATE);
   };
 

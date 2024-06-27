@@ -202,8 +202,9 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->translate(lmargin, tmargin);
   p->setTextAlign(Painter::AlignHCenter | Painter::AlignBottom);
   if(plotVsDist) {
+    real userDist = MapsApp::metricUnits ? maxDist/1000 : maxDist*0.000621371;  // km or miles
     real xMin = zoomOffset < 0 ? -zoomOffset/1000 : 0.0;  // prevent "-0" axis label
-    real xMax = xMin + maxDist/1000/zoomScale;
+    real xMax = xMin + userDist/zoomScale;
     real dx = xMax - xMin;
     //real anch = fewestSigDigits(xMin, xMax);
     real dw = dx/4;

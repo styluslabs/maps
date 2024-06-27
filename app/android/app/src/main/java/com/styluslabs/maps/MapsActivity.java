@@ -15,10 +15,11 @@ import androidx.core.content.FileProvider;
 import android.provider.DocumentsContract;
 import android.provider.Settings;
 import android.app.Activity;
-import android.content.Context;
+import android.app.AlertDialog;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
+import android.os.PowerManager;
 import android.net.Uri;
 import android.util.Log;
 import android.text.Editable;
@@ -40,11 +41,13 @@ import android.view.inputmethod.ExtractedTextRequest;
 import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.content.ClipboardManager;
 import android.content.ClipData;
+import android.content.DialogInterface;
 import android.location.Location;
 import android.location.LocationManager;
 import android.location.LocationListener;
@@ -81,11 +84,16 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private String extFilesPath;
 
   public static final int PERM_REQ_LOCATION = 1;
+  public static final int PERM_REQ_NOTIFICATIONS = 2;
+  public static final int PERM_REQ_MEDIA = 3;
 
   @Override
   protected void onCreate(Bundle icicle)
   {
     super.onCreate(icicle);
+
+    // this doesn't seem to detect problems in dependencies (e.g. OkHttp)
+    //android.os.StrictMode.setVmPolicy(new android.os.StrictMode.VmPolicy.Builder() ...
 
     //extFilesPath = getExternalFilesDir(null).getAbsolutePath();
     extFilesPath = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
@@ -138,9 +146,16 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
     switch (requestCode) {
     case PERM_REQ_LOCATION:
-      if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && canGetLocation()) {
+      if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && canGetLocation())
         startSensors();
-      }
+      break;
+    case PERM_REQ_NOTIFICATIONS:
+      if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+        setServiceState(1, 0.1f, 0);
+      break;
+    case PERM_REQ_MEDIA:
+      if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+        pickFolder();
       break;
     }
   }
@@ -250,9 +265,55 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
      } });
   }
 
+  private void showNotificationRationale()
+  {
+    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+        .setTitle("Enable Notifications")
+        .setMessage("Notification permission must be enabled to record a track.")
+        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+          public void onClick(DialogInterface dialog, int which) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERM_REQ_NOTIFICATIONS);
+          }
+        })
+        //.setIcon(android.R.drawable.ic_dialog_alert)
+        .show();
+  }
+
+  private void showBatteryOptimizationRationale()
+  {
+    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+        .setTitle("Disable Battery Optimization")
+        .setMessage("Battery optimization must be disabled to record a track.")
+        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+          public void onClick(DialogInterface dialog, int which) {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            try {
+              startActivity(intent);
+            } catch (Exception e) {  //ActivityNotFoundException
+              // try ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS instead?
+              //Toast.makeText(this, "Unable to open Battery settings", Toast.LENGTH_LONG).show();
+            }
+          }
+        })
+        //.setIcon(android.R.drawable.ic_dialog_alert)
+        .show();
+  }
+
   public void setServiceState(int state, float intervalSec, float minDist)
   {
     runOnUiThread(new Runnable() { @Override public void run() {
+      if(Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if(shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))
+          showNotificationRationale();
+        else
+          requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERM_REQ_NOTIFICATIONS);
+        return;  // cannot start service w/o notification permission (?)
+      }
+      PowerManager pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
+      if(!pm.isIgnoringBatteryOptimizations(getPackageName()))
+        showBatteryOptimizationRationale();  // we can still continue to start service
+
       if(state > 0) {
         Intent intent = new Intent(getApplicationContext(), MapsService.class).setAction(MapsService.START_RECORDING);
         intent.putExtra(MapsService.EXTRA_INTERVAL, intervalSec);
@@ -266,20 +327,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         startService(new Intent(getApplicationContext(), MapsService.class).setAction(MapsService.STOP_RECORDING));
       }
      } });
-  }
-
-  public void openBatterySettings()
-  {
-    runOnUiThread(new Runnable() { @Override public void run() {
-      Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-      intent.setData(Uri.parse("package:" + getPackageName()));
-      try {
-        startActivity(intent);
-      } catch (Exception e) {  //ActivityNotFoundException
-        // try ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS instead?
-        //Toast.makeText(this, "Unable to open Battery settings", Toast.LENGTH_LONG).show();
-      }
-    } });
   }
 
   public static void updateLocation(Location loc)
@@ -498,9 +545,24 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public void pickFolder()
   {
-    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-    startActivityForResult(intent, ID_PICK_FOLDER);
+    runOnUiThread(new Runnable() { @Override public void run() {
+      if(Build.VERSION.SDK_INT >= 33) {
+        if(checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
+          requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,
+              Manifest.permission.ACCESS_MEDIA_LOCATION}, PERM_REQ_MEDIA);
+          return;
+        }
+      }
+      else if(checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.ACCESS_MEDIA_LOCATION}, PERM_REQ_MEDIA);
+        return;
+      }
+
+      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+      intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+      startActivityForResult(intent, ID_PICK_FOLDER);
+    } });
   }
 
   @Override
@@ -514,8 +576,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
           getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
           Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
           ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
-          MapsLib.openFileDesc(uri.getPath(), pfd.getFd());
-          pfd.close();
+          MapsLib.openFileDesc(uri.getPath(), pfd.detachFd());  //pfd.getFd());
+          //pfd.close();
         } catch(Exception e) {
           Log.v("Tangram", "Error opening directory: " + resultData.getData().toString(), e);
         }

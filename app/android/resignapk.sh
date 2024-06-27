@@ -6,7 +6,7 @@
 # param2, keystore location: ~/.android/debug.keystore
 set -x
 
-BUILD_TOOLS="$HOME/android-sdk/build-tools/30.0.3"
+BUILD_TOOLS="$HOME/android-sdk/build-tools/34.0.0"
 
 # use my debug key default
 APK=$1

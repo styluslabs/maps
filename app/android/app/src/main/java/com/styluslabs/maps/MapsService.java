@@ -84,6 +84,7 @@ public class MapsService extends Service implements LocationListener
     if(Build.VERSION.SDK_INT >= 26) {
       NotificationChannel serviceChannel = new NotificationChannel(
           CHANNEL_ID, "Location Service Channel", NotificationManager.IMPORTANCE_DEFAULT);
+      serviceChannel.setSound(null, null);
       getSystemService(NotificationManager.class).createNotificationChannel(serviceChannel);
     }
     Intent intent = new Intent(this, MapsActivity.class);
@@ -95,6 +96,7 @@ public class MapsService extends Service implements LocationListener
         .setContentTitle("Ascend")
         .setContentText("Ascend Maps is recording a track")
         .setSmallIcon(R.mipmap.ic_launcher)
+        .setOngoing(true)  // prevent dismissal (at least until Android 14)
         .setContentIntent(pendingIntent)
         .build();
     startForeground(NOTIFICATION_ID, notification);  //ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION

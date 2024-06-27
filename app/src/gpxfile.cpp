@@ -1,6 +1,7 @@
 #include "gpxfile.h"
 #include "pugixml.hpp"
 #include "ulib/stringutil.h"
+#include "ulib/fileutil.h"
 #include "util.h"
 #include <iomanip>  // std::get_time
 
@@ -72,9 +73,6 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
     gpxdesc = metadata.child_value("desc");
     gpxtime = parseGpxTime(metadata.child_value("time"));
   }
-  // value set in UI (and stored in DB) takes precedence
-  if(gpxname[0] && track->title.empty()) track->title = gpxname;
-  if(gpxdesc[0]) track->desc = gpxdesc;
   if(gpxtime > 0) track->timestamp = gpxtime;
   pugi::xml_node extnode = metadata.child("extensions").child("sl:gpx");
   if(!extnode)
@@ -142,6 +140,14 @@ bool loadGPX(GpxFile* track, const char* gpxSrc)
     }
     trk = trk.next_sibling("trk");
   }
+  // values set in UI (and stored in DB) takes precedence
+  if(track->title.empty()) track->title = gpxname;
+  if(track->title.empty() && !track->routes.empty()) track->title = track->routes[0].title;
+  if(track->title.empty() && !track->tracks.empty()) track->title = track->tracks[0].title;
+  if(track->title.empty()) track->title = FSPath(track->filename).baseName();
+  if(track->desc.empty()) track->desc = gpxdesc;
+  if(track->desc.empty() && !track->routes.empty()) track->desc = track->routes[0].desc;
+  if(track->desc.empty() && !track->tracks.empty()) track->desc = track->tracks[0].desc;
   track->loaded = true;
   track->modified = false;
   return true;

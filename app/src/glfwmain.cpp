@@ -123,6 +123,8 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFi
     callback(std::make_unique<DesktopFile>(outPath));
     NFD_FreePath(outPath);
   }
+  else
+    LOGE("NFD_OpenDialog error: %s", NFD_GetError());
 }
 
 void MapsApp::pickFolderDialog(FilePathFn_t callback)
@@ -133,6 +135,8 @@ void MapsApp::pickFolderDialog(FilePathFn_t callback)
     callback(outPath);
     NFD_FreePath(outPath);
   }
+  else
+    LOGE("NFD_PickFolder error: %s", NFD_GetError());
 }
 
 void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback)
@@ -146,6 +150,8 @@ void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::strin
     callback(outPath);
     NFD_FreePath(outPath);
   }
+  else
+    LOGE("NFD_SaveDialog error: %s", NFD_GetError());
 }
 
 void MapsApp::notifyStatusBarBG(bool) {}
@@ -223,7 +229,7 @@ int main(int argc, char* argv[])
   // - https://sourceforge.net/projects/tinyfiledialogs (no GTK)
   // - https://github.com/Geequlim/NativeDialogs - last commit 2018
   if(NFD_Init() != NFD_OKAY)
-    LOGE("NFD error: %s", NFD_GetError());
+    LOGE("NFD_Init error: %s", NFD_GetError());
 
   MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
   app->setDpi(dpi);

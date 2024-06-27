@@ -344,10 +344,9 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned offs,
       if (!extract_values<uint8_t, alignIntel>(result.val_string(), buf, base,
                                                len, result)) {
         result.tag(0xFF);
-      }
-      // and cut zero byte at the end, since we don't want that in the
-      // std::string
-      if (result.val_string()[result.val_string().length() - 1] == '\0') {
+      } else if (result.val_string()[result.val_string().length() - 1] == '\0') {
+        // and cut zero byte at the end, since we don't want that in the
+        // std::string
         result.val_string().resize(result.val_string().length() - 1);
       }
       break;

@@ -121,6 +121,7 @@ private:
   std::string trackSummary;
   Timestamp lastTrackPtTime;
   Waypoint trackHoverLoc = LngLat{0, 0};
+  double sliderPos = 0;
   double cropStart = 0;
   double cropEnd = 1;
   double recordLastSave = 0;

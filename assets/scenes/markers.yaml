@@ -161,6 +161,7 @@ layers:
                     anchor: [right, left, bottom, top]
                     collide: true
                     optional: true
+                    priority: 'function() { return 2 + (1+feature.priority)/65536; }'
                     max_lines: 2
                     offset: [0px, -11px]
                     font:
