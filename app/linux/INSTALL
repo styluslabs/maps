@@ -1,4 +1,4 @@
-No setup needed.  To create a desktop entry, run ./install/setup.sh
+No setup needed.  To create a desktop entry, run ./setup/setup.sh
 
 To remove the desktop entry, run:
     rm ~/.local/share/applications/Maps.desktop

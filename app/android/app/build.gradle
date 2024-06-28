@@ -62,7 +62,7 @@ android {
   }
 
   androidResources {
-    ignoreAssetsPattern '!old-*:!tilemaker'
+    ignoreAssetsPattern '!old-*:!.git'
   }
 
   buildFeatures {

@@ -32,14 +32,16 @@ GITREV := $(shell git rev-parse --short HEAD)
 TGZ = ascend-$(GITREV).tar.gz
 TGT = $(LINUX_BUILD_DIR)/ascend
 
+# apt-get install --no-install-recommends cmake libfontconfig-dev libcurl4-openssl-dev libdbus-1-dev
+# trailing / should be omitted (so we can use rsync to exclude .git)
 DISTRES = \
 	assets/config.default.yaml \
 	assets/mapsources.default.yaml \
-	assets/plugins/ \
-	assets/res/ \
-	assets/scenes/ \
-	assets/shared/ \
-	app/linux/install/ \
+	assets/plugins \
+	assets/res \
+	assets/scenes \
+	assets/shared \
+	app/linux/setup \
 	app/linux/INSTALL
 
 # targets
@@ -54,11 +56,12 @@ linux: cmake-linux
 cmake-linux:
 	cmake -H. -B${LINUX_BUILD_DIR} ${LINUX_CMAKE_PARAMS}
 
+#	cp -R -L $(DISTRES) $(LINUX_BUILD_DIR)/.dist
 tgz: linux $(DISTRES)
 	strings $(TGT) | grep "^GLIBC_"
 	mkdir -p $(LINUX_BUILD_DIR)/.dist
 	mv $(TGT) $(LINUX_BUILD_DIR)/.dist
-	cp -R -L $(DISTRES) $(LINUX_BUILD_DIR)/.dist
+	rsync -Lvr --exclude .git $(DISTRES) $(LINUX_BUILD_DIR)/.dist
 	(cd $(LINUX_BUILD_DIR) && mv .dist Ascend && tar --remove-files -czvf $(TGZ) Ascend)
 
 clean-ios:
