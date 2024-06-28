@@ -149,9 +149,6 @@ void MapsApp::getSafeAreaInsets(float *top, float *bottom)
   if(top) *top = _topInset;
   if(bottom) *bottom = _bottomInset;
 }
-
-void MapsApp::openBatterySettings() {}
-
 // main loop
 
 static int mainLoop(int width, int height, float dpi, float topinset, float botinset)
@@ -276,7 +273,7 @@ public:
   std::string mPath;
   std::string securedURL;
   IOSFile(std::string _path, std::string _url = "") : mPath(_path), securedURL(_url) {}
-  ~IOSFile() override { if(!securedURL.empty()) iosPlatform_releaseSecuredURL(securedURL.c_str()) }
+  ~IOSFile() override { if(!securedURL.empty()) iosPlatform_releaseSecuredURL(securedURL.c_str()); }
   std::string fsPath() const override { return mPath; }
   std::string sqliteURI() const override { return "file://" + mPath + "?mode=ro"; }
   std::vector<char> readAll() const override {
