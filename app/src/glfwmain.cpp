@@ -92,29 +92,6 @@ public:
   }
 };
 
-// for testing sqlite_fdvfs (used for Android)
-/*#include <fcntl.h>
-class DesktopFile : public PlatformFile
-{
-public:
-  std::string mPath;
-  int fd = -1;
-  DesktopFile(std::string _path) : mPath(_path) { fd = open(_path.c_str(), O_RDONLY); }
-  ~DesktopFile() override { if(fd >= 0) close(fd); fd = -1; }
-  std::string fsPath() const override { return mPath; }
-  std::string sqliteURI() const override {
-    return fd >= 0 ? "file:///dev/fd/" + std::to_string(fd) + "?vfs=fdvfs&immutable=1&mode=ro" : "file://" + mPath + "?mode=ro";
-  }
-  std::vector<char> readAll() const override {
-    std::vector<char> buff;
-    size_t n = lseek(fd, 0, SEEK_END);
-    buff.resize(n, 0);
-    lseek(fd, 0, SEEK_SET);
-    read(fd, buff.data(), n);
-    return buff;
-  }
-};*/
-
 void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFileFn_t callback)
 {
   nfdchar_t* outPath;
@@ -174,10 +151,7 @@ int main(int argc, char* argv[])
     if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists())
       MapsApp::baseDir = canonicalPath(FSPath(MapsApp::baseDir, "../../assets/"));
   }
-  FSPath configPath(MapsApp::baseDir, "config.yaml");
-  MapsApp::configFile = configPath.c_str();
-  MapsApp::config = YAML::LoadFile(configPath.exists() ? configPath.path :
-      FSPath(MapsApp::baseDir, "config.default.yaml").path);
+  MapsApp::loadConfig();
 
   // command line args
   std::string sceneFile, importFile;  // -f scenes/scene-omt.yaml
@@ -237,14 +211,24 @@ int main(int argc, char* argv[])
   app->createGUI((SDL_Window*)glfwWin);
 
   app->win->addHandler([&](SvgGui*, SDL_Event* event){
-    if(event->type == SDL_QUIT || (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_ESCAPE))
-      MapsApp::runApplication = false;
-    else if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_F5) {
-      app->mapsSources->reload();
-      app->pluginManager->reload();
-      app->loadSceneFile();  // reload scene
+    if(event->type == SDL_KEYDOWN) {
+      if(event->key.keysym.sym == SDLK_q && event->key.keysym.mod & KMOD_CTRL)
+        MapsApp::runApplication = false;
+      else if(IS_DEBUG && event->key.keysym.sym == SDLK_ESCAPE)
+        MapsApp::runApplication = false;
+      else if(event->key.keysym.sym == SDLK_F5) {
+        app->mapsSources->reload();
+        app->pluginManager->reload();
+        app->loadSceneFile();  // reload scene
+      }
+      else
+        return false;
     }
-    return false;
+    else if(event->type == SDL_QUIT)
+      MapsApp::runApplication = false;
+    else
+      return false;
+    return true;
   });
 
   app->mapsOffline->resumeDownloads();

@@ -1837,9 +1837,7 @@ void MapsApp::messageBox(std::string title, std::string message,
 
 SvgNode* MapsApp::uiIcon(const char* id)
 {
-  SvgNode* res = SvgGui::useFile(":/ui-icons.svg")->namedNode(id);
-  ASSERT(res && "UI icon missing!");
-  return res;
+  return ::uiIcon(id);
 }
 
 #if PLATFORM_DESKTOP
@@ -1880,7 +1878,9 @@ bool MapsApp::loadConfig()
     config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
   } catch(...) {
     LOGE("Unable to load config file %s", configPath.c_str());
-    *(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
+    runOnMainThread([](){ messageBox("Error", "Unable to load config file.  Please reinstall the application.",
+        {"OK"}, [](std::string){ *(volatile int*)0 = 0; }); });
+    //*(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
   }
 
   configFile = configPath.c_str();

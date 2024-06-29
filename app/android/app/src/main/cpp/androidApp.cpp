@@ -631,7 +631,12 @@ JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, js
   if(MapsApp::loadConfig() && !firstrun)
     env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
 
-  MapsApp::platform = new AndroidPlatform(env, mapsActivity, assetManager);
+  // if user closes app (swipes off recent apps) while recording track, main activity will be destroyed but
+  //  native code will keep running; new main activity will be created when user next opens the app
+  if(MapsApp::platform)
+    static_cast<AndroidPlatform*>(MapsApp::platform)->onActivityCreated(env, mapsActivity, assetManager);
+  else
+    MapsApp::platform = new AndroidPlatform(env, mapsActivity, assetManager);
 }
 
 JNI_FN(destroy)(JNIEnv* env, jclass)
@@ -644,6 +649,7 @@ JNI_FN(surfaceCreated)(JNIEnv* env, jclass, jobject jsurface, jfloat dpi)
 {
   ANativeWindow* nativeWin = ANativeWindow_fromSurface(env, jsurface);
   if(!nativeWin || mainThread.joinable()) return;
+  MapsApp::mainThreadId = std::thread::id();  // reset to invalid id (to queue events until main thread ready)
   mainThread = std::thread(eglMain, nativeWin, dpi);
 }
 
@@ -652,6 +658,7 @@ JNI_FN(surfaceDestroyed)(JNIEnv* env, jclass)
   MapsApp::runOnMainThread([=](){ MapsApp::runApplication = false; });
   if(mainThread.joinable())
     mainThread.join();
+  MapsApp::mainThreadId = std::this_thread::get_id();  // so location updates get processed for track recording
 }
 
 JNI_FN(surfaceChanged)(JNIEnv* env, jclass, jint w, jint h)

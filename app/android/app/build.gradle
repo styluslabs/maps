@@ -14,7 +14,8 @@ android {
         // Available arguments are inside ${SDK}/cmake/.../android.toolchain.cmake file
         targets 'droidmaps'
         arguments '-DTANGRAM_PLATFORM=android',
-                  '-DANDROID_STL=c++_shared'
+                  '-DANDROID_STL=c++_shared',
+                  '-DCMAKE_VERBOSE_MAKEFILE=ON'
         cppFlags '-std=c++14',
                  '-fvisibility=hidden', // export only JNIEXPORT
                  '-pedantic',
@@ -51,7 +52,7 @@ android {
 
   externalNativeBuild {
     cmake {
-      version '3.24.2'
+      version '3.18.1'
       path '../../../CMakeLists.txt'
     }
   }

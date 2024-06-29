@@ -310,11 +310,11 @@ void initResources(const char* baseDir)
   moreWidgets->children().clear();
 
   // replace widget default icons (e.g. combo box chevron)
-  const SvgDocument* uiIcons = SvgGui::useFile(":/ui-icons.svg");
+  //const SvgDocument* uiIcons = SvgGui::useFile(":/ui-icons.svg");
   auto useNodes = widgetDoc->select("use");
   for(SvgNode* n : useNodes) {
     SvgUse* usenode = static_cast<SvgUse*>(n);
-    SvgNode* target = uiIcons->namedNode(usenode->href());
+    SvgNode* target = MapsApp::uiIcon(usenode->href());
     if(target)
       usenode->setTarget(target);
   }
