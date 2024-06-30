@@ -1878,9 +1878,10 @@ bool MapsApp::loadConfig()
     config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
   } catch(...) {
     LOGE("Unable to load config file %s", configPath.c_str());
-    runOnMainThread([](){ messageBox("Error", "Unable to load config file.  Please reinstall the application.",
-        {"OK"}, [](std::string){ *(volatile int*)0 = 0; }); });
+    runOnMainThread([](){ messageBox("Error",
+        "Error loading config!  Restore config.yaml or reinstall the application.", {"OK"}); });
     //*(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
+    return false;  // do not set configFile so we don't write to it!
   }
 
   configFile = configPath.c_str();

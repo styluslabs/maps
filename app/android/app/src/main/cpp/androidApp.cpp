@@ -357,7 +357,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
   setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceState", "(IFF)V");
-  extractAssetsMID = jniEnv->GetMethodID(cls, "extractAssets", "()V");
+  extractAssetsMID = jniEnv->GetMethodID(cls, "extractAssets", "(Ljava/lang/String;)V");
   return TANGRAM_JNI_VERSION;
 }
 
@@ -627,9 +627,9 @@ JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, js
   MapsApp::configFile = configPath.c_str();
   bool firstrun = !configDfltPath.exists();
   if(firstrun)
-    env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
+    env->CallVoidMethod(mapsActivityRef, extractAssetsMID, extFileDir);
   if(MapsApp::loadConfig() && !firstrun)
-    env->CallVoidMethod(mapsActivityRef, extractAssetsMID);
+    env->CallVoidMethod(mapsActivityRef, extractAssetsMID, extFileDir);
 
   // if user closes app (swipes off recent apps) while recording track, main activity will be destroyed but
   //  native code will keep running; new main activity will be created when user next opens the app

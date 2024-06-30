@@ -27,6 +27,7 @@
 // building search DB from tiles
 SQLiteDB MapsSearch::searchDB;
 static sqlite3_stmt* insertStmt = NULL;
+static bool hasSearchData = false;
 
 class DummyStyleContext : public Tangram::StyleContext {
 public:
@@ -83,6 +84,7 @@ void MapsSearch::indexTileData(TileTask* task, int mapId, const std::vector<Sear
     LOGD("Search indexing completed for tile %s", tileId.toString().c_str());
   }
   searchDB.stmt("INSERT INTO offline_tiles (tile_id, offline_id) VALUES (?,?);").bind(packedId, mapId).exec();
+  hasSearchData = true;
 }
 
 void MapsSearch::importPOIs(std::string srcuri, int offlineId)
@@ -158,7 +160,7 @@ COMMIT;)#";
 
 bool MapsSearch::initSearch()
 {
-  std::string dbPath = MapsApp::baseDir + "fts1.sqlite";
+  FSPath dbPath(MapsApp::baseDir, "fts1.sqlite");
   if(sqlite3_open_v2(dbPath.c_str(), &searchDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
     sqlite3_close(searchDB.release());
 
@@ -183,6 +185,11 @@ bool MapsSearch::initSearch()
 
   if(sqlite3_create_function(searchDB.db, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
     LOGE("sqlite3_create_function: error creating osmSearchRank for search DB");
+
+  int npois = 0;
+  searchDB.stmt("SELECT COUNT(1) FROM pois;").onerow(npois);
+  hasSearchData = npois > 0;
+
   return true;
 }
 
@@ -724,10 +731,7 @@ Button* MapsSearch::createPanel()
   };
 
   auto onSetProvider = [=](int idx) {
-    int npois = 0;
-    if(idx == 0)
-      searchDB.stmt("SELECT COUNT(1) FROM pois;").onerow(npois);
-    noDataMsg->setVisible(idx == 0 && npois == 0);
+    noDataMsg->setVisible(idx == 0 && !hasSearchData);
     std::string typestr = idx > 0 ? app->pluginManager->searchFns[idx-1].type : "";
     StringRef type(typestr);
     searchOnMapMove = !type.contains("-slow");
@@ -789,6 +793,7 @@ Button* MapsSearch::createPanel()
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_OPENED) {
       if(queryText->isEnabled()) {
+        noDataMsg->setVisible(providerIdx == 0 && !hasSearchData);
         app->gui->setFocused(searchBox);
         searchText("", EDITING);  // show history
       }

@@ -314,6 +314,7 @@ void initResources(const char* baseDir)
   auto useNodes = widgetDoc->select("use");
   for(SvgNode* n : useNodes) {
     SvgUse* usenode = static_cast<SvgUse*>(n);
+    if(!usenode->href()[0]) continue;
     SvgNode* target = MapsApp::uiIcon(usenode->href());
     if(target)
       usenode->setTarget(target);

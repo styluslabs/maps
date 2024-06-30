@@ -81,7 +81,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   private boolean replaceAssets = true;  // for development
   private boolean sensorsEnabled = true;
   private boolean hasGpsFix = false;
-  private String extFilesPath;
 
   public static final int PERM_REQ_LOCATION = 1;
   public static final int PERM_REQ_NOTIFICATIONS = 2;
@@ -95,9 +94,17 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     // this doesn't seem to detect problems in dependencies (e.g. OkHttp)
     //android.os.StrictMode.setVmPolicy(new android.os.StrictMode.VmPolicy.Builder() ...
 
-    //extFilesPath = getExternalFilesDir(null).getAbsolutePath();
-    extFilesPath = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
-    MapsLib.init(this, getAssets(), extFilesPath, BuildConfig.VERSION_CODE);
+    String extMediaPath = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
+    String extFilesPath = getExternalFilesDir(null).getAbsolutePath();
+    File mediafile = new File(extMediaPath);
+    File extcfgfile = new File(extFilesPath + "/config.yaml");
+    String extPath = extFilesPath;
+    if(mediafile.isDirectory()) extPath = extMediaPath;
+    else if(extcfgfile.exists()) extPath = extFilesPath;
+    else if(mediafile.mkdirs()) extPath = extMediaPath;
+    else Log.v("Tangram", "Unable to create " + extMediaPath);
+
+    MapsLib.init(this, getAssets(), extPath, BuildConfig.VERSION_CODE);
 
     httpHandler = new DefaultHttpHandler();
 
@@ -482,31 +489,33 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     }
   }
 
-  public void extractAssets()
+  public void extractAssets(String outpath)
   {
-    extractAssetPath(getAssets(), "", extFilesPath + "/");
+    extractAssetPath(getAssets(), "", outpath + "/");
   }
 
-  // assetpath = "" reads from assets/  outpath = "" writes to external files path
+  // assetpath = "" reads from assets/
   private boolean extractAssetPath(AssetManager assetManager, String assetpath, String outpath)
   {
     try {
       if(assetpath.equals("webkit/") || assetpath.equals("images/")) return true;
       String[] files = assetManager.list(assetpath);
       if(files == null || files.length == 0) return false;
-      //if(outpath.isEmpty()) outpath = getExternalFilesDir(null).toString();
       for(String filename : files) {
         String srcpath = assetpath + filename;
         String dstpath = outpath + filename;
         // check for directory
         if(!extractAssetPath(assetManager, srcpath + "/", dstpath + "/")) {
-          Log.v("extractAssets", "Copying " + srcpath + " to " + dstpath);
+          Log.v("Tangram extractAssets", "Copying " + srcpath + " to " + dstpath);
           File dstfile = new File(dstpath);
           if(!replaceAssets && dstfile.exists()) continue;  // don't overwrite existing file
           // this returns InputStream object
           InputStream in = assetManager.open(srcpath);
           // ensure that path exists
-          dstfile.getParentFile().mkdirs();
+          if(!dstfile.getParentFile().isDirectory() && !dstfile.getParentFile().mkdirs()) {
+            Log.v("Tangram extractAssets", "mkdirs() failed for " + dstpath);
+            continue;
+          }
           FileOutputStream out = new FileOutputStream(dstfile);
           // copy byte by byte ... doesn't seem to be a more elegant soln!
           byte[] buf = new byte[65536];

@@ -6,7 +6,8 @@ SvgNode* uiIcon(const char* id)
 {
   const SvgDocument* uiIcons = SvgGui::useFile(":/ui-icons.svg");
   SvgNode* res = uiIcons ? uiIcons->namedNode(id) : NULL;
-  if(!res) PLATFORM_LOG("Icon missing: %s\n", id);  //ASSERT(res && "UI icon missing!");
+  if(!res)
+    PLATFORM_LOG("Icon missing: %s\n", id);  //ASSERT(res && "UI icon missing!");
   return res;
 }
 
