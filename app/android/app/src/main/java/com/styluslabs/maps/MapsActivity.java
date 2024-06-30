@@ -94,15 +94,12 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     // this doesn't seem to detect problems in dependencies (e.g. OkHttp)
     //android.os.StrictMode.setVmPolicy(new android.os.StrictMode.VmPolicy.Builder() ...
 
+    // creation of folder in media dir on first run randomly fails sometimes (on Samsung only?); also, search
+    //  indexing performance (and I assume I/O performance in general) is much worse (10x worse on Pixel 3)
     String extMediaPath = getExternalMediaDirs()[0].getAbsolutePath() + "/files";
     String extFilesPath = getExternalFilesDir(null).getAbsolutePath();
-    File mediafile = new File(extMediaPath);
-    File extcfgfile = new File(extFilesPath + "/config.yaml");
-    String extPath = extFilesPath;
-    if(mediafile.isDirectory()) extPath = extMediaPath;
-    else if(extcfgfile.exists()) extPath = extFilesPath;
-    else if(mediafile.mkdirs()) extPath = extMediaPath;
-    else Log.v("Tangram", "Unable to create " + extMediaPath);
+    File mediacfgfile = new File(extMediaPath + "/config.yaml");
+    String extPath = mediacfgfile.exists() ? extMediaPath : extFilesPath;
 
     MapsLib.init(this, getAssets(), extPath, BuildConfig.VERSION_CODE);
 
