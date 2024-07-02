@@ -1111,6 +1111,24 @@ void MapsTracks::toggleRouteEdit(bool show)
   //setRouteMode(activeTrack->routeMode);  // update previewMarker
 }
 
+void MapsTracks::newRoute(bool measure)
+{
+  std::string dst = app->pickResultName.empty() ? lngLatToStr(app->pickResultCoord) : app->pickResultName;
+  Waypoint wp1(app->currLocation.lngLat(), "Start");
+  Waypoint wp2(app->pickResultCoord, dst, "", app->pickResultProps);
+  double km = lngLatDist(wp1.lngLat(), wp2.lngLat());
+  navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
+  navRoute.title = measure ? "Measurement" : "Navigation";
+  navRoute.routeMode = measure ? "direct" : (km < 10 ? "walk" : km < 100 ? "bike" : "drive");
+  app->showPanel(tracksPanel);
+  app->panelToSkip = tracksPanel;
+  populateTrack(&navRoute);
+  if(!measure && km > 0.01)
+    addWaypoint(wp1);  //"Current location"
+  addWaypoint(wp2);
+  toggleRouteEdit(measure);
+}
+
 void MapsTracks::addPlaceActions(Toolbar* tb)
 {
   if(activeTrack) {
@@ -1125,36 +1143,12 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   }
   else {
     Button* routeBtn = createActionbutton(MapsApp::uiIcon("directions"), "Route", true);
-    routeBtn->onClicked = [=](){
-      std::string dst = app->pickResultName.empty() ? lngLatToStr(app->pickResultCoord) : app->pickResultName;
-      Waypoint wp1(app->currLocation.lngLat(), "Start");
-      Waypoint wp2(app->pickResultCoord, dst, "", app->pickResultProps);
-      double km = lngLatDist(wp1.lngLat(), wp2.lngLat());
-      navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
-      navRoute.title = "Navigation";
-      navRoute.routeMode = km < 10 ? "walk" : km < 100 ? "bike" : "drive";
-      app->showPanel(tracksPanel);
-      app->panelToSkip = tracksPanel;
-      populateTrack(&navRoute);
-      if(km > 0.01)
-        addWaypoint(wp1);  //"Current location"
-      addWaypoint(wp2);
-      toggleRouteEdit(false);
-    };
+    routeBtn->onClicked = [this](){ newRoute(false); };
+    //SvgGui::setupRightClick(routeBtn, [this](SvgGui*, Widget*, Point){ newRoute(true); });  -- just use measure!
     tb->addWidget(routeBtn);
 
     Button* measureBtn = createActionbutton(MapsApp::uiIcon("measure"), "Measure", true);
-    measureBtn->onClicked = [=](){
-      Waypoint wpt(app->pickResultCoord, app->pickResultName, "", app->pickResultProps);
-      navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
-      navRoute.title = "Measurement";
-      navRoute.routeMode = "direct";
-      app->showPanel(tracksPanel);
-      app->panelToSkip = tracksPanel;
-      populateTrack(&navRoute);
-      addWaypoint(wpt);
-      toggleRouteEdit(true);
-    };
+    measureBtn->onClicked = [this](){ newRoute(true);  };
     tb->addWidget(measureBtn);
   }
 }

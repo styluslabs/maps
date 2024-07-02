@@ -232,25 +232,34 @@ void MapsOffline::runSQL(std::string dbpath, std::string sql)
 
 int64_t MapsOffline::shrinkCache(int64_t maxbytes)
 {
-  std::vector< std::unique_ptr<Tangram::MBTilesDataSource> > dbsources;
+  std::vector<SQLiteDB> dbsources;
   std::vector< std::pair<int, int> > tiles;
   int totalTiles = 0;
-  auto insertTile = [&](int oflid, int t, int size){ ++totalTiles; if(!oflid) tiles.emplace_back(t, size); };
+  auto insertTile = [&](const char*, int oflid, int t, int size){ ++totalTiles; if(!oflid) tiles.emplace_back(t, size); };
 
   FSPath cachedir(MapsApp::baseDir, "cache");
   for(auto& file : lsDirectory(cachedir)) {
     FSPath cachefile = cachedir.child(file);
     if(cachefile.extension() != "mbtiles") continue;
-    dbsources.push_back(std::make_unique<Tangram::MBTilesDataSource>(
-        *MapsApp::platform, cachefile.baseName(), cachefile.path, "", true));
+    SQLiteDB mbtiles;
+    if(sqlite3_open_v2(cachefile.c_str(), &mbtiles.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) continue;
     int ntiles = totalTiles;
-    dbsources.back()->getTileSizes(insertTile);
+    bool ok = mbtiles.stmt("SELECT images.tile_id, ot.offline_id, tla.last_access, length(tile_data)"
+        " FROM images LEFT JOIN tile_last_access AS tla ON images.tile_id = tla.tile_id"
+        " LEFT JOIN offline_tiles AS ot ON images.tile_id = ot.tile_id;").exec(insertTile);
+    if(!ok) {
+      LOGW("Error getting tile sizes from %s - database may be in use.", cachefile.c_str());
+      continue;
+    }
+    dbsources.push_back(std::move(mbtiles));
     // delete empty cache file
     if(totalTiles == ntiles) {
       LOG("Deleting empty cache file %s", cachefile.c_str());
-      dbsources.pop_back();
+      dbsources.pop_back();  // we push then pop because DB has to be closed before we can remove file
       removeFile(cachefile.path);
     }
+    else
+      LOG("Found %d tiles in %s", totalTiles - ntiles, cachefile.c_str());
   }
 
   std::sort(tiles.rbegin(), tiles.rend());  // sort by timestamp, descending (newest to oldest)
@@ -259,10 +268,13 @@ int64_t MapsOffline::shrinkCache(int64_t maxbytes)
     tot += x.second;
     if(tot > maxbytes) {
       for(auto& src : dbsources) {
-        auto totchanges = sqlite3_total_changes(src->dbHandle());
-        src->deleteOldTiles(x.first);
-        if(sqlite3_total_changes(src->dbHandle()) - totchanges > 32)
-          sqlite3_exec(src->dbHandle(), "VACUUM;", NULL, NULL, NULL);
+        int totchanges = src.totalChanges();
+        src.stmt("DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM tile_last_access WHERE"
+            " last_access > ?) AND tile_id NOT IN (SELECT tile_id FROM offline_tiles);").bind(x.first).exec();
+        int nchanges = src.totalChanges() - totchanges;
+        LOG("shrinkCache: %d changes for %s", nchanges, sqlite3_db_filename(src.db, "main"));
+        if(nchanges > 32)
+          src.exec("VACUUM;");
       }
       break;
     }

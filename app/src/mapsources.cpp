@@ -67,7 +67,8 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     //  text and points are drawn w/ blend_order -1, so use blend_order < -1 to place rasters underneath
     // note that lines and polygons are normally drawn w/ opaque blend mode, which ignores blend_order and is
     //  drawn before all other blend modes; default raster style uses opaque!
-    if(order > 0) {
+    bool isoverlay = order > 0 && src["layer"].as<bool>(false);
+    if(isoverlay) {
       updates.emplace_back("+styles." + rasterN,
           fstring("{base: raster, lighting: false, blend: translucent, blend_order: %d}", order-100));
     }
@@ -75,9 +76,9 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
       vectorBase = false;
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order > 0 ? rasterN : "raster");
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", isoverlay ? rasterN : "raster");
     //updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", alphastr);  -- this is how to do opacity
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", order > 0 ? std::to_string(1000 + order) : "0");
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string((isoverlay ? 1000 : 0) + order));
     ++order;
   }
   else if(src["scene"]) {  // vector map
