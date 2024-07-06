@@ -1921,7 +1921,7 @@ void MapsTracks::createTrackListPanel()
   };
   loadTrackBtn->onClicked = [=](){ MapsApp::openFileDialog({{"GPX files", "gpx"}}, loadTrackFn); };
 
-  Button* recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record Track");
+  Button* recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record", true);
   recordTrackBtn->onClicked = [=](){
     if(!recordedTrack.tracks.empty())
       populateTrack(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
@@ -1931,9 +1931,9 @@ void MapsTracks::createTrackListPanel()
 
   tracksContent = new DragDropList;  //createColumn();
   auto tracksTb = app->createPanelHeader(MapsApp::uiIcon("folder"), "Tracks");
+  tracksTb->addWidget(recordTrackBtn);
   tracksTb->addWidget(drawTrackBtn);
   tracksTb->addWidget(loadTrackBtn);
-  tracksTb->addWidget(recordTrackBtn);
   tracksPanel = app->createMapPanel(tracksTb, NULL, tracksContent, false);
 
   tracksPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
