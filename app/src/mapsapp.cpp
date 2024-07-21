@@ -1698,8 +1698,9 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
       return false;
     if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
         //&& event->tfinger.touchId != SDL_TOUCH_MOUSEID  -- at least need to allow splitter!!!
-       && gui->menuStack.empty()  // don't interfere with menu
-        && (!gui->pressedWidget || (gui->pressedWidget->isDescendantOf(toolbar) && gui->fingerClicks == 0))) {
+        && gui->menuStack.empty()  // don't interfere with menu
+        && gui->fingerClicks == 0  // require sufficient motion before activation
+        && (!gui->pressedWidget || gui->pressedWidget->isDescendantOf(toolbar))) {
       if(gui->pressedWidget)
         gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, NULL);  //this);
       auto& p0 = gui->pressEvent.tfinger;
@@ -2045,7 +2046,8 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->setupGL();
     // Painter created here since GL context required to build shaders
     // ALIGN_SCISSOR needed only due to rotated direction-icon inside scroll area
-    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));  //Painter::PAINT_SW | Painter::SW_BLIT_GL
+    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
+    //painter.reset(new Painter(Painter::PAINT_SW | Painter::SW_BLIT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
     scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
     gui->fullRedraw = painter->usesGPU();
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles

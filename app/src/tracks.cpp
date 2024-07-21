@@ -187,7 +187,8 @@ void MapsTracks::setTrackVisible(GpxFile* track, bool visible)
 
 Widget* MapsTracks::createTrackEntry(GpxFile* track)
 {
-  Button* item = createListItem(MapsApp::uiIcon("track"), track->title.c_str(), track->desc.c_str());
+  auto* icon = track == &recordedTrack ? MapsApp::uiIcon("track-recording") : MapsApp::uiIcon("track");
+  Button* item = createListItem(icon, track->title.c_str(), track->desc.c_str());
   item->node->setAttr("__rowid", track->rowid);
   item->onClicked = [=](){ populateTrack(track); };
   Widget* container = item->selectFirst(".child-container");
@@ -1241,6 +1242,8 @@ void MapsTracks::startRecording()
   populateTrack(&recordedTrack);
   setTrackWidgets(TRACK_STATS);  // plot isn't very useful until there are enough points
   editTrackContent->setVisible(true);
+  tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));
+  recordTrackBtn->setChecked(true);
 }
 
 void MapsTracks::setTrackEdit(bool show)
@@ -1788,6 +1791,8 @@ void MapsTracks::createTrackPanel()
     recordTrack = false;
     tracksDirty = true;
     pauseRecordBtn->setChecked(false);
+    tracksBtn->setIcon(MapsApp::uiIcon("track"));
+    recordTrackBtn->setChecked(false);
     populateTrack(&tracks.back());
   };
 
@@ -1921,7 +1926,7 @@ void MapsTracks::createTrackListPanel()
   };
   loadTrackBtn->onClicked = [=](){ MapsApp::openFileDialog({{"GPX files", "gpx"}}, loadTrackFn); };
 
-  Button* recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record", true);
+  recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record", true);
   recordTrackBtn->onClicked = [=](){
     if(!recordedTrack.tracks.empty())
       populateTrack(&recordedTrack);  // show stats panel for recordedTrack, incl pause and stop buttons
@@ -2006,7 +2011,7 @@ Button* MapsTracks::createPanel()
     return false;
   });
 
-  Button* tracksBtn = app->createPanelButton(MapsApp::uiIcon("track"), "Tracks", tracksPanel);
+  tracksBtn = app->createPanelButton(MapsApp::uiIcon("track"), "Tracks", tracksPanel);
   tracksBtn->setMenu(tracksMenu);
   return tracksBtn;
 }

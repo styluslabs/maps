@@ -330,16 +330,18 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
 
 void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
 {
+  // if results don't fill height, scroll area won't scroll, so onScroll won't be called to get more results!
+  int limit = std::max(20, int(app->win->winBounds().height()/42 + 1));
   int offset = listResults.size();
   // if '*' not appended to string, we assume catagorical search - no info for ranking besides dist
   bool sortByDist = queryStr.back() != '*' || app->config["search"]["sort"].as<std::string>("rank") == "dist";
   // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
   std::string query = fstring("SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON"
-      " pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT 20 OFFSET ?;",
-      sortByDist ? "-1.0" : "rank");
+      " pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT %d OFFSET ?;",
+      sortByDist ? "-1.0" : "rank", limit);
   searchDB.stmt(query).bind(queryStr, offset).exec([&](int rowid, double lng, double lat,
       double score, const char* json){ addListResult(rowid, lng, lat, score, json); });
-  moreListResultsAvail = listResults.size() - offset >= 20;
+  moreListResultsAvail = int(listResults.size()) - offset >= limit;
 }
 
 void MapsSearch::onMapEvent(MapEvent_t event)

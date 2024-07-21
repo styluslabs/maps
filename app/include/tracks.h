@@ -113,6 +113,8 @@ private:
   Toolbar* editTrackTb = NULL;
   Widget* editTrackContent = NULL;
   TrackSliders* trackSliders = NULL;
+  Button* tracksBtn = NULL;
+  Button* recordTrackBtn = NULL;
 
   std::unique_ptr<FileStream> recordGPXStrm;
   Timer* recordTimer = NULL;

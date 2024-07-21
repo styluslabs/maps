@@ -213,6 +213,11 @@ document.addEventListener('DOMContentLoaded', function(event) {
 <!-- tabler-route.svg -->
 <svg id="track" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M4 19a2 2 0 1 0 4 0a2 2 0 1 0-4 0M16 5a2 2 0 1 0 4 0a2 2 0 1 0-4 0m-4 14h4.5a3.5 3.5 0 0 0 0-7h-8a3.5 3.5 0 0 1 0-7H12"/></svg>
 
+<svg id="track-recording" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24">
+<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M4 19a2 2 0 1 0 4 0a2 2 0 1 0-4 0M16 5a2 2 0 1 0 4 0a2 2 0 1 0-4 0m-4 14h4.5a3.5 3.5 0 0 0 0-7h-8a3.5 3.5 0 0 1 0-7H12"/>
+<circle fill="red" cx="18" cy="4.6" r="4"/>
+</svg>
+
 <!-- tabler-world.svg -->
 <svg id="globe" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0-18 0m.6-3h16.8M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18m1-18a17 17 0 0 1 0 18"/></g></svg>
 
