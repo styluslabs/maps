@@ -228,7 +228,7 @@ hillshade:
     scene: scenes/raster-contour.yaml
     updates_vector:
         global.elevation_sources: [elevation]
-        global.earth_style: hillshade
+        #global.earth_style: hillshade
         layers.earth: { data: { source: elevation }, draw: { hillshade: { color: global.earth_color, order: 0 } } }
     updates_raster:
         styles.hillshade.shaders.defines.ELEVATION_INDEX: 1

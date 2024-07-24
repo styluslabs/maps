@@ -112,7 +112,7 @@ global:
         #runway_16: '#fff'
         #runway_casing: orange
 
-    # z-order for polygons and lines (higher z-order draws over lower); order > 1000 is reserved by mapsapp
+    # z-order for polygons (<100) and lines (higher z-order draws over lower); order > 1000 is reserved by mapsapp
     order:
         landuse: 10
         parks: 12
@@ -120,27 +120,27 @@ global:
         golf: 16
         airport: 18
         landcover: 20
-        waterway: 22
-        water: 24
-        pier: 26
-        bldg: 30
-        transportation_casing: 38
-        transportation: 40
-        rail: 40
-        taxiway: 50
-        path: 50
-        runway: 55
-        minor_road: 60
-        piste: 65
-        major_road: 70
-        motorway: 80
-        bridge: 100
-        bicycle: 120
-        transit: 150
-        aerialway: 150
-        border: 190
-        bldg_3d_line: 199
-        bldg_3d: 200
+        waterway: 122
+        water: 124
+        pier: 126
+        bldg: 130
+        transportation_casing: 138
+        transportation: 140
+        rail: 140
+        taxiway: 150
+        path: 150
+        runway: 155
+        minor_road: 160
+        piste: 165
+        major_road: 170
+        motorway: 180
+        bridge: 200
+        bicycle: 220
+        transit: 250
+        aerialway: 250
+        border: 290
+        bldg_3d_line: 299
+        bldg_3d: 300
 
     piste_color_fn: function() { return global.color.piste[feature.difficulty] || 'white'; }
     piste_symbols: { easy: '●', intermediate: '■', advanced: '◆', expert: '◆◆' }
@@ -267,7 +267,7 @@ sources:
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
-        rasters: global.elevation_sources
+        #rasters: global.elevation_sources
 
 
 fonts:
