@@ -70,7 +70,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     bool isoverlay = order > 0 && src["layer"].as<bool>(false);
     if(isoverlay) {
       updates.emplace_back("+styles." + rasterN,
-          fstring("{base: raster, lighting: false, blend: translucent, blend_order: %d}", order-100));
+          fstring("{base: raster, lighting: false, blend: nonopaque, blend_order: %d}", order-100));
     }
     else
       vectorBase = false;

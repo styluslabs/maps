@@ -212,8 +212,8 @@ hillshade-usgs:
     layers:
         - source: hillshade
     updates:
-        global.earth_style: translucent-polygons
-        styles.hillshade.shaders.defines.FLOAT_TEX: true
+        #global.earth_style: translucent-polygons
+        #styles.hillshade.shaders.defines.FLOAT_TEX: true
         sources.elevation:
             type: Raster
             filtering: nearest
@@ -227,9 +227,9 @@ hillshade:
     layer: true
     scene: scenes/raster-contour.yaml
     updates_vector:
-        global.elevation_sources: [elevation]
+        #global.elevation_sources: [elevation]
         #global.earth_style: hillshade
-        layers.earth: { data: { source: elevation }, draw: { hillshade: { color: global.earth_color, order: 0 } } }
+        layers.earth: { data: { source: elevation }, draw: { hillshade: { color: global.earth_color, order: 99 } } }
     updates_raster:
         styles.hillshade.shaders.defines.ELEVATION_INDEX: 1
         sources.raster-0.rasters: [elevation]

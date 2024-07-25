@@ -11,7 +11,7 @@ global:
     # globals required for hillshading
     earth_style: polygons
     earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
-    elevation_sources: []
+    #elevation_sources: []
     marker_font: Open Sans
     # Open Sans looks very good, especially the italic style
     primary_font: Open Sans

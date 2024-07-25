@@ -113,7 +113,7 @@ styles:
         base: polygons
         raster: custom
         #texcoords: true
-        blend: inlay
+        blend: nonopaque
         blend_order: -1001
         shaders:
             defines:
@@ -243,13 +243,7 @@ styles:
                     #if ELEVATION_INDEX
                     vec4 base_color = RASTER_BASE_COLOR;
                     #else
-                    //vec4 base_color = v_color;
-                    vec4 base_color = vec4(0.0, 0.0, 0.0, 1.0);
-                    //vec4 shade_color = calculateLighting(v_position.xyz, normal, vec4(1.0));
-                    //vec4 base_color = vec4(0.0, 0.0, 0.0, 1.0 - shade_color.r);
-                    ///vec4 shade_color = calculateLighting(v_position.xyz, normal, vec4(0.5, 0.5, 0.5, 1.0));
-                    ///float hs = shade_color.r/0.5;
-                    ///vec4 base_color = hs > 1.0 ? vec4(1.0, 1.0, 1.0, hs - 1.0) : vec4(0.0, 0.0, 0.0, 1.0 - hs);
+                    vec4 base_color = vec4(0.0, 0.0, 0.0, 1.0);  //v_color;
                     #endif
                     #ifdef SHOW_CONTOURS
                     float z = u_map_position.z;
@@ -292,11 +286,6 @@ styles:
                         vec4 tint = texture2D(u_slope_angle, vec2(degs/90.0, 0.5));
                         base_color = mix(base_color, vec4(tint.rgb, 0.0), elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
                     #endif
-                        // blend
-                        //cov = min(cov, 1.0);
-                        //float alpha1 = base_color.a + cov - base_color.a*cov;
-                        //color = CONTOUR_COLOR * (cov*(1.0-base_color.a)/alpha1);
-                        //color.a = alpha1;
                         base_color = mix(base_color, vec4(CONTOUR_COLOR.rgb, 0.0), min(cov, 1.));
                     }
                     #else  // no contours
@@ -307,11 +296,17 @@ styles:
                     #endif
                     //color = base_color;
                     #endif
+                    // apply lighting to get final color
+                    #if ELEVATION_INDEX
+                    color = calculateLighting(v_position.xyz, normal, base_color);
+                    gl_FragColor = vec4(color.rgb, 1.0);
+                    #else
                     vec4 shading = calculateLighting(v_position.xyz, normal, vec4(1.0));
+                    // for blending over background and opaque polygons; see 24/07/24 rev for supporting shading > 1.0
                     color = base_color * shading.r;
                     color.a = 1.0 - color.a;
-                    // final color
                     gl_FragColor = vec4(color.rgb/color.a, color.a);
+                    #endif
                     } // main()
                     #endif  //TANGRAM_FRAGMENT_SHADER
 

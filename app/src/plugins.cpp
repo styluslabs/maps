@@ -278,15 +278,19 @@ static int addSearchResult(duk_context* ctx)
   const char* json = duk_json_encode(ctx, 5);    // duktape obj -> string -> rapidjson obj ... not ideal
 
   auto& ms = MapsApp::inst->mapsSearch;
-  if(flags & MapsSearch::MAP_SEARCH) {
-    ms->addMapResult(osm_id, lng, lat, score, json);
-    ms->moreMapResultsAvail = flags & MapsSearch::MORE_RESULTS;
-  }
-  if(flags & MapsSearch::LIST_SEARCH) {
-    ms->addListResult(osm_id, lng, lat, score, json);
-    ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
-    if(flags & MapsSearch::UPDATE_RESULTS)  // flag set for final result
+  if(flags & MapsSearch::UPDATE_RESULTS) {
+    if(flags & MapsSearch::LIST_SEARCH)
       ms->resultsUpdated(flags);
+  }
+  else {
+    if(flags & MapsSearch::MAP_SEARCH) {
+      ms->addMapResult(osm_id, lng, lat, score, json);
+      ms->moreMapResultsAvail = flags & MapsSearch::MORE_RESULTS;
+    }
+    if(flags & MapsSearch::LIST_SEARCH) {
+      ms->addListResult(osm_id, lng, lat, score, json);
+      ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
+    }
   }
   return 0;
 }

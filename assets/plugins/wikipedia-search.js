@@ -31,9 +31,9 @@ function wikipediaSearch(query, bounds, flags)
             "value": "<a href='" + url + "'><text>" + r.title + "</text></a>"};
         // tourism=wikipedia is hack to show wikipedia icon marker for results
         const tags = {"name": r.title, "wiki": encodeURI(r.title), "place_info": [url_info], "tourism": "wikipedia"};
-        if(ii == data.length - 1) { flags = flags | 0x4000; } // MapSearch::UPDATE_RESULTS flag
         addSearchResult(ii, r.lat, r.lon, data.length-ii, flags, tags);
       }
+      addSearchResult(0, 0, 0, 0, flags | 0x4000, {});  // MapSearch::UPDATE_RESULTS flag
     });
   } else {
     // some wikidata entries have multiple entries for P625 (coordinates); GROUP_CONCAT instead of SAMPLE
@@ -66,9 +66,9 @@ function wikipediaSearch(query, bounds, flags)
             "wiki": encodeURI(r.wikiTitle.value), "place_info": [url_info], "tourism": "wikipedia"};
         const lnglat = r.lnglat.value.substr(6, r.lnglat.value.length-7).split(" ");  // parse WKT "Point(<lng> <lat>)"
         const lng = Number(lnglat[0]), lat = Number(lnglat[1]);
-        if(ii == data.length - 1) { flags = flags | 0x4000; } // MapSearch::UPDATE_RESULTS flag
         addSearchResult(ii, lat, lng, radkm - Number(r.dist.value), flags, tags);
       }
+      addSearchResult(0, 0, 0, 0, flags | 0x4000, {});  // MapSearch::UPDATE_RESULTS flag
     });
   }
 }

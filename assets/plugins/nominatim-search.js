@@ -9,9 +9,9 @@ function nominatimSearch(query, bounds, flags)
     for(var ii = 0; ii < content.length; ii++) {
       const r = content[ii];
       const tags = {"name": r.display_name, [r.category]: r.type};
-      if(ii == content.length - 1) { flags = flags | 0x4000; } // MapSearch::UPDATE_RESULTS flag
       addSearchResult(r.osm_id, r.lat, r.lon, r.importance, flags, tags);
     }
+    addSearchResult(0, 0, 0, 0, flags | 0x4000, {});  // MapSearch::UPDATE_RESULTS flag
   });
 }
 
