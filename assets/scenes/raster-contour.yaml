@@ -114,7 +114,8 @@ styles:
         raster: custom
         #texcoords: true
         blend: nonopaque
-        blend_order: -1001
+        # blend_order for translucent lines is -1001 for stylus-osm-dark
+        blend_order: -1002
         shaders:
             defines:
                 ELEVATION_INDEX: 0
@@ -124,6 +125,7 @@ styles:
                 RASTER_BASE_COLOR: 'sampleRaster(0)'
                 # sampler2D default is lowp!
                 TANGRAM_RASTER_PRECISION: 'highp'
+                TANGRAM_VERTEX_RASTERS: true
             uniforms:
                 u_exaggerate: 4.5
                 CONTOUR_COLOR: global.contour_color
@@ -173,8 +175,12 @@ styles:
                       discard;  //color = vec4(uv.x, uv.y, 0.0, 1.0);
 
             blocks:
+                position: |
+                    //#ifdef TANGRAM_3D_TERRAIN
+                    position.z = getElevation(u_rasters[ELEVATION_INDEX], currentRasterUV(ELEVATION_INDEX));
+                    //#endif
                 global: |
-                    #ifdef TANGRAM_FRAGMENT_SHADER
+                    //#ifdef TANGRAM_FRAGMENT_SHADER
                     float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters
                         vec4 h = texture2D(tex, uv);
                     #ifdef FLOAT_TEX
@@ -184,6 +190,7 @@ styles:
                     #endif
                         //return (h.r*256.*256. + h.g*256. + h.b)*0.1 - 10000.;  // mapbox
                     }
+                    #ifdef TANGRAM_FRAGMENT_SHADER
                     #define TANGRAM_CUSTOM_MAIN
                     void main(void) {
                     vec3 normal;
