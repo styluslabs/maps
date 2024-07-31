@@ -226,8 +226,15 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
       std::string q2 = fstring("UPDATE tracks SET archived = %d WHERE rowid = ?;", track->archived ? 0 : 1);
       SQLiteStmt(app->bkmkDB, q2).bind(track->rowid).exec();
       track->archived = !track->archived;
-      if(!track->archived) tracksDirty = true;
-      else archiveDirty = true;
+      if(track->archived) {
+        if(track->visible)
+          setTrackVisible(track, false);
+        if(!archiveLoaded)
+          tracks.remove_if([](const GpxFile& t){ return t.archived; });
+        archiveDirty = true;
+      }
+      else
+        tracksDirty = true;
       app->gui->deleteWidget(item);  // must be last!
     });
 
