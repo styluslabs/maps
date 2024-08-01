@@ -176,9 +176,9 @@ styles:
 
             blocks:
                 position: |
-                    //#ifdef TANGRAM_3D_TERRAIN
+                    #ifdef TANGRAM_TERRAIN_3D
                     position.z = getElevation(u_rasters[ELEVATION_INDEX], currentRasterUV(ELEVATION_INDEX));
-                    //#endif
+                    #endif
                 global: |
                     //#ifdef TANGRAM_FRAGMENT_SHADER
                     float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters

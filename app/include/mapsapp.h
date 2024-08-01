@@ -200,6 +200,7 @@ public:
   static std::string configFile;
   static sqlite3* bkmkDB;
   static bool metricUnits;
+  static bool terrain3D;
   static std::vector<Color> markerColors;
   static ThreadSafeQueue< std::function<void()> > taskQueue;
   static std::thread::id mainThreadId;

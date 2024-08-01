@@ -395,7 +395,7 @@ layers:
             draw: { polygons: { visible: true, color: global.color.farmland } }
         # golf course can be inside park, so make sure it is drawn on top
         golf:
-            filter: [ { class: golf_course }, { leisure: golf_course } ]
+            filter: [ { class: golf_course }, { leisure: [golf_course, pitch] } ]
             draw: { polygons: { visible: true, order: global.order.golf, color: global.color.golf } }
         park:
             filter:

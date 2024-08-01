@@ -44,6 +44,7 @@ std::string MapsApp::baseDir;
 YAML::Node MapsApp::config;
 std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
+bool MapsApp::terrain3D = true;
 sqlite3* MapsApp::bkmkDB = NULL;
 std::vector<Color> MapsApp::markerColors;
 SvgGui* MapsApp::gui = NULL;
@@ -725,6 +726,8 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
+  if(terrain3D)
+    options.terrain3dSource = config["sources"]["elevation"][0].as<std::string>("");
   dumpJSStats(NULL);  // reset stats
   map->loadScene(std::move(options), async);
 }
@@ -1367,6 +1370,16 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   metricCb->setChecked(metricUnits);
   overflowMenu->addItem(metricCb);
 
+  Button* terrain3dCb = createCheckBoxMenuItem("3D terrain");
+  terrain3dCb->onClicked = [=](){
+    terrain3D = !terrain3D;
+    config["terrain_3d"] = terrain3D;
+    terrain3dCb->setChecked(terrain3D);
+    mapsSources->rebuildSource(mapsSources->currSource);  //loadSceneFile();
+  };
+  terrain3dCb->setChecked(terrain3D);
+  overflowMenu->addItem(terrain3dCb);
+
   Button* themeCb = createCheckBoxMenuItem("Use light theme");
   themeCb->onClicked = [=](){
     bool light = !themeCb->checked();
@@ -1934,6 +1947,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   platform = _platform;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
+  terrain3D = config["terrain_3d"].as<bool>(false);
   // Google Maps and Apple Maps use opposite scaling for this gesture, so definitely needs to be configurable
   touchHandler->dblTapDragScale = config["gestures"]["dbl_tap_drag_scale"].as<float>(1.0f);
   shuffleSeed = config["random_shuffle_seed"].as<bool>(true) ? std::rand() : 0;
