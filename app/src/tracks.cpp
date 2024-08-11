@@ -347,15 +347,17 @@ void MapsTracks::closeActiveTrack()
 {
   if(!activeTrack) return;
   app->pluginManager->cancelRequests(PluginManager::ROUTE);
-  if(activeTrack->modified)
-    activeTrack->modified = !saveTrack(activeTrack);
   if(activeTrack != &recordedTrack && activeTrack->marker)
     activeTrack->marker->setStylePath("layers.track.draw.track");
   if(!activeTrack->visible)
     showTrack(activeTrack, false);
-  Widget* item = tracksContent->getItem(std::to_string(activeTrack->rowid));
-  if(item)
-    item->selectFirst(".detail-text")->setText(activeTrack->desc.c_str());
+  if(activeTrack->rowid >= 0) {
+    if(activeTrack->modified)
+      activeTrack->modified = !saveTrack(activeTrack);
+    Widget* item = tracksContent->getItem(std::to_string(activeTrack->rowid));
+    if(item)
+      item->selectFirst(".detail-text")->setText(activeTrack->desc.c_str());
+  }
   activeTrack = NULL;
   waypointsDirty = false; plotDirty = false;
 }

@@ -11,7 +11,7 @@ global:
     # globals required for hillshading
     earth_style: polygons
     earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
-    #elevation_sources: []
+    elevation_sources: []
     marker_font: Open Sans
     # Open Sans looks very good, especially the italic style
     primary_font: Open Sans
@@ -267,7 +267,7 @@ sources:
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
-        #rasters: global.elevation_sources
+        rasters: global.elevation_sources
 
 
 fonts:
@@ -299,8 +299,39 @@ cameras:
 
 
 styles:
-    # blend_order -1000 to draw buildings just above other geometry; blend_order -110 to -100 reserved by app
     heightglow:
+        base: polygons
+        raster: custom
+        blend: translucent
+        blend_order: -1000
+        lighting: vertex
+        shaders:
+            defines:
+                ELEVATION_INDEX: 0
+                FLOAT_TEX: true
+                TANGRAM_RASTER_PRECISION: 'highp'
+                TANGRAM_VERTEX_RASTERS: true
+            blocks:
+                color: |
+                    color.rgb += vec3(worldPosition().z / 800.);
+                position: |
+                    #ifdef TANGRAM_TERRAIN_3D
+                    position.z += getElevation(u_rasters[ELEVATION_INDEX], currentRasterUV(ELEVATION_INDEX));
+                    #endif
+                global: |
+                    #if defined(TANGRAM_VERTEX_SHADER) && defined(TANGRAM_TERRAIN_3D)
+                    float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters
+                        vec4 h = texture2D(tex, uv);
+                    #ifdef FLOAT_TEX
+                        return h.r;
+                    #else
+                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // mapzen terrarium
+                    #endif
+                        //return (h.r*256.*256. + h.g*256. + h.b)*0.1 - 10000.;  // mapbox
+                    }
+                    #endif
+    # blend_order -1000 to draw buildings just above other geometry; blend_order -110 to -100 reserved by app
+    old_heightglow:
         base: polygons
         blend: translucent
         blend_order: -1000
@@ -315,6 +346,31 @@ styles:
     unlit-lines:
         base: lines
         lighting: false
+        raster: custom
+        shaders:
+            defines:
+                ELEVATION_INDEX: 0
+                FLOAT_TEX: true
+                TANGRAM_RASTER_PRECISION: 'highp'
+                TANGRAM_VERTEX_RASTERS: true
+            blocks:
+                position: |
+                    #ifdef TANGRAM_TERRAIN_3D
+                    position.z = getElevation(u_rasters[ELEVATION_INDEX], currentRasterUV(ELEVATION_INDEX));
+                    #endif
+                global: |
+                    #if defined(TANGRAM_VERTEX_SHADER) && defined(TANGRAM_TERRAIN_3D)
+                    float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters
+                        vec4 h = texture2D(tex, uv);
+                    #ifdef FLOAT_TEX
+                        return h.r;
+                    #else
+                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // mapzen terrarium
+                    #endif
+                        //return (h.r*256.*256. + h.g*256. + h.b)*0.1 - 10000.;  // mapbox
+                    }
+                    #endif
+
     # dash only supported for styles, not draw block because each dash pattern requires separate shader
     dashed-border:
         mix: unlit-lines
@@ -503,6 +559,7 @@ layers:
         filter: { $geometry: line }
         draw:
             lines:
+                style: unlit-lines
                 order: global.order.waterway
                 color: global.color.water
                 width: [[10,0px],[11,1px],[15,2px]]
@@ -955,6 +1012,7 @@ layers:
             filter: { aeroway: taxiway, $zoom: { min: 13 } }
             draw:
                 lines:
+                    style: unlit-lines
                     color: global.color.taxiway
                     order: global.order.taxiway
                     width: [[13, 0px], [14, 2px], [17, 10px]]
@@ -963,6 +1021,7 @@ layers:
             filter: { aeroway: [runway, airstrip], $zoom: { min: 12 } }
             draw:
                 lines:
+                    style: unlit-lines
                     color: global.color.runway_13  #[[13, global.color.runway_13], [16, global.color.runway_16]]
                     width: [[12, 3px], [13, 5px], [14, 10px], [15, 75]]
                     order: global.order.runway
@@ -1052,6 +1111,7 @@ layers:
                 width: [[10, 2px], [13, 3px], [14, 4px]]
                 order: global.order.transit
                 #style: transit-lines
+                style: unlit-lines
                 color: global.transit_color_fn
             text:
                 interactive: true
@@ -1422,6 +1482,7 @@ layers:
         filter: { admin_level: [2, 3, 4] }
         draw:
             lines:
+                style: unlit-lines
                 order: global.order.border
                 width: 1px
                 color: global.color.border
