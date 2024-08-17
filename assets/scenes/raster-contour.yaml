@@ -22,6 +22,10 @@
 #  GL_LINEAR) and does some fancy adjustments to get final hillshading
 # - Carto SDK generates normals from elevation on CPU (also using Horn/Sobel)
 
+import:
+    - elevation.yaml
+
+
 global:
     contour_color: '#C56008'  #vec4(0.773,0.376,0.031,1.)
 
@@ -76,30 +80,6 @@ application:
                 </svg>
 
 
-sources:
-    elevation:
-        type: Raster
-        filtering: nearest
-        url: https://elevation-tiles-prod.s3.amazonaws.com/geotiff/{z}/{x}/{y}.tif
-        max_zoom: 14
-        cache: terrarium-tiff
-        # https://github.com/tilezen/joerd/blob/master/docs/attribution.md
-        attribution: |
-            * ArcticDEM terrain data DEM(s) were created from DigitalGlobe, Inc., imagery and funded under National Science Foundation awards 1043681, 1559691, and 1542736;
-            * Australia terrain data © Commonwealth of Australia (Geoscience Australia) 2017;
-            * Austria terrain data © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich;
-            * Canada terrain data contains information licensed under the Open Government Licence – Canada;
-            * Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers;
-            * Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration
-            * Mexico terrain data source: INEGI, Continental relief, 2016;
-            * New Zealand terrain data Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government (All rights reserved);
-            * Norway terrain data © Kartverket;
-            * United Kingdom terrain data © Environment Agency copyright and/or database right 2015. All rights reserved;
-            * United States 3DEP (formerly NED) and global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey.
-        #rasters: [worldcover]
-        #{ "url: https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png", max_zoom: 15, zoom_offset: -1, cache: terrarium }
-
-
 styles:
     # rasters assigned to a vector tile are limited to vector tile zoom, so to see higher resolution DEM, we
     #  have to blend vector polygons over base hillshading
@@ -111,6 +91,7 @@ styles:
 
     hillshade:
         base: polygons
+        mix: [ global.terrain_3d_mixin, get-elevation ]
         raster: custom
         #texcoords: true
         blend: nonopaque
@@ -118,14 +99,14 @@ styles:
         blend_order: -1002
         shaders:
             defines:
-                ELEVATION_INDEX: 0
+                #ELEVATION_INDEX: 0
                 SHOW_CONTOURS: false
                 SHOW_ANGLE: false
-                FLOAT_TEX: true
+                #FLOAT_TEX: true
                 RASTER_BASE_COLOR: 'sampleRaster(0)'
                 # sampler2D default is lowp!
-                TANGRAM_RASTER_PRECISION: 'highp'
-                TANGRAM_VERTEX_RASTERS: true
+                #TANGRAM_RASTER_PRECISION: 'highp'
+                #TANGRAM_VERTEX_RASTERS: true
             uniforms:
                 u_exaggerate: 4.5
                 CONTOUR_COLOR: global.contour_color
@@ -175,21 +156,7 @@ styles:
                       discard;  //color = vec4(uv.x, uv.y, 0.0, 1.0);
 
             blocks:
-                position: |
-                    #ifdef TANGRAM_TERRAIN_3D
-                    position.z = getElevation(u_rasters[ELEVATION_INDEX], currentRasterUV(ELEVATION_INDEX));
-                    #endif
                 global: |
-                    //#ifdef TANGRAM_FRAGMENT_SHADER
-                    float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters
-                        vec4 h = texture2D(tex, uv);
-                    #ifdef FLOAT_TEX
-                        return h.r;
-                    #else
-                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // mapzen terrarium
-                    #endif
-                        //return (h.r*256.*256. + h.g*256. + h.b)*0.1 - 10000.;  // mapbox
-                    }
                     #ifdef TANGRAM_FRAGMENT_SHADER
                     #define TANGRAM_CUSTOM_MAIN
                     void main(void) {
@@ -212,15 +179,15 @@ styles:
                     //  discard;
                     vec2 cen_ij = floor(ij) + 0.5;
                     vec2 uv = cen_ij*duv;
-                    float h00 = getElevation(u_rasters[ELEVATION_INDEX], uv - duv);
-                    float h01 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(-duv.x, 0.));
-                    float h02 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(-duv.x, duv.y));
-                    float h10 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(0., -duv.y));
-                    float h11 = getElevation(u_rasters[ELEVATION_INDEX], uv);
-                    float h12 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(0., duv.y));
-                    float h20 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(duv.x, -duv.y));
-                    float h21 = getElevation(u_rasters[ELEVATION_INDEX], uv + vec2(duv.x, 0.));
-                    float h22 = getElevation(u_rasters[ELEVATION_INDEX], uv + duv);
+                    float h00 = getElevationAt(uv - duv);
+                    float h01 = getElevationAt(uv + vec2(-duv.x, 0.));
+                    float h02 = getElevationAt(uv + vec2(-duv.x, duv.y));
+                    float h10 = getElevationAt(uv + vec2(0., -duv.y));
+                    float h11 = getElevationAt(uv);
+                    float h12 = getElevationAt(uv + vec2(0., duv.y));
+                    float h20 = getElevationAt(uv + vec2(duv.x, -duv.y));
+                    float h21 = getElevationAt(uv + vec2(duv.x, 0.));
+                    float h22 = getElevationAt(uv + duv);
                     // handle edge of tile by extrapolating
                     bvec2 bot = lessThan(cen_ij, vec2(1.));
                     bvec2 top = greaterThan(cen_ij + 1., texwh);

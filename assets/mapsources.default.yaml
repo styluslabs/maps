@@ -192,7 +192,7 @@ hillshade-png:
     layers:
         - source: hillshade
     updates:
-        styles.hillshade.shaders.defines.FLOAT_TEX: false
+        styles.hillshade.shaders.defines.ELEVATION_FLOAT_TEX: false
         sources.elevation:
             type: Raster
             filtering: nearest
@@ -213,7 +213,7 @@ hillshade-usgs:
         - source: hillshade
     updates:
         #global.earth_style: translucent-polygons
-        #styles.hillshade.shaders.defines.FLOAT_TEX: true
+        #styles.hillshade.shaders.defines.ELEVATION_FLOAT_TEX: true
         sources.elevation:
             type: Raster
             filtering: nearest

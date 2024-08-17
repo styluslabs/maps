@@ -1,0 +1,21 @@
+# terrain3d.yaml
+import:
+    - elevation.yaml
+
+global:
+    terrain_3d_mixin: terrain-3d
+    elevation_sources: [elevation]
+    show_polygons: false
+    show_water: true
+
+styles:
+    terrain-3d:
+        mix: [ get-elevation ]
+        shaders:
+            defines:
+                TANGRAM_VERTEX_RASTERS: true
+            blocks:
+                position: |
+                    #ifdef TANGRAM_TERRAIN_3D
+                    position.z += getElevation();
+                    #endif

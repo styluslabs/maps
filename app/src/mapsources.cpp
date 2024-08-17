@@ -62,6 +62,8 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     // if cache file is not explicitly specified, use key since it is guaranteed to be unique
     if(!src["cache"] || src["cache"].Scalar() != "false")
       updates.emplace_back("+sources." + rasterN + ".cache", key);
+    if(MapsApp::terrain3D)
+      updates.emplace_back("+sources." + rasterN + ".rasters", "global.elevation_sources");
     // separate style is required for each overlay layer
     //  use translucent instead of overlay so that depth test can place proxy tiles underneath other tiles
     //  text and points are drawn w/ blend_order -1, so use blend_order < -1 to place rasters underneath
@@ -69,14 +71,17 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     //  drawn before all other blend modes; default raster style uses opaque!
     bool isoverlay = order > 0 && src["layer"].as<bool>(false);
     if(isoverlay) {
-      updates.emplace_back("+styles." + rasterN,
-          fstring("{base: raster, lighting: false, blend: nonopaque, blend_order: %d}", order-100));
+      updates.emplace_back("+styles." + rasterN, fstring("{ base: raster, mix: global.terrain_3d_mixin, raster: color,"
+          " shaders: { defines: { ELEVATION_INDEX: 1 } }, lighting: false, blend: nonopaque, blend_order: %d }", order-100));
     }
-    else
+    else {
+      updates.emplace_back("+styles." + rasterN, "{ base: raster, mix: global.terrain_3d_mixin,"
+          " raster: color, shaders: { defines: { ELEVATION_INDEX: 1 } } }");
       vectorBase = false;
+    }
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", isoverlay ? rasterN : "raster");
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", rasterN);
     //updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", alphastr);  -- this is how to do opacity
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string((isoverlay ? 1000 : 0) + order));
     ++order;
@@ -108,6 +113,11 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   for(auto& imp : MapsApp::config["sources"]["common_imports"]) {
     std::string url = imp.Scalar();
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
+  }
+  if(MapsApp::terrain3D) {
+    std::string url = MapsApp::config["terrain_3d"]["import"].as<std::string>();
+    if(!url.empty())
+      importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   }
   for(auto& url : imports)
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";

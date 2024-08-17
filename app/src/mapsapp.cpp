@@ -1373,7 +1373,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   Button* terrain3dCb = createCheckBoxMenuItem("3D terrain");
   terrain3dCb->onClicked = [=](){
     terrain3D = !terrain3D;
-    config["terrain_3d"] = terrain3D;
+    config["terrain_3d"]["enabled"] = terrain3D;
     terrain3dCb->setChecked(terrain3D);
     mapsSources->rebuildSource(mapsSources->currSource);  //loadSceneFile();
   };
@@ -1947,7 +1947,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   platform = _platform;
   mainThreadId = std::this_thread::get_id();
   metricUnits = config["metric_units"].as<bool>(true);
-  terrain3D = config["terrain_3d"].as<bool>(false);
+  terrain3D = config["terrain_3d"]["enabled"].as<bool>(false);
   // Google Maps and Apple Maps use opposite scaling for this gesture, so definitely needs to be configurable
   touchHandler->dblTapDragScale = config["gestures"]["dbl_tap_drag_scale"].as<float>(1.0f);
   shuffleSeed = config["random_shuffle_seed"].as<bool>(true) ? std::rand() : 0;

@@ -11,7 +11,7 @@ global:
     # globals required for hillshading
     earth_style: polygons
     earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
-    elevation_sources: []
+    #elevation_sources: []
     marker_font: Open Sans
     # Open Sans looks very good, especially the italic style
     primary_font: Open Sans
@@ -299,77 +299,26 @@ cameras:
 
 
 styles:
+    # blend_order -1000 to draw buildings just above other geometry; blend_order -110 to -100 reserved by app
     heightglow:
         base: polygons
-        raster: custom
-        blend: translucent
-        blend_order: -1000
-        lighting: vertex
-        shaders:
-            defines:
-                ELEVATION_INDEX: 0
-                FLOAT_TEX: true
-                TANGRAM_RASTER_PRECISION: 'highp'
-                TANGRAM_VERTEX_RASTERS: true
-            blocks:
-                color: |
-                    color.rgb += vec3(worldPosition().z / 800.);
-                position: |
-                    #ifdef TANGRAM_TERRAIN_3D
-                    position.z += getElevation(u_rasters[ELEVATION_INDEX], currentRasterUV(ELEVATION_INDEX));
-                    #endif
-                global: |
-                    #if defined(TANGRAM_VERTEX_SHADER) && defined(TANGRAM_TERRAIN_3D)
-                    float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters
-                        vec4 h = texture2D(tex, uv);
-                    #ifdef FLOAT_TEX
-                        return h.r;
-                    #else
-                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // mapzen terrarium
-                    #endif
-                        //return (h.r*256.*256. + h.g*256. + h.b)*0.1 - 10000.;  // mapbox
-                    }
-                    #endif
-    # blend_order -1000 to draw buildings just above other geometry; blend_order -110 to -100 reserved by app
-    old_heightglow:
-        base: polygons
+        mix: global.terrain_3d_mixin
         blend: translucent
         blend_order: -1000
         lighting: vertex
         shaders:
             blocks:
                 color: "color.rgb += vec3(worldPosition().z / 800.);"
+
     heightglowline:
         base: lines
         blend_order: -999
         mix: heightglow
+
     unlit-lines:
         base: lines
+        mix: global.terrain_3d_mixin
         lighting: false
-        raster: custom
-        shaders:
-            defines:
-                ELEVATION_INDEX: 0
-                FLOAT_TEX: true
-                TANGRAM_RASTER_PRECISION: 'highp'
-                TANGRAM_VERTEX_RASTERS: true
-            blocks:
-                position: |
-                    #ifdef TANGRAM_TERRAIN_3D
-                    position.z = getElevation(u_rasters[ELEVATION_INDEX], currentRasterUV(ELEVATION_INDEX));
-                    #endif
-                global: |
-                    #if defined(TANGRAM_VERTEX_SHADER) && defined(TANGRAM_TERRAIN_3D)
-                    float getElevation(TANGRAM_RASTER_PRECISION sampler2D tex, vec2 uv) {  // in meters
-                        vec4 h = texture2D(tex, uv);
-                    #ifdef FLOAT_TEX
-                        return h.r;
-                    #else
-                        return (h.r*256. + h.g + h.b/256.)*255. - 32768.;  // mapzen terrarium
-                    #endif
-                        //return (h.r*256.*256. + h.g*256. + h.b)*0.1 - 10000.;  // mapbox
-                    }
-                    #endif
 
     # dash only supported for styles, not draw block because each dash pattern requires separate shader
     dashed-border:
