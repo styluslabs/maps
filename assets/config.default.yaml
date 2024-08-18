@@ -25,6 +25,11 @@ sources:
     - usgs-topo
     - archived
 
+terrain_3d:
+  enabled: true
+  import: scenes/terrain-3d.yaml
+  styles: [hillshade, raster-0]
+
 # use https://github.com/aosp-mirror/platform_frameworks_base/raw/de0fe2daafb769cc37ca922ffef6dbafb8c6cae2/data/fonts/DroidSansFallback.ttf because next version removes a bunch of characters
 fallback_fonts:
   - shared/fonts/Roboto-Regular.ttf

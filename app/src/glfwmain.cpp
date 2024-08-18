@@ -184,6 +184,7 @@ int main(int argc, char* argv[])
   //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
 #endif
   glfwWindowHint(GLFW_SAMPLES, MapsApp::config["msaa_samples"].as<int>(2));
+  glfwWindowHint(GLFW_DEPTH_BITS, 24);
   glfwWindowHint(GLFW_STENCIL_BITS, 8);
 
   GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "Ascend", NULL, NULL);
