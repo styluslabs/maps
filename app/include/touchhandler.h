@@ -36,4 +36,5 @@ public:
 
   enum { TOUCH_NONE, TOUCH_PINCH, TOUCH_ROTATE, TOUCH_SHOVE } multiTouchState;
   enum { TAP_NONE, DBL_TAP_DRAG_PENDING, DBL_TAP_DRAG_ACTIVE } tapState;
+  bool altDragMode = false;
 };

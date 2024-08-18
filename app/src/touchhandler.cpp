@@ -3,18 +3,11 @@
 #include "ugui/svggui.h"
 
 
-//static constexpr float flingInvTau = 1/0.05f;  // time constant for smoothing of pan speed
 static constexpr float pinchThreshold = 30;  // pixels/xyScale (change in distance between fingers)
 static constexpr float rotateThreshold = 0.25f;  // radians
 static constexpr float shoveThreshold = 100;  // pixels/xyScale (translation of centroid of fingers)
 static constexpr float longPressThreshold = 8;  // pixels/xyScale
-//static constexpr float maxTapDist = 20;  // max pixels between start and end points for a tap
-//static constexpr float minFlingDist = 150;
-//static constexpr double maxTapTime = 0.25;  // seconds
-//static constexpr double minDblTapTime = 0.04;  // min time between end of first tap and start of second
-//static constexpr double maxDblTapTime = 0.25;  // max time between end of first tap and start of second
-//static constexpr double minFlingTime = 0.03;
-//static constexpr double minLongPressTime = 0.7;  // 0.5s is typical on Android
+static constexpr float mouseRotateScale = 0.001f;  // radians/pixel
 
 static int actionFromSDLFinger(unsigned int sdltype)
 {
@@ -27,13 +20,8 @@ static int actionFromSDLFinger(unsigned int sdltype)
 
 bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
 {
-  if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId != SDL_BUTTON_LMASK) {
-    app->longPressEvent(event->tfinger.x*xyScale, event->tfinger.y*xyScale);
-  }
-  else if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL ||
-      (event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK)) {
-    if(event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK)
-      return false;
+  if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL ||
+      (event->type == SDL_FINGERMOTION && (event->tfinger.fingerId == SDL_BUTTON_LMASK || altDragMode))) {
     if(app->drawOnMap) {
       int action = actionFromSDLFinger(event->type);
       app->fingerEvent(action, event->tfinger.x*xyScale, event->tfinger.y*xyScale);
@@ -41,6 +29,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
         return true;
     }
     else if(event->type == SDL_FINGERDOWN) {
+      altDragMode = event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK;
       tapState = gui->fingerClicks == 2 ? DBL_TAP_DRAG_PENDING : TAP_NONE;
     }
     else if(event->type == SDL_FINGERMOTION) {
@@ -51,8 +40,12 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
       if(gui->fingerClicks > 0) {
         app->map->handlePanGesture(prevCOM.x, prevCOM.y, initCOM.x, initCOM.y);  // undo any panning
         if(gui->fingerClicks == 1) {
-          if(event->tfinger.touchId == SDL_TOUCH_MOUSEID)
-            app->tapEvent(initCOM.x, initCOM.y);
+          if(event->tfinger.touchId == SDL_TOUCH_MOUSEID) {
+            if(altDragMode)
+              app->longPressEvent(initCOM.x, initCOM.y);
+            else
+              app->tapEvent(initCOM.x, initCOM.y);
+          }
           else {
             // note delay is less than max double tap delay (400ms)
             tapTimer = app->gui->setTimer(250, app->win.get(), tapTimer, [this]() {
@@ -77,6 +70,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
         else
           app->map->handleFlingGesture(prevCOM.x, prevCOM.y, v.x, v.y);
       }
+      altDragMode = false;
     }
     // hack because fingerId gets replaced for single touch events
     int fingerId = !gui->touchPoints.empty() ? gui->touchPoints[0].id : (!touchPoints.empty() ? touchPoints[0].id : 0);
@@ -191,7 +185,11 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
   }
   else if(prevpoints > 0) {
-    if(tapState == DBL_TAP_DRAG_ACTIVE) {
+    if(altDragMode && prevpoints == 1) {
+      map->handleRotateGesture(initCOM.x, initCOM.y, -(pt.x - prevCOM.x)*mouseRotateScale);  //map->getViewportWidth()/2
+      map->handleShoveGesture(pt.y - prevCOM.y);
+    }
+    else if(tapState == DBL_TAP_DRAG_ACTIVE) {
       float h = app->map->getViewportHeight();
       // alternative is to zoom from center of map instead of tap point - float cx = w/2, cy = h/2;
       map->handlePinchGesture(initCOM.x, initCOM.y, std::pow(2.0f, 4.0f*dblTapDragScale*(pt.y - prevCOM.y)/h), 0.f);

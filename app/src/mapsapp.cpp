@@ -128,7 +128,7 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
   addHandler([this](SvgGui* gui, SDL_Event* event){
     // dividing by inputScale is a temporary hack - touchHandler should work in device independent coords (and
     //  why doesn't map's pixel scale apply to coords?)
-    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK)
+    if(event->type == SDL_FINGERDOWN)  //&& event->tfinger.fingerId == SDL_BUTTON_LMASK)
       gui->setPressed(this);
     return app->touchHandler->sdlEvent(gui, event);
   });
