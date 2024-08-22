@@ -9,7 +9,7 @@ function openRouteService(mode, waypoints)
   }
 
   const mode0 = mode.split("-")[0];
-  const profile = mode0 == "walk" ? "foot-hiking" : mode0 == "bike" ? "cycling-regular" : "driving-car";
+  const profile = mode0 == "walk" ? "foot-hiking" : mode0 == "bike" ? "cycling-road" : "driving-car";  //cycling-regular, cycling-mountain
   const url = "https://api.openrouteservice.org/v2/directions/" + profile + "/gpx";
   const hdrs = "Content-Type: application/json\r\nAuthorization: " + secrets.openroute_auth;
   const body = {"coordinates": waypoints, "elevation": "true"};

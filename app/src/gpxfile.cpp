@@ -268,7 +268,7 @@ std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double preci
 #include "tangram.h"
 #include "util/geom.h"
 #include "util/mapProjection.h"
-
+/*
 using Tangram::MapProjection;
 
 TrackMarker::~TrackMarker()
@@ -345,7 +345,7 @@ void TrackMarker::setTrack(GpxWay* way, size_t nways)
     map->markerRemove(markers[ii]);
   markers.resize(nmarkers);
 }
-
+*/
 // here we're using MapsApp::inst, while for TrackMarker we store Map* ... we should pick one way or the other
 #include "mapsapp.h"
 
@@ -353,4 +353,22 @@ UniqueMarkerID::~UniqueMarkerID()
 {
   if(handle > 0)
     MapsApp::inst->map->markerRemove(handle);
+}
+
+void TrackMarker::setProperties(Properties&& props)
+{
+  markerProps = std::move(props);
+}
+
+void TrackMarker::setTrack(GpxWay* way, size_t nways)
+{
+  for(size_t jj = 0; jj < nways; ++jj) {
+    Tangram::ClientDataSource::PolylineBuilder builder;
+    builder.beginPolyline(way->pts.size());
+    for(const Waypoint& wp : way->pts)
+      builder.addPoint(wp.lngLat());
+    MapsApp::inst->tracksDataSource->addPolylineFeature(Properties(markerProps), std::move(builder));
+    ++way;
+  }
+  MapsApp::inst->tracksDataSource->generateTiles();
 }

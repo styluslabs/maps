@@ -17,6 +17,8 @@ using Tangram::TileTaskCb;
 using Tangram::BinaryTileTask;
 using Tangram::UrlRequestHandle;
 using Tangram::MapProjection;
+using Tangram::TileSource;
+using Tangram::ClientDataSource;
 
 class MapsApp;
 

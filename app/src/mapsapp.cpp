@@ -767,6 +767,16 @@ void MapsApp::mapUpdate(double time)
   if(locMarkerAngle != orientation + map->getRotation()*180/float(M_PI))
     updateLocMarker();
 
+  if(map->getScene()->isPendingCompletion()) {
+    tracksDataSource->rasterSources().clear();
+    if(terrain3D) {
+      auto elevsrc = getElevationSource();
+      if(elevsrc)
+        tracksDataSource->addRasterSource(elevsrc);
+    }
+    map->addTileSource(tracksDataSource);
+  }
+
   mapState = map->update(time - lastFrameTime);
   lastFrameTime = time;
   //LOG("MapState: %X", mapState.flags);
@@ -948,6 +958,18 @@ YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
   return node;
 }
 
+std::shared_ptr<TileSource> MapsApp::getElevationSource()
+{
+  auto& tileSources = map->getScene()->tileSources();
+  for(const auto& srcname : config["sources"]["elevation"]) {
+    for(auto& src : tileSources) {
+      if(src->isRaster() && src->name() == srcname.Scalar())
+        return src;
+    }
+  }
+  return nullptr;
+}
+
 #include "util/imageLoader.h"
 
 struct malloc_deleter { void operator()(void* x) { std::free(x); } };
@@ -1002,28 +1024,23 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
     }
   }
 
-  auto& tileSources = map->getScene()->tileSources();
-  for(const auto& srcname : config["sources"]["elevation"]) {
-    for(auto& src : tileSources) {
-      if(src->isRaster() && src->name() == srcname.Scalar()) {
-        TileID tileId = lngLatTile(pos, src->maxZoom());
-        // do not use RasterSource::createTask() because we can't use its cached Textures!
-        auto task = std::make_shared<BinaryTileTask>(tileId, src);  //rsrc->createTask(tileId);
-        src->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
-          runOnMainThread([=](){
-            if(_task->hasData()) {
-              auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
-              prevTex.data.reset(Tangram::loadImage((const uint8_t*)data.data(),
-                  data.size(), &prevTex.width, &prevTex.height, &prevTex.fmt, 4));
-              prevTileId = tileId;
-              if(prevTex.data)
-                callback(elevationLerp(prevTex, tileId, pos));
-            }
-          });
-        }});
+  auto elevSrc = getElevationSource();
+  if(!elevSrc) return;
+  TileID tileId = lngLatTile(pos, elevSrc->maxZoom());
+  // do not use RasterSource::createTask() because we can't use its cached Textures!
+  auto task = std::make_shared<BinaryTileTask>(tileId, elevSrc);  //rsrc->createTask(tileId);
+  elevSrc->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
+    runOnMainThread([=](){
+      if(_task->hasData()) {
+        auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
+        prevTex.data.reset(Tangram::loadImage((const uint8_t*)data.data(),
+            data.size(), &prevTex.width, &prevTex.height, &prevTex.fmt, 4));
+        prevTileId = tileId;
+        if(prevTex.data)
+          callback(elevationLerp(prevTex, tileId, pos));
       }
-    }
-  }
+    });
+  }});
 }
 
 std::string MapsApp::elevToStr(double meters)
@@ -2010,11 +2027,14 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 #if 1  //PLATFORM_MOBILE
   Tangram::ShaderSource::glesVersion = 300;
 #endif
-  map.reset(new Tangram::Map(std::unique_ptr<Platform>(_platform)));
+  map = std::make_unique<Tangram::Map>(std::unique_ptr<Platform>(_platform));
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
   //map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });
   map->setPickRadius(2.0f);
+
+  tracksDataSource = std::make_shared<ClientDataSource>(
+      *platform, "tracks", "", false, TileSource::ZoomOptions(-1, -1, 14, 0));
 
   // Setup UI panels
   mapsSources = std::make_unique<MapsSources>(this);

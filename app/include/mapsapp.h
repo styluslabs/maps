@@ -81,6 +81,7 @@ public:
   std::string getPlaceTitle(const Properties& props) const;
   void gotoCameraPos(const CameraPosition& campos);
   void updateLocPlaceInfo();
+  std::shared_ptr<TileSource> getElevationSource();
 
   Location currLocation = {0};
   float orientation = 0;
@@ -116,6 +117,7 @@ public:
   std::unique_ptr<Painter> scaleBarPainter;
   std::unique_ptr<Window> win;
 
+  std::shared_ptr<ClientDataSource> tracksDataSource;
   std::unique_ptr<TouchHandler> touchHandler;
   std::unique_ptr<MapsTracks> mapsTracks;
   std::unique_ptr<MapsBookmarks> mapsBookmarks;

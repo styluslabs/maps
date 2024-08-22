@@ -48,7 +48,7 @@ struct GpxWay
   GpxWay(const std::string& _title, const std::string& _desc) : title(_title), desc(_desc) {}
 };
 
-class TrackMarker
+/*class TrackMarker
 {
 public:
   Map* map;
@@ -64,6 +64,20 @@ public:
   void setProperties(Properties&& props);
   void setTrack(GpxWay* way, size_t nways = 1);
   bool onPicked(MarkerID picked);
+};*/
+
+class TrackMarker
+{
+public:
+  Properties markerProps;
+
+  TrackMarker(Map* _map, const char* style) {}
+  //~TrackMarker();
+  void setVisible(bool vis) {}
+  void setStylePath(const char* style) {}
+  void setProperties(Properties&& props);
+  void setTrack(GpxWay* way, size_t nways = 1);
+  bool onPicked(MarkerID picked) { return false; }  // need to use Map::pickFeatureAt()
 };
 
 struct GpxFile

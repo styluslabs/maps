@@ -82,6 +82,11 @@ textures:
 
 
 styles:
+    track-lines:
+        base: lines
+        mix: global.terrain_3d_mixin
+        lighting: false
+
     loc-points:
         mix: poi-points
         blend_order: 1000
@@ -274,9 +279,10 @@ layers:
                     color: white
 
     track:
+        data: { source: tracks }
         draw:
             track:
-                style: lines
+                style: track-lines
                 interactive: true
                 color: function() { return feature.color || '#0000FF'; }
                 width: 2px
