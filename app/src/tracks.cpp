@@ -115,18 +115,18 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
     MapsApp::messageBox("File not found", fstring("Error opening %s", track->filename.c_str()), {"OK"});
 
   if(!track->marker)
-    track->marker = std::make_unique<TrackMarker>(app->map.get(), "layers.track.draw.track");
+    track->marker = std::make_unique<TrackMarker>();  //app->map.get(), "layers.track.draw.track");
   if(track->activeWay() && (track->activeWay()->pts.size() > 1 || track->routes.size() > 1)) {
-    if(!track->style.empty())
-      track->marker->markerProps = {{{"color", track->style}}};
     if(!track->routes.empty())
       track->marker->setTrack(&track->routes.front(), track->routes.size());
     else
       track->marker->setTrack(&track->tracks.front(), track->tracks.size());
-    track->marker->setVisible(true);
+    if(!track->style.empty())
+      track->marker->setProperties({{{"color", track->style}}});
+    track->marker->setProperties({{{"visible", 1}}});  //track->marker->setVisible(true);
   }
   else
-    track->marker->setVisible(false);
+    track->marker->setProperties({{{"visible", 0}}});  //track->marker->setVisible(false);
 
   if(!track->routes.empty() && track->routeMode != "direct") {
     auto& pts = track->routes.back().pts;
@@ -348,7 +348,7 @@ void MapsTracks::closeActiveTrack()
   if(!activeTrack) return;
   app->pluginManager->cancelRequests(PluginManager::ROUTE);
   if(activeTrack != &recordedTrack && activeTrack->marker)
-    activeTrack->marker->setStylePath("layers.track.draw.track");
+    activeTrack->marker->setProperties({{{"selected", 0}}});  //setStylePath("layers.track.draw.track");
   if(!activeTrack->visible)
     showTrack(activeTrack, false);
   if(activeTrack->rowid >= 0) {
@@ -394,7 +394,7 @@ void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
     activeTrack = track;
     viewEntireTrack(track);
     if(!isRecTrack)
-      track->marker->setStylePath("layers.selected-track.draw.track");
+      activeTrack->marker->setProperties({{{"selected", 1}}});  //track->marker->setStylePath("layers.selected-track.draw.track");
     insertionWpt.clear();
     retryBtn->setVisible(false);
     if(!istrack) {
@@ -1241,7 +1241,8 @@ void MapsTracks::startRecording()
   //if(app->hasLocation)
   //  recordedTrack.tracks.back().pts.push_back(app->currLocation);
   recordedTrack.style = "#FF6030";  // use color in marker style instead?
-  recordedTrack.marker = std::make_unique<TrackMarker>(app->map.get(), "layers.recording-track.draw.track");
+  recordedTrack.marker = std::make_unique<TrackMarker>();  //app->map.get(), "layers.recording-track.draw.track");
+  recordedTrack.marker->setProperties({{{"recording", 1}}});
   tracksDirty = true;
   lastTrackPtTime = mSecSinceEpoch();
   // create GPX file (so track data is safely saved w/o additional user input after tapping record btn)
@@ -1791,6 +1792,7 @@ void MapsTracks::createTrackPanel()
     app->gui->removeTimer(recordTimer);
     recordTimer = NULL;
     recordedTrack.desc = ftimestr("%F") + " | " + trackSummary;
+    recordedTrack.marker->setProperties({{{"recording", 0}}});
     saveTrack(&recordedTrack);
     if(recordTrack)
       app->setServiceState(0);

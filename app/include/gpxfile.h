@@ -70,12 +70,11 @@ class TrackMarker
 {
 public:
   Properties markerProps;
+  uint64_t featureId = -1;
 
-  TrackMarker(Map* _map, const char* style) {}
-  //~TrackMarker();
-  void setVisible(bool vis) {}
-  void setStylePath(const char* style) {}
-  void setProperties(Properties&& props);
+  TrackMarker();
+  ~TrackMarker();
+  void setProperties(Properties&& props, bool replace = false);
   void setTrack(GpxWay* way, size_t nways = 1);
   bool onPicked(MarkerID picked) { return false; }  // need to use Map::pickFeatureAt()
 };

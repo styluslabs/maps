@@ -355,9 +355,30 @@ UniqueMarkerID::~UniqueMarkerID()
     MapsApp::inst->map->markerRemove(handle);
 }
 
-void TrackMarker::setProperties(Properties&& props)
+/*void TrackMarker::setProperties(Properties&& props)
 {
+  bool vis = markerProps.getNumber("visible") != 0;
   markerProps = std::move(props);
+  setVisible(vis);
+}
+
+void TrackMarker::setVisible(bool vis)
+{
+  markerProps.set("visible", vis ? 1 : 0);
+  MapsApp::inst->tracksDataSource->setProperties(featureId, Properties(markerProps));
+  MapsApp::inst->tracksDataSource->clearData();  // this just increments generation counter
+}*/
+
+void TrackMarker::setProperties(Properties&& props, bool replace)
+{
+  if(replace)
+    markerProps = std::move(props);
+  else {
+    for(auto& item : props.items())
+      markerProps.setValue(item.key, item.value);
+  }
+  MapsApp::inst->tracksDataSource->setProperties(featureId, Properties(markerProps));
+  MapsApp::inst->tracksDataSource->clearData();  // this just increments generation counter
 }
 
 void TrackMarker::setTrack(GpxWay* way, size_t nways)
@@ -367,8 +388,21 @@ void TrackMarker::setTrack(GpxWay* way, size_t nways)
     builder.beginPolyline(way->pts.size());
     for(const Waypoint& wp : way->pts)
       builder.addPoint(wp.lngLat());
-    MapsApp::inst->tracksDataSource->addPolylineFeature(Properties(markerProps), std::move(builder));
+    featureId = MapsApp::inst->tracksDataSource->addPolylineFeature(
+        Properties(markerProps), std::move(builder), featureId);
     ++way;
   }
   MapsApp::inst->tracksDataSource->generateTiles();
+}
+
+TrackMarker::TrackMarker()
+{
+  markerProps.set("visible", 1);
+}
+
+TrackMarker::~TrackMarker()
+{
+  // remove track by setting to empty geometry
+  Tangram::ClientDataSource::PolylineBuilder builder;
+  MapsApp::inst->tracksDataSource->addPolylineFeature(Properties(), std::move(builder), featureId);
 }

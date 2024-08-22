@@ -280,6 +280,7 @@ layers:
 
     track:
         data: { source: tracks }
+        filter: { visible: [true] }
         draw:
             track:
                 style: track-lines
@@ -288,31 +289,43 @@ layers:
                 width: 2px
                 #join: round
                 order: 5000
+        recording:
+            filter: { recording: [true] }
+            draw: { track: { width: 3px } }
+        selected:
+            filter: { selected: [true] }
+            draw:
+                track:
+                    outline:
+                        width: 2px
+                        color: white
+                        miter_limit: 1.5
+                        #join: round
 
-    selected-track:
-        draw:
-            track:
-                style: lines
-                interactive: true
-                color: function() { return feature.color || '#0000FF'; }
-                width: 2px
-                #join: round
-                order: 5000
-                outline:
-                    width: 2px
-                    color: white
-                    miter_limit: 1.5
-                    #join: round
-
-    recording-track:
-        draw:
-            track:
-                style: lines
-                interactive: true
-                color: function() { return feature.color || '#FF0000'; }
-                width: 3px
-                #join: round
-                order: 5000
+    #selected-track:
+    #    draw:
+    #        track:
+    #            style: lines
+    #            interactive: true
+    #            color: function() { return feature.color || '#0000FF'; }
+    #            width: 2px
+    #            #join: round
+    #            order: 5000
+    #            outline:
+    #                width: 2px
+    #                color: white
+    #                miter_limit: 1.5
+    #                #join: round
+    #
+    #recording-track:
+    #    draw:
+    #        track:
+    #            style: lines
+    #            interactive: true
+    #            color: function() { return feature.color || '#FF0000'; }
+    #            width: 3px
+    #            #join: round
+    #            order: 5000
 
     route-step:
         draw:
