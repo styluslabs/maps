@@ -320,6 +320,12 @@ styles:
         mix: global.terrain_3d_mixin
         lighting: false
 
+    # water polygons can be assumed to be flat (not quite true for rivers), so only need to set elevation at edges
+    water-polygons:
+        base: polygons
+        mix: global.terrain_3d_mixin
+        #lighting: false
+
     # dash only supported for styles, not draw block because each dash pattern requires separate shader
     dashed-border:
         mix: unlit-lines
@@ -470,6 +476,7 @@ layers:
         filter: { $geometry: polygon }
         draw:
             polygons:
+                style: water-polygons
                 order: global.order.water
                 color: global.color.water
         #ocean:

@@ -23,6 +23,7 @@ public:
   bool tapEvent(LngLat location);
   void fingerEvent(int action, LngLat pos);
   void routePluginError(const char* err);
+  bool onFeaturePicked(const Tangram::FeaturePickResult* result);
 
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;

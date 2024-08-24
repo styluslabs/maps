@@ -229,6 +229,10 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
 
   for(auto& src : currLayers)
     builder.addLayer(src);
+  if(MapsApp::terrain3D) {
+    for(const auto& update : MapsApp::config["terrain_3d"]["updates"])
+      builder.updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
+  }
   builder.updates.insert(builder.updates.end(), currUpdates.begin(), currUpdates.end());
 
   if(!builder.imports.empty() || !builder.updates.empty()) {

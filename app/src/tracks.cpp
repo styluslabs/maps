@@ -114,6 +114,7 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
   if(!track->loaded && !track->filename.empty() && !loadGPX(track))
     MapsApp::messageBox("File not found", fstring("Error opening %s", track->filename.c_str()), {"OK"});
 
+  Properties props;
   if(!track->marker)
     track->marker = std::make_unique<TrackMarker>();  //app->map.get(), "layers.track.draw.track");
   if(track->activeWay() && (track->activeWay()->pts.size() > 1 || track->routes.size() > 1)) {
@@ -122,11 +123,13 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
     else
       track->marker->setTrack(&track->tracks.front(), track->tracks.size());
     if(!track->style.empty())
-      track->marker->setProperties({{{"color", track->style}}});
-    track->marker->setProperties({{{"visible", 1}}});  //track->marker->setVisible(true);
+      props.set("color", track->style);
+    props.set("visible", 1);
   }
   else
-    track->marker->setProperties({{{"visible", 0}}});  //track->marker->setVisible(false);
+    props.set("visible", 0);
+  props.set("track_feature_id", track->marker->featureId);
+  track->marker->setProperties(std::move(props));
 
   if(!track->routes.empty() && track->routeMode != "direct") {
     auto& pts = track->routes.back().pts;
@@ -154,7 +157,8 @@ void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
     if(!show) return;
     updateTrackMarker(track);
   }
-  track->marker->setVisible(show && track->activeWay() && track->activeWay()->pts.size() > 1);
+  bool hasway = track->activeWay() && track->activeWay()->pts.size() > 1;
+  track->marker->setProperties({{{"visible", show && hasway ? 1 : 0}}});
   for(Waypoint& wp : track->waypoints)
     app->map->markerSetVisible(wp.marker, show);
 
@@ -1007,6 +1011,37 @@ bool MapsTracks::findPickedWaypoint(GpxFile* track)
   return false;
 }
 
+bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
+{
+  double id;
+  if(result->properties->getNumber("track_feature_id", id)) {
+    if(activeTrack && activeTrack->marker && activeTrack->marker->featureId == id) {
+      //if(trackPanel->isVisible()) {
+      //  // find the track point closest to chosen position
+      //  double mindist = DBL_MAX;
+      //  const Waypoint* closestWpt = NULL;
+      //  for(const Waypoint& pt : activeTrack->activeWay()->pts) {
+      //    double dist = lngLatDist(pt.lngLat(), app->pickResultCoord);
+      //    if(dist > mindist) continue;
+      //    mindist = dist;
+      //    closestWpt = &pt;
+      //  }
+      //  if(closestWpt)
+      //    trackSliders->trackSlider->setValue(trackPlot->plotVsDist ? closestWpt->dist/trackPlot->maxDist
+      //        : closestWpt->loc.time - trackPlot->minTime/(trackPlot->maxTime - trackPlot->minTime));
+      //}
+      return true;
+    }
+    for(GpxFile& track : tracks) {
+      if(track.visible && &track != activeTrack && track.marker->featureId == id) {
+        populateTrack(&track);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void MapsTracks::onMapEvent(MapEvent_t event)
 {
   if(event == MAP_CHANGE) {
@@ -1043,32 +1078,15 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->setPickResult(trackHoverLoc.lngLat(), "", "");  //activeTrack->title + " waypoint"
       app->pickedMarkerId = 0;
     }
-    else if(activeTrack && activeTrack->marker && activeTrack->marker->onPicked(app->pickedMarkerId)) {
-      if(trackPanel->isVisible()) {
-        // find the track point closest to chosen position
-        double mindist = DBL_MAX;
-        const Waypoint* closestWpt = NULL;
-        for(const Waypoint& pt : activeTrack->activeWay()->pts) {
-          double dist = lngLatDist(pt.lngLat(), app->pickResultCoord);
-          if(dist > mindist) continue;
-          mindist = dist;
-          closestWpt = &pt;
-        }
-        if(closestWpt)
-          trackSliders->trackSlider->setValue(trackPlot->plotVsDist ? closestWpt->dist/trackPlot->maxDist
-              : closestWpt->loc.time - trackPlot->minTime/(trackPlot->maxTime - trackPlot->minTime));
-      }
-      app->pickedMarkerId = 0;
-    }
     else {
       if(!activeTrack || !findPickedWaypoint(activeTrack)) {  // navRoute is not in tracks
         for(GpxFile& track : tracks) {
           if(!track.visible || &track == activeTrack) continue;
           if(findPickedWaypoint(&track)) break;
-          if(track.marker->onPicked(app->pickedMarkerId)) {
-            populateTrack(&track);
-            break;
-          }
+          //if(track.marker->onPicked(app->pickedMarkerId)) {
+          //  populateTrack(&track);
+          //  break;
+          //}
         }
       }
     }

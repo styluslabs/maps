@@ -9,8 +9,13 @@ global:
     show_water: true
 
 styles:
+    terrain-3d-polygons:
+        mix: []
+
     terrain-3d:
         mix: [ get-elevation ]
+        # tile_edges == false is the default except for lines
+        draw: { tile_edges: false }
         shaders:
             defines:
                 TANGRAM_VERTEX_RASTERS: true

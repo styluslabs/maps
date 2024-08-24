@@ -645,9 +645,9 @@ void MapsApp::tapEvent(float x, float y)
 #endif
 
   map->pickLabelAt(x, y, [this](const Tangram::LabelPickResult* result) {
+    if(!result) return;
     auto& props = result->touchItem.properties;
     LOGD("Picked label: %s", result ? props->getAsString("name").c_str() : "none");
-    if(!result) return;
     std::string itemId = props->getAsString("id");
     std::string osmType = props->getAsString("osm_type");
     if(itemId.empty())
@@ -677,6 +677,10 @@ void MapsApp::tapEvent(float x, float y)
       //pickResultCoord = result->coordinates;  -- just set to center of marker for polylines/polygons
     }
     tapLocation = {NAN, NAN};
+  });
+
+  map->pickFeatureAt(x, y, [this](const Tangram::FeaturePickResult* result) {
+    mapsTracks->onFeaturePicked(result);
   });
 
   //map->getPlatform().requestRender();

@@ -259,94 +259,12 @@ std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double preci
 //  and gets rounded to zero, so marker isn't drawn.  For even larger markers, use of floats instead of
 //  doubles could become an issue.
 // This is a known issue: github.com/tangrams/tangram-es/issues/994 , issues/1655 , issues/1463
-// For now, we'll split large polyline markers into multiple markers
-// Other potential solutions are to use ClientDataSource (generates tiles ... too slow?), change to float
-//  for polyline width, or apply width after model transform
+// Previously, we split large polyline markers into multiple markers (code removed 24 Aug 2024)
+// We now use ClientDataSource since this allows tracks to be treated as regular map features and so work
+//  with 3D terrain and have multiple styles (for direction indicators)
 // Modifying Tangram to support arbitrarily large markers (e.g. by splitting into multiple polylines) looked
 //  like it would be messy
 
-#include "tangram.h"
-#include "util/geom.h"
-#include "util/mapProjection.h"
-/*
-using Tangram::MapProjection;
-
-TrackMarker::~TrackMarker()
-{
-  for(MarkerID id : markers) map->markerRemove(id);
-}
-
-void TrackMarker::setVisible(bool vis) { for(MarkerID id : markers) map->markerSetVisible(id, vis); }
-
-void TrackMarker::setStylePath(const char* style)
-{
-  stylePath = style;
-  for(MarkerID id : markers)
-    map->markerSetStylingFromPath(id, style);
-}
-
-void TrackMarker::setProperties(Properties&& props)
-{
-  markerProps = std::move(props);
-  for(MarkerID id : markers)
-    map->markerSetProperties(id, Properties(markerProps));
-}
-
-bool TrackMarker::onPicked(MarkerID picked)
-{
-  for(MarkerID id : markers) {
-    if(id == picked) return true;
-  }
-  return false;
-}
-
-void TrackMarker::setTrack(GpxWay* way, size_t nways)
-{
-  size_t nmarkers = 0;
-  for(size_t jj = 0; jj < nways; ++jj) {
-    std::vector<LngLat> pts;
-    auto meters0 = MapProjection::lngLatToProjectedMeters(way->pts[0].lngLat());
-    Tangram::BoundingBox bounds = {meters0, meters0};
-    for(size_t ii = 0; ii < way->pts.size();) {
-      const Waypoint& wp = way->pts[ii];
-      auto meters = MapProjection::lngLatToProjectedMeters(wp.lngLat());
-      auto b0 = bounds;
-      bounds.expand(meters.x, meters.y);
-      if(bounds.width() > maxExtent || bounds.height() > maxExtent || ++ii == way->pts.size()) {
-        double slope = (meters.y - meters0.y)/(meters.x - meters0.x);
-        auto clip = meters;
-        if(clip.x < b0.min.x) clip.x = std::max(clip.x, b0.max.x - maxExtent);
-        else if(clip.x > b0.max.x) clip.x = std::min(clip.x, b0.min.x + maxExtent);
-        clip.y = meters0.y + (clip.x - meters0.x)*slope;
-
-        if(clip.y < b0.min.y) clip.y = std::max(clip.y, b0.max.y - maxExtent);
-        else if(clip.y > b0.max.y) clip.y = std::min(clip.y, b0.min.y + maxExtent);
-        clip.x = meters0.x + (clip.y - meters0.y)/slope;
-
-        pts.push_back(MapProjection::projectedMetersToLngLat(clip));
-
-        if(++nmarkers >= markers.size()) {
-          MarkerID id = map->markerAdd();
-          markers.push_back(id);
-          map->markerSetStylingFromPath(id, stylePath.c_str());
-        }
-        map->markerSetPolyline(markers[nmarkers-1], pts.data(), pts.size());
-        map->markerSetProperties(markers[nmarkers-1], Properties(markerProps));
-        pts = {pts.back()};
-        bounds = {clip, clip};
-        continue;  // repeat current point (i.e. segment from clip to meters)
-      }
-      pts.push_back(wp.loc.lngLat());
-      meters0 = meters;
-    }
-    ++way;
-  }
-  for(size_t ii = nmarkers; ii < markers.size(); ++ii)
-    map->markerRemove(markers[ii]);
-  markers.resize(nmarkers);
-}
-*/
-// here we're using MapsApp::inst, while for TrackMarker we store Map* ... we should pick one way or the other
 #include "mapsapp.h"
 
 UniqueMarkerID::~UniqueMarkerID()
@@ -354,20 +272,6 @@ UniqueMarkerID::~UniqueMarkerID()
   if(handle > 0)
     MapsApp::inst->map->markerRemove(handle);
 }
-
-/*void TrackMarker::setProperties(Properties&& props)
-{
-  bool vis = markerProps.getNumber("visible") != 0;
-  markerProps = std::move(props);
-  setVisible(vis);
-}
-
-void TrackMarker::setVisible(bool vis)
-{
-  markerProps.set("visible", vis ? 1 : 0);
-  MapsApp::inst->tracksDataSource->setProperties(featureId, Properties(markerProps));
-  MapsApp::inst->tracksDataSource->clearData();  // this just increments generation counter
-}*/
 
 void TrackMarker::setProperties(Properties&& props, bool replace)
 {
@@ -383,23 +287,19 @@ void TrackMarker::setProperties(Properties&& props, bool replace)
 
 void TrackMarker::setTrack(GpxWay* way, size_t nways)
 {
+  Tangram::ClientDataSource::PolylineBuilder builder;
   for(size_t jj = 0; jj < nways; ++jj) {
-    Tangram::ClientDataSource::PolylineBuilder builder;
     builder.beginPolyline(way->pts.size());
     for(const Waypoint& wp : way->pts)
       builder.addPoint(wp.lngLat());
-    featureId = MapsApp::inst->tracksDataSource->addPolylineFeature(
-        Properties(markerProps), std::move(builder), featureId);
     ++way;
   }
+  featureId = MapsApp::inst->tracksDataSource->addPolylineFeature(
+      Properties(markerProps), std::move(builder), featureId);
   MapsApp::inst->tracksDataSource->generateTiles();
 }
 
-TrackMarker::TrackMarker()
-{
-  markerProps.set("visible", 1);
-}
-
+//TrackMarker::TrackMarker() { markerProps.set("visible", 1); }
 TrackMarker::~TrackMarker()
 {
   // remove track by setting to empty geometry
