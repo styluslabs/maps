@@ -280,7 +280,7 @@ layers:
 
     track:
         data: { source: tracks }
-        filter: { visible: [true] }
+        filter: { visible: 1 }
         draw:
             track:
                 style: track-lines
@@ -290,10 +290,10 @@ layers:
                 #join: round
                 order: 5000
         recording:
-            filter: { recording: [true] }
+            filter: { recording: 1 }
             draw: { track: { width: 3px } }
         selected:
-            filter: { selected: [true] }
+            filter: { selected: 1 }
             draw:
                 track:
                     outline:

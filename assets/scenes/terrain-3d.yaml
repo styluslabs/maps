@@ -2,11 +2,24 @@
 import:
     - elevation.yaml
 
+
 global:
     terrain_3d_mixin: terrain-3d
     elevation_sources: [elevation]
-    show_polygons: false
-    show_water: true
+    fog_color: '#FFFFFF'
+    #show_polygons: false
+    #show_water: true
+
+
+# need to add support for uniform appearing in multiple shaders
+#application:
+#    gui_variables:
+#        u_fog_density:
+#            style: hillshade
+#            label: Fog density
+#            min: 0
+#            max: 100
+
 
 styles:
     terrain-3d-polygons:
@@ -19,8 +32,16 @@ styles:
         shaders:
             defines:
                 TANGRAM_VERTEX_RASTERS: true
+            uniforms:
+                u_fog_color: global.fog_color
+                u_fog_density: 0.001
             blocks:
                 position: |
                     #ifdef TANGRAM_TERRAIN_3D
                     position.z += getElevation();
+                    #endif
+                filter: |
+                    #ifdef TANGRAM_TERRAIN_3D
+                    //float fog = exp(v_position.z * u_fog_density);
+                    //color.rgb = mix(u_fog_color.rgb, color.rgb, clamp(fog, 0.0, 1.0));
                     #endif

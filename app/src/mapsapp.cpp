@@ -680,6 +680,7 @@ void MapsApp::tapEvent(float x, float y)
   });
 
   map->pickFeatureAt(x, y, [this](const Tangram::FeaturePickResult* result) {
+    if(!result) return;
     mapsTracks->onFeaturePicked(result);
   });
 

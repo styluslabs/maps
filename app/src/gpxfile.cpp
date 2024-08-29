@@ -283,6 +283,7 @@ void TrackMarker::setProperties(Properties&& props, bool replace)
   }
   MapsApp::inst->tracksDataSource->setProperties(featureId, Properties(markerProps));
   MapsApp::inst->tracksDataSource->clearData();  // this just increments generation counter
+  MapsApp::inst->platform->requestRender();  // move into ClientDataSource?
 }
 
 void TrackMarker::setTrack(GpxWay* way, size_t nways)
@@ -297,6 +298,7 @@ void TrackMarker::setTrack(GpxWay* way, size_t nways)
   featureId = MapsApp::inst->tracksDataSource->addPolylineFeature(
       Properties(markerProps), std::move(builder), featureId);
   MapsApp::inst->tracksDataSource->generateTiles();
+  MapsApp::inst->platform->requestRender();  // move into ClientDataSource?
 }
 
 //TrackMarker::TrackMarker() { markerProps.set("visible", 1); }
