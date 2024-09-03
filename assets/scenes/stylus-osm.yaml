@@ -7,7 +7,8 @@
 # - trying to create scene file that works for multiple schema isn't practical (either w/ globals or stacking yaml files)
 
 global:
-    camera_settings: { type: isometric, axis: [-.2, .2] }
+    #camera_settings: { type: isometric, axis: [-.2, .2] }
+    camera_settings: { type: perspective }
     # globals required for hillshading
     earth_style: polygons
     earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
@@ -1263,7 +1264,7 @@ layers:
             exclusive: true
             priority: 3
             filter:
-                railway: [station, tram_stop]
+                railway: [station, halt, tram_stop]
                 $zoom: { min: 13 }
             # show_transit: stations at 13, station labels at 14; default: stations at 15, station labels at 16
             # - trying to implement this logic w/o using JS functions was a horrible disaster

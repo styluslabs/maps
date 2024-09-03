@@ -156,14 +156,7 @@ styles:
                       discard;  //color = vec4(uv.x, uv.y, 0.0, 1.0);
 
             blocks:
-                global: |
-                    #ifdef TANGRAM_FRAGMENT_SHADER
-                    #define TANGRAM_CUSTOM_MAIN
-                    void main(void) {
-                    vec3 normal;
-                    vec4 color;
-                    material = u_material;
-                    //normal: |
+                color: |
                     // Using 9 texel patch, estimate 1st and 2nd deriv to smooth elevation and normal
                     vec2 st = currentRasterUV(ELEVATION_INDEX);
                     // polygons are not clipped to tile, so prevent drawing outside of tile where no elevation data
@@ -273,16 +266,15 @@ styles:
                     // apply lighting to get final color
                     #if ELEVATION_INDEX
                     color = calculateLighting(v_position.xyz, normal, base_color);
-                    gl_FragColor = vec4(color.rgb, 1.0);
+                    color = vec4(color.rgb, 1.0);
                     #else
                     vec4 shading = calculateLighting(v_position.xyz, normal, vec4(1.0));
                     // for blending over background and opaque polygons; see 24/07/24 rev for supporting shading > 1.0
-                    color = base_color * shading.r;
-                    color.a = 1.0 - color.a;
-                    gl_FragColor = vec4(color.rgb/color.a, color.a);
+                    float alpha = 1.0 - base_color.a * shading.r;
+                    color = vec4(base_color.rgb * shading.r/alpha, alpha);
                     #endif
-                    } // main()
-                    #endif  //TANGRAM_FRAGMENT_SHADER
+                    // prevent duplicate call to calculateLighting()
+                    #undef TANGRAM_LIGHTING_FRAGMENT
 
 
 lights:

@@ -25,23 +25,27 @@ styles:
     terrain-3d-polygons:
         mix: []
 
+    fog:
+        shaders:
+            uniforms:
+                u_fog_color: global.fog_color
+                u_fog_density: 0.000005
+            blocks:
+                filter: |
+                    #ifdef TANGRAM_TERRAIN_3D
+                    float fog = exp(v_position.z * u_fog_density);
+                    color.rgb = mix(u_fog_color.rgb, color.rgb, clamp(fog, 0.0, 1.0));
+                    #endif
+
     terrain-3d:
-        mix: [ get-elevation ]
+        mix: [ get-elevation, fog ]
         # tile_edges == false is the default except for lines
         draw: { tile_edges: false }
         shaders:
             defines:
                 TANGRAM_VERTEX_RASTERS: true
-            uniforms:
-                u_fog_color: global.fog_color
-                u_fog_density: 0.001
             blocks:
                 position: |
                     #ifdef TANGRAM_TERRAIN_3D
                     position.z += getElevation();
-                    #endif
-                filter: |
-                    #ifdef TANGRAM_TERRAIN_3D
-                    //float fog = exp(v_position.z * u_fog_density);
-                    //color.rgb = mix(u_fog_color.rgb, color.rgb, clamp(fog, 0.0, 1.0));
                     #endif
