@@ -228,6 +228,7 @@ layers:
             marker:
                 style: loc-points
                 texture: loc-marker
+                #flat: true  -- this breaks direction indication for some reason
                 interactive: true
                 collide: false
                 size: 32px

@@ -29,11 +29,14 @@ styles:
         shaders:
             uniforms:
                 u_fog_color: global.fog_color
-                u_fog_density: 0.000005
+                u_fog_density: 0.1
             blocks:
                 filter: |
                     #ifdef TANGRAM_TERRAIN_3D
-                    float fog = exp(v_position.z * u_fog_density);
+                    // note v_position.z < 0
+                    float cospitch = u_view[2][2];
+                    float eyeh = -u_view[3][2];  // distance from eye to map center
+                    float fog = exp(u_fog_density * v_position.z/eyeh/(cospitch + 0.5));
                     color.rgb = mix(u_fog_color.rgb, color.rgb, clamp(fog, 0.0, 1.0));
                     #endif
 

@@ -775,11 +775,14 @@ void MapsApp::mapUpdate(double time)
   if(map->getScene()->isPendingCompletion()) {
     tracksDataSource->rasterSources().clear();
     if(terrain3D) {
+      //map->getScene()->elevationManager()->m_elevationSource
       auto elevsrc = getElevationSource();
       if(elevsrc)
         tracksDataSource->addRasterSource(elevsrc);
     }
-    map->addTileSource(tracksDataSource);
+    map->getScene()->tileManager()->addClientTileSource(tracksDataSource);
+    //map->addTileSource(tracksDataSource);  -- Map will cache source and add to scenes automatically, which
+    // we don't want until we've added elevation source
   }
 
   mapState = map->update(time - lastFrameTime);
