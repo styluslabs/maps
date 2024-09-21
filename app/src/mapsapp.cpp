@@ -599,7 +599,8 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
 void MapsApp::longPressEvent(float x, float y)
 {
   double lng, lat;
-  map->screenPositionToLngLat(x, y, &lng, &lat);
+  if(!map->screenPositionToLngLat(x, y, &lng, &lat))
+    return;
   // clear panel history unless editing track/route
   if(!mapsTracks->activeTrack)
     showPanel(infoPanel);
@@ -979,6 +980,7 @@ std::shared_ptr<TileSource> MapsApp::getElevationSource()
 }
 
 #include "util/imageLoader.h"
+#include "util/elevationManager.h"
 
 struct malloc_deleter { void operator()(void* x) { std::free(x); } };
 struct ElevTex { std::unique_ptr<uint8_t, malloc_deleter> data; int width; int height; GLint fmt; };
@@ -1030,6 +1032,14 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
       callback(elevationLerp(prevTex, tileId, pos));
       return;
     }
+  }
+
+  auto* elevMgr = map->getScene()->elevationManager();
+  if(elevMgr) {
+    bool ok = false;
+    double elev = elevMgr->getElevation(MapProjection::lngLatToProjectedMeters(pos), ok);
+    if(ok)
+      callback(elev);
   }
 
   auto elevSrc = getElevationSource();
