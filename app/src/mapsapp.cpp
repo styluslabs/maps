@@ -2042,9 +2042,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   };
 
   // GLES 3 needed on iOS for highp float textures
-#if 1  //PLATFORM_MOBILE
-  Tangram::ShaderSource::glesVersion = 300;
-#endif
+  //Tangram::ShaderSource::glesVersion = 300;  ... now detected in gl/hardware.cpp
   map = std::make_unique<Tangram::Map>(std::unique_ptr<Platform>(_platform));
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
