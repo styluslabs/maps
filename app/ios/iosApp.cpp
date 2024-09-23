@@ -149,6 +149,26 @@ void MapsApp::getSafeAreaInsets(float *top, float *bottom)
   if(top) *top = _topInset;
   if(bottom) *bottom = _bottomInset;
 }
+
+static void copyRecursive(FSPath src, FSPath dest, bool replace = false)
+{
+  if(isDirectory(src.c_str())) {
+    if(!dest.exists())
+      createDir(dest.path);
+    for(auto& f : lsDirectory(src))
+      copyRecursive(src.child(f), dest.child(f), replace);
+  }
+  else if(replace || !dest.exists()) {
+    LOGW("Copying file: %s to %s", src.c_str(), dest.c_str());
+    copyFile(src, dest);
+  }
+}
+
+void MapsApp::extractAssets(const char* assetPath)
+{
+  copyRecursive(assetPath, MapsApp::baseDir, true);
+}
+
 // main loop
 
 static int mainLoop(int width, int height, float dpi, float topinset, float botinset)
@@ -191,35 +211,14 @@ static int mainLoop(int width, int height, float dpi, float topinset, float boti
   return 0;
 }
 
-void copyRecursive(FSPath src, FSPath dest, bool replace = false)
-{
-  if(isDirectory(src.c_str())) {
-    if(!dest.exists())
-      createDir(dest.path);
-    for(auto& f : lsDirectory(src))
-      copyRecursive(src.child(f), dest.child(f), replace);
-  }
-  else if(replace || !dest.exists()) {
-    LOGW("Copying file: %s to %s", src.c_str(), dest.c_str());
-    copyFile(src, dest);
-  }
-}
-
 void iosApp_startApp(void* glView, const char* bundlePath)
 {
-  static const int versionCode = 1;
-
   sdlWin = (SDL_Window*)glView;
   const char* ioshome = getenv("HOME");
   MapsApp::baseDir = FSPath(ioshome, "Documents/").path;
   //FSPath iosLibRoot = FSPath(ioshome, "Library/");  -- use Library/Caches to automatically exclude from iCloud?
-
-  bool firstrun = !FSPath(MapsApp::baseDir, "config.default.yaml").exists();
   FSPath assetPath(bundlePath, "assets/");
-  if(firstrun)
-    copyRecursive(assetPath, MapsApp::baseDir, true);
-  if(MapsApp::loadConfig() && !firstrun)
-    copyRecursive(assetPath, MapsApp::baseDir, true);
+  MapsApp::loadConfig(assetPath.c_str());
 
   MapsApp::platform = Tangram::createiOSPlatform();
 }

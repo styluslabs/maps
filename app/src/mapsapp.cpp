@@ -1920,12 +1920,18 @@ bool MapsApp::openURL(const char* url)
 }
 #endif
 
-bool MapsApp::loadConfig()
+#include "util/yamlUtil.h"
+
+bool MapsApp::loadConfig(const char* assetPath)
 {
-  static constexpr int versionCode = 1;
+  static constexpr int versionCode = 2;
 
   FSPath configPath(baseDir, "config.yaml");
   FSPath configDfltPath(baseDir, "config.default.yaml");
+  bool firstrun = !configDfltPath.exists();
+  if(firstrun)
+    extractAssets(assetPath);
+
   try {
     config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
   } catch(...) {
@@ -1938,9 +1944,21 @@ bool MapsApp::loadConfig()
 
   configFile = configPath.c_str();
   int prevver = config["prev_version"].as<int>(0);
+  // set prev_version < 0 to update assets every run
   if(prevver < versionCode && prevver >= 0)
     config["prev_version"] = versionCode;
-  return prevver < versionCode;  // set prev_version < 0 to update assets every run
+
+  // merge in new config.default.yaml
+  if(prevver < versionCode && !firstrun) {
+    extractAssets(assetPath);
+    try {
+      auto newconfig = YAML::LoadFile(configDfltPath.path);
+      Tangram::YamlUtil::mergeMapFields(newconfig, config);
+      config = newconfig;
+    } catch(...) {}
+  }
+
+  return prevver < versionCode;
 }
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just

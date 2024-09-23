@@ -462,6 +462,7 @@ void MapsSources::onMapEvent(MapEvent_t event)
     std::vector<std::string> order = sourcesContent->getOrder();
     if(order.empty()) return;
     YAML::Node ordercfg = app->config["sources"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
+    ordercfg.SetStyle(YAML::EmitterStyle::Flow);
     for(const std::string& s : order)
       ordercfg.push_back(s);
     return;

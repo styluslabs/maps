@@ -522,6 +522,13 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
 
 void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 30; *bottom = 0; }
 
+void MapsApp::extractAssets(const char* assetPath)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jstring jassetPath = jniEnv->NewStringUTF(assetPath);
+  jniEnv->CallVoidMethod(mapsActivityRef, extractAssetsMID, jassetPath);
+}
+
 // EGL setup and main loop
 
 bool chooseConfig(EGLDisplay display, int depth, int samples, EGLConfig* config)
@@ -620,16 +627,8 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
 JNI_FN(init)(JNIEnv* env, jclass, jobject mapsActivity, jobject assetManager, jstring extFileDir, jint versionCode)
 {
   mapsActivityRef = env->NewWeakGlobalRef(mapsActivity);
-
   MapsApp::baseDir = JniHelpers::stringFromJavaString(env, extFileDir) + "/";
-  FSPath configPath(MapsApp::baseDir, "config.yaml");
-  FSPath configDfltPath(MapsApp::baseDir, "config.default.yaml");
-  MapsApp::configFile = configPath.c_str();
-  bool firstrun = !configDfltPath.exists();
-  if(firstrun)
-    env->CallVoidMethod(mapsActivityRef, extractAssetsMID, extFileDir);
-  if(MapsApp::loadConfig() && !firstrun)
-    env->CallVoidMethod(mapsActivityRef, extractAssetsMID, extFileDir);
+  MapsApp::loadConfig(MapsApp::baseDir.c_str());
 
   // if user closes app (swipes off recent apps) while recording track, main activity will be destroyed but
   //  native code will keep running; new main activity will be created when user next opens the app

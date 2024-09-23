@@ -135,6 +135,7 @@ void MapsApp::notifyStatusBarBG(bool) {}
 void MapsApp::setSensorsEnabled(bool enabled) {}
 void MapsApp::setServiceState(int state, float intervalSec, float minDist) {}
 void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 0; *bottom = 0; }
+void MapsApp::extractAssets(const char*) {}
 
 int main(int argc, char* argv[])
 {
@@ -151,7 +152,7 @@ int main(int argc, char* argv[])
     if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists())
       MapsApp::baseDir = canonicalPath(FSPath(MapsApp::baseDir, "../../assets/"));
   }
-  MapsApp::loadConfig();
+  MapsApp::loadConfig("");
 
   // command line args
   std::string sceneFile, importFile;  // -f scenes/scene-omt.yaml

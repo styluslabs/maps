@@ -209,7 +209,10 @@ styles:
                     //color: |
                     #if ELEVATION_INDEX
                     vec4 base_color = RASTER_BASE_COLOR;
+                    #elif defined(TANGRAM_TERRAIN_3D)
+                    vec4 base_color = vec4(0.88, 0.88, 0.88, 1.0);
                     #else
+                    #define HILLSHADE_BLEND_OVER
                     vec4 base_color = vec4(0.0, 0.0, 0.0, 1.0);  //v_color;
                     #endif
                     #ifdef SHOW_CONTOURS
@@ -267,14 +270,14 @@ styles:
                     //color = base_color;
                     #endif
                     // apply lighting to get final color
-                    #if ELEVATION_INDEX
-                    color = calculateLighting(v_position.xyz, normal, base_color);
-                    color = vec4(color.rgb, 1.0);
-                    #else
+                    #ifdef HILLSHADE_BLEND_OVER
                     vec4 shading = calculateLighting(v_position.xyz, normal, vec4(1.0));
                     // for blending over background and opaque polygons; see 24/07/24 rev for supporting shading > 1.0
                     float alpha = 1.0 - base_color.a * shading.r;
                     color = vec4(base_color.rgb * shading.r/alpha, alpha);
+                    #else
+                    color = calculateLighting(v_position.xyz, normal, base_color);
+                    color = vec4(color.rgb, 1.0);
                     #endif
                     // prevent duplicate call to calculateLighting()
                     #undef TANGRAM_LIGHTING_FRAGMENT

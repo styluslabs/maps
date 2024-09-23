@@ -488,7 +488,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public void extractAssets(String outpath)
   {
-    extractAssetPath(getAssets(), "", outpath + "/");
+    extractAssetPath(getAssets(), "", outpath);
   }
 
   // assetpath = "" reads from assets/
