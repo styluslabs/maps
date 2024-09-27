@@ -1,4 +1,5 @@
 add_definitions(-DTANGRAM_IOS)
+add_definitions(-DGLES_SILENCE_DEPRECATION)
 add_compile_options(-g)  # always include debug info
 
 if(TANGRAM_IOS_SIM)

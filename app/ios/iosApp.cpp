@@ -159,7 +159,7 @@ static void copyRecursive(FSPath src, FSPath dest, bool replace = false)
       copyRecursive(src.child(f), dest.child(f), replace);
   }
   else if(replace || !dest.exists()) {
-    LOGW("Copying file: %s to %s", src.c_str(), dest.c_str());
+    //LOGW("Copying file: %s to %s", src.c_str(), dest.c_str());
     copyFile(src, dest);
   }
 }
