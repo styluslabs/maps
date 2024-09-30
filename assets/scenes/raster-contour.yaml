@@ -90,7 +90,7 @@ styles:
         draw: { alpha: 0.25 }
 
     hillshade:
-        base: polygons
+        base: raster
         mix: [ global.terrain_3d_mixin, get-elevation ]
         raster: custom
         #texcoords: true

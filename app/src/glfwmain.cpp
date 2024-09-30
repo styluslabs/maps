@@ -4,6 +4,7 @@
 #include "usvg/svgwriter.h"
 #include "../linux/src/linuxPlatform.h"
 #include "util/yamlPath.h"
+#include "util/elevationManager.h"
 #include "nfd.h"
 
 #include "mapsources.h"
@@ -191,6 +192,13 @@ int main(int argc, char* argv[])
   GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, "Ascend", NULL, NULL);
   if(!glfwWin) { PLATFORM_LOG("glfwCreateWindow failed.\n"); return -1; }
   glfwSDLInit(glfwWin);  // setup event callbacks
+
+  glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+  GLFWwindow* glfwOffscreen = glfwCreateWindow(100, 100, "Ascend Offscreen", NULL, glfwWin);
+
+  auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>();
+  offscreenWorker->enqueue([=](){ glfwMakeContextCurrent(glfwOffscreen); });
+  Tangram::ElevationManager::offscreenWorker = offscreenWorker.get();
 
   glfwMakeContextCurrent(glfwWin);
   glfwSwapInterval(0);  //1); // Enable vsync

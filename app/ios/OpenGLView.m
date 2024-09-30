@@ -20,7 +20,7 @@
 
 @implementation OpenGLView
 
-+ (Class)layerClass 
++ (Class)layerClass
 {
   return [CAEAGLLayer class];
 }
@@ -52,11 +52,31 @@
   glGenFramebuffers(1, &_msaaFrameBuffer);
 }
 
+/*
+// in GLViewController:
+void iosPlatform_createSharedContext(void* _vc)
+{
+  GLViewController* vc = (__bridge GLViewController*)_vc;
+  [vc->glView createSharedContext];
+}
+
+// this should be called from a thread
+- (void)createSharedContext
+{
+  EAGLContext* _context2 = [[EAGLContext alloc] initWithAPI:[_context API] sharegroup:[_context sharegroup]];
+  if (!_context2) {
+      NSLog(@"Failed to create shared OpenGL context");
+  } else if (![EAGLContext setCurrentContext:_context2]) {
+      NSLog(@"setCurrentContext failed for shared OpenGL context");
+  }
+}
+*/
+
 - (void)setupBuffers
 {
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);
   [_context renderbufferStorage:GL_RENDERBUFFER fromDrawable:_eaglLayer];
-  
+
   glBindFramebuffer(GL_FRAMEBUFFER, _frameBuffer);
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, _colorRenderBuffer);
 
@@ -94,7 +114,7 @@
   _depthRenderBuffer = 0; _colorRenderBuffer = 0; _msaaRenderBuffer = 0;
 }
 
-- (void)swapBuffers 
+- (void)swapBuffers
 {
   if (samples > 1) {
     const GLenum attachments[] = {GL_COLOR_ATTACHMENT0};  //GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT
@@ -107,7 +127,7 @@
   [_context presentRenderbuffer:GL_RENDERBUFFER];
 }
 
-- (void)makeContextCurrent 
+- (void)makeContextCurrent
 {
   [EAGLContext setCurrentContext:_context];
 }
@@ -130,7 +150,7 @@
   [self destroyBuffers];
 }
 
-- (void)layoutSubviews 
+- (void)layoutSubviews
 {
   int w = (int)(self.bounds.size.width * self.contentScaleFactor);
   int h = (int)(self.bounds.size.height * self.contentScaleFactor);
@@ -217,10 +237,10 @@ void iosPumpEventsBlocking(void)
   if(!mainRunLoop)
     mainRunLoop = CFRunLoopGetCurrent();
   CFRunLoopRunInMode(kCFRunLoopDefaultMode, 100, TRUE);
-  
+
   // necessary???
   [EAGLContext setCurrentContext:_context];
-  
+
   sdlWin = {display, surface, nativeWin};
   if(!app) {
     app = new MapsApp(MapsApp::platform);

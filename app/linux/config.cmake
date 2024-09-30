@@ -50,6 +50,7 @@ target_include_directories(tangram
   PRIVATE
   tangram-es/platforms/common
   tangram-es/core/deps
+  tangram-es/core/deps/glm
   tangram-es/core/deps/stb
   tangram-es/core/deps/yaml-cpp/include
   app/include
