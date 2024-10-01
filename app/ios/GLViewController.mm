@@ -376,6 +376,12 @@ void iosPlatform_setContextCurrent(void* _vc)
   [vc->glView makeContextCurrent];
 }
 
+void iosPlatform_createSharedContext(void* _vc)
+{
+  GLViewController* vc = (__bridge GLViewController*)_vc;
+  [vc->glView createSharedContext];
+}
+
 void iosPlatform_setImeText(void*_vc, const char* text, int selStart, int selEnd)
 {
   GLViewController* vc = (__bridge GLViewController*)_vc;

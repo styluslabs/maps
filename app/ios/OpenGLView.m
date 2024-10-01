@@ -52,14 +52,6 @@
   glGenFramebuffers(1, &_msaaFrameBuffer);
 }
 
-/*
-// in GLViewController:
-void iosPlatform_createSharedContext(void* _vc)
-{
-  GLViewController* vc = (__bridge GLViewController*)_vc;
-  [vc->glView createSharedContext];
-}
-
 // this should be called from a thread
 - (void)createSharedContext
 {
@@ -70,7 +62,6 @@ void iosPlatform_createSharedContext(void* _vc)
       NSLog(@"setCurrentContext failed for shared OpenGL context");
   }
 }
-*/
 
 - (void)setupBuffers
 {

@@ -55,6 +55,7 @@ target_include_directories(maps-ios PRIVATE
   tangram-es/platforms/common
   tangram-es/platforms/ios/framework/src
   tangram-es/core/deps/stb
+  tangram-es/core/deps/glm
   tangram-es/core/deps/yaml-cpp/include
   ${STYLUSLABS_DEPS}
 )

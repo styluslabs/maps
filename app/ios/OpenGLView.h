@@ -4,5 +4,6 @@
 
 - (void)swapBuffers;
 - (void)makeContextCurrent;
+- (void)createSharedContext;
 
 @end

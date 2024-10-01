@@ -170,6 +170,8 @@ void MapsApp::extractAssets(const char* assetPath)
 }
 
 // main loop
+#include "util/elevationManager.h"
+#include "util/asyncWorker.h"
 
 static int mainLoop(int width, int height, float dpi, float topinset, float botinset)
 {
@@ -182,6 +184,10 @@ static int mainLoop(int width, int height, float dpi, float topinset, float boti
     app->createGUI(sdlWin);
     // docs say ~/Library/Caches can be cleared by iOS, so tiles should not be stored there!
     iosPlatform_excludeFromBackup(FSPath(MapsApp::baseDir, "cache/").c_str());
+
+    auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>();
+    offscreenWorker->enqueue([](){ iosPlatform_createSharedContext(sdlWin); });
+    Tangram::ElevationManager::offscreenWorker = std::move(offscreenWorker);
   }
   else
     MapsApp::mainThreadId = std::this_thread::get_id();
