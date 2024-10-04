@@ -9,6 +9,7 @@
 #define PLATFORMUTIL_IMPLEMENTATION
 #include "ulib/platformutil.h"
 
+#define STRINGUTIL_NO_STB_IMPL
 #define STRINGUTIL_IMPLEMENTATION
 #include "ulib/stringutil.h"
 

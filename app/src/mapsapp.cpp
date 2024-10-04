@@ -1,7 +1,7 @@
 #include "mapsapp.h"
 #include "tangram.h"
 #include "scene/scene.h"
-#include "gl/shaderSource.h"  // to set GLSL version
+#include "debug/textDisplay.h"
 #include "util.h"
 #include "pugixml.hpp"
 #include "rapidjson/document.h"
@@ -117,6 +117,9 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
       // ... but skip on initial layout (detected by Rect viewport not yet set)
       if(viewport.isValid())
         map->setPosition(pos.longitude, pos.latitude);
+      auto margins = app->currLayout->node->hasClass("window-layout-narrow") ?
+            glm::vec4(0, 0, 10, 0) : glm::vec4(80, 0, 0, 0);  // TRBL
+      Tangram::TextDisplay::Instance().setMargins(margins);
       app->platform->requestRender();
     }
     if(src != dest)
@@ -722,9 +725,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
   options.preserveMarkers = true;
-#if IS_DEBUG
-  options.debugStyles = true;
-#endif
+  options.debugStyles = Tangram::getDebugFlag(Tangram::DebugFlags::tile_bounds);
   // fallback fonts
   FSPath basePath(baseDir);
   for(auto& font : MapsApp::config["fallback_fonts"])
@@ -739,6 +740,8 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   }
   dumpJSStats(NULL);  // reset stats
   map->loadScene(std::move(options), async);
+
+  //map->getScene()->tileManager()->setCacheSize(512*1024*1024);
 }
 
 void MapsApp::sendMapEvent(MapEvent_t event)
@@ -1090,7 +1093,7 @@ void MapsApp::dumpTileContents(float x, float y)
   TileTaskCb cb{[](std::shared_ptr<TileTask> task) {
     if(!task->hasData() || !task->source()) return;
     TileID id = task->tileId();
-    std::string filename = baseDir + fstring("dump_%s_%d_%d_%d.json", task->source()->name().c_str(), id.z, id.x, id.y);
+    std::string filename = baseDir + ::fstring("dump_%s_%d_%d_%d.json", task->source()->name().c_str(), id.z, id.x, id.y);
     //FileStream fout(filename.c_str(), "wb");
     std::ofstream fout(filename);
     std::lock_guard<std::mutex> lock(logMutex);
@@ -1434,9 +1437,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   if(config["ui"]["show_debug"].as<bool>(false)) {
     Menu* debugMenu = createMenu(Menu::HORZ);
-    const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds",
-        "Tile info", "Label bounds", "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer"};
-    for(int ii = 0; ii < 9; ++ii) {
+    const char* debugFlags[8] = {"Freeze tiles", "Proxy colors", "Tile bounds",
+        "Label bounds", "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer"};
+    for(int ii = 0; ii < 8; ++ii) {
       Button* debugCb = createCheckBoxMenuItem(debugFlags[ii]);
       debugCb->onClicked = [=](){
         debugCb->setChecked(!debugCb->isChecked());

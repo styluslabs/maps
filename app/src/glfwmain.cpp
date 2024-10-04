@@ -198,7 +198,7 @@ int main(int argc, char* argv[])
 
   auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>();
   offscreenWorker->enqueue([=](){ glfwMakeContextCurrent(glfwOffscreen); });
-  Tangram::ElevationManager::offscreenWorker = offscreenWorker.get();
+  Tangram::ElevationManager::offscreenWorker = std::move(offscreenWorker);
 
   glfwMakeContextCurrent(glfwWin);
   glfwSwapInterval(0);  //1); // Enable vsync
