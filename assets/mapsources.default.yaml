@@ -116,6 +116,29 @@ usgs-imagery:
     updates:
         application.dark_base_map: true
 
+sentinel2-recent:
+    title: Sentinel-2 Recent
+    url: https://planetarycomputer.microsoft.com/api/data/v1/mosaic/ee3c35fe2906b21590b2153418b89570/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?assets=B04&assets=B03&assets=B02&color_formula=Gamma%20RGB%203.2%20Saturation%200.8%20Sigmoidal%20RGB%2025%200.35&nodata=0&collection=sentinel-2-l2a&format=jpeg
+    cache: false
+    updates:
+        application.dark_base_map: true
+
+sentinel2-arcgis:
+    title: Sentinel-2 Recent (ArcGIS)
+    archived: true
+    url: |
+        function(x,y,z) {
+          const url = "https://sentinel.arcgis.com/arcgis/rest/services/Sentinel2/ImageServer/exportImage?f=image&format=jpgpng&mosaicRule=%7B%22mosaicMethod%22%3A%22esriMosaicAttribute%22%2C%22where%22%3A%22(datatype_format%20%3D%20%27Cloned%27)%20OR%20(datatype_format%20IS%20NULL)%22%2C%22sortField%22%3A%22Best%22%2C%22sortValue%22%3A%220%22%2C%22ascending%22%3Atrue%2C%22mosaicOperation%22%3A%22MT_FIRST%22%7D&renderingRule=%7B%22rasterFunction%22%3A%22Natural%20Color%20with%20DRA%22%7D&imageSR=102100&bboxSR=102100&size=512%2C512&bbox=";
+          const earthCircumference = 2 * 3.14159265359 * 6378137.0;
+          const metersPerTile = earthCircumference / (1 << z);
+          const xmin = x*metersPerTile - earthCircumference/2;
+          const ymin = earthCircumference/2 - (y+1)*metersPerTile;
+          return url + [xmin, ymin, xmin + metersPerTile, ymin + metersPerTile].join("%2C");
+        }
+    cache: false
+    updates:
+        application.dark_base_map: true
+
 usgs-topo:
     title: USGS Topo
     url: http://basemap.nationalmap.gov/ArcGIS/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}

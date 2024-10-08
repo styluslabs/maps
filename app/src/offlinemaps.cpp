@@ -55,7 +55,8 @@ struct OfflineTask
 class OfflineDownloader
 {
 public:
-    OfflineDownloader(Platform& _platform, const OfflineMapInfo& ofl, const OfflineSourceInfo& src);
+    OfflineDownloader(
+        Tangram::DataSourceContext& _context, const OfflineMapInfo& ofl, const OfflineSourceInfo& src);
     ~OfflineDownloader();
     size_t remainingTiles() const { return m_queued.size() + m_pending.size(); }
     bool fetchNextTile(int maxPending);
@@ -133,16 +134,17 @@ static void offlineDLMain()
   }
 }
 
-OfflineDownloader::OfflineDownloader(Platform& _platform, const OfflineMapInfo& ofl, const OfflineSourceInfo& src)
+OfflineDownloader::OfflineDownloader(
+    Tangram::DataSourceContext& _context, const OfflineMapInfo& ofl, const OfflineSourceInfo& src)
 {
-  mbtiles = std::make_unique<Tangram::MBTilesDataSource>(_platform, src.name, src.cacheFile, "", true);
+  mbtiles = std::make_unique<Tangram::MBTilesDataSource>(_context.getPlatform(), src.name, src.cacheFile, "", true);
   name = src.name + "-" + std::to_string(ofl.id);
   offlineId = ofl.id;
   searchData = MapsSearch::parseSearchFields(src.searchData);
   offlineSize = mbtiles->getOfflineSize();
   srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
 
-  mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(_platform, src.url, src.urlOptions);
+  mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(_context, src.url, src.urlOptions);
   // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
   for(int z = std::min(ofl.zoom, srcMaxZoom); z <= srcMaxZoom; ++z) {
     TileID tile00 = lngLatTile(ofl.lngLat00, z);
@@ -317,9 +319,11 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
   }
   //offlinePending.push_back(std::move(olinfo));
 
-  queueOfflineTask(mapid, [olinfo=std::move(olinfo)](){
+  YAML::Node globals = map->getScene()->config()["globals"];
+  queueOfflineTask(mapid, [olinfo=std::move(olinfo), globals=YAML::Clone(globals)](){
+    Tangram::DataSourceContext dataSourceContext(*MapsApp::platform, globals);
     for(auto& source : olinfo.sources)
-      offlineDownloaders.emplace_back(new OfflineDownloader(*MapsApp::platform, olinfo, source));
+      offlineDownloaders.emplace_back(new OfflineDownloader(dataSourceContext, olinfo, source));
   });
   //MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
 }
