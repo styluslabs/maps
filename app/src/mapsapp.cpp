@@ -471,13 +471,15 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
 {
   static const char* rowProtoSVG = R"(
     <g class="listitem" margin="0 5" layout="box" box-anchor="hfill">
-      <rect box-anchor="hfill" fill="none" width="48" height="42"/>
-      <rect box-anchor="fill" width="48" height="48"/>
-      <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
-        <g class="image-container" margin="2 5">
-          <use class="icon weak" width="26" height="26" xlink:href=""/>
+      <g class="button-wrapper" layout="box" box-anchor="fill">
+        <rect box-anchor="hfill" fill="none" width="48" height="42"/>
+        <rect box-anchor="fill" width="48" height="48"/>
+        <g class="child-container" layout="flex" flex-direction="row" box-anchor="hfill">
+          <g class="image-container" margin="2 5">
+            <use class="icon weak" width="26" height="26" xlink:href=""/>
+          </g>
+          <g class="value-container" box-anchor="hfill" layout="box" margin="0 10"></g>
         </g>
-        <g class="value-container" box-anchor="hfill" layout="box" margin="0 10"></g>
       </g>
       <rect class="listitem-separator separator" margin="0 2 0 2" box-anchor="bottom hfill" width="20" height="1"/>
     </g>
@@ -512,9 +514,10 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
       g->setAttribute("box-anchor", "hfill");
       auto anchorNodes = g->select("a");
       for(SvgNode* a : anchorNodes) {
-        Button* b = new Button(a);
-        b->onClicked = [b](){
-          MapsApp::openURL(b->node->getStringAttr("href", b->node->getStringAttr("xlink:href")));
+        // if only one link, make entire row clickable
+        Button* b = new Button(anchorNodes.size() > 1 ? a : row->containerNode()->selectFirst(".button-wrapper"));
+        b->onClicked = [a](){
+          MapsApp::openURL(a->getStringAttr("href", a->getStringAttr("xlink:href")));
         };
       }
       auto textNodes = g->select("text");

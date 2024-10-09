@@ -1730,11 +1730,18 @@ void MapsTracks::createWayptContent()
   rteEditOverflowBtn->setMenu(rteEditOverflow);
 
   rteEditOverflow->addItem("Clear route", [this](){
-    if(activeTrack && !activeTrack->routes.empty())
+    if(!activeTrack->routes.empty())
       activeTrack->routes.pop_back();
     if(!activeTrack->routes.empty())
       updateStats(activeTrack);
     updateTrackMarker(activeTrack);
+  });
+
+  rteEditOverflow->addItem("Reverse route", [this](){
+    std::reverse(activeTrack->waypoints.begin(), activeTrack->waypoints.end());
+    waypointsDirty = true;
+    populateTrack(activeTrack);
+    createRoute(activeTrack);
   });
 
   Button* tapToAddWayptBtn = createCheckBoxMenuItem("Tap to add waypoint");

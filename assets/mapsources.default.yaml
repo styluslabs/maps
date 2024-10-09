@@ -128,6 +128,7 @@ sentinel2-arcgis:
     archived: true
     url: |
         function(x,y,z) {
+          // SR 102100 is EPSG:3857
           const url = "https://sentinel.arcgis.com/arcgis/rest/services/Sentinel2/ImageServer/exportImage?f=image&format=jpgpng&mosaicRule=%7B%22mosaicMethod%22%3A%22esriMosaicAttribute%22%2C%22where%22%3A%22(datatype_format%20%3D%20%27Cloned%27)%20OR%20(datatype_format%20IS%20NULL)%22%2C%22sortField%22%3A%22Best%22%2C%22sortValue%22%3A%220%22%2C%22ascending%22%3Atrue%2C%22mosaicOperation%22%3A%22MT_FIRST%22%7D&renderingRule=%7B%22rasterFunction%22%3A%22Natural%20Color%20with%20DRA%22%7D&imageSR=102100&bboxSR=102100&size=512%2C512&bbox=";
           const earthCircumference = 2 * 3.14159265359 * 6378137.0;
           const metersPerTile = earthCircumference / (1 << z);
