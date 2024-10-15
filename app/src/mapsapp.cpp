@@ -727,6 +727,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.updates.push_back(SceneUpdate{"global.shuffle_seed", std::to_string(shuffleSeed)});
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
+  options.diskTileCacheMaxAge = config["storage"]["max_age"].as<int64_t>(options.diskTileCacheMaxAge);
   options.preserveMarkers = true;
   options.debugStyles = Tangram::getDebugFlag(Tangram::DebugFlags::tile_bounds);
   // fallback fonts

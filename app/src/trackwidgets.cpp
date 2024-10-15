@@ -472,7 +472,7 @@ SliderHandle* createSliderHandle(Widget* bg, real lmargin, real bmargin)
 {
   // all sliders hidden intially
   static const char* slidersSVG = R"#(
-    <g class="slider-handle" display="none" box-anchor="left bottom">
+    <g class="slider-handle draggable" display="none" box-anchor="left bottom">
       <rect fill="none" x="-11" y="-11" width="22" height="22"/>
       <!-- rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/ -->
     </g>
