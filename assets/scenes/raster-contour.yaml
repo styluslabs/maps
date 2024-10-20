@@ -28,6 +28,7 @@ import:
 
 global:
     contour_color: '#C56008'  #vec4(0.773,0.376,0.031,1.)
+    show_contours: false
 
 
 application:
@@ -100,7 +101,7 @@ styles:
         shaders:
             defines:
                 #ELEVATION_INDEX: 0
-                SHOW_CONTOURS: false
+                SHOW_CONTOURS: global.show_contours
                 SHOW_ANGLE: false
                 #FLOAT_TEX: true
                 RASTER_BASE_COLOR: 'sampleRaster(0)'
@@ -307,6 +308,22 @@ lights:
 #    url_params:
 #        api_key: global.sdk_api_key
 
-#layers:
+layers:
+    contour-labels:
+        data: { source: elevation }
+        filter: { $zoom: { min: 10 } }
+        enabled: global.show_contours
+        draw:
+            text:
+                style: contour-labels
+                #priority: global.priority.contour_label
+                text_wrap: false
+                font:
+                    family: global.primary_font
+                    style: italic
+                    size: 8pt
+                    fill: global.color.default_label
+                    stroke: { color: global.color.default_halo, width: 3 }
+
 #    worldcover: { data: { source: worldcover }, draw: { translucent-raster: { order: 1 } } }
 #    earth: { data: { source: osmand-raster }, draw: { hillshade: { color: white, order: 0 } } }

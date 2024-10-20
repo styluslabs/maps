@@ -27,7 +27,7 @@ stylus-osm-terrain:
         - source: hillshade
     updates:
         global.contour_color: "#B2B2B2"
-        styles.hillshade.shaders.defines.SHOW_CONTOURS: global.show_trails
+        global.show_contours: global.show_trails
 
 stylus-satellite:
     title: Ascend OSM + Satellite
@@ -169,7 +169,7 @@ enable-contours:
     layers:
         - source: hillshade
     updates:
-        styles.hillshade.shaders.defines.SHOW_CONTOURS: true
+        global.show_contours: true
         application.gui_variables.contour_color: { label: Contour Color }
 
 enable-slope-angle:
