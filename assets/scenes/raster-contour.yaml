@@ -317,7 +317,8 @@ layers:
             text:
                 style: contour-labels
                 #priority: global.priority.contour_label
-                text_wrap: false
+                # auto forces text to always be oriented uphill, even if upside down on screen
+                angle: auto
                 font:
                     family: global.primary_font
                     style: italic
