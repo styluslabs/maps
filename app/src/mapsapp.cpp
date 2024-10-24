@@ -730,6 +730,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.diskTileCacheMaxAge = config["storage"]["max_age"].as<int64_t>(options.diskTileCacheMaxAge);
   options.preserveMarkers = true;
   options.debugStyles = Tangram::getDebugFlag(Tangram::DebugFlags::tile_bounds);
+  options.metricUnits = metricUnits;
   // fallback fonts
   FSPath basePath(baseDir);
   for(auto& font : MapsApp::config["fallback_fonts"])

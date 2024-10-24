@@ -15,6 +15,9 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 else()
   add_definitions(-DNDEBUG)
   add_definitions(-DLOG_LEVEL=2)
+  #add_definitions(-DGLM_FORCE_INTRINSICS)
+  # print glm config to ensure SIMD is being used
+  #add_definitions(-DGLM_FORCE_MESSAGES)
 endif()
 
 # executable

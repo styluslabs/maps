@@ -100,14 +100,10 @@ styles:
         blend_order: -1002
         shaders:
             defines:
-                #ELEVATION_INDEX: 0
                 SHOW_CONTOURS: global.show_contours
+                METRIC_UNITS: global.metric_units
                 SHOW_ANGLE: false
-                #FLOAT_TEX: true
                 RASTER_BASE_COLOR: 'sampleRaster(0)'
-                # sampler2D default is lowp!
-                #TANGRAM_RASTER_PRECISION: 'highp'
-                #TANGRAM_VERTEX_RASTERS: true
             uniforms:
                 u_exaggerate: 4.5
                 CONTOUR_COLOR: global.contour_color
@@ -234,7 +230,11 @@ styles:
                         // contour line radius in pixels
                         //float linehw = 0.5;
                         // spacing between contour lines in meters - 10m has too many artifacts
+                    #ifdef METRIC_UNITS
                         float interval = z >= 13.5 ? 25. : z >= 11.5 ? 50. : 100.;  //z >= 11. ? 100. : 200.;
+                    #else
+                        float interval = (z >= 13.5 ? 100. : z >= 11.5 ? 200. : 500.)/3.28084;
+                    #endif
                         float zstep = z >= 13.5 ? 13.5 : z >= 11.5 ? 11.5 : 9.5;
                         float linehw = mix(0.3, 0.5, clamp(0.5*(z - zstep), 0., 1.));
                         #ifdef TANGRAM_TERRAIN_3D
@@ -251,7 +251,11 @@ styles:
                         float cov = max(0.5 - dup + linehw, 0.) + max(0.5 - ddn + linehw, 0.);
                         // coarse lines
                         float coarsehw = 2.*linehw;  //0.75;
+                    #ifdef METRIC_UNITS
                         float coarse = z >= 13.5 ? 100. : z >= 11.5 ? 200. : 500.;
+                    #else
+                        float coarse = (z >= 13.5 ? 500. : z >= 11.5 ? 1000. : 2000.)/3.28084;
+                    #endif
                         dup = fract(hc/coarse)*coarse/slope / u_meters_per_pixel;
                         ddn = abs(1. - fract(hc/coarse))*coarse/slope / u_meters_per_pixel;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
