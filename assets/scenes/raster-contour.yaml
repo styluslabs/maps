@@ -299,23 +299,12 @@ lights:
     light2: { type: directional, direction: [1, -1, -1], diffuse: 0.2, ambient: 0.35 }
 
 
-#osmand-raster:
-#    type: Raster
-#    url: https://tile.osmand.net/hd/{z}/{x}/{y}.png
-#    #user-agent: OsmAnd~
-#    rasters: [elevation]
-#    cache: osmand-raster2x
-
-#normals:
-#    type: Raster
-#    url: https://elevation-tiles-prod.s3.amazonaws.com/normal/{z}/{x}/{y}.png
-#    url_params:
-#        api_key: global.sdk_api_key
+#scene: { background: { color: '#E0E0E0' } }
 
 layers:
     contour-labels:
         data: { source: elevation }
-        filter: { $zoom: { min: 10 } }
+        filter: { $zoom: { min: 12 } }
         enabled: global.show_contours
         draw:
             text:
@@ -323,12 +312,23 @@ layers:
                 #priority: global.priority.contour_label
                 # auto forces text to always be oriented uphill, even if upside down on screen
                 angle: auto
+                repeat_distance: 30px
                 font:
                     family: global.primary_font
                     style: italic
-                    size: 8pt
+                    size: 7pt
                     fill: global.color.default_label
-                    stroke: { color: global.color.default_halo, width: 3 }
+                    stroke: { color: global.color.default_halo, width: 2 }
+
+    #contour-debug:
+    #    data: { source: elevation }
+    #    filter: { $zoom: { min: 12 } }
+    #    enabled: global.show_contours
+    #    draw:
+    #        lines:
+    #            style: contour-debug
+    #            color: red
+    #            order: 0
 
 #    worldcover: { data: { source: worldcover }, draw: { translucent-raster: { order: 1 } } }
 #    earth: { data: { source: osmand-raster }, draw: { hillshade: { color: white, order: 0 } } }

@@ -318,6 +318,7 @@ void MapsSources::populateSources()
       order.push_back(key.Scalar());
   }
   sourcesContent->clear();
+  sourcesContent->onApplyLayout = {};
   app->gui->deleteContents(archivedContent, ".listitem");
 
   std::vector<std::string> layerTitles = {};  //"None"
