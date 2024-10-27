@@ -28,6 +28,7 @@ private:
   void saveSources();
   void importSources(const std::string& src);
   void promptDownload(const std::vector<std::string>& keys);
+  void removeCurrLayer(const std::string& key);
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;
@@ -49,7 +50,8 @@ private:
   std::string baseUrl;
   std::string srcFile;
   YAML::Node mapSources;
-  std::vector<std::string> currLayers;
+  struct SourceLayer { std::string source; float opacity; };
+  std::vector<SourceLayer> currLayers;
   std::vector<SceneUpdate> currUpdates;
   std::vector<std::string> layerKeys;
   bool legendsLoaded = false;

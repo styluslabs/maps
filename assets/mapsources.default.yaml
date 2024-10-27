@@ -23,8 +23,8 @@ stylus-osm-terrain:
     title: Ascend OSM
     layer: true
     layers:
-        - source: stylus-osm
-        - source: hillshade
+        - stylus-osm
+        - hillshade
     updates:
         global.contour_color: "#B2B2B2"
         global.show_contours: global.show_trails
@@ -32,25 +32,25 @@ stylus-osm-terrain:
 stylus-satellite:
     title: Ascend OSM + Satellite
     layers:
-        - source: bing-earth
-        - source: stylus-osm-dark
+        - bing-earth
+        - stylus-osm-dark
     updates:
         global.show_polygons: false
 
 stylus-worldcover:
     title: Ascend OSM + Worldcover
     layers:
-        - {source: worldcover}
-        - {source: stylus-osm-terrain}
-        - {source: mix-base-raster}
+        - worldcover
+        - stylus-osm-terrain
+        - mix-base-raster
     updates:
         global.show_trails: true
 
 stylus-bike-hike:
   title: Ascend OSM Bike & Hike
   layers:
-    - {source: stylus-osm-terrain}
-    - {source: hillshade}
+    - stylus-osm-terrain
+    - hillshade
   updates:
     global.show_bike: true
     global.show_trails: true
@@ -166,8 +166,7 @@ waymarked-trails:
 enable-contours:
     title: Contours
     layer: true
-    layers:
-        - source: hillshade
+    layers: [ hillshade ]
     updates:
         global.show_contours: true
         application.gui_variables.contour_color: { label: Contour Color }
@@ -175,8 +174,7 @@ enable-contours:
 enable-slope-angle:
     title: Slope Angle
     layer: true
-    layers:
-        - source: hillshade
+    layers: [ hillshade ]
     updates:
         styles.hillshade.shaders.defines.SHOW_ANGLE: true
 
@@ -184,8 +182,7 @@ mix-base-raster:
     title: Mix Hillshade Base Raster
     archived: true
     layer: true
-    layers:
-        - source: hillshade
+    layers: [ hillshade ]
     updates:
         styles.hillshade.shaders.defines.RASTER_BASE_COLOR: |
             vec4(mix(sampleRaster(0).rgb, base_mix_color.rgb, base_mix_color.a), 1.0)
@@ -213,8 +210,7 @@ hillshade-png:
     title: Hillshading (Old)
     archived: true
     layer: true
-    layers:
-        - source: hillshade
+    layers: [ hillshade ]
     updates:
         styles.hillshade.shaders.defines.ELEVATION_FLOAT_TEX: false
         sources.elevation:
@@ -233,8 +229,7 @@ hillshade-usgs:
     attribution: |
         United States 3DEP data courtesy of the U.S. Geological Survey
     layer: true
-    layers:
-        - source: hillshade
+    layers: [ hillshade ]
     updates:
         #global.earth_style: translucent-polygons
         #styles.hillshade.shaders.defines.ELEVATION_FLOAT_TEX: true

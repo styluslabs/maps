@@ -18,6 +18,8 @@
 
 // Source selection
 
+static std::string getLayerName(const YAML::Node& n) { return n.IsMap() ? n["source"].Scalar() : n.Scalar(); }
+
 class SourceBuilder
 {
 public:
@@ -31,11 +33,11 @@ public:
 
   SourceBuilder(const YAML::Node& s) : sources(s) {}
 
-  void addLayer(const std::string& key);
+  void addLayer(const std::string& key, float opacity);
   std::string getSceneYaml(const std::string& baseUrl);
 };
 
-void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
+void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const YAML::Node& src)
 {
   // skip layer if already added
   for(auto& k : layerkeys) { if(k == key) return; }
@@ -46,8 +48,7 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
   }
   if(src["layers"]) {  // multi-layer
     for (const auto& layer : src["layers"]) {
-      std::string layerkey = layer["source"].Scalar();
-      addLayer(layerkey);  //, sources[layerkey]);
+      addLayer(getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f);
     }
   }
   else if(src["url"]) {  // raster tiles
@@ -70,26 +71,21 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
     // note that lines and polygons are normally drawn w/ opaque blend mode, which ignores blend_order and is
     //  drawn before all other blend modes; default raster style uses opaque!
     bool isoverlay = order > 0 && src["layer"].as<bool>(false);
-    if(isoverlay) {
-      updates.emplace_back("+styles." + rasterN, fstring("{ base: raster, mix: global.terrain_3d_mixin, raster: color,"
-          " shaders: { defines: { ELEVATION_INDEX: 1 } }, lighting: false, blend: nonopaque, blend_order: %d }", order-100));
-    }
-    else {
-      updates.emplace_back("+styles." + rasterN, "{ base: raster, mix: global.terrain_3d_mixin,"
-          " raster: color, shaders: { defines: { ELEVATION_INDEX: 1 } } }");
-      vectorBase = false;
-    }
+    updates.emplace_back("+styles.raster-" + key, fstring("{ mix: raster-common, "
+        " shaders: { uniforms: { u_opacity: %.2f } }, blend: %s, blend_order: %d }",
+        opacity, (isoverlay || opacity < 1) ? "nonopaque" : "opaque", order-100));
+    if(order == 0) { vectorBase = false; }
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", rasterN);
-    //updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", alphastr);  -- this is how to do opacity
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", "raster-" + key);
+    // opacity needs to be a uniform so it can be adjusted in real time w/o reloading scene
+    //updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", std::to_string(opacity));
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string((isoverlay ? 1000 : 0) + order));
     ++order;
   }
   else if(src["scene"]) {  // vector map
     imports.push_back(src["scene"].Scalar());
     layerkeys.push_back(key);
-    if(order == 0) vectorBase = true;
     ++order;  //order = 9001;  // subsequent rasters should be drawn on top of the vector map
   }
   else {  // update only
@@ -106,6 +102,20 @@ void SourceBuilder::addLayer(const std::string& key)  //, const YAML::Node& src)
 
 std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 {
+  static const char* stylestr = R"(
+styles:
+  raster-common:
+    base: raster
+    mix: global.terrain_3d_mixin
+    raster: color
+    lighting: false
+    shaders:
+      defines: { ELEVATION_INDEX: 1 }
+      uniforms: { u_opacity: 1.0 }
+      blocks:
+        color: "color.a *= u_opacity;"
+)";
+
   // we'll probably want to skip curl for reading from filesystem in scene/importer.cpp - see tests/src/mockPlatform.cpp
   // or maybe add a Url getParent() method to Url class
   std::string importstr;
@@ -122,8 +132,8 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   for(auto& url : imports)
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   if(importstr.empty())
-    return "global:\n\nsources:\n\nlayers:\n";
-  return "import:\n" + importstr;  //+ "\nglobal:\n\nsources:\n\nstyles:\n\nlayers:\n";
+    return stylestr;  //"global:\n\nsources:\n\nlayers:\n";
+  return "import:\n" + importstr + stylestr;
 }
 
 MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app) { reload(); }
@@ -211,24 +221,24 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     auto splitsrc = splitStr<std::vector>(srcname, ",");
     if(splitsrc.size() > 1) {
       for(auto& src : splitsrc)
-        currLayers.push_back(src);  //builder.addLayer(src);
+        currLayers.push_back({src, 1.0f});  //builder.addLayer(src);
     }
     else {
       auto src = mapSources[srcname];
       if(!src) return;
       if(src["layers"] && !src["layer"].as<bool>(false)) {
         for(const auto& layer : src["layers"])
-          currLayers.push_back(layer["source"].Scalar());
+          currLayers.push_back({getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f});
         for(const auto& update : src["updates"])
           currUpdates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
       }
       else
-        currLayers.push_back(srcname);
+        currLayers.push_back({srcname, 1.0f});
     }
   }
 
   for(auto& src : currLayers)
-    builder.addLayer(src);
+    builder.addLayer(src.source, src.opacity);
   if(MapsApp::terrain3D) {
     for(const auto& update : MapsApp::config["terrain_3d"]["updates"])
       builder.updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
@@ -257,7 +267,8 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
         static_cast<Button*>(item)->setChecked(key == currSource);
       Button* showbtn = static_cast<Button*>(item->selectFirst(".show-btn"));
       if(showbtn) {
-        bool shown = std::find(currLayers.begin(), currLayers.end(), key) != currLayers.end()
+        bool shown = std::find_if(currLayers.begin(), currLayers.end(),
+            [&](auto& l) { return l.source == key; }) != currLayers.end()
             || std::find(builder.layerkeys.begin(), builder.layerkeys.end(), key) != builder.layerkeys.end();
         showbtn->setChecked(key != currSource && shown);
       }
@@ -291,7 +302,8 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     if(node["layers"] || !mapSources[savekey]) {
       YAML::Node layers = YAML::Node(YAML::NodeType::Sequence);
       for(auto& src : currLayers)
-        layers.push_back(YAML::Load("{source: " + src + "}"));
+        layers.push_back(YAML::Load(src.opacity < 1 ?
+            fstring("{source: %s, opacity: %.2f}", src.source.c_str(), src.opacity) : src.source));
       node["layers"] = layers;
     }
     else if(node["url"])
@@ -307,6 +319,12 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   populateSources();
   rebuildSource(savekey);  // populateSources() resets the layer select boxes, need to restore!
   return savekey;
+}
+
+void MapsSources::removeCurrLayer(const std::string& key)
+{
+  currLayers.erase(std::remove_if(currLayers.begin(), currLayers.end(),
+      [&](auto l){ return l.source == key; }), currLayers.end());
 }
 
 void MapsSources::populateSources()
@@ -366,18 +384,18 @@ void MapsSources::populateSources()
         bool show = !showBtn->isChecked();
         showBtn->setChecked(show);
         if(!show)
-          currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), key), currLayers.end());
+          removeCurrLayer(key);  //currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), key), currLayers.end());
         else if(!isLayer) {
           // insert before first layer that is not an opaque raster
           auto it = currLayers.begin();
           for(; it != currLayers.end(); ++it) {
-            auto itsrc = mapSources[*it];
+            auto itsrc = mapSources[it->source];
             if(!itsrc["url"] || itsrc["layer"].as<bool>(false)) break;
           }
-          currLayers.insert(it, key);
+          currLayers.insert(it, {key, 1.0f});
         }
         else
-          currLayers.push_back(key);
+          currLayers.push_back({key, 1.0f});
         // treat as new source (to edit an existing multi-layer source, user can go to edit sources directly)
         currSource = "";
         titleEdit->setText("Untitled");
@@ -447,7 +465,7 @@ void MapsSources::populateSources()
   if(!selectLayerDialog) {
     selectLayerDialog.reset(createSelectDialog("Choose Layer", MapsApp::uiIcon("layers")));
     selectLayerDialog->onSelected = [this](int idx){
-      currLayers.push_back(layerKeys[idx]);
+      currLayers.push_back({layerKeys[idx], 1.0f});
       rebuildSource();  //currLayers);
       populateSourceEdit("");
     };
@@ -525,34 +543,41 @@ void MapsSources::updateSceneVar(const std::string& path, const std::string& new
     app->map->updateGlobals({app->sceneUpdates.back()});
 }
 
+static Tangram::Style* findStyle(Tangram::Scene* scene, const std::string name)
+{
+  auto& styles = scene->styles();
+  for(auto& style : styles) {
+    if(style->getName() == name)
+      return style.get();
+  }
+  return NULL;
+}
+
 Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& name, YAML::Node varnode)
 {
-  auto& styles = app->map->getScene()->styles();
-  for(auto& style : styles) {
-    if(style->getName() == stylename) {
-      for(auto& uniform : style->styleUniforms()) {
-        if(uniform.first.name == name) {
-          if(uniform.second.is<float>()) {
-            float stepval = varnode["step"].as<float>(1);
-            float minval = varnode["min"].as<float>(-INFINITY);
-            float maxval = varnode["max"].as<float>(INFINITY);
-            auto spinBox = createTextSpinBox(uniform.second.get<float>(), stepval, minval, maxval, "%.2f");
-            spinBox->onValueChanged = [=, &uniform](real val){
-              std::string path = "styles." + stylename + ".shaders.uniforms." + name;
-              std::string newval = std::to_string(val);
-              replaceSceneVar(app->sceneUpdates, path, newval);
-              replaceSceneVar(currUpdates, path, newval);
-              uniform.second.set<float>(val);
-              app->platform->requestRender();
-              sourceModified();
-            };
-            return spinBox;
-          }
-          LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), name.c_str());
-          return NULL;
+  Tangram::Style* style = findStyle(app->map->getScene(), name);
+  if(style) {
+    for(auto& uniform : style->styleUniforms()) {
+      if(uniform.first.name == name) {
+        if(uniform.second.is<float>()) {
+          float stepval = varnode["step"].as<float>(1);
+          float minval = varnode["min"].as<float>(-INFINITY);
+          float maxval = varnode["max"].as<float>(INFINITY);
+          auto spinBox = createTextSpinBox(uniform.second.get<float>(), stepval, minval, maxval, "%.2f");
+          spinBox->onValueChanged = [=, &uniform](real val){
+            std::string path = "styles." + stylename + ".shaders.uniforms." + name;
+            std::string newval = std::to_string(val);
+            replaceSceneVar(app->sceneUpdates, path, newval);
+            replaceSceneVar(currUpdates, path, newval);
+            uniform.second.set<float>(val);
+            app->platform->requestRender();
+            sourceModified();
+          };
+          return spinBox;
         }
+        LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), name.c_str());
+        return NULL;
       }
-      break;
     }
   }
   LOGE("Cannot find style uniform %s.%s referenced in gui_variables!", stylename.c_str(), name.c_str());
@@ -662,19 +687,52 @@ void MapsSources::populateSourceEdit(std::string key)
 
   if(!src || src["layers"]) {
     for(auto& layer : currLayers) {
-      Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[layer]["title"].Scalar().c_str());
+      std::string layername = layer.source;
+      Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[layername]["title"].Scalar().c_str());
       Widget* container = item->selectFirst(".child-container");
 
-      //<use class="icon elevation-icon" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
-      //widgetNode("#listitem-icon")
-      //TextEdit* opacityEdit = createTextEdit(80);
-      //container->addWidget(opacityEdit);
-      //... updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", <alpha value>);
+      // if raster layer, show opacity control
+      if(mapSources[layername]["url"]) {
+        Button* opacityBtn = createToolbutton(
+            MapsApp::uiIcon("opacity"), fstring("%d%%", int(layer.opacity*100 + 0.5f)).c_str(), true);
+
+        Slider* opacitySlider = createSlider();
+        opacitySlider->setValue(layer.opacity);
+        opacitySlider->onValueChanged = [=](real val){
+          // can't cache style because Scene could be reloaded w/o repeating populateSourceEdit()
+          Tangram::Style* style = findStyle(app->map->getScene(), "raster-" + layername);
+          if(!style) return;
+          opacityBtn->setTitle(fstring("%d%%", int(val*100 + 0.5)).c_str());
+          for(auto& uniform : style->styleUniforms()) {
+            if(uniform.first.name == "u_opacity" && uniform.second.is<float>()) {
+              uniform.second.set<float>(val);
+              app->platform->requestRender();
+              sourceModified();
+              break;
+            }
+          }
+        };
+        setMinWidth(opacitySlider, 250);
+
+        Widget* opacityWidget = new Widget(new SvgG());
+        opacityWidget->node->setAttribute("layout", "box");
+        opacityWidget->node->setAttribute("margin", "0 6");
+        opacityWidget->addWidget(opacitySlider);
+
+        // if we use VERT_RIGHT, slider shifts when toolbutton text width changes (and slider gets shifted
+        //  over anyway in narrow layout mode)
+        Menu* opacityMenu = createMenu(Menu::VERT_LEFT);
+        opacityMenu->addWidget(opacityWidget);
+        opacityMenu->isPressedGroupContainer = false;  // otherwise slider handle can't be dragged
+        //widthPreview->onPressed = [this](){ window()->gui()->pressedWidget = NULL; };
+        opacityBtn->setMenu(opacityMenu);
+        container->addWidget(opacityBtn);
+      }
 
       Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
       discardBtn->onClicked = [=](){
-        currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), layer), currLayers.end());
-        rebuildSource();  //tempLayers);
+        removeCurrLayer(layername);  //currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), layer), currLayers.end());
+        rebuildSource();
         sourceModified();
         app->gui->deleteWidget(item);
       };
