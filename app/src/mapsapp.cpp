@@ -731,6 +731,8 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.preserveMarkers = true;
   options.debugStyles = Tangram::getDebugFlag(Tangram::DebugFlags::tile_bounds);
   options.metricUnits = metricUnits;
+  options.terrain3d = terrain3D;
+  options.elevationSource = config["sources"]["elevation"][0].as<std::string>("");
   // fallback fonts
   FSPath basePath(baseDir);
   for(auto& font : config["fallback_fonts"])
@@ -738,11 +740,6 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   if(config["num_tile_workers"].IsScalar())
     options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
-  if(terrain3D) {
-    for(auto& style : config["terrain_3d"]["styles"])
-      options.terrain3dStyles.push_back(style.as<std::string>());
-  }
-  options.elevationSource = config["sources"]["elevation"][0].as<std::string>("");
   dumpJSStats(NULL);  // reset stats
   map->loadScene(std::move(options), async);
 

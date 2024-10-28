@@ -28,7 +28,6 @@ private:
   void saveSources();
   void importSources(const std::string& src);
   void promptDownload(const std::vector<std::string>& keys);
-  void removeCurrLayer(const std::string& key);
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;
@@ -47,10 +46,14 @@ private:
   std::unique_ptr<SelectDialog> selectLayerDialog;
   std::unique_ptr<Dialog> importDialog;
 
+  struct SourceLayer {
+    std::string source; float opacity;
+    bool operator==(const std::string& s) { return s == source; }
+  };
+
   std::string baseUrl;
   std::string srcFile;
   YAML::Node mapSources;
-  struct SourceLayer { std::string source; float opacity; };
   std::vector<SourceLayer> currLayers;
   std::vector<SceneUpdate> currUpdates;
   std::vector<std::string> layerKeys;

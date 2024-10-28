@@ -27,7 +27,6 @@ sources:
 
 terrain_3d:
   enabled: true
-  styles: [hillshade, raster-0]
   import: scenes/terrain-3d.yaml
   updates:
     global.earth_style: terrain-3d-polygons

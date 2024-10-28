@@ -71,10 +71,14 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     // note that lines and polygons are normally drawn w/ opaque blend mode, which ignores blend_order and is
     //  drawn before all other blend modes; default raster style uses opaque!
     bool isoverlay = order > 0 && src["layer"].as<bool>(false);
-    updates.emplace_back("+styles.raster-" + key, fstring("{ mix: raster-common, "
-        " shaders: { uniforms: { u_opacity: %.2f } }, blend: %s, blend_order: %d }",
-        opacity, (isoverlay || opacity < 1) ? "nonopaque" : "opaque", order-100));
-    if(order == 0) { vectorBase = false; }
+    if(order == 0) {
+      updates.emplace_back("+styles.raster-" + key, "{ mix: raster-common }");
+      vectorBase = false;
+    }
+    else {
+      updates.emplace_back("+styles.raster-" + key, fstring("{ mix: [raster-common, raster-opacity],"
+          " shaders: { uniforms: { u_opacity: %.2f } }, blend_order: %d }", opacity, order-100));
+    }
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", "raster-" + key);
@@ -104,6 +108,13 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 {
   static const char* stylestr = R"(
 styles:
+  raster-opacity:
+    blend: nonopaque
+    shaders:
+      uniforms: { u_opacity: 1.0 }
+      blocks:
+        color: "color.a *= u_opacity;"
+
   raster-common:
     base: raster
     mix: global.terrain_3d_mixin
@@ -111,9 +122,6 @@ styles:
     lighting: false
     shaders:
       defines: { ELEVATION_INDEX: 1 }
-      uniforms: { u_opacity: 1.0 }
-      blocks:
-        color: "color.a *= u_opacity;"
 )";
 
   // we'll probably want to skip curl for reading from filesystem in scene/importer.cpp - see tests/src/mockPlatform.cpp
@@ -237,8 +245,10 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     }
   }
 
-  for(auto& src : currLayers)
+  for(auto& src : currLayers) {
+    if(builder.order == 0) { src.opacity = NAN; }
     builder.addLayer(src.source, src.opacity);
+  }
   if(MapsApp::terrain3D) {
     for(const auto& update : MapsApp::config["terrain_3d"]["updates"])
       builder.updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
@@ -321,12 +331,6 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   return savekey;
 }
 
-void MapsSources::removeCurrLayer(const std::string& key)
-{
-  currLayers.erase(std::remove_if(currLayers.begin(), currLayers.end(),
-      [&](auto l){ return l.source == key; }), currLayers.end());
-}
-
 void MapsSources::populateSources()
 {
   sourcesDirty = false;
@@ -384,7 +388,7 @@ void MapsSources::populateSources()
         bool show = !showBtn->isChecked();
         showBtn->setChecked(show);
         if(!show)
-          removeCurrLayer(key);  //currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), key), currLayers.end());
+          currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), key), currLayers.end());
         else if(!isLayer) {
           // insert before first layer that is not an opaque raster
           auto it = currLayers.begin();
@@ -692,7 +696,7 @@ void MapsSources::populateSourceEdit(std::string key)
       Widget* container = item->selectFirst(".child-container");
 
       // if raster layer, show opacity control
-      if(mapSources[layername]["url"]) {
+      if(mapSources[layername]["url"] && !std::isnan(layer.opacity)) {
         Button* opacityBtn = createToolbutton(
             MapsApp::uiIcon("opacity"), fstring("%d%%", int(layer.opacity*100 + 0.5f)).c_str(), true);
 
@@ -703,6 +707,9 @@ void MapsSources::populateSourceEdit(std::string key)
           Tangram::Style* style = findStyle(app->map->getScene(), "raster-" + layername);
           if(!style) return;
           opacityBtn->setTitle(fstring("%d%%", int(val*100 + 0.5)).c_str());
+          auto it = std::find(currLayers.begin(), currLayers.end(), layername);
+          if(it != currLayers.end())
+            it->opacity = val;
           for(auto& uniform : style->styleUniforms()) {
             if(uniform.first.name == "u_opacity" && uniform.second.is<float>()) {
               uniform.second.set<float>(val);
@@ -731,7 +738,7 @@ void MapsSources::populateSourceEdit(std::string key)
 
       Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
       discardBtn->onClicked = [=](){
-        removeCurrLayer(layername);  //currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), layer), currLayers.end());
+        currLayers.erase(std::remove(currLayers.begin(), currLayers.end(), layername), currLayers.end());
         rebuildSource();
         sourceModified();
         app->gui->deleteWidget(item);
