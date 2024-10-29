@@ -1437,7 +1437,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   overflowMenu->addSubmenu("Undelete", undeleteMenu);
   undeleteMenu->parent()->setVisible(false);  // hidden when empty
 
-  if(config["ui"]["show_debug"].as<bool>(false)) {
+#ifdef NDEBUG
+  if(config["ui"]["show_debug"].as<bool>(false))
+#endif
+  {
     Menu* debugMenu = createMenu(Menu::HORZ);
     const char* debugFlags[8] = {"Freeze tiles", "Proxy colors", "Tile bounds",
         "Label bounds", "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer"};

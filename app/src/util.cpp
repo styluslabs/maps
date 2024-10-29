@@ -269,42 +269,40 @@ bool MarkerGroup::onPicked(MarkerID id)
 // note LabelCollider is only used when building the tile, while LabelManager is run for every frame
 // blend_order only supported for style blocks: https://github.com/tangrams/tangram-es/issues/2039
 
-MarkerID MarkerGroup::getMarker(PlaceInfo& res)
+void MarkerGroup::createMapMarker(PlaceInfo& res)
 {
   MarkerID id = map->markerAdd();
-  map->markerSetStylingFromPath(id, res.isAltMarker ? altStyling.c_str() : styling.c_str());
+  map->markerSetStylingFromPath(id, styling.c_str());
   map->markerSetVisible(id, visible);
   map->markerSetPoint(id, res.pos);
   map->markerSetProperties(id, Properties(res.props));
-  map->markerSetDrawOrder(id, res.props.getNumber("priority") + (res.isAltMarker ? 0 : 0x10000));
-  return id;
+  map->markerSetDrawOrder(id, res.props.getNumber("priority") + 0x10000);
+
+  if(!altStyling.empty()) {
+    MarkerID altid = map->markerAdd();
+    map->markerSetStylingFromPath(altid, altStyling.c_str());
+    map->markerSetVisible(altid, visible);
+    map->markerSetPoint(altid, res.pos);
+    map->markerSetProperties(altid, Properties(res.props));
+    map->markerSetDrawOrder(altid, res.props.getNumber("priority"));
+    map->markerSetAlternate(id, altid);
+    res.altMarkerId = altid;
+  }
+  res.markerId = id;
 }
 
 void MarkerGroup::setVisible(bool vis)
 {
   if(visible == vis) return;
   visible = vis;
-  for(auto& res : places)
-    map->markerSetVisible(res.isAltMarker ? res.altMarkerId : res.markerId, vis);
-  onZoom();
-}
-
-
-// if isect2d is insufficient, try https://github.com/nushoin/RTree - single-header r-tree impl
-static isect2d::AABB<glm::vec2> markerAABB(Map* map, LngLat pos, double radius)
-{
-  double x, y;
-  map->lngLatToScreenPosition(pos.longitude, pos.latitude, &x, &y);
-  return isect2d::AABB<glm::vec2>(x - radius, y - radius, x + radius, y + radius);
+  for(auto& res : places) {
+    map->markerSetVisible(res.markerId, vis);  //res.isAltMarker ? res.altMarkerId
+    map->markerSetVisible(res.altMarkerId, vis);  //res.isAltMarker ? res.altMarkerId
+  }
 }
 
 MarkerGroup::MarkerGroup(Tangram::Map* _map, const std::string& _styling, const std::string _altStyling)
-    : map(_map), styling(_styling), altStyling(_altStyling)
-{
-  int w = map->getViewportWidth(), h = map->getViewportHeight();
-  collider.resize({16, 16}, {w, h});
-  prevZoom = map->getZoom();
-}
+    : map(_map), styling(_styling), altStyling(_altStyling) {}
 
 MarkerGroup::~MarkerGroup()
 {
@@ -318,8 +316,6 @@ void MarkerGroup::reset()
     map->markerRemove(res.altMarkerId);
   }
   places.clear();
-  collider.clear();
-  prevZoom = -1;
 }
 
 void MarkerGroup::updateMarker(int id, Properties&& props)
@@ -349,9 +345,6 @@ void MarkerGroup::deleteMarker(int id)
       map->markerRemove(it->markerId);
       map->markerRemove(it->altMarkerId);
       places.erase(it);
-      // marker deletion may allow nearby marker to be shown
-      prevZoom = -1;
-      onZoom();
       break;
     }
   }
@@ -359,90 +352,10 @@ void MarkerGroup::deleteMarker(int id)
 
 void MarkerGroup::createMarker(LngLat pos, OnPickedFn cb, Properties&& props, int id)
 {
-  places.push_back({id, pos, std::move(props), cb, 0, 0, false});
+  places.push_back({id, pos, std::move(props), cb, 0, 0});  //, 0, false});
   PlaceInfo& res = places.back();
   for(auto& item : commonProps.items())
     res.props.setValue(item.key, item.value);
   res.props.set("priority", places.size()-1);  //id < 0 ? places.size()-1 : id);
-  bool collided = false;
-  LngLat other;
-  if(!altStyling.empty()) {
-    float zoom = map->getZoom();
-    double markerRadius = zoom >= 17 ? 25 : 50;
-    collider.intersect(markerAABB(map, res.pos, markerRadius), [&](auto& a, auto& b) {
-      map->screenPositionToLngLat(b.getCentroid().x, b.getCentroid().y, &other.longitude, &other.latitude);
-      collided = true;
-      return false;
-    });
-  }
-  res.isAltMarker = collided;
-  if(collided) {
-    const double minSep = MapProjection::metersPerPixelAtZoom(20) * 30;
-    // ensure some separation between markers so they separate at sufficiently high zoom
-    auto pm0 = MapProjection::lngLatToProjectedMeters(other);
-    auto pm1 = MapProjection::lngLatToProjectedMeters(pos);
-    if(pm0 == pm1) {
-      float dir = (id%8) * (M_PI/4);
-      res.pos = MapProjection::projectedMetersToLngLat(pm0 + minSep*glm::dvec2(glm::cos(dir), glm::sin(dir)));
-    }
-    else if(glm::distance(pm0, pm1) < minSep)
-      res.pos = MapProjection::projectedMetersToLngLat(pm0 + minSep*glm::normalize(pm1 - pm0));
-    res.altMarkerId = getMarker(res);
-  }
-  else
-    res.markerId = getMarker(res);
-}
-
-void MarkerGroup::onZoom()
-{
-  float zoom = map->getZoom();
-  if(!visible || altStyling.empty() || std::abs(zoom - prevZoom) < 0.5f) return;
-
-  double markerRadius = zoom >= 17 ? 25 : 50;
-  collider.clear();
-  int w = map->getViewportWidth(), h = map->getViewportHeight();
-  collider.resize({16, 16}, {w, h});
-  if(zoom < prevZoom) {
-    // if zoom decr by more than threshold, convert colliding pins to dots
-    for(auto& res : places) {
-      if(res.isAltMarker) continue;
-      bool collided = false;
-      collider.intersect(markerAABB(map, res.pos, markerRadius),
-          [&](auto& a, auto& b) { collided = true; return false; });
-      if(collided) {
-        // convert to dot marker
-        map->markerSetVisible(res.markerId, false);
-        res.isAltMarker = true;
-        if(res.altMarkerId <= 0)
-          res.altMarkerId = getMarker(res);
-        else
-          map->markerSetVisible(res.altMarkerId, true);
-      }
-    }
-  }
-  else {
-    // if zoom incr, convert dots to pins if no collision
-    for(auto& res : places) {
-      if(!res.isAltMarker)
-        collider.insert(markerAABB(map, res.pos, markerRadius));
-    }
-    for(auto& res : places) {
-      if(!res.isAltMarker) continue;
-      // don't touch offscreen markers
-      if(!map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)) continue;
-      bool collided = false;
-      collider.intersect(markerAABB(map, res.pos, markerRadius),
-          [&](auto& a, auto& b) { collided = true; return false; });
-      if(!collided) {
-        // convert to pin marker
-        map->markerSetVisible(res.altMarkerId, false);
-        res.isAltMarker = false;
-        if(res.markerId <= 0)
-          res.markerId = getMarker(res);
-        else
-          map->markerSetVisible(res.markerId, true);
-      }
-    }
-  }
-  prevZoom = zoom;
+  createMapMarker(res);
 }

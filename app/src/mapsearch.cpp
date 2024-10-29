@@ -376,10 +376,8 @@ void MapsSearch::onMapEvent(MapEvent_t event)
     updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
     prevZoom = zoom;
   }
-  else if(!mapResults.empty() && (zoomedin || zoomedout)) {
-    markers->onZoom();
+  else if(!mapResults.empty() && (zoomedin || zoomedout))
     prevZoom = zoom;
-  }
   // any map pan or zoom can potentially affect ranking of list results
   if(mapmoved || zoomedin || zoomedout)
     retryBtn->setVisible(true);

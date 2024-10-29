@@ -56,7 +56,6 @@ public:
   void reset();
   void setVisible(bool vis);
   bool onPicked(MarkerID id);
-  void onZoom();
   void deleteMarker(int id);
   void updateMarker(int id, Properties&& props);
 
@@ -74,12 +73,9 @@ public:
     OnPickedFn callback;
     MarkerID markerId;
     MarkerID altMarkerId;
-    bool isAltMarker;
   };
   std::vector<PlaceInfo> places;
-  isect2d::ISect2D<glm::vec2> collider;
-  float prevZoom = -1;
 
 private:
-  MarkerID getMarker(PlaceInfo& res);
+  void createMapMarker(PlaceInfo& res);
 };

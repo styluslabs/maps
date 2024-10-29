@@ -354,8 +354,6 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 void MapsBookmarks::onMapEvent(MapEvent_t event)
 {
   if(event == MAP_CHANGE) {
-    for(auto& mg : bkmkMarkers)
-      mg.second->onZoom();
     if(mapAreaBkmks) {
       for(Widget* item : bkmkContent->select(".listitem")) {
         LngLat pos = item->userData<LngLat>();
