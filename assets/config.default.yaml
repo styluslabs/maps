@@ -84,6 +84,8 @@ ui:
   ui_scale: 0.95
   map_scale: 0.95
 
+#tile_cache_limit: 536870912
+
 # for debugging
 num_tile_workers: 2
 

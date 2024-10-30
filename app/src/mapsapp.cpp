@@ -118,7 +118,7 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
       if(viewport.isValid())
         map->setPosition(pos.longitude, pos.latitude);
       auto margins = app->currLayout->node->hasClass("window-layout-narrow") ?
-            glm::vec4(0, 0, 10, 0) : glm::vec4(80, 0, 0, 0);  // TRBL
+            glm::vec4(0, 0, 10, 0) : glm::vec4(0, 0, 0, app->getPanelWidth()+20);  // TRBL
       Tangram::TextDisplay::Instance().setMargins(margins);
       app->platform->requestRender();
     }
@@ -738,12 +738,12 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   for(auto& font : config["fallback_fonts"])
     options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(basePath.child(font.Scalar()).path)));
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
-  if(config["num_tile_workers"].IsScalar())
-    options.numTileWorkers = atoi(config["num_tile_workers"].Scalar().c_str());
+  options.numTileWorkers = config["num_tile_workers"].as<int>(2);
   dumpJSStats(NULL);  // reset stats
   map->loadScene(std::move(options), async);
 
-  //map->getScene()->tileManager()->setCacheSize(512*1024*1024);
+  // max tile cache size
+  map->getScene()->tileManager()->setCacheSize(config["tile_cache_limit"].as<size_t>(512*1024*1024));
 }
 
 void MapsApp::sendMapEvent(MapEvent_t event)
@@ -938,9 +938,9 @@ void MapsApp::updateLocation(const Location& _loc)
 
 void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
 {
-  // only show if no fix yet
-  gpsStatusBtn->setVisible(!satsUsed);
-  if(!satsUsed)
+  // only show if no fix yet; satsVisible < 0 if GPS disabled
+  gpsStatusBtn->setVisible(satsUsed < 1 && satsVisible >= 0);
+  if(satsUsed < 1 && satsVisible >= 0)
     gpsStatusBtn->setText(fstring("%d", satsVisible).c_str());  //"%d/%d", satsUsed
   bool hadloc = hasLocation;
   hasLocation = satsUsed > 0;  //|| (currLocation.poserr > 0 && currLocation.poserr < 10);  -- age of currLocation!?!
@@ -992,7 +992,7 @@ struct ElevTex { std::unique_ptr<uint8_t, malloc_deleter> data; int width; int h
 
 static double readElevTex(const ElevTex& tex, int x, int y)
 {
-  // see getElevation() in raster-contour.yaml and https://github.com/tilezen/joerd
+  // see getElevation() in hillshade.yaml and https://github.com/tilezen/joerd
   if(tex.fmt == GL_R32F)
     return ((float*)tex.data.get())[y*tex.width + x];
   GLubyte* p = tex.data.get() + y*tex.width*4 + x*4;
@@ -1071,15 +1071,17 @@ std::string MapsApp::elevToStr(double meters)
   return fstring(metricUnits ? "%.0f m" : "%.0f ft", metricUnits ? meters : meters*3.28084);
 }
 
-std::string MapsApp::distKmToStr(double dist, int prec)
+std::string MapsApp::distKmToStr(double dist, int prec, int sigdig)
 {
   if(!MapsApp::metricUnits) {
     double miles = dist*0.621371;
+    prec = std::min(std::max(sigdig - int(std::log10(miles)) - 1, 0), prec);
     if(miles < 0.1)
       return fstring("%.0f ft", 5280*miles);
     else
       return fstring("%.*f mi", (miles < 1 && prec < 1) ? 1 : prec, miles);
   }
+  prec = std::min(std::max(sigdig - int(std::log10(dist)) - 1, 0), prec);
   if(dist < 0.1 || (dist < 1 && prec > 1))
     return fstring("%.0f m", dist*1000);
   return fstring("%.*f km", prec, dist);

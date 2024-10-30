@@ -496,7 +496,8 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   // use map center for origin if current location is offscreen
   if(phase != NEXTPAGE) {
     LngLat loc = app->currLocation.lngLat();
-    searchRankOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude) ? loc : app->getMapCenter();
+    isCurrLocDistOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude);
+    searchRankOrigin = isCurrLocDistOrigin ? loc : app->getMapCenter();
   }
 
   if(phase == EDITING) {
@@ -581,6 +582,17 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
 
 void MapsSearch::populateResults()
 {
+  static const char* distProtoSVG = R"#(
+    <g margin="0 0" layout="flex" flex-direction="row">
+      <use class="icon gps-location" display="none" width="16" height="16" xlink:href=":/ui-icons.svg#gps-location" />
+      <use class="icon crosshair" display="none" width="16" height="16" xlink:href=":/ui-icons.svg#crosshair" />
+      <text class="weak" font-size="12" margin="0 8 0 6"></text>
+    </g>
+  )#";
+  static std::unique_ptr<SvgNode> distProto;
+  if(!distProto)
+    distProto.reset(loadSVGFragment(distProtoSVG));
+
   for(size_t ii = listResultOffset; ii < listResults.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = listResults[ii];
     Properties props = jsonToProps(res.tags.c_str());
@@ -592,15 +604,13 @@ void MapsSearch::populateResults()
     item->onClicked = [this, ii](){
       app->setPickResult(listResults[ii].pos, "", listResults[ii].tags);
     };
-    double distkm = lngLatDist(app->currLocation.lngLat(), res.pos);
-    double dist = app->metricUnits ? distkm : distkm*0.621371;
-    int prec = dist >= 100 ? 0 : 1;
-    std::string diststr = fstring(app->metricUnits ? "%.*f km" : "%.*f mi", prec, dist);
-    TextBox* distText = new TextBox(createTextNode(diststr.c_str()));
-    distText->node->addClass("weak");
-    distText->node->setAttribute("font-size", "12");
-    distText->node->setAttribute("margin", "0 8 0 0");
-    item->selectFirst(".child-container")->addWidget(distText);
+
+    // show distance to search origin
+    Widget* distWidget = new Widget(distProto->clone());
+    distWidget->selectFirst(isCurrLocDistOrigin ? ".gps-location" : ".crosshair")->setVisible(true);
+    double distkm = lngLatDist(searchRankOrigin, res.pos);
+    distWidget->setText(MapsApp::distKmToStr(distkm, 1, 3).c_str());  // 3 sig digits so no decimal over 100km
+    item->selectFirst(".child-container")->addWidget(distWidget);
     item->node->setAttribute("__querytext", namestr.c_str());
     resultsContent->addWidget(item);
   }

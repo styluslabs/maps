@@ -72,6 +72,7 @@ private:
   bool unifiedSearch = false;
   bool flyingToResults = false;
   bool newMapSearch = true;
+  bool isCurrLocDistOrigin = true;
   int selectedResultIdx = -1;
 
   bool initSearch();

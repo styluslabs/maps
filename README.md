@@ -98,7 +98,7 @@ Vector maps are styled using [Tangram YAML scene files](https://tangrams.readthe
 * `$latitude` and `$longitude` for tile center are available for filters to make location-specific adjustments to styling
 * SVG images are supported for textures; sprites can be created automatically using SVG id attributes.
 
-Tangram styles can include custom shaders.  The hillshading, contour lines, and slope angle shading in the above screenshots are all calculated on-the-fly from elevation tiles in a shader - see [raster-contour.yaml](assets/scenes/raster-contour.yaml).
+Tangram styles can include custom shaders.  The hillshading, contour lines, and slope angle shading in the above screenshots are all calculated on-the-fly from elevation tiles in a shader - see [hillshade.yaml](assets/scenes/hillshade.yaml).
 
 [scripts/mb2mz.js](scripts/mb2mz.js) is provided to convert a Mapbox style spec JSON file to a Tangram scene file.  See [scripts/runmb2mz.jz](scripts/runmb2mz.js) for an example.  The included [osm-bright.yaml](assets/scenes/osm-bright.yaml) applies the widely-used OSM Bright style to vector tiles using the OpenMapTiles schema.
 

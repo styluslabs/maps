@@ -244,7 +244,7 @@ hillshade-usgs:
 hillshade:
     title: Hillshading
     layer: true
-    scene: scenes/raster-contour.yaml
+    scene: scenes/hillshade.yaml
     updates_vector:
         #global.elevation_sources: [elevation]
         #global.earth_style: hillshade

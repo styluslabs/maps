@@ -226,19 +226,23 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     if(canGetLocation()) {
       // requesting updates from just fused provider doesn't turn on GPS!
       // min GPS dt = 0 (ms), dr = 1 (meters)
-      locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);
-      //locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 1, this);
-      if(locationManager.getProvider("fused") != null) {
-        locationManager.requestLocationUpdates("fused", 0, 1, this);
-        onLocationChanged(locationManager.getLastKnownLocation("fused"));
-      }
-      else
-        onLocationChanged(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER));
-      if(mGnssStatusCallback != null)
-        locationManager.registerGnssStatusCallback(mGnssStatusCallback);  //catch (SecurityException e)
-      else {
-        onGpsStatusChanged(0);
-        locationManager.addGpsStatusListener(this);  //catch (SecurityException e)
+      try {  // looks like requestLocationUpdates() might throw on some devices if location disabled
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 1, this);
+        //locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 1, this);
+        if(locationManager.getProvider("fused") != null) {
+          locationManager.requestLocationUpdates("fused", 0, 1, this);
+          onLocationChanged(locationManager.getLastKnownLocation("fused"));
+        }
+        else
+          onLocationChanged(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER));
+        if(mGnssStatusCallback != null)
+          locationManager.registerGnssStatusCallback(mGnssStatusCallback);  //catch (SecurityException e)
+        else {
+          onGpsStatusChanged(0);
+          locationManager.addGpsStatusListener(this);  //catch (SecurityException e)
+        }
+      } catch(Exception e) {
+        Log.v("Tangram", "Error requesting location updates", e);
       }
     }
     //mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
@@ -373,6 +377,9 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         satsUsed++;
     }
     hasGpsFix = satsUsed > 0;
+    if(satsVisible == 0 && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
+      satsVisible = -1;
+
     MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
 
@@ -386,6 +393,9 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         satsUsed++;
     }
     hasGpsFix = satsUsed > 0;
+    if(satsVisible == 0 && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
+      satsVisible = -1;
+
     MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
   //private float[] mGravity;

@@ -557,19 +557,19 @@ static Tangram::Style* findStyle(Tangram::Scene* scene, const std::string name)
   return NULL;
 }
 
-Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& name, YAML::Node varnode)
+Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& varname, YAML::Node varnode)
 {
-  Tangram::Style* style = findStyle(app->map->getScene(), name);
+  Tangram::Style* style = findStyle(app->map->getScene(), stylename);
   if(style) {
     for(auto& uniform : style->styleUniforms()) {
-      if(uniform.first.name == name) {
+      if(uniform.first.name == varname) {
         if(uniform.second.is<float>()) {
           float stepval = varnode["step"].as<float>(1);
           float minval = varnode["min"].as<float>(-INFINITY);
           float maxval = varnode["max"].as<float>(INFINITY);
           auto spinBox = createTextSpinBox(uniform.second.get<float>(), stepval, minval, maxval, "%.2f");
           spinBox->onValueChanged = [=, &uniform](real val){
-            std::string path = "styles." + stylename + ".shaders.uniforms." + name;
+            std::string path = "styles." + stylename + ".shaders.uniforms." + varname;
             std::string newval = std::to_string(val);
             replaceSceneVar(app->sceneUpdates, path, newval);
             replaceSceneVar(currUpdates, path, newval);
@@ -579,12 +579,12 @@ Widget* MapsSources::processUniformVar(const std::string& stylename, const std::
           };
           return spinBox;
         }
-        LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), name.c_str());
+        LOGE("Cannot set %s.%s: only float uniforms currently supported in gui_variables!", stylename.c_str(), varname.c_str());
         return NULL;
       }
     }
   }
-  LOGE("Cannot find style uniform %s.%s referenced in gui_variables!", stylename.c_str(), name.c_str());
+  LOGE("Cannot find style uniform %s.%s referenced in gui_variables!", stylename.c_str(), varname.c_str());
   return NULL;
 }
 

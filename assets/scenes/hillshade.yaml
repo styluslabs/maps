@@ -293,6 +293,7 @@ lights:
     #light1: { type: directional, direction: [1, 1, -.9], diffuse: 0.8, ambient: 0.3 }
     #light1: { type: directional, origin: world, direction: [1, 1, -1], diffuse: 0.3, ambient: 0.7 }
     # single light - use exaggeration ~ 1.5
+    # - w/ 'origin: world', lighting changes as camera is rotated
     #light1: { type: directional, origin: world, direction: [1, -1, -1], diffuse: 0.4, ambient: 0.7 }
     # Google Terrain style lighting, where flat areas are brighter than slopes - use exaggeration ~ 4
     light1: { type: directional, direction: [0, 0, -1], diffuse: 0.2, ambient: 0.35 }
