@@ -802,7 +802,10 @@ void MapsApp::mapUpdate(double time)
   // update map center
   auto cpos = map->getCameraPosition();
   reorientBtn->setVisible(cpos.tilt != 0 || cpos.rotation != 0);
-  reorientBtn->containerNode()->selectFirst(".icon")->setTransform(Transform2D::rotating(cpos.rotation));
+  SvgNode* iconNode = reorientBtn->containerNode()->selectFirst(".icon");
+  auto tf = Transform2D::rotating(cpos.rotation);
+  if(tf != iconNode->getTransform())
+    iconNode->setTransform(tf);
 
   sendMapEvent(MAP_CHANGE);
 }
@@ -1290,7 +1293,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   static const char* reorientSVG = R"#(
     <g class="reorient-btn toolbutton roundbutton" layout="box">
       <circle class="background" cx="21" cy="21" r="21"/>
-      <g margin="0 0" box-anchor="fill" layout="box">
+      <g class="toolbutton-content" margin="0 0" box-anchor="fill" layout="box">
         <use class="icon" width="28" height="28" xlink:href=":/ui-icons.svg#compass" />
       </g>
     </g>
@@ -1535,6 +1538,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
   };
   reorientBtn->setVisible(false);
+  // prevent complete UI layout when compass icon is rotated
+  reorientBtn->selectFirst(".toolbutton-content")->layoutIsolate = true;
 
   //recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
   recenterBtn = new Button(widgetNode("#roundbutton"));

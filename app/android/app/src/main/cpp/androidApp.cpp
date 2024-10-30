@@ -13,6 +13,9 @@
 #include "JniHelpers.h"
 #include "JniThreadBinding.h"
 
+#include "util/elevationManager.h"
+#include "util/asyncWorker.h"
+
 using Tangram::AndroidPlatform;
 using Tangram::JniHelpers;
 
@@ -578,9 +581,20 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
 
   if(context == EGL_NO_CONTEXT) {
     const EGLint eglAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    context = eglCreateContext(display, config, nullptr, eglAttribs);
+    context = eglCreateContext(display, config, EGL_NO_CONTEXT, eglAttribs);
     if(!context) { LOGE("eglCreateContext() error %X", eglGetError()); return -1; }
     if(app) app->glNeedsInit = true;
+
+    // shared context for offscreen worker
+    auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>();
+    offscreenWorker->enqueue([=](){
+      EGLContext context2 = eglCreateContext(display, config, context, eglAttribs);
+      if(!context2) { LOGE("Offscreen context: eglCreateContext() error %X", eglGetError()); return; }
+      //surface = eglCreatePbufferSurface(display, config, nullptr);
+      auto curr_res = eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context2);
+      if(curr_res == EGL_FALSE) { LOGE("Offscreen context: eglMakeCurrent() error %X", eglGetError()); return; }
+    });
+    Tangram::ElevationManager::offscreenWorker = std::move(offscreenWorker);
   }
 
   EGLSurface surface = eglCreateWindowSurface(display, config, nativeWin, NULL);
