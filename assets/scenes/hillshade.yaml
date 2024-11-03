@@ -313,6 +313,8 @@ layers:
                 #priority: global.priority.contour_label
                 # auto forces text to always be oriented uphill, even if upside down on screen
                 angle: auto
+                # text_source: units will append units (m or ft) to label
+                #text_source: units
                 repeat_distance: 30px
                 font:
                     family: global.primary_font

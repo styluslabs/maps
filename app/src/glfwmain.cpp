@@ -295,7 +295,7 @@ int main(int argc, char* argv[])
 
   offscreenWorker = std::move(Tangram::ElevationManager::offscreenWorker);
   if(offscreenWorker) {
-    // GLFW docs say a context must not be current on any other thread
+    // GLFW docs say a context must not be current on any other thread for glfwTerminate()
     offscreenWorker->enqueue([=](){ glfwMakeContextCurrent(NULL); });
     offscreenWorker.reset();  // wait for thread exit
   }

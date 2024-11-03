@@ -114,34 +114,35 @@ global:
         #runway_casing: orange
 
     # z-order for polygons (<100) and lines (higher z-order draws over lower); order > 1000 is reserved by mapsapp
+    # ... now offset by 500 because we need depth range for raster tile proxy levels
     order:
-        landuse: 10
-        parks: 12
-        park_detail: 14
-        golf: 16
-        airport: 18
-        landcover: 20
-        waterway: 122
-        water: 124
-        pier: 126
-        bldg: 130
-        transportation_casing: 138
-        transportation: 140
-        rail: 140
-        taxiway: 150
-        path: 150
-        runway: 155
-        minor_road: 160
-        piste: 165
-        major_road: 170
-        motorway: 180
-        bridge: 200
-        bicycle: 220
-        transit: 250
-        aerialway: 250
-        border: 290
-        bldg_3d_line: 299
-        bldg_3d: 300
+        landuse: 510
+        parks: 512
+        park_detail: 514
+        golf: 516
+        airport: 518
+        landcover: 520
+        waterway: 622
+        water: 624
+        pier: 626
+        bldg: 630
+        transportation_casing: 638
+        transportation: 640
+        rail: 640
+        taxiway: 650
+        path: 650
+        runway: 655
+        minor_road: 660
+        piste: 665
+        major_road: 670
+        motorway: 680
+        bridge: 700
+        bicycle: 720
+        transit: 750
+        aerialway: 750
+        border: 790
+        bldg_3d_line: 799
+        bldg_3d: 800
 
     piste_color_fn: function() { return global.color.piste[feature.difficulty] || 'white'; }
     piste_symbols: { easy: '●', intermediate: '■', advanced: '◆', expert: '◆◆' }
@@ -346,10 +347,21 @@ styles:
     dashed-rail:
         mix: unlit-lines
         dash: [0.15, 7.0]
-    #dashed-tunnel:
-    #    base: lines
-    #    lighting: false
-    #    dash: [3, 2]
+    aerialway:
+        mix: unlit-lines
+        # both approaches have issue w/ circles being stretched due to change of line width w/ zoom
+        #blend: nonopaque
+        #texcoords: true
+        #shaders:
+        #    defines: { dotSize: 0.2 }
+        #    blocks:
+        #        color: |
+        #            vec2 st = vec2(v_texcoord.x, 4.0*fract(v_texcoord.y / 4.0)) - 0.5;
+        #            color.a = 1. - step(dotSize, dot(st,st)*2.);
+        texture: |
+            data:image/svg+xml;utf8,<svg width="10pt" height="40pt" viewBox="-5 -20 10 40">
+              <g fill="#fff"> <circle cx="0" cy="0" r="4"/> </g>
+            </svg>
     transit-lines:
         base: lines
         blend: overlay
@@ -697,28 +709,36 @@ layers:
                     order: global.order.aerialway  # aerialway would more often be over bridge vs under
                     color: global.color.aerialway
                     width: [[14, 0.5px], [15, 1.0px], [16, 2m]]
-                # maybe use dashed line instead?
                 points:
                     visible: false
+                    style: aerialway
+                    order: global.order.aerialway
                     color: global.color.aerialway
-                    size: [[14, 1.25px], [15, 3px], [16, 3px]]
-                    collide: false
-                    placement: spaced
-                    placement_spacing: 10px
-                    placement_min_length_ratio: 0
+                    width: [[14, 50], [16, 25], [18, 10], [20, 4]]
+                    #width: [[14, 6px], [15, 8px], [16, 10px]]
+                    #width: [[14, 50m], [15, 30m], [16, 20m]]
+                # maybe use dashed line instead?
+                #points:
+                #    visible: false
+                #    color: global.color.aerialway
+                #    size: [[14, 1.25px], [15, 3px], [16, 3px]]
+                #    collide: false
+                #    placement: spaced
+                #    placement_spacing: 10px
+                #    placement_min_length_ratio: 0
             show_points:
-                filter: { $zoom: { min: 13 } }
+                filter: { $zoom: { min: 13 }, aerialway: [gondola, cable_car, mixed_lift, chair_lift] }
                 draw: { points: { visible: true } }
             gondola:
                 filter: { aerialway: [gondola, cable_car, mixed_lift] }
                 draw:
                     lines: { width: [[10,0.5px], [11,1px], [12, 1.5px], [13, 1.5px], [14, 2px], [15, 2.5px]] }
-                    points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
+                    #points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
             chair_lift:
                 filter: { aerialway: chair_lift }
                 draw:
                     lines: { width: [[10,0.5px], [11,1px], [12, 1.5px], [13, 1.5px], [14, 2px], [15, 2.5px]] }
-                    points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
+                    #points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
             aerialway_label:
                 filter: { $zoom: { min: 14 } }
                 draw:

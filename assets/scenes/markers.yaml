@@ -289,7 +289,7 @@ layers:
                 color: function() { return feature.color || '#0000FF'; }
                 width: 2px
                 #join: round
-                order: 5000
+                order: 2000
         recording:
             filter: { recording: 1 }
             draw: { track: { width: 3px } }
@@ -298,6 +298,7 @@ layers:
             draw:
                 track:
                     outline:
+                        order: 1990
                         width: 2px
                         color: white
                         miter_limit: 1.5

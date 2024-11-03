@@ -4,8 +4,8 @@ sources:
   last_source: opentopomap
   elevation: ["elevation"]
   common_imports:
-    - scenes/secrets.yaml
     - scenes/markers.yaml
+    #- scenes/secrets.yaml
   list_order:
     - stylus-osm-terrain
     - stylus-bike-hike

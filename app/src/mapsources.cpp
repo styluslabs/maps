@@ -84,7 +84,11 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", "raster-" + key);
     // opacity needs to be a uniform so it can be adjusted in real time w/o reloading scene
     //updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", std::to_string(opacity));
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string((isoverlay ? 1000 : 0) + order));
+    // 100 unit gap between rasters to allow sufficient range for proxy layers, which need ~50 unit offset
+    //  to prevent proxy tile terrain from poking through; 2000 units is max order usable w/ 3D terrain
+    // we should keep separate counts of base rasters and overlays to make more efficient use of order range
+    int draworder = (isoverlay ? 1000 : 100) + order*100;
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.order", std::to_string(draworder));
     ++order;
   }
   else if(src["scene"]) {  // vector map

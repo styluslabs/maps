@@ -29,8 +29,9 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
         return true;
     }
     else if(event->type == SDL_FINGERDOWN) {
+      uint32_t mods = SDL_GetModState();
       altDragMode = event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK;
-      tapState = gui->fingerClicks == 2 ? DBL_TAP_DRAG_PENDING : TAP_NONE;
+      tapState = (gui->fingerClicks == 2 || (mods & KMOD_CTRL)) ? DBL_TAP_DRAG_PENDING : TAP_NONE;
     }
     else if(event->type == SDL_FINGERMOTION) {
       if(tapState == DBL_TAP_DRAG_PENDING && gui->fingerClicks == 0)
