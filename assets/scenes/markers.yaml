@@ -87,6 +87,15 @@ styles:
         mix: global.terrain_3d_mixin
         lighting: false
 
+    track-direction:
+        mix: track-lines
+        texture: |
+            data:image/svg+xml;utf8,<svg width="10pt" height="80pt" viewBox="-5 -40 10 80">
+              <!-- path fill="#fff" d="M-5 -40 L-5 40 L5 40 L5 -40Z"/ -->
+              <!-- path fill="#000" d="M-5 -6 L-5 0 L0 -4 L5 0 L5 -6 L0 -10Z"/ -->
+              <path fill="#fff" d="M-5 -40 L-5 0 L0 -4 L5 0 L5 -40Z M-5 40 L-5 6 L0 2 L5 6 L5 40Z"/>
+            </svg>
+
     loc-points:
         mix: poi-points
         blend_order: 1000
@@ -287,17 +296,21 @@ layers:
                 style: track-lines
                 interactive: true
                 color: function() { return feature.color || '#0000FF'; }
-                width: 2px
+                width: [[16, 2px], [17, 4px], [18, 6px]]
                 #join: round
                 order: 2000
+        direction:
+            filter: { $zoom: { min: 17 } }
+            draw: { track: { style: track-direction } }
         recording:
             filter: { recording: 1 }
-            draw: { track: { width: 3px } }
+            draw: { track: { width: [[16, 3px], [17, 6px]] } }
         selected:
             filter: { selected: 1 }
             draw:
                 track:
                     outline:
+                        style: track-lines
                         order: 1990
                         width: 2px
                         color: white

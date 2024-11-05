@@ -2153,13 +2153,12 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   if(flyToPickResult) {
     // ensure marker is visible and hasn't been covered by opening panel
     Point scr;
-    auto campos = map->getCameraPosition();
-    campos.longitude = pickResultCoord.longitude;
-    campos.latitude = pickResultCoord.latitude;
-    campos.zoom = std::min(campos.zoom, 16.0f);
-    bool onscr = map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y);
-    if(!onscr || panelContainer->node->bounds().contains(scr/gui->paintScale))
+    bool onscr = map->lngLatToScreenPosition(pickResultCoord.longitude, pickResultCoord.latitude, &scr.x, &scr.y);
+    if(!onscr || panelContainer->node->bounds().contains(scr/gui->paintScale)) {
+      auto campos = map->getCameraPositionToLookAt(pickResultCoord);
+      campos.zoom = std::min(campos.zoom, 16.0f);
       gotoCameraPos(campos);
+    }
     flyToPickResult = false;
   }
 

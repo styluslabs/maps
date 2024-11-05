@@ -98,6 +98,18 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
   else if(event->type == SvgGui::OUTSIDE_PRESSED) {
     sdlEvent(gui, (SDL_Event*)event->user.data1);  // just treat as a normal fingerup event
   }
+  else if(event->type == SDL_KEYDOWN) {
+    if(event->key.keysym.mod & KMOD_CTRL) {
+      if(event->key.keysym.sym == SDLK_EQUALS)
+        app->map->setZoom(app->map->getZoom() + 0.5f);
+      else if(event->key.keysym.sym == SDLK_MINUS)
+        app->map->setZoom(app->map->getZoom() - 0.5f);
+      else
+        return false;
+    }
+    else
+      return false;
+  }
   else
     return false;
   return true;
