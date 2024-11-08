@@ -101,9 +101,9 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
   else if(event->type == SDL_KEYDOWN) {
     if(event->key.keysym.mod & KMOD_CTRL) {
       if(event->key.keysym.sym == SDLK_EQUALS)
-        app->map->setZoom(app->map->getZoom() + 0.5f);
+        app->map->setZoom(app->map->getZoom() + 0.2f);
       else if(event->key.keysym.sym == SDLK_MINUS)
-        app->map->setZoom(app->map->getZoom() - 0.5f);
+        app->map->setZoom(app->map->getZoom() - 0.2f);
       else
         return false;
     }

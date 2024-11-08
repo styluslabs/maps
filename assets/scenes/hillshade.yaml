@@ -237,9 +237,9 @@ styles:
                     #endif
                         float zstep = z >= 13.5 ? 13.5 : z >= 11.5 ? 11.5 : 9.5;
                         float linehw = mix(0.3, 0.5, clamp(0.5*(z - zstep), 0., 1.));
-                        #ifdef TANGRAM_TERRAIN_3D
-                        linehw *= 0.01/(1.0 - gl_FragCoord.z);  // reduce variation of line width with depth
-                        #endif
+                    #ifdef TANGRAM_TERRAIN_3D
+                        //linehw *= 0.01/(1.0 - gl_FragCoord.z);  // reduce variation of line width with depth
+                    #endif
                         //float intervals[4] = float[](10., 20., 50., 100.);  -- need GLES 3
                         //float interval = 10.*clamp(exp2(15. - u_tile_origin.z), 1., 100.);
                         // no underwater contour lines!

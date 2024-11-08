@@ -1466,6 +1466,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       real lng = currLocation.lng + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
       real alt = currLocation.alt + 10*std::rand()/real(RAND_MAX);
       updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 10, alt, 10, NAN, 0, NAN, 0});
+      updateOrientation(orientation + 5*std::rand()/real(RAND_MAX), 0, 0);
     };
 
     Menu* appDebugMenu = createMenu(Menu::HORZ);
@@ -1528,9 +1529,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->setMargins(0, 0, 6, 0);
   reorientBtn->onClicked = [this](){
-    prevCamPos = map->getCameraPosition();
-    prevCamPos.tilt = 0;
-    prevCamPos.rotation = 0;
+    // w/ 3D terrain, point at center of screen not the same as camera position
+    LngLat center = getMapCenter();
+    prevCamPos = {center.longitude, center.latitude, map->getZoom(), 0, 0};
     map->setCameraPositionEased(prevCamPos, 1.0);
     if(followState != NO_FOLLOW) {
       followState = NO_FOLLOW;
@@ -1553,11 +1554,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
     if(followState != NO_FOLLOW)
       return;
-    auto campos = map->getCameraPosition();
-    bool cammatch = camerasMatch(campos, prevCamPos);
-    //prevCamPos = {};
-    campos.longitude = currLocation.lng;
-    campos.latitude = currLocation.lat;
+    bool cammatch = camerasMatch(map->getCameraPosition(), prevCamPos);
+    auto campos = map->getCameraPositionToLookAt(currLocation.lngLat());
     //campos.zoom = std::min(campos.zoom, 16.0f);
     Point loc, center(map->getViewportWidth()/2, map->getViewportHeight()/2);
     bool locvisible = map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &loc.x, &loc.y);
@@ -1568,8 +1566,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
     else if(!locvisible && !std::isnan(pickResultCoord.latitude) &&
         map->lngLatToScreenPosition(pickResultCoord.longitude, pickResultCoord.latitude, NULL, NULL)) {
-      auto viewboth = map->getEnclosingCameraPosition(pickResultCoord, currLocation.lngLat(), {32});
-      campos.zoom = viewboth.zoom - 1;
+      auto viewboth = map->getEnclosingCameraPosition(pickResultCoord, currLocation.lngLat());
+      // -1 since currLocation is placed at center not edge; -0.25 or -0.5 for padding
+      campos.zoom = viewboth.zoom - (terrain3D ? 1.5f : 1.25f);
       gotoCameraPos(campos);  //, 1.0);
       if(campos.zoom >= 12)
         prevCamPos = campos;
