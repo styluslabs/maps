@@ -218,6 +218,7 @@ private:
 
   void populateColorPickerMenu();
   void customizeColors(Color initialColor, std::function<void(Color)> callback);
+  void toggleFollow();
 
   bool flyToPickResult = false;
   bool initToCurrLoc = false;

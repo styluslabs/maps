@@ -367,6 +367,12 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   Toolbar* toolbar = createToolbar();
   mapsBookmarks->addPlaceActions(toolbar);
   mapsTracks->addPlaceActions(toolbar);
+  if(currLocPlaceInfo) {
+    Button* followBtn = createActionbutton(MapsApp::uiIcon("nav-arrow"), "Follow");
+    followBtn->onClicked = [=](){ toggleFollow(); };  //followBtn->setChecked(followState != NO_FOLLOW); };
+    //followBtn->setChecked(followState != NO_FOLLOW);
+    toolbar->addWidget(followBtn);
+  }
   toolbar->addWidget(createStretch());
 
   Button* shareLocBtn = createActionbutton(MapsApp::uiIcon("share"), "Share");
@@ -756,25 +762,32 @@ void MapsApp::sendMapEvent(MapEvent_t event)
   //pluginManager->onMapEvent(event);
 }
 
-static bool camerasMatch(const CameraPosition& cam0, const CameraPosition& cam1)
+/*static bool camerasMatch(const CameraPosition& cam0, const CameraPosition& cam1)
 {
   float drot = std::abs(cam0.rotation - cam1.rotation)*180/M_PI;
   drot = std::min(drot, 360 - drot);
-  return std::abs(cam0.zoom - cam1.zoom) < 1E-7
-      && std::abs(cam0.longitude - cam1.longitude) < 1E-7
-      && std::abs(cam0.latitude - cam1.latitude) < 1E-7
+  auto pos0 = MapProjection::lngLatToProjectedMeters(cam0.lngLat());
+  auto pos1 = MapProjection::lngLatToProjectedMeters(cam1.lngLat());
+  return std::abs(cam0.zoom - cam1.zoom) < 2  //1E-2  //1E-7
+      && glm::length(pos1 - pos0)/MapProjection::metersPerPixelAtZoom(cam0.zoom) < 5
       && drot < 1.0;
-}
+}*/
 
 void MapsApp::mapUpdate(double time)
 {
   static double lastFrameTime = 0;
 
-  if(followState == FOLLOW_ACTIVE && !camerasMatch(map->getCameraPosition(), prevCamPos)) {
-    followState = NO_FOLLOW;
-    prevCamPos = {};
-    recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
+  // w/ 3D terrain, screenPositionToLngLat() not valid between position change and depth texture update
+  if(followState == FOLLOW_ACTIVE) {  //&& !camerasMatch(map->getCameraPosition(), prevCamPos)) {
+    Point scr, center(map->getViewportWidth()/2, map->getViewportHeight()/2);
+    map->lngLatToScreenPosition(prevCamPos.longitude, prevCamPos.latitude, &scr.x, &scr.y);
+    if(scr.dist(center)/gui->paintScale > 10) {
+      followState = NO_FOLLOW;
+      prevCamPos = {};
+      recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
+    }
   }
+
   if(locMarkerAngle != orientation + map->getRotation()*180/float(M_PI))
     updateLocMarker();
 
@@ -809,17 +822,6 @@ void MapsApp::mapUpdate(double time)
 
   sendMapEvent(MAP_CHANGE);
 }
-
-//void MapsApp::onResize(int wWidth, int wHeight, int fWidth, int fHeight)
-//{
-//  float new_density = (float)fWidth / (float)wWidth;
-//  if (new_density != density) {
-//    //recreate_context = true;
-//    density = new_density;
-//  }
-//  map->setPixelScale(pixel_scale*density);
-//  map->resize(fWidth, fHeight);  // this just calls setViewport
-//}
 
 void MapsApp::onLowMemory()
 {
@@ -923,8 +925,7 @@ void MapsApp::updateLocation(const Location& _loc)
   updateLocMarker();
 
   if(followState == FOLLOW_ACTIVE) {
-    prevCamPos.longitude = _loc.lng;
-    prevCamPos.latitude = _loc.lat;
+    prevCamPos.setLngLat(_loc.lngLat());
     map->setCameraPosition(prevCamPos);
   }
   if(currLocPlaceInfo) {
@@ -965,6 +966,16 @@ void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
   }
   //LOGW("orientation: %.1f deg", orientation);
   updateLocMarker();
+}
+
+void MapsApp::toggleFollow()
+{
+  bool follow = followState == NO_FOLLOW;
+  followState = follow ? FOLLOW_PENDING : NO_FOLLOW;
+  prevCamPos = map->getCameraPosition().setLngLat(currLocation.lngLat());
+  prevCamPos.rotation = follow ? -orientation*float(M_PI)/180 : 0;
+  map->setCameraPositionEased(prevCamPos, 1.0f);
+  recenterBtn->setIcon(MapsApp::uiIcon(follow ? "nav-arrow" : "gps-location"));
 }
 
 YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
@@ -1554,12 +1565,13 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
     if(followState != NO_FOLLOW)
       return;
-    bool cammatch = camerasMatch(map->getCameraPosition(), prevCamPos);
-    auto campos = map->getCameraPositionToLookAt(currLocation.lngLat());
+
+    //bool cammatch = camerasMatch(map->getCameraPosition(), prevCamPos);
+    auto campos = map->getCameraPosition().setLngLat(currLocation.lngLat());
     //campos.zoom = std::min(campos.zoom, 16.0f);
     Point loc, center(map->getViewportWidth()/2, map->getViewportHeight()/2);
     bool locvisible = map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &loc.x, &loc.y);
-    if(cammatch && center.dist(loc)/gui->paintScale < 40) {
+    if(center.dist(loc)/gui->paintScale < 20) {  // && cammatch
       campos.zoom = std::min(20.0f, campos.zoom + 1);
       map->setCameraPositionEased(campos, 0.35f);
       prevCamPos = campos;
@@ -1575,24 +1587,17 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
     else {
       if(campos.zoom < 12) campos.zoom = 15;
-      gotoCameraPos(campos);  //, 1.0);
+      if(mapState.isAnimating() && lngLatDist(campos.lngLat(), prevCamPos.lngLat()) < 0.01)  //camerasMatch(campos, prevCamPos))
+        map->setCameraPosition(campos);  // stop animation and go to final position immediately
+      else
+        gotoCameraPos(campos);  //, 1.0);
       prevCamPos = campos;
     }
   };
 
   // should we forward motion events to map (so if user accidently starts drag on button it still works?)
   recenterBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
-    if(event->type == SDL_FINGERUP && gui->fingerClicks == 2) {
-      prevCamPos = map->getCameraPosition();
-      bool follow = followState == NO_FOLLOW;
-      followState = follow ? FOLLOW_PENDING : NO_FOLLOW;
-      prevCamPos.longitude = currLocation.lng;
-      prevCamPos.latitude = currLocation.lat;
-      prevCamPos.rotation = follow ? -orientation*float(M_PI)/180 : 0;
-      map->setCameraPositionEased(prevCamPos, 1.0f);
-      recenterBtn->setIcon(MapsApp::uiIcon(follow ? "nav-arrow" : "gps-location"));
-    }
-    else if(isLongPressOrRightClick(event)) {
+    if(isLongPressOrRightClick(event)) {
       sensorsEnabled = !sensorsEnabled;
       setSensorsEnabled(sensorsEnabled);
       recenterBtn->setIcon(MapsApp::uiIcon(sensorsEnabled ? "gps-location" : "gps-location-off"));
@@ -1602,6 +1607,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
         updateLocMarker();
       }
     }
+    //else if(event->type == SDL_FINGERUP && gui->fingerClicks == 2)
+    //  toggleFollow();
     else
       return false;
     // prevent click event; should OUTSIDE_PRESSED be sent by SvgGui before long press event?
@@ -2152,12 +2159,11 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   if(flyToPickResult) {
     // ensure marker is visible and hasn't been covered by opening panel
     Point scr;
-    bool onscr = map->lngLatToScreenPosition(pickResultCoord.longitude, pickResultCoord.latitude, &scr.x, &scr.y);
-    if(!onscr || panelContainer->node->bounds().contains(scr/gui->paintScale)) {
-      auto campos = map->getCameraPositionToLookAt(pickResultCoord);
-      campos.zoom = std::min(campos.zoom, 16.0f);
+    auto campos = map->getCameraPosition().setLngLat(pickResultCoord);
+    campos.zoom = std::min(campos.zoom, 16.0f);
+    bool onscr = map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y);
+    if(!onscr || panelContainer->node->bounds().contains(scr/gui->paintScale))
       gotoCameraPos(campos);
-    }
     flyToPickResult = false;
   }
 
