@@ -509,20 +509,20 @@ static bool mbtilesImport(SQLiteDB& tileDB, int offlineId)
     importSql = R"#(BEGIN;
       REPLACE INTO map SELECT zoom_level, tile_column, tile_row, md5(tile_data) FROM src.tiles;
       DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM map);  -- delete orphaned tiles
-      REPLACE INTO images SELECT s.tile_data, map.tile_id FROM src.tiles AS s JOIN map ON
+      REPLACE INTO images (tile_data, tile_id) SELECT s.tile_data, map.tile_id FROM src.tiles AS s JOIN map ON
         s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
-      REPLACE INTO offline_tiles SELECT map.tile_id, %d FROM src.tiles AS s JOIN map ON
+      REPLACE INTO offline_tiles (tile_id, offline_id) SELECT map.tile_id, %d FROM src.tiles AS s JOIN map ON
         s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
-      REPLACE INTO metadata(name, value) VALUES ('compression', 'unknown');
+      REPLACE INTO metadata (name, value) VALUES ('compression', 'unknown');
       COMMIT;)#";
   }
   else if(hasMap && hasImages) {
     importSql = R"#(BEGIN;
       REPLACE INTO main.map SELECT * FROM src.map;
       DELETE FROM main.images WHERE tile_id NOT IN (SELECT tile_id FROM main.map);  -- delete orphaned tiles
-      REPLACE INTO main.images SELECT * FROM src.images;
-      REPLACE INTO main.offline_tiles SELECT tile_id, %d FROM src.map;
-      REPLACE INTO main.metadata(name, value) VALUES ('compression', 'unknown');
+      REPLACE INTO main.images (tile_data, tile_id) SELECT * FROM src.images;
+      REPLACE INTO main.offline_tiles (tile_id, offline_id) SELECT tile_id, %d FROM src.map;
+      REPLACE INTO main.metadata (name, value) VALUES ('compression', 'unknown');
       COMMIT;)#";
   }
   else {
