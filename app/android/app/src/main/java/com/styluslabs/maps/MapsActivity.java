@@ -452,6 +452,12 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public void cancelUrlRequest(final long requestHandle)
   {
+    if(requestHandle == -1) {
+      httpHandler.cancelAllRequests();
+      httpRequestHandles.clear();
+      return;
+    }
+
     Object request = httpRequestHandles.remove(requestHandle);
     if (request != null) {
       httpHandler.cancelRequest(request);

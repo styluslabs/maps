@@ -26,7 +26,7 @@ sources:
     - archived
 
 terrain_3d:
-  enabled: true
+  #enabled: true  -- missing value will trigger prompt when map is titled
   import: scenes/terrain-3d.yaml
   updates:
     global.earth_style: terrain-3d-polygons

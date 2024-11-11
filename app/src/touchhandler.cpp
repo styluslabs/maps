@@ -5,7 +5,7 @@
 
 static constexpr float pinchThreshold = 30;  // pixels/xyScale (change in distance between fingers)
 static constexpr float rotateThreshold = 0.25f;  // radians
-static constexpr float shoveThreshold = 100;  // pixels/xyScale (translation of centroid of fingers)
+static constexpr float shoveThreshold = 40;  // pixels/xyScale (translation of centroid of fingers)
 static constexpr float longPressThreshold = 8;  // pixels/xyScale
 static constexpr float mouseRotateScale = 0.001f;  // radians/pixel
 
@@ -176,6 +176,8 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
           multiTouchState = TOUCH_ROTATE;
         else if(prevDist < 250*xyScale && std::abs(com.y - prevCOM.y) > threshscale*shoveThreshold*xyScale)
           multiTouchState = TOUCH_SHOVE;
+        else if(prevDist < 250*xyScale && std::abs(com.x - prevCOM.x) > threshscale*shoveThreshold*xyScale)
+          multiTouchState = TOUCH_ROTATE2;
       }
       if(multiTouchState == TOUCH_PINCH) {
         map->handlePanGesture(prevCOM.x, prevCOM.y, com.x, com.y);
@@ -189,6 +191,10 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
         map->handleRotateGesture(com.x, com.y, angle - prevAngle);
       else if(multiTouchState == TOUCH_SHOVE)
         map->handleShoveGesture(com.y - prevCOM.y);
+      else if(multiTouchState == TOUCH_ROTATE2) {
+        map->handleRotateGesture(map->getViewportWidth()/2,
+            map->getViewportHeight()/2, -(com.x - prevCOM.x)*mouseRotateScale);
+      }
     }
     if(multiTouchState != TOUCH_NONE || touchPoints.size() > prevpoints) {
       prevCOM = com;
@@ -199,7 +205,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
   }
   else if(prevpoints > 0) {
     if(altDragMode && prevpoints == 1) {
-      map->handleRotateGesture(initCOM.x, initCOM.y, -(pt.x - prevCOM.x)*mouseRotateScale);  //map->getViewportWidth()/2
+      map->handleRotateGesture(initCOM.x, initCOM.y, -(pt.x - prevCOM.x)*mouseRotateScale);
       map->handleShoveGesture(pt.y - prevCOM.y);
     }
     else if(tapState == DBL_TAP_DRAG_ACTIVE) {

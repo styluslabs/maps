@@ -165,6 +165,7 @@ public:
   Widget* panelToSkip = NULL;
   Menu* undeleteMenu = NULL;
   Pager* panelPager = NULL;
+  Button* terrain3dCb = NULL;
   std::function<bool(SvgGui*, Widget*, SDL_Event*)> pagerEventFilter;
 
   std::atomic_int_fast64_t storageTotal = {0};

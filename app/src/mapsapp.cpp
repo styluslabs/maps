@@ -820,6 +820,14 @@ void MapsApp::mapUpdate(double time)
   if(tf != iconNode->getTransform())
     iconNode->setTransform(tf);
 
+  // prompt for 3D terrain if first time tilting
+  if(cpos.tilt != 0 && !terrain3D && !config["terrain_3d"]["enabled"].IsDefined()) {
+    config["terrain_3d"]["enabled"] = false;
+    MapsApp::messageBox("3D Terrain",
+        fstring("3D terrain can be controlled from the overflow menu.  Enable now? "), {"OK", "Cancel"},
+        [=](std::string res){ if(res == "OK") { terrain3dCb->onClicked(); } });
+  }
+
   sendMapEvent(MAP_CHANGE);
 }
 
@@ -982,7 +990,7 @@ YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
 {
   YAML::Node node;
   if(map->getScene()->isReady())
-      Tangram::YamlPath(yamlPath).get(map->getScene()->config(), node);
+    Tangram::YamlPath(yamlPath).get(map->getScene()->config(), node);
   return node;
 }
 
@@ -1429,7 +1437,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   metricCb->setChecked(metricUnits);
   overflowMenu->addItem(metricCb);
 
-  Button* terrain3dCb = createCheckBoxMenuItem("3D terrain");
+  terrain3dCb = createCheckBoxMenuItem("3D terrain");
   terrain3dCb->onClicked = [=](){
     terrain3D = !terrain3D;
     config["terrain_3d"]["enabled"] = terrain3D;
