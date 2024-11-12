@@ -237,11 +237,12 @@ layers:
             marker:
                 style: loc-points
                 texture: loc-marker
-                #flat: true  -- this breaks direction indication for some reason
+                flat: true
                 interactive: true
                 collide: false
                 size: 32px
-                angle: 'function() { return feature.angle; }'
+                #angle: 'function() { return feature.orientation + feature.map_rotation; }'  -- for flat: false
+                angle: 'function() { return feature.orientation; }'
                 color: |
                     function() { return feature.selected ? '#CF513D' : (feature.hasfix ? '#0000FF' : '#909090'); }
                 priority: -1000

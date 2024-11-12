@@ -882,8 +882,8 @@ void MapsApp::updateLocMarker()
   }
   locMarkerAngle = orientation + map->getRotation()*180/float(M_PI);
   map->markerSetPoint(locMarker, currLocation.lngLat());
-  map->markerSetProperties(locMarker, {{ {"hasfix", hasLocation ? 1 : 0},
-      {"selected", currLocPlaceInfo ? 1 : 0}, {"angle", locMarkerAngle}}});
+  map->markerSetProperties(locMarker, {{ {"hasfix", hasLocation ? 1 : 0}, {"selected", currLocPlaceInfo ? 1 : 0},
+      {"orientation", orientation}, {"map_rotation", map->getRotation()*180/float(M_PI)}}});
 }
 
 void MapsApp::updateLocPlaceInfo()
@@ -1779,7 +1779,7 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
     if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
         //&& event->tfinger.touchId != SDL_TOUCH_MOUSEID  -- at least need to allow splitter!!!
         && gui->menuStack.empty()  // don't interfere with menu
-        && gui->fingerClicks == 0  // require sufficient motion before activation
+        && gui->totalFingerDist > 40  //fingerClicks == 0  // require sufficient motion before activation
         && (!gui->pressedWidget || gui->pressedWidget->isDescendantOf(toolbar))) {
       if(gui->pressedWidget)
         gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, NULL);  //this);
