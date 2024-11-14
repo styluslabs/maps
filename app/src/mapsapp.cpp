@@ -1771,29 +1771,40 @@ Toolbar* MapsApp::createPanelHeader(const SvgNode* icon, const char* title)
   //static_cast<SvgText*>(titleWidget->containerNode()->selectFirst("text"))->setText(title);
   toolbar->addWidget(titleWidget);
 
-  toolbar->eventFilter = [=](SvgGui* gui, Widget* widget, SDL_Event* event){
-    if(gui->pressedWidget == panelPager)
-      return pagerEventFilter(gui, widget, event);
-    if(gui->pressedWidget == panelSplitter)
-      return false;
-    if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
+  toolbar->addHandler([=](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERDOWN && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
+      gui->setPressed(toolbar);  // accept press event if a child hasn't
+    }
+    else if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK
         //&& event->tfinger.touchId != SDL_TOUCH_MOUSEID  -- at least need to allow splitter!!!
         && gui->menuStack.empty()  // don't interfere with menu
-        && gui->totalFingerDist > 40  //fingerClicks == 0  // require sufficient motion before activation
+        && gui->fingerClicks == 0  // require sufficient motion before activation
         && (!gui->pressedWidget || gui->pressedWidget->isDescendantOf(toolbar))) {
       if(gui->pressedWidget)
         gui->pressedWidget->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, NULL);  //this);
       auto& p0 = gui->pressEvent.tfinger;
       auto& p1 = event->tfinger;
       if(std::abs(p1.x-p0.x) > std::abs(p1.y-p0.y)) {
-        pagerEventFilter(gui, widget, &gui->pressEvent);  // send to Pager
+        pagerEventFilter(gui, toolbar, &gui->pressEvent);  // send to Pager
         gui->setPressed(panelPager);
-        return pagerEventFilter(gui, widget, event);
+        return pagerEventFilter(gui, toolbar, event);
       }
       else {
         panelSplitter->sdlEvent(gui, &gui->pressEvent);  // send to splitter
       }
     }
+    else
+      return false;
+    return true;
+  });
+
+  toolbar->eventFilter = [=](SvgGui* gui, Widget* widget, SDL_Event* event){
+    if(gui->pressedWidget == panelPager)
+      return pagerEventFilter(gui, widget, event);
+    if(gui->pressedWidget == panelSplitter || gui->pressedWidget == toolbar)
+      return false;
+    if(event->type == SDL_FINGERMOTION && event->tfinger.fingerId == SDL_BUTTON_LMASK)
+      return toolbar->sdlEvent(gui, event);  // send to splitter
     return false;
   };
 
