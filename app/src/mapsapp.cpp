@@ -22,6 +22,7 @@
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
 #include "usvg/svgparser.h"
+#include "nanovg_gl_utils.h"
 #include "mapwidgets.h"
 #include "resources.h"
 #if PLATFORM_IOS
@@ -103,6 +104,15 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
   onApplyLayout = [this](const Rect& src, const Rect& dest){
     if(dest != viewport) {
       Map* map = app->map.get();
+
+      Rect r = window()->winBounds()*app->gui->paintScale;
+      int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
+      map->setViewport(0, 0, w, h);
+
+      int desth = int(dest.height()*app->gui->paintScale + 0.5);
+      map->setPadding(Tangram::EdgePadding(0, 0, 0, h - desth, false));
+
+      /*
       Rect r0 = dest;
       real winh = window()->winBounds().height();
       // expand map down a bit to account for (possibly) rounded corners of UI
@@ -117,6 +127,7 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
       // ... but skip on initial layout (detected by Rect viewport not yet set)
       if(viewport.isValid())
         map->setPosition(pos.longitude, pos.latitude);
+      */
       auto margins = app->currLayout->node->hasClass("window-layout-narrow") ?
             glm::vec4(0, 0, 10, 0) : glm::vec4(0, 0, 0, app->getPanelWidth()+20);  // TRBL
       Tangram::TextDisplay::Instance().setMargins(margins);
@@ -247,8 +258,7 @@ void MapsApp::sdlEvent(SDL_Event* event)
 
 void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
 {
-  //int vieww = map->getViewportWidth(), viewh = map->getViewportHeight();
-  Rect bounds = mapsWidget->node->bounds()/gui->inputScale;
+  Rect bounds = getMapViewport();
   int vieww = int(bounds.width() + 0.5), viewh = int(bounds.height() + 0.5);
   double lng00, lng01, lng10, lng11, lat00, lat01, lat10, lat11;
   map->screenPositionToLngLat(0, 0, &lng00, &lat00);
@@ -262,14 +272,17 @@ void MapsApp::getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax)
   lngLatMax.longitude = std::max(std::max(lng00, lng01), std::max(lng10, lng11));
 }
 
+Rect MapsApp::getMapViewport()
+{
+  return mapsWidget->node->bounds().toSize()*gui->paintScale;
+}
+
 LngLat MapsApp::getMapCenter()
 {
   LngLat res;
   // map viewport may extend outside visible area (i.e. MapsWidget) to account for, e.g, rounded corners
-  //int w = map->getViewportWidth(), h = map->getViewportHeight();
-  Rect bounds = mapsWidget->node->bounds()/gui->inputScale;
-  int w = int(bounds.width() + 0.5), h = int(bounds.height() + 0.5);
-  map->screenPositionToLngLat(w/2, h/2, &res.longitude, &res.latitude);
+  Point center = getMapViewport().center();
+  map->screenPositionToLngLat(center.x, center.y, &res.longitude, &res.latitude);
   return res;
 }
 
@@ -779,9 +792,9 @@ void MapsApp::mapUpdate(double time)
 
   // w/ 3D terrain, screenPositionToLngLat() not valid between position change and depth texture update
   if(followState == FOLLOW_ACTIVE) {  //&& !camerasMatch(map->getCameraPosition(), prevCamPos)) {
-    Point scr, center(map->getViewportWidth()/2, map->getViewportHeight()/2);
+    Point scr;
     map->lngLatToScreenPosition(prevCamPos.longitude, prevCamPos.latitude, &scr.x, &scr.y);
-    if(scr.dist(center)/gui->paintScale > 10) {
+    if(scr.dist(getMapViewport().center())/gui->paintScale > 10) {
       followState = NO_FOLLOW;
       prevCamPos = {};
       recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
@@ -824,7 +837,7 @@ void MapsApp::mapUpdate(double time)
   if(cpos.tilt != 0 && !terrain3D && !config["terrain_3d"]["enabled"].IsDefined()) {
     config["terrain_3d"]["enabled"] = false;
     MapsApp::messageBox("3D Terrain",
-        fstring("3D terrain can be controlled from the overflow menu.  Enable now? "), {"OK", "Cancel"},
+        fstring("3D terrain can be controlled from the overflow menu.  Enable now?"), {"OK", "Cancel"},
         [=](std::string res){ if(res == "OK") { terrain3dCb->onClicked(); } });
   }
 
@@ -862,12 +875,12 @@ void MapsApp::onResume()
 // Map::flyTo() zooms out and then back in, inappropriate for short flights
 void MapsApp::gotoCameraPos(const CameraPosition& campos)
 {
-  int w = map->getViewportHeight(), h = map->getViewportHeight();
   Point scr;
   map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y);
   // if point is close enough, use simple ease instead of flyTo
-  Point offset = scr - Point(w, h)/2;
-  if(std::abs(offset.x) < 2*w && std::abs(offset.y) < 2*h)
+  Rect viewport = getMapViewport();
+  Point offset = scr - viewport.center();
+  if(std::abs(offset.x) < 2*viewport.width() && std::abs(offset.y) < 2*viewport.height())
     map->setCameraPositionEased(campos, std::max(0.2, std::min(offset.dist()/200, 1.0)));
   else
     map->flyTo(campos, 1.0);
@@ -1499,10 +1512,14 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   #endif
     Button* offlineCb = createCheckBoxMenuItem("Offline");
     offlineCb->onClicked = [=](){
-      offlineCb->setChecked(!offlineCb->isChecked());
-      platform->isOffline = offlineCb->isChecked();
+      bool offline = !offlineCb->isChecked();
+      offlineCb->setChecked(offline);
+      platform->isOffline = offline;
+      config["force_offline"] = offline;
     };
     appDebugMenu->addItem(offlineCb);
+    if(config["force_offline"].as<bool>(false))
+      offlineCb->onClicked();
 
     Timer* fakeLocTimer = NULL;
     Button* fakeLocCb = createCheckBoxMenuItem("Simulate motion");
@@ -1519,7 +1536,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
     // dump contents of tile in middle of screen
     appDebugMenu->addItem("Dump tile", [this](){
-      dumpTileContents(map->getViewportWidth()/2, map->getViewportHeight()/2);
+      Point center = getMapViewport().center();
+      dumpTileContents(center.x, center.y);
     });
     appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
     appDebugMenu->addItem("Set location", [this](){
@@ -1548,7 +1566,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->setMargins(0, 0, 6, 0);
   reorientBtn->onClicked = [this](){
-    // w/ 3D terrain, point at center of screen not the same as camera position
     LngLat center = getMapCenter();
     prevCamPos = {center.longitude, center.latitude, map->getZoom(), 0, 0};
     map->setCameraPositionEased(prevCamPos, 1.0);
@@ -1577,9 +1594,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     //bool cammatch = camerasMatch(map->getCameraPosition(), prevCamPos);
     auto campos = map->getCameraPosition().setLngLat(currLocation.lngLat());
     //campos.zoom = std::min(campos.zoom, 16.0f);
-    Point loc, center(map->getViewportWidth()/2, map->getViewportHeight()/2);
+    Point loc;
     bool locvisible = map->lngLatToScreenPosition(currLocation.lng, currLocation.lat, &loc.x, &loc.y);
-    if(center.dist(loc)/gui->paintScale < 20) {  // && cammatch
+    if(loc.dist(getMapViewport().center())/gui->paintScale < 20) {  // && cammatch
       campos.zoom = std::min(20.0f, campos.zoom + 1);
       map->setCameraPositionEased(campos, 0.35f);
       prevCamPos = campos;
@@ -2193,6 +2210,10 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     mapUpdate(currTime);
     TRACE_END(t0, "map update");
     //mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
+
+    //Rect scissor = mapsWidget->viewport*gui->paintScale;
+    //nvgluSetScissor(0, 0, int(scissor.width() + 0.5), std::min(int(scissor.height() + 10), fbHeight));
+
     map->render();
     // selection queries are processed by render(); if nothing selected, tapLocation will still be valid
     if(pickedMarkerId > 0) {
@@ -2216,6 +2237,8 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->render();  // only have to rerender map, not update
   else
     return false;  // neither map nor UI is dirty
+
+  //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
 
   TRACE_END(t0, "map render");
   // scale bar must be updated whenever map changes, but we don't want to redraw entire UI every frame

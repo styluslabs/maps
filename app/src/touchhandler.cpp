@@ -65,7 +65,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
         Point v = Point(gui->flingV).clamp(-2000, 2000)*xyScale;  // pixels per second
         // Tangram will ignore gestures if velocity is too low (as desired)
         if(tapState == DBL_TAP_DRAG_ACTIVE) {
-          float h = app->map->getViewportHeight();
+          float h = app->getMapViewport().height();
           app->map->handlePinchGesture(initCOM.x, initCOM.y, 1.0, 4.0f*dblTapDragScale*v.y/h);
         }
         else
@@ -192,8 +192,8 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       else if(multiTouchState == TOUCH_SHOVE)
         map->handleShoveGesture(com.y - prevCOM.y);
       else if(multiTouchState == TOUCH_ROTATE2) {
-        map->handleRotateGesture(map->getViewportWidth()/2,
-            map->getViewportHeight()/2, -(com.x - prevCOM.x)*mouseRotateScale);
+        auto pos = app->getMapViewport().center();
+        map->handleRotateGesture(pos.x, pos.y, -(com.x - prevCOM.x)*mouseRotateScale);
       }
     }
     if(multiTouchState != TOUCH_NONE || touchPoints.size() > prevpoints) {
@@ -209,7 +209,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
       map->handleShoveGesture(pt.y - prevCOM.y);
     }
     else if(tapState == DBL_TAP_DRAG_ACTIVE) {
-      float h = app->map->getViewportHeight();
+      float h = app->getMapViewport().height();
       // alternative is to zoom from center of map instead of tap point - float cx = w/2, cy = h/2;
       map->handlePinchGesture(initCOM.x, initCOM.y, std::pow(2.0f, 4.0f*dblTapDragScale*(pt.y - prevCOM.y)/h), 0.f);
     }
@@ -220,7 +220,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     prevCOM = pt;
   }
   else if(prevpoints == 0) {
-    map->handlePanGesture(0.0f, 0.0f, 0.0f, 0.0f);  // cancel any previous motion
+    map->cancelCameraAnimation();  //handlePanGesture(0.0f, 0.0f, 0.0f, 0.0f);  // cancel any previous motion
     prevCOM = initCOM = pt;
   }
 }

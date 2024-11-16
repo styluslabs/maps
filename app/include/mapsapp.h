@@ -28,6 +28,7 @@ class ScaleBarWidget;
 class CrosshairWidget;
 class ManageColorsDialog;
 class SvgNode;
+class Rect;
 class Color;
 class Painter;
 struct sqlite3;
@@ -72,6 +73,7 @@ public:
   void loadSceneFile(bool async = true, bool setPosition = false);
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
+  Rect getMapViewport();
   LngLat getMapCenter();
   void getElevation(LngLat pos, std::function<void(double)> callback);
   void setPickResult(LngLat pos, std::string namestr, const std::string& propstr);

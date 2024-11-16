@@ -30,5 +30,5 @@ target_include_directories(tangram-core PRIVATE "${STYLUSLABS_DEPS}/nanovgXC/src
 
 if(CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
   target_compile_definitions(tangram-core PRIVATE TANGRAM_JS_TRACING=1)
-  target_compile_definitions(tangram-core PRIVATE TINY_DNG_LOADER_PROFILING=1)
+  target_compile_definitions(tangram-core PRIVATE TANGRAM_RELWITHDEBINFO=1)
 endif()
