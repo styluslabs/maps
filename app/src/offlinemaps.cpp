@@ -616,7 +616,10 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
   const char* query = "INSERT INTO offlinemaps (mapid,lng0,lat0,lng1,lat1,maxzoom,source,title,done) VALUES (?,?,?,?,?,?,?,?,?);";
   SQLiteStmt(app->bkmkDB, query).bind(olinfo.id, olinfo.lngLat00.longitude, olinfo.lngLat00.latitude,
       olinfo.lngLat11.longitude, olinfo.lngLat11.latitude, olinfo.maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
-  app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(olinfo.lngLat00, olinfo.lngLat11, {32}), 0.5f);
+
+  auto campos = app->map->getEnclosingCameraPosition(olinfo.lngLat00, olinfo.lngLat11);  //, {32})
+  campos.zoom -= 0.25f;
+  app->gotoCameraPos(campos);  //app->map->setCameraPositionEased(, 0.5f);
 
   YAML::Node searchYaml;
   if(!poiimport && !tileSource->isRaster())
@@ -695,7 +698,9 @@ void MapsOffline::populateOffline()
         app->map->markerSetVisible(rectMarker, true);
       app->map->markerSetStylingFromString(rectMarker, polylineStyle);
       app->map->markerSetPolyline(rectMarker, bounds, 5);
-      app->map->setCameraPositionEased(app->map->getEnclosingCameraPosition(bounds[0], bounds[2], {32}), 0.5f);
+      auto campos = app->map->getEnclosingCameraPosition(bounds[0], bounds[2]);  //, {32});
+      campos.zoom -= 0.25f;
+      app->gotoCameraPos(campos);  //app->map->setCameraPositionEased(, 0.5f);
       if(app->mapsSources->currSource != sourcestr)
         app->mapsSources->rebuildSource(sourcestr);
     };

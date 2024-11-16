@@ -1291,7 +1291,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
           <rect class="panel-bg background" box-anchor="fill" x="0" y="0" width="20" height="20" margin="20 0 0 0" />
           <rect class="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
         </g>
-        <g class="main-tb-container" box-anchor="hfill" layout="box"></g>
+        <g class="main-tb-container" box-anchor="hfill" margin="0 20 20 20" layout="box"></g>
         <rect class="bottom-inset" box-anchor="hfill" width="20" height="0"/>
       </g>
 
@@ -1415,6 +1415,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   // toolbar w/ buttons for search, bookmarks, tracks, sources
   mainToolbar = createMenubar();  //createToolbar();
+  mainToolbar->node->addClass("main-toolbar");
   mainToolbar->selectFirst(".child-container")->node->setAttribute("justify-content", "space-between");
   mainToolbar->selectFirst(".child-container")->setMargins(0, 10);
   Button* searchBtn = mapsSearch->createPanel();
@@ -1439,7 +1440,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   Menu* overflowMenu = createMenu(Menu::VERT);
   overflowBtn->setMenu(overflowMenu);
   overflowMenu->addItem(pluginBtn);
-  Button* metricCb = createCheckBoxMenuItem("Use metric units");
+  Button* metricCb = createCheckBoxMenuItem("Metric units");
   metricCb->onClicked = [=](){
     metricUnits = !metricUnits;
     config["metric_units"] = metricUnits;
@@ -1460,7 +1461,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   terrain3dCb->setChecked(terrain3D);
   overflowMenu->addItem(terrain3dCb);
 
-  Button* themeCb = createCheckBoxMenuItem("Use light theme");
+  Button* themeCb = createCheckBoxMenuItem("Light theme");
   themeCb->onClicked = [=](){
     bool light = !themeCb->checked();
     themeCb->setChecked(light);

@@ -128,7 +128,8 @@ global:
         bldg: 630
         transportation_casing: 638
         transportation: 640
-        rail: 640
+        rail_sleepers: 640
+        rail: 645
         taxiway: 650
         path: 650
         runway: 655
@@ -139,7 +140,7 @@ global:
         bridge: 700
         bicycle: 720
         transit: 750
-        aerialway: 750
+        aerialway: 760
         border: 790
         bldg_3d_line: 799
         bldg_3d: 800
@@ -693,7 +694,7 @@ layers:
                 filter: { $zoom: { min: 14 } }
                 draw:
                     dashed-rail:
-                        order: global.order.rail
+                        order: global.order.rail_sleepers
                         color: global.color.rail
                         width: [[12, 4px], [14, 4px], [16, 6px]]
             tunnel:

@@ -341,9 +341,9 @@ void MapsTracks::viewEntireTrack(GpxFile* track)
   }
   if(!app->map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude)
       || !app->map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude)) {
-    auto newpos = app->map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32});
-    newpos.zoom = std::min(newpos.zoom, 17.0f);
-    app->map->setCameraPositionEased(newpos, 0.5f);
+    auto newpos = app->map->getEnclosingCameraPosition(minLngLat, maxLngLat);  //, {32});
+    newpos.zoom = std::min(newpos.zoom - 0.25f, 17.0f);
+    app->gotoCameraPos(newpos);  //app->map->setCameraPositionEased(newpos, 0.5f);
   }
 }
 

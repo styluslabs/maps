@@ -179,6 +179,7 @@ rect.pushbtn-bg { border-radius: 6; }
 rect.dialog-bg { border-radius: 8; }
 .panel-header rect.toolbar-bg { border-radius: 8 8 0 0; }
 .title-toolbar rect.toolbar-bg { border-radius: 8 8 0 0; }
+.main-toolbar rect.toolbar-bg { border-radius: 8; }
 text.window-title { fill: var(--text); font-size: 17; font-weight: 700; margin: 15 0 4 12; }
 /* .toolbutton rect.toolbtn-bg { border-radius: 6; margin: 2 0 } */
 /* .panel-header { box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.5); } */
