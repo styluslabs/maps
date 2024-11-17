@@ -215,6 +215,9 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
     else if(prevpoints == 1 && tapState == TAP_NONE) {
       map->handlePanGesture(prevCOM.x, prevCOM.y, pt.x, pt.y);
+      // disable follow if sufficent panning (to avoid enraging user)
+      if(app->followState == MapsApp::FOLLOW_ACTIVE && app->gui->totalFingerDist > 50)
+        app->toggleFollow();
     }
     // we'll update prevCOM even in DBL_TAP_DRAG_PENDING so there isn't a jump in zoom when gesture becomes active
     prevCOM = pt;

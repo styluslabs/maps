@@ -107,7 +107,8 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
 
       Rect r = window()->winBounds()*app->gui->paintScale;
       int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
-      map->setViewport(0, 0, w, h);
+      if(w != map->getViewportWidth() || h != map->getViewportHeight())
+        map->setViewport(0, 0, w, h);
 
       int desth = int(dest.height()*app->gui->paintScale + 0.5);
       map->setPadding(Tangram::EdgePadding(0, 0, 0, h - desth, false));
@@ -775,31 +776,9 @@ void MapsApp::sendMapEvent(MapEvent_t event)
   //pluginManager->onMapEvent(event);
 }
 
-/*static bool camerasMatch(const CameraPosition& cam0, const CameraPosition& cam1)
-{
-  float drot = std::abs(cam0.rotation - cam1.rotation)*180/M_PI;
-  drot = std::min(drot, 360 - drot);
-  auto pos0 = MapProjection::lngLatToProjectedMeters(cam0.lngLat());
-  auto pos1 = MapProjection::lngLatToProjectedMeters(cam1.lngLat());
-  return std::abs(cam0.zoom - cam1.zoom) < 2  //1E-2  //1E-7
-      && glm::length(pos1 - pos0)/MapProjection::metersPerPixelAtZoom(cam0.zoom) < 5
-      && drot < 1.0;
-}*/
-
 void MapsApp::mapUpdate(double time)
 {
   static double lastFrameTime = 0;
-
-  // w/ 3D terrain, screenPositionToLngLat() not valid between position change and depth texture update
-  if(followState == FOLLOW_ACTIVE) {  //&& !camerasMatch(map->getCameraPosition(), prevCamPos)) {
-    Point scr;
-    map->lngLatToScreenPosition(prevCamPos.longitude, prevCamPos.latitude, &scr.x, &scr.y);
-    if(scr.dist(getMapViewport().center())/gui->paintScale > 10) {
-      followState = NO_FOLLOW;
-      prevCamPos = {};
-      recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
-    }
-  }
 
   if(locMarkerAngle != orientation + map->getRotation()*180/float(M_PI))
     updateLocMarker();
@@ -822,8 +801,11 @@ void MapsApp::mapUpdate(double time)
   //LOG("MapState: %X", mapState.flags);
   if(mapState.isAnimating())  // !mapState.viewComplete() - TileWorker requests rendering when new tiles ready
     platform->requestRender();
-  else if(followState == FOLLOW_PENDING)
-    followState = FOLLOW_ACTIVE;
+  else {
+    flyingToCurrLoc = false;
+    if(followState == FOLLOW_PENDING)
+      followState = FOLLOW_ACTIVE;
+  }
 
   // update map center
   auto cpos = map->getCameraPosition();
@@ -875,6 +857,9 @@ void MapsApp::onResume()
 // Map::flyTo() zooms out and then back in, inappropriate for short flights
 void MapsApp::gotoCameraPos(const CameraPosition& campos)
 {
+  if(followState == FOLLOW_ACTIVE)
+    toggleFollow();
+
   Point scr;
   map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y);
   // if point is close enough, use simple ease instead of flyTo
@@ -946,8 +931,7 @@ void MapsApp::updateLocation(const Location& _loc)
   updateLocMarker();
 
   if(followState == FOLLOW_ACTIVE) {
-    prevCamPos.setLngLat(_loc.lngLat());
-    map->setCameraPosition(prevCamPos);
+    map->setCameraPosition(map->getCameraPosition().setLngLat(_loc.lngLat()));  //, 0.1f);
   }
   if(currLocPlaceInfo) {
     updateLocPlaceInfo();
@@ -982,8 +966,9 @@ void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
   orientation = deg;
   // we might have to add a low-pass for this
   if(followState == FOLLOW_ACTIVE) {
-    prevCamPos.rotation = -deg*float(M_PI)/180;
-    map->setCameraPosition(prevCamPos);
+    auto campos = map->getCameraPosition();
+    campos.rotation = -deg*float(M_PI)/180;
+    map->setCameraPosition(campos); //, 0.1f);
   }
   //LOGW("orientation: %.1f deg", orientation);
   updateLocMarker();
@@ -993,9 +978,9 @@ void MapsApp::toggleFollow()
 {
   bool follow = followState == NO_FOLLOW;
   followState = follow ? FOLLOW_PENDING : NO_FOLLOW;
-  prevCamPos = map->getCameraPosition().setLngLat(currLocation.lngLat());
-  prevCamPos.rotation = follow ? -orientation*float(M_PI)/180 : 0;
-  map->setCameraPositionEased(prevCamPos, 1.0f);
+  auto campos = map->getCameraPosition().setLngLat(currLocation.lngLat());
+  campos.rotation = follow ? -orientation*float(M_PI)/180 : 0;
+  map->setCameraPositionEased(campos, 1.0f);
   recenterBtn->setIcon(MapsApp::uiIcon(follow ? "nav-arrow" : "gps-location"));
 }
 
@@ -1568,8 +1553,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   reorientBtn->setMargins(0, 0, 6, 0);
   reorientBtn->onClicked = [this](){
     LngLat center = getMapCenter();
-    prevCamPos = {center.longitude, center.latitude, map->getZoom(), 0, 0};
-    map->setCameraPositionEased(prevCamPos, 1.0);
+    CameraPosition campos = {center.longitude, center.latitude, map->getZoom(), 0, 0};
+    map->setCameraPositionEased(campos, 1.0);
     if(followState != NO_FOLLOW) {
       followState = NO_FOLLOW;
       recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
@@ -1592,7 +1577,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     if(followState != NO_FOLLOW)
       return;
 
-    //bool cammatch = camerasMatch(map->getCameraPosition(), prevCamPos);
     auto campos = map->getCameraPosition().setLngLat(currLocation.lngLat());
     //campos.zoom = std::min(campos.zoom, 16.0f);
     Point loc;
@@ -1600,7 +1584,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     if(loc.dist(getMapViewport().center())/gui->paintScale < 20) {  // && cammatch
       campos.zoom = std::min(20.0f, campos.zoom + 1);
       map->setCameraPositionEased(campos, 0.35f);
-      prevCamPos = campos;
     }
     else if(!locvisible && !std::isnan(pickResultCoord.latitude) &&
         map->lngLatToScreenPosition(pickResultCoord.longitude, pickResultCoord.latitude, NULL, NULL)) {
@@ -1608,16 +1591,14 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       // -1 since currLocation is placed at center not edge; -0.25 or -0.5 for padding
       campos.zoom = viewboth.zoom - (terrain3D ? 1.5f : 1.25f);
       gotoCameraPos(campos);  //, 1.0);
-      if(campos.zoom >= 12)
-        prevCamPos = campos;
     }
     else {
       if(campos.zoom < 12) campos.zoom = 15;
-      if(mapState.isAnimating() && lngLatDist(campos.lngLat(), prevCamPos.lngLat()) < 0.01)  //camerasMatch(campos, prevCamPos))
+      if(flyingToCurrLoc)
         map->setCameraPosition(campos);  // stop animation and go to final position immediately
       else
         gotoCameraPos(campos);  //, 1.0);
-      prevCamPos = campos;
+      flyingToCurrLoc = !flyingToCurrLoc;
     }
   };
 

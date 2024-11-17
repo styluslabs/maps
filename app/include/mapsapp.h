@@ -84,11 +84,12 @@ public:
   void gotoCameraPos(const CameraPosition& campos);
   void updateLocPlaceInfo();
   std::shared_ptr<TileSource> getElevationSource();
+  void toggleFollow();
 
   Location currLocation = {0};
   float orientation = 0;
   float locMarkerAngle = 0;
-  CameraPosition prevCamPos;
+  //CameraPosition prevCamPos;
   enum { NO_FOLLOW = 0, FOLLOW_PENDING, FOLLOW_ACTIVE } followState = NO_FOLLOW;
 
   MarkerID pickResultMarker = 0;
@@ -221,9 +222,9 @@ private:
 
   void populateColorPickerMenu();
   void customizeColors(Color initialColor, std::function<void(Color)> callback);
-  void toggleFollow();
 
   bool flyToPickResult = false;
+  bool flyingToCurrLoc = false;
   bool initToCurrLoc = false;
   bool sensorsEnabled = true;
   bool panelMaximized = false;
