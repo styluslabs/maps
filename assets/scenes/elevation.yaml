@@ -6,6 +6,7 @@ sources:
         filtering: nearest
         url: https://elevation-tiles-prod.s3.amazonaws.com/geotiff/{z}/{x}/{y}.tif
         max_zoom: 14
+        zoom_offset: 1
         cache: terrarium-tiff
         # 2 years - don't think this source will see any updates
         max_age: 63072000

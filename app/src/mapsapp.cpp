@@ -51,6 +51,7 @@ std::vector<Color> MapsApp::markerColors;
 SvgGui* MapsApp::gui = NULL;
 bool MapsApp::runApplication = true;
 bool MapsApp::simulateTouch = false;
+int MapsApp::prevVersion = 0;
 ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
@@ -105,12 +106,13 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
     if(dest != viewport) {
       Map* map = app->map.get();
 
-      Rect r = window()->winBounds()*app->gui->paintScale;
+      real pxscale = app->gui->paintScale;
+      Rect r = window()->winBounds()*pxscale;
       int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
       if(w != map->getViewportWidth() || h != map->getViewportHeight())
         map->setViewport(0, 0, w, h);
 
-      int desth = int(dest.height()*app->gui->paintScale + 0.5);
+      int desth = int(dest.height()*pxscale + 0.5);
       map->setPadding(Tangram::EdgePadding(0, 0, 0, h - desth, false));
 
       /*
@@ -130,7 +132,8 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
         map->setPosition(pos.longitude, pos.latitude);
       */
       auto margins = app->currLayout->node->hasClass("window-layout-narrow") ?
-            glm::vec4(0, 0, 10, 0) : glm::vec4(0, 0, 0, app->getPanelWidth()+20);  // TRBL
+            glm::vec4(app->topInset, 0, (h - desth)/pxscale + 10, 0) :
+            glm::vec4(0, 0, 0, app->getPanelWidth()+20);  // TRBL
       Tangram::TextDisplay::Instance().setMargins(margins);
       app->platform->requestRender();
     }
@@ -1276,7 +1279,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
           <rect class="panel-bg background" box-anchor="fill" x="0" y="0" width="20" height="20" margin="20 0 0 0" />
           <rect class="results-split-sizer" fill="none" box-anchor="hfill" width="320" height="200"/>
         </g>
-        <g class="main-tb-container" box-anchor="hfill" margin="0 20 20 20" layout="box"></g>
+        <g class="main-tb-container" box-anchor="hfill" margin="0 20 16 20" layout="box"></g>
         <rect class="bottom-inset" box-anchor="hfill" width="20" height="0"/>
       </g>
 
@@ -1328,7 +1331,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     if(event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
       getSafeAreaInsets(&topInset, &bottomInset);
       if(bottomInset > 0)
-        static_cast<SvgRect*>(winnode->selectFirst(".bottom-inset"))->setRect(Rect::wh(20, bottomInset));
+        static_cast<SvgRect*>(bottomPadding->node)->setRect(Rect::wh(20, bottomInset));
       return true;
     }
     return false;
@@ -1373,6 +1376,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
     return false;
   });
+
+  bottomPadding = new Widget(winnode->selectFirst(".bottom-inset"));
 
   // adjust map center to account for sidebar
   //map->setPadding({200, 0, 0, 0});
@@ -1525,6 +1530,12 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       Point center = getMapViewport().center();
       dumpTileContents(center.x, center.y);
     });
+    appDebugMenu->addItem("Dump YAML", [this](){
+      std::string filename = baseDir + "dump_scene.yaml";
+      std::ofstream fout(filename);
+      fout << map->getScene()->config();
+      LOGW("Scene YAML dumped to %s", filename.c_str());
+    });
     appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
     appDebugMenu->addItem("Set location", [this](){
       Location loc(currLocation);
@@ -1655,6 +1666,12 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   themeCb->setChecked(config["ui"]["theme"].as<std::string>("") != "light");
   themeCb->onClicked();
 
+  // need to update map sources from old version
+  if(prevVersion == 1) {
+    FSPath path = FSPath(configFile).parent().child("mapsources.default.yaml");
+    mapsSources->importSources("file://" + path.path);
+  }
+
   gui->showWindow(win.get(), NULL);
   // on desktop, command line options could override startup behavior
 #if PLATFORM_MOBILE
@@ -1673,6 +1690,7 @@ void MapsApp::showPanelContainer(bool show)
   if(panelSplitter->isEnabled()) {
     panelSplitter->setVisible(show);
     mainTbContainer->setVisible(!show);
+    bottomPadding->setVisible(show);
   }
   if(!panelHistory.empty() && show)
     panelHistory.back()->setVisible(true);  // to send VISIBLE event to panel
@@ -1982,13 +2000,13 @@ bool MapsApp::loadConfig(const char* assetPath)
   }
 
   configFile = configPath.c_str();
-  int prevver = config["prev_version"].as<int>(0);
+  prevVersion = config["prev_version"].as<int>(0);
   // set prev_version < 0 to update assets every run
-  if(prevver < versionCode && prevver >= 0)
+  if(prevVersion < versionCode && prevVersion >= 0)
     config["prev_version"] = versionCode;
 
   // merge in new config.default.yaml
-  if(prevver < versionCode && !firstrun) {
+  if(prevVersion < versionCode && !firstrun) {
     extractAssets(assetPath);
     try {
       auto newconfig = YAML::LoadFile(configDfltPath.path);
@@ -1997,7 +2015,7 @@ bool MapsApp::loadConfig(const char* assetPath)
     } catch(...) {}
   }
 
-  return prevver < versionCode;
+  return prevVersion < versionCode;
 }
 
 // note that we need to saveConfig whenever app is paused on mobile, so easiest for MapsComponents to just
@@ -2008,11 +2026,15 @@ void MapsApp::saveConfig()
   config["storage"]["total"] = storageTotal.load();
 
   CameraPosition pos = map->getCameraPosition();
-  config["view"]["lng"] = pos.longitude;
-  config["view"]["lat"] = pos.latitude;
-  config["view"]["zoom"] = pos.zoom;
-  config["view"]["rotation"] = pos.rotation;
-  config["view"]["tilt"] = pos.tilt;
+  // should never happen, but if camera position is corrupted, don't persist it!
+  if(!std::isnan(pos.longitude) && !std::isnan(pos.latitude)
+       && pos.zoom > 0 && !std::isnan(pos.rotation) && !std::isnan(pos.tilt)) {
+    config["view"]["lng"] = pos.longitude;
+    config["view"]["lat"] = pos.latitude;
+    config["view"]["zoom"] = pos.zoom;
+    config["view"]["rotation"] = pos.rotation;
+    config["view"]["tilt"] = pos.tilt;
+  }
 
   config["ui"]["split_size"] = int(panelSplitter->currSize);
 

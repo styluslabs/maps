@@ -175,8 +175,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     //if(Build.VERSION.SDK_INT >= 29)
     //  window.getDecorView().setSystemGestureExclusionRects(Collections.singletonList(new Rect(0, 0, 10000, 10000)));
     //View.SYSTEM_UI_FLAG_FULLSCREEN | View.INVISIBLE |
-    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-    //WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
+        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
     window.setStatusBarColor(Color.TRANSPARENT);
   }
 

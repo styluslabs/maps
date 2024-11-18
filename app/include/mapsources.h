@@ -14,6 +14,7 @@ public:
   void rebuildSource(const std::string& srcname = "", bool async = true);
   void onMapEvent(MapEvent_t event);
   void updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload);
+  void importSources(const std::string& src);
   Button* createPanel();
 
   std::string currSource;
@@ -26,7 +27,6 @@ private:
   void populateSourceEdit(std::string key);
   void sourceModified();
   void saveSources();
-  void importSources(const std::string& src);
   void promptDownload(const std::vector<std::string>& keys);
 
   Widget* sourcesPanel = NULL;

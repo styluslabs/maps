@@ -523,7 +523,7 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
   jniEnv->CallVoidMethod(mapsActivityRef, setServiceStateMID, state, intervalSec, minDist);
 }
 
-void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 30; *bottom = 0; }
+void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 30; *bottom = 16; }
 
 void MapsApp::extractAssets(const char* assetPath)
 {

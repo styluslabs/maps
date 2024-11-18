@@ -221,6 +221,7 @@ hillshade-png:
             #url: https://tile.nextzen.org/tilezen/terrain/v1/256/terrarium/{z}/{x}/{y}.png
             #url_params: { api_key: global.sdk_api_key }
             max_zoom: 15
+            zoom_offset: 0
             cache: terrarium
 
 hillshade-usgs:
@@ -248,7 +249,9 @@ hillshade:
     updates_vector:
         #global.elevation_sources: [elevation]
         #global.earth_style: hillshade
-        layers.earth: { data: { source: elevation }, draw: { hillshade: { color: global.earth_color, order: 99 } } }
+        layers.earth:
+            data: { source: elevation }
+            draw: { hillshade: { color: global.earth_color, order: global.earth_order } }
     updates_raster:
         styles.hillshade.shaders.defines.ELEVATION_INDEX: 1
         sources.raster-0.rasters: [elevation]

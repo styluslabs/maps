@@ -28,9 +28,9 @@ class ScaleBarWidget;
 class CrosshairWidget;
 class ManageColorsDialog;
 class SvgNode;
-class Rect;
 class Color;
 class Painter;
+struct Rect;
 struct sqlite3;
 struct SDL_Window;
 union SDL_Event;
@@ -109,6 +109,7 @@ public:
   bool glNeedsInit = true;
   bool drawOnMap = false;
   bool appSuspended = false;
+  float topInset = 0, bottomInset = 0;
 
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;
@@ -150,6 +151,7 @@ public:
   Widget* panelContainer = NULL;
   Widget* panelContent = NULL;
   Widget* mainTbContainer = NULL;
+  Widget* bottomPadding = NULL;
   Widget* infoPanel = NULL;
   Widget* infoContent = NULL;
   Menubar* mainToolbar = NULL;
@@ -212,6 +214,7 @@ public:
   static std::thread::id mainThreadId;
   static bool runApplication;
   static bool simulateTouch;
+  static int prevVersion;
 
 private:
   void saveConfig();
@@ -230,5 +233,4 @@ private:
   bool panelMaximized = false;
   bool panelMinimized = false;
   int shuffleSeed = 0;
-  float topInset = 0, bottomInset = 0;
 };
