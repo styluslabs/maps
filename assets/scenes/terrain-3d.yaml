@@ -47,8 +47,9 @@ styles:
         shaders:
             defines:
                 TANGRAM_VERTEX_RASTERS: true
+                TANGRAM_MIN_ELEVATION: 0.0
             blocks:
                 position: |
                     #ifdef TANGRAM_TERRAIN_3D
-                    position.z += getElevation();
+                    position.z += max(getElevation(), TANGRAM_MIN_ELEVATION);
                     #endif

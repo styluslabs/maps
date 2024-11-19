@@ -440,13 +440,15 @@ void MapsSources::populateSources()
       if(res != "OK") return;
       mapSources.remove(key);
       saveSources();
+      if(key == currSource)
+        currSource.clear();
       app->gui->deleteWidget(item);  //populateSources();
     };
     overflowMenu->addItem("Delete", [=](){
       std::vector<std::string> dependents;
       for (const auto& ssrc : mapSources) {
         for (const auto& layer : ssrc.second["layers"]) {
-          if(layer["source"].Scalar() == key)
+          if(getLayerName(layer) == key)
             dependents.push_back(ssrc.second["title"].Scalar());
         }
       }

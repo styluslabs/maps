@@ -135,12 +135,11 @@ The application is provided under the GPL-3.0 license.  The modified Tangram-ES 
 
 ### Roadmap ###
 
-* builds for iOS, Windows, and Mac
-* 3D terrain and globe view
-* contour line labels
 * integrate [Valhalla](https://github.com/valhalla/valhalla/) for offline routing
-* more plugins
 * Use QuickJS javascript engine instead of Duktape
+* more plugins
+* builds for Windows, and Mac
+* globe view
 * pmtiles support
 
 

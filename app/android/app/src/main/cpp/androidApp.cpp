@@ -380,6 +380,7 @@ char* SDL_GetClipboardText()
   JniThreadBinding jniEnv(JniHelpers::getJVM());
 
   auto jtext = (jstring)(jniEnv->CallObjectMethod(mapsActivityRef, getClipboardMID));
+  if(!jtext) return NULL;
   const char* text = jniEnv->GetStringUTFChars(jtext, 0);
   char* out = NULL;
   if(text && text[0]) {

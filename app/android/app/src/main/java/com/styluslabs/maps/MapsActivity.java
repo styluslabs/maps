@@ -458,7 +458,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       return;
     }
 
-    Object request = httpRequestHandles.remove(requestHandle);
+    // handle will be removed by HttpHandler.Callback
+    Object request = httpRequestHandles.get(requestHandle);
     if (request != null) {
       httpHandler.cancelRequest(request);
     }

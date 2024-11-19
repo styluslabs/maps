@@ -786,7 +786,7 @@ layers:
                     filter: { $zoom: { min: 12 } }
                     draw: { lines: { visible: true } }
                 direction:
-                    filter: { $zoom: { min: 17 } }
+                    filter: { $zoom: { min: 16 } }
                     draw: { lines: { style: piste-direction } }
             piste_names:
                 #enabled: global.show_trails
@@ -980,6 +980,7 @@ layers:
                 text:
                     text_wrap: 20
                     font:
+                        size: 10px
                         fill: global.color.ferry_name
                         stroke: { color: global.color.ferry_halo, width: 4px }
                         style: italic
