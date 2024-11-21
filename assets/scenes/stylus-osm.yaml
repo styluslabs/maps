@@ -60,6 +60,9 @@ global:
         transit: '#EB322F'
         rail: '#96ABB2'  #[0.588,0.671,0.698]
         rail_tunnel: '#A9C3CB'
+        dashed_rail: '#555555'
+        service_rail: '#999999'
+        dashed_rail_tunnel: '#777777'
         pier: '#F2EFE9'  #[0.993,0.993,0.993]
         breakwater: '#AAAAAA'
         ferry: '#8db3ce'
@@ -346,9 +349,12 @@ styles:
     dashed-bike:
         mix: unlit-lines
         dash: [1.0, 1.0]
-    dashed-rail:
+    rail-sleepers:
         mix: unlit-lines
         dash: [0.15, 7.0]
+    dashed-rail:
+        mix: unlit-lines
+        dash: [4, 4]
     aerialway:
         mix: unlit-lines
         # both approaches have issue w/ circles being stretched due to change of line width w/ zoom
@@ -500,8 +506,10 @@ layers:
                 style: water-polygons
                 order: global.order.water
                 color: global.color.water
-        #ocean:
-        #    filter: { class: ocean}
+        ocean:
+            filter: { class: ocean }
+            # ensure that ocean has elevation = 0 (by not writing elevation)
+            draw: { polygons: { style: polygons } }
         #inter:
         #    filter: { class: [lake, river] }
 
@@ -634,19 +642,21 @@ layers:
                 draw: { lines: { width: [[8, 0], [9, 1px], [13, 2px], [14, 2px], [16, 12]] } }
 
         minor_road:
-            filter: { highway: [tertiary, tertiary_link, unclassified, residential, road, living_street, service] }
+            filter:
+                highway: [tertiary, tertiary_link, unclassified, residential, road, living_street, service]
+                $zoom: { min: 13 }
             draw:
                 lines:
                     order: global.order.minor_road
-                    width: [[13, 0px], [14, 1px], [15, 8]]
+                    width: [[13, 0.75px], [14, 1px], [15, 8]]
                     outline:
                         width: [[17, 0], [18, 1]]
             service:
                 filter: { highway: service }
-                draw: { lines: { width: [[15, 0px], [16, 4px], [17, 8]] } }
+                draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 4px], [17, 8]] } }
             parking:
                 filter: { service: parking_aisle }
-                draw: { lines: { width: [[15, 0px], [16, 2px], [17, 4]] } }
+                draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 2px], [17, 4]] } }
 
         paths:
             filter: { highway: [footway, path, steps, pedestrian] }
@@ -655,10 +665,10 @@ layers:
                     order: global.order.path
                     style: dashed-path
                     color: global.color.path
-                    width: [[14, 0px], [15, 1px], [18, 3px]]
+                    width: [[14, 0px], [14, 0.5px], [15, 1px], [18, 3px]]
             steps:
                 filter: { highway: steps }
-                draw: { lines: { style: dashed-steps, width: [[14, 0px], [15, 3px], [18, 6px]] } }
+                draw: { lines: { style: dashed-steps, width: [[14, 0px], [14, 0.5px], [15, 3px], [18, 6px]] } }
             unpaved:
                 enabled: global.show_trails
                 filter:
@@ -671,33 +681,63 @@ layers:
                 draw: { lines: { style: dashed-bike } }
 
         tracks:
-            filter: { highway: [cycleway, byway, bridleway, track] }
+            filter:
+                highway: [cycleway, byway, bridleway, track]
+                $zoom: { min: 13 }
             draw:
                 lines:
                     order: global.order.path
                     style: dashed-track
                     color: global.color.path
-                    width: [[13, 0px], [14, 1px], [15, 2px], [18, 4px]]
+                    width: [[13, 0.75px], [14, 1px], [15, 2px], [18, 4px]]
 
-        # unpaved road: dashed w/ outline?  track: same as unpaved road if motor_vehicle: yes, otherwise like path
         rail:
             filter:
                 class: rail
-                railway: [rail, light_rail, subway, narrow_gauge, tram, funicular]
+                railway: [rail, narrow_gauge]
+                #$zoom: { min: 10 }
+            draw:
+                lines:
+                    style: dashed-rail
+                    order: global.order.rail
+                    color: white
+                    width: [[12, 1px], [14, 1px], [16, 2px]]
+                    outline:
+                        # outline drawn w/o dashed style provides background for dashes!
+                        style: unlit-lines
+                        color: global.color.dashed_rail
+                        width: [[12, 0.5px], [14, 1px]]
+            service:
+                filter: { service: true }
+                draw:
+                    lines:
+                        width: [[15, 0px], [15, 0.75px], [16, 1px], [17, 2px]]
+                        outline: { color: global.color.service_rail }
+            tunnel:
+                filter: { brunnel: tunnel }
+                draw: { lines: { outline: { color: global.color.dashed_rail_tunnel } } }
+
+        light_rail:
+            filter:
+                class: rail
+                railway: [light_rail, subway, tram, funicular]
                 $zoom: { min: 10 }
             draw:
                 lines:
                     order: global.order.rail
                     color: global.color.rail
                     width: [[12, 1px], [14, 1px], [16, 2px]]
-            sleepers:
-                # since dash pattern resets for every line segment it looks very irregular when zoomed out
-                filter: { $zoom: { min: 14 } }
-                draw:
-                    dashed-rail:
-                        order: global.order.rail_sleepers
-                        color: global.color.rail
-                        width: [[12, 4px], [14, 4px], [16, 6px]]
+            service:
+                filter: { service: true }
+                draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 1px], [17, 2px]] } }
+            #sleepers:
+            #    # since dash pattern resets for every line segment it looks very irregular when zoomed out
+            #    filter: { $zoom: { min: 14 } }
+            #    draw:
+            #        rail-sleepers:
+            #            order: global.order.rail_sleepers
+            #            color: global.color.rail
+            #            width: [[12, 4px], [14, 4px], [16, 6px]]
             tunnel:
                 filter: { brunnel: tunnel }
                 draw: { lines: { color: global.color.rail_tunnel } }

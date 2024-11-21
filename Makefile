@@ -58,6 +58,7 @@ cmake-linux:
 
 #	cp -R -L $(DISTRES) $(LINUX_BUILD_DIR)/.dist
 tgz: linux $(DISTRES)
+	build/Debug/tests/tests.out
 	strings $(TGT) | grep "^GLIBC_"
 	mkdir -p $(LINUX_BUILD_DIR)/.dist
 	mv $(TGT) $(LINUX_BUILD_DIR)/.dist

@@ -28,6 +28,14 @@ include("app/config.cmake")
 add_subdirectory(tangram-es)
 target_include_directories(tangram-core PRIVATE "${STYLUSLABS_DEPS}/nanovgXC/src")
 
+if(TANGRAM_BUILD_BENCHMARKS OR TANGRAM_BUILD_TESTS)
+  target_include_directories(platform_mock
+    PRIVATE
+    "${STYLUSLABS_DEPS}/nanovgXC/src"
+    tangram-es/core/deps/stb
+  )
+endif()
+
 if(CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
   target_compile_definitions(tangram-core PRIVATE TANGRAM_JS_TRACING=1)
   target_compile_definitions(tangram-core PRIVATE TANGRAM_RELWITHDEBINFO=1)

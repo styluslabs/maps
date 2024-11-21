@@ -602,8 +602,13 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
 
   // check vector vs raster; mbtiles cache does not set json metadata field, so we cannot compare that
   auto& tilesrcs = app->map->getScene()->tileSources();
-  auto* tileSource = tilesrcs.empty() ? NULL : tilesrcs.front().get();
-  std::string destpath = tileSource ? tileSource->offlineInfo().cacheFile : "";
+  if(tilesrcs.empty()) {
+    MapsApp::messageBox("Import error", "Error loading destination source.", {"OK"});
+    return false;
+  }
+
+  auto* tileSource = tilesrcs.front().get();
+  std::string destpath = tileSource->offlineInfo().cacheFile;
   if(destpath.empty())
     destpath = tileSource->offlineInfo().url;
   if(destpath.empty() || Url::getPathExtension(destpath) != "mbtiles") {
