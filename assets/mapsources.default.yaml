@@ -50,7 +50,6 @@ stylus-bike-hike:
   title: Ascend OSM Bike & Hike
   layers:
     - stylus-osm-terrain
-    - hillshade
   updates:
     global.show_bike: true
     global.show_trails: true

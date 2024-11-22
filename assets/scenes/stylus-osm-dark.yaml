@@ -31,11 +31,16 @@ global:
         motorway: rgba(253, 226, 147, 0.4)
         motorway_link: rgba(253, 226, 147, 0.4)
         motorway_muted: rgba(255, 255, 255, 0.4)
+        motorway_tunnel: rgba(205, 183, 117, 0.4)
         path: rgba(255, 255, 255, 0.4)
         unpaved_trail: hsl(33, 100%, 75%)
         bike_lane: '#408840'
         bike_path: '#60C060'
         bike_unpaved: '#60C000'
+        dashed_rail_core: rgba(255, 255, 255, 0.6)
+        dashed_rail: rgba(85, 85, 85, 1.0)
+        service_rail: rgba(153, 153, 153, 0.6)
+        dashed_rail_tunnel: rgba(119, 119, 119, 0.5)
         # text
         default_label: white
         default_halo: black

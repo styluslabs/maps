@@ -60,6 +60,7 @@ global:
         transit: '#EB322F'
         rail: '#96ABB2'  #[0.588,0.671,0.698]
         rail_tunnel: '#A9C3CB'
+        dashed_rail_core: white
         dashed_rail: '#555555'
         service_rail: '#999999'
         dashed_rail_tunnel: '#777777'
@@ -548,6 +549,10 @@ layers:
                 order: global.order.waterway
                 color: global.color.water
                 width: [[10,0px],[11,1px],[15,2px]]
+        unnamed:
+            # very large number of unnamed streams in, e.g., Italy (many that should be tagged intermittent?)
+            filter: { name: false }
+            draw: { lines: { width: [[12,0px],[12,0.5px],[14,1px],[16,2px]] } }
         river:
             filter: { waterway: river }
             draw: { lines: { width: [[7,0.5px],[8,1px],[12,2px],[15,4px]] } }
@@ -556,7 +561,7 @@ layers:
             draw: { lines: { style: dashed-bike } }
             stream:
                 filter: { waterway: stream }
-                draw: { lines: { width: [[15,0px],[16,1.5px],[19,2px]] } }
+                draw: { lines: { width: [[15,0px],[15,0.5px],[16,1.5px],[19,2px]] } }
 
     waterway_name:
         data: { source: osm, layer: water }
@@ -700,10 +705,11 @@ layers:
                 lines:
                     style: dashed-rail
                     order: global.order.rail
-                    color: white
+                    color: global.color.dashed_rail_core
                     width: [[12, 1px], [14, 1px], [16, 2px]]
                     outline:
                         # outline drawn w/o dashed style provides background for dashes!
+                        visible: true
                         style: unlit-lines
                         color: global.color.dashed_rail
                         width: [[12, 0.5px], [14, 1px]]

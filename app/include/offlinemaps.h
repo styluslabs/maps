@@ -12,7 +12,7 @@ public:
   ~MapsOffline();
   int numOfflinePending() const;
   void saveOfflineMap(int mapid, Tangram::LngLat lngLat00, Tangram::LngLat lngLat11, int maxZoom);
-  void updateProgress(int mapid, int remaining, int total);
+  void updateProgress(int mapid, const std::string& msg);
   void downloadCompleted(int id, bool canceled);
   void resumeDownloads();
   void openForImport(std::unique_ptr<PlatformFile> srcfile);

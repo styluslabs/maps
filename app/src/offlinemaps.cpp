@@ -108,7 +108,10 @@ static void offlineDLStep()
         for(auto& dl : offlineDownloaders.queue)
           remaining += dl->remainingTiles();
         prevProgressUpdate = t0;
-        MapsApp::runOnMainThread([=, id=olinfo.id](){ mapsOfflineInst->updateProgress(id, remaining, currTilesTotal); });
+        MapsApp::runOnMainThread([=, id=olinfo.id](){
+          auto msg = fstring("%d/%d tiles downloaded", currTilesTotal - remaining, currTilesTotal);
+          mapsOfflineInst->updateProgress(id, msg);
+        });
       }
       if(currdl->remainingTiles())
         return;
@@ -444,8 +447,10 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
   OfflineMapInfo olinfo = {offlineId, lngLat00, lngLat11, 0, maxZoom, {}, false};
 
   if(app->mapsSources->mapSources[desc]) {
-    if(importFile(desc, std::move(srcfile), olinfo, hasPois))
+    if(importFile(desc, std::move(srcfile), olinfo, hasPois)) {
       populateOffline();
+      updateProgress(offlineId, "Importing...");
+    }
   }
   else {
     std::vector<std::string> layerKeys;
@@ -460,8 +465,10 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
       selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
     selectDestDialog->addItems(layerTitles);
     selectDestDialog->onSelected = [=, _srcfile=srcfile.release()](int idx){
-      if(importFile(layerKeys[idx], std::unique_ptr<PlatformFile>(_srcfile), olinfo, hasPois))
+      if(importFile(layerKeys[idx], std::unique_ptr<PlatformFile>(_srcfile), olinfo, hasPois)) {
         populateOffline();
+        updateProgress(offlineId, "Importing...");
+      }
     };
     showModalCentered(selectDestDialog.get(), MapsApp::gui);
   }
@@ -565,7 +572,10 @@ static void indexImportedTiles(SQLiteDB& tileDB, int offlineId, const YAML::Node
     Timestamp t0 = mSecSinceEpoch();
     if(t0 - prevProgressUpdate > 1000) {
       prevProgressUpdate = t0;
-      MapsApp::runOnMainThread([=](){ mapsOfflineInst->updateProgress(offlineId, remaining, total); });
+      MapsApp::runOnMainThread([=](){
+        auto msg = fstring("%d/%d tiles indexed", total - remaining, total);
+        mapsOfflineInst->updateProgress(offlineId, msg);
+      });
     }
   });
 }
@@ -586,8 +596,16 @@ static void exportPOIs(const char* dest, int offlineId)
     LOGE("Error opening %s for POI export", dest);
     return;
   }
-  if(poiOutDB.exec(fstring(poiExportSQL, searchDB.c_str(), offlineId)))
-    LOG("POI export to %s completed", dest);
+  if(poiOutDB.exec(fstring(poiExportSQL, searchDB.c_str(), offlineId))) {
+    int nPois;
+    poiOutDB.stmt("SELECT count(1) FROM main.pois;").onerow(nPois);
+    if(!nPois) {
+      poiOutDB.exec("DROP TABLE IF EXISTS main.pois;");
+      LOGW("No POIs found for export to %s", dest);
+    }
+    else
+      LOG("Exported %d POIs to %s", nPois, dest);
+  }
   else
     LOGE("SQL error exporting POIs to %s: %s", dest, poiOutDB.errMsg());
 }
@@ -597,13 +615,16 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
   bool poiimport = hasPois && app->config["storage"]["import_pois"].as<bool>(true);
   bool poiexport = !hasPois && app->config["storage"]["export_pois"].as<bool>(false);
   // loading source will ensure mbtiles cache is created if enabled for source
-  if(destsrc != app->mapsSources->currSource)
+  if(MapsApp::terrain3D || destsrc != app->mapsSources->currSource) {
+    bool was3d = std::exchange(MapsApp::terrain3D, false);
     app->mapsSources->rebuildSource(destsrc, false);
+    MapsApp::terrain3D = was3d;
+  }
 
   // check vector vs raster; mbtiles cache does not set json metadata field, so we cannot compare that
   auto& tilesrcs = app->map->getScene()->tileSources();
-  if(tilesrcs.empty()) {
-    MapsApp::messageBox("Import error", "Error loading destination source.", {"OK"});
+  if(tilesrcs.size() != 1) {
+    MapsApp::messageBox("Import error", "Expected exactly one tile source for current source.", {"OK"});
     return false;
   }
 
@@ -662,13 +683,13 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
 
 // GUI
 
-void MapsOffline::updateProgress(int mapid, int remaining, int total)
+void MapsOffline::updateProgress(int mapid, const std::string& msg)
 {
   if(!offlinePanel->isVisible()) return;
   for(Widget* item : offlineContent->select(".listitem")) {
     if(item->node->getIntAttr("__mapid") == mapid) {
       //setText("Canceling..."); setText("Download pending");
-      item->selectFirst(".detail-text")->setText(fstring("%d/%d tiles downloaded", total - remaining, total).c_str());
+      item->selectFirst(".detail-text")->setText(msg.c_str());
       return;
     }
   }
