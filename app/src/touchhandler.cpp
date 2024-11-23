@@ -34,6 +34,8 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
       uint32_t mods = SDL_GetModState();
       altDragMode = event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK;
       tapState = (gui->fingerClicks == 2 || (mods & KMOD_CTRL)) ? DBL_TAP_DRAG_PENDING : TAP_NONE;
+      if(altDragMode)
+        rotOrigin = (mods & KMOD_SHIFT) ? TOUCHPT_NAN : initCOM;  //app->map->getTilt() > tiltThresholdRad
     }
     else if(event->type == SDL_FINGERMOTION) {
       if(tapState == DBL_TAP_DRAG_PENDING && gui->fingerClicks == 0)
@@ -233,7 +235,5 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
   else if(prevpoints == 0) {
     map->cancelCameraAnimation();  //handlePanGesture(0.0f, 0.0f, 0.0f, 0.0f);  // cancel any previous motion
     prevCOM = initCOM = pt;
-    if(altDragMode)
-      rotOrigin = app->map->getTilt() > tiltThresholdRad ? TOUCHPT_NAN : initCOM;
   }
 }

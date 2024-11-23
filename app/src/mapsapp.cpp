@@ -1470,9 +1470,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 #endif
   {
     Menu* debugMenu = createMenu(Menu::HORZ);
-    const char* debugFlags[8] = {"Freeze tiles", "Proxy colors", "Tile bounds",
-        "Label bounds", "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer"};
-    for(int ii = 0; ii < 8; ++ii) {
+    const char* debugFlags[9] = {"Freeze tiles", "Proxy colors", "Tile bounds", "Label bounds",
+        "Tangram info", "Draw all labels", "Tangram stats", "Selection buffer", "Depth buffer"};
+    for(int ii = 0; ii < 9; ++ii) {
       Button* debugCb = createCheckBoxMenuItem(debugFlags[ii]);
       debugCb->onClicked = [=](){
         debugCb->setChecked(!debugCb->isChecked());
