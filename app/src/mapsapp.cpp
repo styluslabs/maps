@@ -424,7 +424,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     SvgUse* icon = static_cast<SvgUse*>(diricon->node);
     if(icon)
       icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
-    distwdgt->setText(distKmToStr(dist).c_str());
+    distwdgt->setText(distKmToStr(dist, 2, 4).c_str());
   }
 
   // show place type
@@ -1049,7 +1049,7 @@ static double elevationLerp(const ElevTex& tex, TileID tileId, LngLat pos)
   return t0 + fy*(t1 - t0);
 }
 
-void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
+double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
 {
   static ElevTex prevTex;
   static TileID prevTileId = {0, 0, 0, 0};
@@ -1057,8 +1057,9 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
   if(prevTex.data) {
     TileID tileId = lngLatTile(pos, prevTileId.z);
     if(tileId == prevTileId) {
-      callback(elevationLerp(prevTex, tileId, pos));
-      return;
+      double elev = elevationLerp(prevTex, tileId, pos);
+      if(callback) { callback(elev); }
+      return elev;
     }
   }
 
@@ -1066,12 +1067,16 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
   if(elevMgr) {
     bool ok = false;
     double elev = elevMgr->getElevation(MapProjection::lngLatToProjectedMeters(pos), ok);
-    if(ok)
-      callback(elev);
+    if(ok) {
+      if(callback) { callback(elev); }
+      return elev;
+    }
   }
 
+  if(!callback) return 0;
+
   auto elevSrc = getElevationSource();
-  if(!elevSrc) return;
+  if(!elevSrc) return 0;
   TileID tileId = lngLatTile(pos, elevSrc->maxZoom());
   // do not use RasterSource::createTask() because we can't use its cached Textures!
   auto task = std::make_shared<BinaryTileTask>(tileId, elevSrc);  //rsrc->createTask(tileId);
@@ -1087,6 +1092,7 @@ void MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
       }
     });
   }});
+  return 0;
 }
 
 std::string MapsApp::elevToStr(double meters)
@@ -2200,10 +2206,13 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     // ensure marker is visible and hasn't been covered by opening panel
     Point scr;
     auto campos = map->getCameraPosition().setLngLat(pickResultCoord);
-    campos.zoom = std::min(campos.zoom, 16.0f);
     bool onscr = map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y);
-    if(!onscr || panelContainer->node->bounds().contains(scr/gui->paintScale))
+    bool underpanel = panelContainer->node->bounds().contains(scr/gui->paintScale);
+    if(!onscr || underpanel) {
+      if(!underpanel)
+        campos.zoom = std::min(campos.zoom, 16.0f);
       gotoCameraPos(campos);
+    }
     flyToPickResult = false;
   }
 

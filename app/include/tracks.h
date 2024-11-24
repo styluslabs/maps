@@ -101,7 +101,7 @@ private:
   Button* saveRouteBtn = NULL;
   Button* routeModeBtn = NULL;
   Button* routePluginBtn = NULL;
-  TextBox* previewDistText = NULL;
+  Widget* previewDistText = NULL;
   Widget* sparkStats = NULL;
   TrackSparkline* trackSpark = NULL;
   Button* retryBtn = NULL;

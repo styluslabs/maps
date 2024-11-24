@@ -48,6 +48,8 @@ import android.content.res.AssetManager;
 import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.DialogInterface;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.location.Location;
 import android.location.LocationManager;
 import android.location.LocationListener;
@@ -135,6 +137,19 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     //setContentView(mMapsView);
     //mGLSurfaceView.setRenderMode(MapsView.RENDERMODE_WHEN_DIRTY);
     onNewIntent(getIntent());
+
+    // detect location enabled/disabled
+    registerReceiver(new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+          if(LocationManager.PROVIDERS_CHANGED_ACTION.equals(intent.getAction())) {
+            if(!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+              MapsLib.updateGpsStatus(-1, 0);  // hide GPS status icon
+              hasGpsFix = false;
+            }
+          }
+        }
+      }, new IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION));
   }
 
   @Override
@@ -377,9 +392,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         satsUsed++;
     }
     hasGpsFix = satsUsed > 0;
-    if(satsVisible == 0 && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
-      satsVisible = -1;
-
     MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
 
@@ -393,9 +405,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         satsUsed++;
     }
     hasGpsFix = satsUsed > 0;
-    if(satsVisible == 0 && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
-      satsVisible = -1;
-
     MapsLib.updateGpsStatus(satsVisible, satsUsed);
   }
   //private float[] mGravity;

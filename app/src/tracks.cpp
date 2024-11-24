@@ -1056,17 +1056,33 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->map->lngLatToScreenPosition(mappos.longitude, mappos.latitude, &scrpos.x, &scrpos.y);
       app->crossHair->routePreviewOrigin = (scrpos - scrcenter)/MapsApp::gui->paintScale;
       double distkm = lngLatDist(mappos, app->getMapCenter());
-      std::string pvstr = MapsApp::distKmToStr(distkm);
+      std::string mainstr = MapsApp::distKmToStr(distkm);
+      // elevation (if available)
+      double jut = 0;
+      if(it->loc.alt != 0) {
+        double elev = app->getElevation(app->getMapCenter());
+        if(elev != 0) {
+          double dz = elev - it->loc.alt;
+          mainstr += (dz > 0 ? " | +" : " | ") + MapsApp::elevToStr(dz);
+          double distm = 1000*distkm;
+          jut = dz*dz/std::sqrt(distm*distm + dz*dz);
+        }
+      }
+      // bearing and change in bearing from prev segment
       double bearing = 180*lngLatBearing(mappos, app->getMapCenter())/M_PI;
-      pvstr += fstring(" | %.1f\u00B0", bearing < 0 ? bearing + 360 : bearing);
+      std::string detailstr = fstring("%.1f\u00B0", bearing < 0 ? bearing + 360 : bearing);
       if(it != activeTrack->waypoints.begin() && distkm > 0) {
         LngLat prevpt = (--it)->lngLat();
         double bchange = bearing - 180*lngLatBearing(prevpt, mappos)/M_PI;
         if(bchange > 180) bchange -= 360;
         else if(bchange < -180) bchange += 360;
-        pvstr += fstring(" (%+.1f\u00B0)", bchange);
+        detailstr += fstring(" (%+.1f\u00B0)", bchange);
       }
-      previewDistText->setText(pvstr.c_str());
+      if(jut > 100) {
+        detailstr += " | Jut " + MapsApp::elevToStr(jut);
+      }
+      previewDistText->selectFirst(".main-text")->setText(mainstr.c_str());
+      previewDistText->selectFirst(".detail-text")->setText(detailstr.c_str());
     }
   }
   else if(event == LOC_UPDATE) {
@@ -1650,6 +1666,13 @@ void MapsTracks::createPlotContent()
 
 void MapsTracks::createWayptContent()
 {
+  static const char* previewDistSVG = R"(
+    <g layout="box" box-anchor="vfill">
+      <text class="main-text" box-anchor="left" margin="0 10 6 10"></text>
+      <text class="detail-text weak" box-anchor="left bottom" margin="0 10 2 10" font-size="12"></text>
+    </g>
+  )";
+
   wayptContent = new DragDropList;
 
   saveRouteBtn = createToolbutton(MapsApp::uiIcon("save"), "Save");
@@ -1709,8 +1732,7 @@ void MapsTracks::createWayptContent()
   wayptWidgets.push_back(showAllWptsBtn);
 
   // route edit toolbar - I think this will eventually be a floating toolbar
-  previewDistText = new TextBox(createTextNode(""));
-  previewDistText->setMargins(6, 10);
+  previewDistText = new Widget(loadSVGFragment(previewDistSVG));  //setMargins(6, 10);
 
   retryBtn = createToolbutton(MapsApp::uiIcon("retry"), "Retry");
   retryBtn->onClicked = [=](){ createRoute(activeTrack); };

@@ -75,7 +75,7 @@ public:
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   Rect getMapViewport();
   LngLat getMapCenter();
-  void getElevation(LngLat pos, std::function<void(double)> callback);
+  double getElevation(LngLat pos, std::function<void(double)> callback = {});
   void setPickResult(LngLat pos, std::string namestr, const std::string& propstr);
   YAML::Node readSceneValue(const std::string& yamlPath);
   void placeInfoPluginError(const char* err);

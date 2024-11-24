@@ -301,7 +301,7 @@ layers:
                 #join: round
                 order: 2000
         direction:
-            filter: { $zoom: { min: 17 } }
+            filter: { $zoom: { min: 16 } }
             draw: { track: { style: track-direction } }
         recording:
             filter: { recording: 1 }
