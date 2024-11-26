@@ -18,6 +18,7 @@ sources:
     - opentopomap
     - arcgis-satellite
     - bing-earth
+    - sentinel2-recent
     - esa-sentinel2
     - nasa-worldview
     - worldcover
@@ -26,7 +27,7 @@ sources:
     - archived
 
 terrain_3d:
-  #enabled: true  -- missing value will trigger prompt when map is titled
+  #enabled: true  -- missing value will trigger prompt when map is tilted
   import: scenes/terrain-3d.yaml
   updates:
     global.earth_style: terrain-3d-polygons

@@ -7,6 +7,7 @@
 @interface OpenGLView() {
   CAEAGLLayer* _eaglLayer;
   EAGLContext* _context;
+  EAGLContext* _context2;
   GLuint _colorRenderBuffer, _depthRenderBuffer, _msaaRenderBuffer;
   GLuint _frameBuffer, _msaaFrameBuffer;
   int width, height, samples;
@@ -28,6 +29,8 @@
 - (void)setupLayerAndContext
 {
   iosApp_getGLConfig(&samples);  // in the future this could also provide, e.g., sRGB setting
+  // MSAA is cheap on mobile (tile-based) GPUs and 2x MSAA apparently can have artifacts on iPhone
+  if(samples > 1) { samples = 4; }
 
   _eaglLayer = (CAEAGLLayer*) self.layer;
   _eaglLayer.opaque = YES;
@@ -40,6 +43,7 @@
       NSLog(@"Failed to initialize OpenGL context");
       exit(1);
   }
+  _context2 = [[EAGLContext alloc] initWithAPI:[_context API] sharegroup:[_context sharegroup]];
   if (![EAGLContext setCurrentContext:_context]) {
       _context = nil;
       NSLog(@"Failed to set current OpenGL context");
@@ -55,7 +59,9 @@
 // this should be called from a thread
 - (void)createSharedContext
 {
-  EAGLContext* _context2 = [[EAGLContext alloc] initWithAPI:[_context API] sharegroup:[_context sharegroup]];
+  // seems there can be a deadlock between creating shared context on worker thread and using main context
+  //  on main thread, so we have to create shared context on main thread too
+  //EAGLContext* _context2 = [[EAGLContext alloc] initWithAPI:[_context API] sharegroup:[_context sharegroup]];
   if (!_context2) {
       NSLog(@"Failed to create shared OpenGL context");
   } else if (![EAGLContext setCurrentContext:_context2]) {
@@ -108,10 +114,10 @@
 - (void)swapBuffers
 {
   if (samples > 1) {
-    const GLenum attachments[] = {GL_COLOR_ATTACHMENT0};  //GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT
+    const GLenum attachments[] = {GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT};
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _frameBuffer);
     glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 1, attachments);
+    glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 3, attachments);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _msaaFrameBuffer);
   }
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);  // make sure correct renderbuffer is bound
