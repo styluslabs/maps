@@ -17,6 +17,9 @@
 #include "mapwidgets.h"
 #include "gpxfile.h"
 #include "offlinemaps.h"
+// for createFromSearch()
+#include "mapsearch.h"
+#include "plugins.h"
 #if PLATFORM_IOS
 #include "../ios/iosApp.h"
 #endif
@@ -538,6 +541,31 @@ void MapsBookmarks::addPlaceActions(Toolbar* tb)
 
   createBkmkBtn->onClicked = [=](){ chooseBookmarkList(createBkmkFn); };
   tb->addWidget(createBkmkBtn);
+}
+
+void MapsBookmarks::createFromSearch(const std::string& title, const std::vector<SearchResult>& results)
+{
+  std::string style = colorToStr(nextListColor());
+  SQLiteStmt(app->bkmkDB, "INSERT INTO lists (title, color) VALUES (?,?);").bind(title, style).exec();
+  int64_t list_id = sqlite3_last_insert_rowid(app->bkmkDB);
+
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat) VALUES (?,?,?,?,?,?,?);";
+  SQLiteStmt insbkmk(app->bkmkDB, query);
+  for(auto& res : results) {
+    // cut and paste from MapsSearch::populateResults()
+    auto json = strToJson(res.tags.c_str());
+    Properties props = jsonToProps(json);
+    std::string namestr = app->getPlaceTitle(props);
+    std::string placetype = !res.tags.empty() ? app->pluginManager->jsCallFn("getPlaceType", res.tags) : "";
+    if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
+    if(namestr.empty())
+      namestr = lngLatToStr(res.pos);
+    std::string osm_id = osmIdFromJson(json);
+
+    insbkmk.bind(list_id, osm_id, namestr, res.tags, placetype, res.pos.longitude, res.pos.latitude).exec();
+  }
+  //populateLists(false);
+  listsDirty = true;
 }
 
 void MapsBookmarks::importGpx(const char* filename, const char* gpxsrc)

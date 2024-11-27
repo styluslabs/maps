@@ -3,6 +3,8 @@
 #include "mapscomponent.h"
 #include "util.h"
 
+struct SearchResult;
+
 class MapsBookmarks : public MapsComponent
 {
 public:
@@ -16,6 +18,7 @@ public:
   Button* createPanel();
   void setPlaceInfoSection(const std::string& osm_id, LngLat pos);
   void addPlaceActions(Toolbar* tb);
+  void createFromSearch(const std::string& title, const std::vector<SearchResult>& results);
 
   Widget* listsPanel = NULL;
   std::unordered_map< int, std::unique_ptr<MarkerGroup> > bkmkMarkers;

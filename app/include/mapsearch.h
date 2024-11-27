@@ -91,5 +91,6 @@ private:
   Button* retryBtn = NULL;
   TextEdit* queryText = NULL;
   TextBox* resultCountText = NULL;
+  Button* saveToBkmksBtn = NULL;
   size_t listResultOffset = 0;
 };

@@ -36,7 +36,7 @@ global:
         industry: '#C0CDCD'
         retail: '#FEF0D0'
         civic: '#D9CFC3'
-        water: '#9dc3de'
+        water: '#9dc3de'  # == hsl(205, 50%, 74%) (compare ferry color)
         water_name: "#51909c"
         water_halo: "#e2eef0"
         beach: '#FEEFC3'  #[1.000,0.953,0.900]
@@ -66,7 +66,7 @@ global:
         dashed_rail_tunnel: '#777777'
         pier: '#F2EFE9'  #[0.993,0.993,0.993]
         breakwater: '#AAAAAA'
-        ferry: '#8db3ce'
+        ferry: hsl(205, 42%, 62%)  #'#8db3ce'
         runway_13: '#C7CADC'  #'#FFE4B5'
         taxiway: '#BCBCCC'
         airport: '#E8EAEF'  #'#ddd'
@@ -75,7 +75,7 @@ global:
         motorway_shield: '#FFDC36'
         road_name: '#666'
         road_halo: white
-        ferry_name: '#8db3ce'
+        ferry_name: hsl(205, 42%, 62%)  #'#8db3ce'
         ferry_halo: white
         border: '#888'  #wheat
         border_country: '#666'  #[0.824, 0.651, 0.329, 1.00]
@@ -174,8 +174,8 @@ global:
         function() { return global.show_name_en && feature.name_en && feature.name ? feature.name_en + "\n" + feature.name : feature.name; }
 
     shuffle_seed: 58987
-    # priorities for colliding objects (points and text; lower value wins) - float in tangram (docs incorrectly say integer)
-    # - priorities are now multiplied by 65536, so we just need priority*65536 to be an integer
+    # priorities for colliding objects (points and text; lower value wins) - fractional part now orders within
+    #  group defined by integer part, after ordering by visible state and camera space z coord
     priority:
         boundary: 0
         continent: 6
@@ -329,10 +329,14 @@ styles:
         lighting: false
 
     # water polygons can be assumed to be flat (not quite true for rivers), so only need to set elevation at edges
-    water-polygons:
+    unlit-polygons:
         base: polygons
         mix: global.terrain_3d_mixin
-        #lighting: false
+        lighting: false
+
+    ocean-polygons:
+        base: polygons
+        lighting: false
 
     # dash only supported for styles, not draw block because each dash pattern requires separate shader
     dashed-border:
@@ -504,13 +508,13 @@ layers:
         filter: { $geometry: polygon }
         draw:
             polygons:
-                style: water-polygons
+                style: unlit-polygons
                 order: global.order.water
                 color: global.color.water
         ocean:
             filter: { class: ocean }
             # ensure that ocean has elevation = 0 (by not writing elevation)
-            draw: { polygons: { style: polygons } }
+            draw: { polygons: { style: ocean-polygons } }
         #inter:
         #    filter: { class: [lake, river] }
 
@@ -752,7 +756,7 @@ layers:
             filter: { class: ferry }
             draw:
                 lines:
-                    style: dashed-path
+                    style: dashed-track
                     color: global.color.ferry
                     width: [[14, 1px], [18, 2px]]
 

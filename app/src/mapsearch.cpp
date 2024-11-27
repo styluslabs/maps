@@ -273,6 +273,7 @@ void MapsSearch::clearSearchResults()
   listResults.clear();
   markers->reset();
   flyingToResults = false;  // just in case event got dropped
+  saveToBkmksBtn->setEnabled(false);
 }
 
 void MapsSearch::clearSearch()
@@ -302,6 +303,8 @@ void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, co
     app->setPickResult(res.pos, "", res.tags);
   };
   markers->createMarker({lng, lat}, onPicked, jsonToProps(json));
+  if(idx == 0)
+    saveToBkmksBtn->setEnabled(true);
 }
 
 void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, const char* json)
@@ -798,6 +801,17 @@ Button* MapsSearch::createPanel()
   Button* sortBtn = createToolbutton(MapsApp::uiIcon("sort"), "Sort");
   sortBtn->setMenu(sortMenu);
   searchTb->addWidget(sortBtn);
+
+  Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
+  Menu* overflowMenu = createMenu(Menu::VERT_LEFT, false);
+  overflowBtn->setMenu(overflowMenu);
+  saveToBkmksBtn = overflowMenu->addItem("Save as bookmarks", [=](){
+    std::string plugin = cproviders[providerIdx];
+    std::string query = queryText->text();
+    app->mapsBookmarks->createFromSearch(query.empty() ? plugin : plugin + ": " + query, mapResults);
+    app->showPanel(app->mapsBookmarks->listsPanel, false);
+  });
+  searchTb->addWidget(overflowBtn);
 
   resultsContent = createColumn();
   searchPanel = app->createMapPanel(searchTb, resultsContent, searchHeader);
