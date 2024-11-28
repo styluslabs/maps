@@ -184,15 +184,16 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     Window window = getWindow();
     window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+    // see setDecorFitsSystemWindows() in androidx/core/view/WindowCompat.java
     window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);  // | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
     //    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);  // to disable back gesture
     //if(Build.VERSION.SDK_INT >= 29)
     //  window.getDecorView().setSystemGestureExclusionRects(Collections.singletonList(new Rect(0, 0, 10000, 10000)));
-    //View.SYSTEM_UI_FLAG_FULLSCREEN | View.INVISIBLE |
-    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
-        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        //| WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);  -- breaks layout adjustment for keyboard
     window.setStatusBarColor(Color.TRANSPARENT);
+    window.setNavigationBarColor(Color.TRANSPARENT);
   }
 
   /* add this to MapsView.java if setSystemGestureExclusionRects on decor view doesn't work:

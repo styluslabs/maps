@@ -214,7 +214,8 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     }
   }
   else if(prevpoints > 0) {
-    if(altDragMode && prevpoints == 1) {
+    if(multiTouchState != TOUCH_NONE && multiTouchState != TOUCH_PINCH) {}  // only allow panning after pinch
+    else if(altDragMode && prevpoints == 1) {
       map->handleRotateGesture(rotOrigin.x, rotOrigin.y, -(pt.x - prevCOM.x)*mouseRotateScale);
       map->handleShoveGesture(pt.y - prevCOM.y);
     }

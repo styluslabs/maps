@@ -177,15 +177,15 @@ global:
     # priorities for colliding objects (points and text; lower value wins) - fractional part now orders within
     #  group defined by integer part, after ordering by visible state and camera space z coord
     priority:
-        boundary: 0
         continent: 6
-        district_CN: 9.5
-        neighborhood: 15
+        district_CN: 9
+        neighborhood: 10
+        peak: 14
+        boundary: 15  # boundaries often follow mountain ridges, so don't let them hide peaks
         park: 20
         golf: 21
         cemetery: 22
         forest: 23
-        peak: 30
         # road labels
         oneway_arrow: 23
         motorway_ref: 24

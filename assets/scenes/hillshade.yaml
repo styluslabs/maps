@@ -185,7 +185,8 @@ styles:
                     if(top.x) { h20 = 2.*h10 - h00; h21 = 2.*h11 - h01; h22 = 2.*h12 - h02; }
                     if(bot.y) { h00 = 2.*h01 - h02; h10 = 2.*h11 - h12; h20 = 2.*h21 - h22; }
                     if(top.y) { h02 = 2.*h01 - h00; h12 = 2.*h11 - h10; h22 = 2.*h21 - h20; }
-                    // proj meters per elevation tile pixel (u_tile_origin.z is tile zoom, u_map_position.z is real zoom)
+                    // proj meters per elevation tile pixel; note u_tile_origin.w is tile data zoom,
+                    //  u_tile_origin.z is tile styling zoom, u_map_position.z is view zoom (float)
                     vec2 dxy_elev = 2.*3.141592*6378137.0*exp2(-u_tile_origin.w)*duv/u_raster_offsets[ELEVATION_INDEX].z;
                     // convert projected meters to actual meters - Mercator scale factor is cos(latitude); we recover
                     //  latitude from Mercator y (projected meters): lat = 2*atan(exp(y/R)) - M_PI/2;
@@ -214,6 +215,7 @@ styles:
                     #endif
                     #ifdef SHOW_CONTOURS
                     float z = u_map_position.z;
+                    //float s = u_tile_origin.z; -- looks better to use same contour interval for entire scene
                     if(z < 10.) {
                     #if ELEVATION_INDEX
                         // don't show shaded relief over raster
@@ -232,9 +234,9 @@ styles:
                         //float linehw = 0.5;
                         // spacing between contour lines in meters - 10m has too many artifacts
                     #ifdef METRIC_UNITS
-                        float interval = z >= 13.5 ? 25. : z >= 11.5 ? 50. : 100.;  //z >= 11. ? 100. : 200.;
+                        float interval = z >= 14. ? 25. : z >= 12. ? 50. : 100.;
                     #else
-                        float interval = (z >= 13.5 ? 100. : z >= 11.5 ? 200. : 500.)/3.28084;
+                        float interval = (z >= 14. ? 100. : z >= 12. ? 200. : 500.)/3.28084;
                     #endif
                         float zstep = z >= 13.5 ? 13.5 : z >= 11.5 ? 11.5 : 9.5;
                         float linehw = mix(0.3, 0.5, clamp(0.5*(z - zstep), 0., 1.));
@@ -253,9 +255,9 @@ styles:
                         // coarse lines
                         float coarsehw = 2.*linehw;  //0.75;
                     #ifdef METRIC_UNITS
-                        float coarse = z >= 13.5 ? 100. : z >= 11.5 ? 200. : 500.;
+                        float coarse = z >= 14. ? 100. : z >= 12. ? 200. : 500.;
                     #else
-                        float coarse = (z >= 13.5 ? 500. : z >= 11.5 ? 1000. : 2000.)/3.28084;
+                        float coarse = (z >= 14. ? 500. : z >= 12. ? 1000. : 2000.)/3.28084;
                     #endif
                         dup = fract(hc/coarse)*coarse/slope / u_meters_per_pixel;
                         ddn = abs(1. - fract(hc/coarse))*coarse/slope / u_meters_per_pixel;

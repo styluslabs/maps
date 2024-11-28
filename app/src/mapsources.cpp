@@ -660,7 +660,7 @@ void MapsSources::populateSceneVars()
         auto textedit = createTitledTextEdit(label.c_str(), value.c_str());
         textedit->addHandler([=](SvgGui* gui, SDL_Event* event){
           if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
-            updateSceneVar("global." + name, textedit->text(), onchange, reload);
+            updateSceneVar("global." + name, trimStr(textedit->text()), onchange, reload);
             return true;
           }
           return false;
@@ -772,7 +772,8 @@ void MapsSources::populateSourceEdit(std::string key)
 void MapsSources::importSources(const std::string& src)
 {
   std::string key;
-  if(src.front() == '{') {
+  if(src.empty()) {}
+  else if(src.front() == '{') {
     key = createSource("", src);
   }
   else if(Tangram::NetworkDataSource::urlHasTilePattern(src)) {
@@ -827,7 +828,7 @@ Button* MapsSources::createPanel()
 
   importDialog.reset(createInputDialog({importTb}, "Import source", "Import", [=](){
     // JSON (YAML flow), tile URL, or path/URL to file
-    importSources(importEdit->text());
+    importSources(trimStr(importEdit->text()));
   }));
 
   Button* createBtn = createToolbutton(MapsApp::uiIcon("add"), "New Source");

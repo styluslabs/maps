@@ -73,7 +73,7 @@ Plugins written in Javascript can add search providers, routing providers, map t
 
 Files in `plugins/` with `.js` extension are executed at application startup.  To reload, tap the reload button on the Plugin Console toolbar.  Some plugins (`openroute.js` and `sentinel2.js` currently) require third-party API keys to work - follow the instructions in the plugin's js file to obtain an API key, then create a file `plugins/_secrets.js` to set `secrets = { "some_api_key": value, "another_api_key": value }`.
 
-Currently uses Duktape, so support for features from ES2015 and later is limited.  ~~On iOS, JavascriptCore will be used.~~  JavascriptCore doesn't use JIT in non-Apple apps and turned out to be slower then Duktape!
+Currently uses Duktape, so support for features from ES2015 and later is limited.
 
 The included plugins give a sample of what's possible:
 * [google-import.js](assets/plugins/google-import.js) - import list of places from GeoJSON exported by Google Maps; run from the plugin console
@@ -138,7 +138,7 @@ The application is provided under the GPL-3.0 license.  The modified Tangram-ES 
 * integrate [Valhalla](https://github.com/valhalla/valhalla/) for offline routing
 * Use QuickJS javascript engine instead of Duktape
 * more plugins
-* builds for Windows, and Mac
+* builds for Windows and Mac
 * globe view
 * pmtiles support
 

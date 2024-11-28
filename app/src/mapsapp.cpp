@@ -8,6 +8,9 @@
 #include <sys/stat.h>
 #include <fstream>
 #include "sqlitepp.h"
+// for elevation
+#include "util/imageLoader.h"
+#include "util/elevationManager.h"
 
 #include "touchhandler.h"
 #include "bookmarks.h"
@@ -1006,9 +1009,6 @@ std::shared_ptr<TileSource> MapsApp::getElevationSource()
   }
   return nullptr;
 }
-
-#include "util/imageLoader.h"
-#include "util/elevationManager.h"
 
 struct malloc_deleter { void operator()(void* x) { std::free(x); } };
 struct ElevTex { std::unique_ptr<uint8_t, malloc_deleter> data; int width; int height; GLint fmt; };
