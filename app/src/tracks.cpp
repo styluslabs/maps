@@ -762,7 +762,7 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   track->waypoints.erase(it);
   track->modified = true;
   if(track->waypoints.empty())
-    app->crossHair->routePreviewOrigin = {NAN, NAN};
+    app->crossHair->setRoutePreviewOrigin();
   if(routed)
     createRoute(track);
   updateWayptCount(wayptTabLabel, track);
@@ -1054,7 +1054,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       Point scrpos, scrcenter;
       app->map->lngLatToScreenPosition(mapcenter.longitude, mapcenter.latitude, &scrcenter.x, &scrcenter.y);
       app->map->lngLatToScreenPosition(mappos.longitude, mappos.latitude, &scrpos.x, &scrpos.y);
-      app->crossHair->routePreviewOrigin = (scrpos - scrcenter)/MapsApp::gui->paintScale;
+      app->crossHair->setRoutePreviewOrigin((scrpos - scrcenter)/MapsApp::gui->paintScale);
       double distkm = lngLatDist(mappos, app->getMapCenter());
       std::string mainstr = MapsApp::distKmToStr(distkm);
       // elevation (if available)
@@ -1139,7 +1139,7 @@ void MapsTracks::setRouteMode(const std::string& mode)
   if(directRoutePreview && mode == "direct")
     onMapEvent(MAP_CHANGE);
   else
-    app->crossHair->routePreviewOrigin = {NAN, NAN};
+    app->crossHair->setRoutePreviewOrigin();
   app->drawOnMap = routeEditTb->isVisible() && mode == "draw";
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
@@ -1805,7 +1805,7 @@ void MapsTracks::createWayptContent()
       directRoutePreview = false;
       app->drawOnMap = false;
       app->crossHair->setVisible(false);
-      app->crossHair->routePreviewOrigin = {NAN, NAN};
+      app->crossHair->setRoutePreviewOrigin();
     }
     return false;
   });

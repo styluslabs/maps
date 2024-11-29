@@ -176,16 +176,17 @@ class ScaleBarWidget : public Widget
 {
 public:
   ScaleBarWidget(Map* _map) : Widget(new SvgCustomNode), map(_map) {}
-  void draw(SvgPainter* svgp) const override {}
+  void draw(SvgPainter* svgp) const override { if(!useDirectDraw) directDraw(svgp->p); }
   Rect bounds(SvgPainter* svgp) const override;
   void directDraw(Painter* p) const;
 
   Map* map;
+  bool useDirectDraw = false;
 };
 
 Rect ScaleBarWidget::bounds(SvgPainter* svgp) const
 {
-  return svgp->p->getTransform().mapRect(Rect::wh(100, 14));
+  return svgp->p->getTransform().mapRect(Rect::wh(100, 24));
 }
 
 void ScaleBarWidget::directDraw(Painter* p) const
@@ -193,8 +194,9 @@ void ScaleBarWidget::directDraw(Painter* p) const
   //Painter* p = svgp->p;
   Rect bbox = node->bounds();
   p->save();
-  p->translate(bbox.origin());
-  //real w = bbox.width(), h = bbox.height();  p->translate(w/2, h/2);
+  if(useDirectDraw)
+    p->translate(bbox.origin());
+  p->translate(2, 0);
 
   real y = bbox.center().y;
   LngLat r0, r1;
@@ -226,18 +228,19 @@ void ScaleBarWidget::directDraw(Painter* p) const
   str += fstring("  (z%.2f)", map->getZoom());
 #endif
 
-  real y0 = bbox.height()/2;
+  real y0 = bbox.height() - 4;
+  real w = bbox.width() - 4;
   p->setFillBrush(Color::NONE);
   p->setStroke(Color::WHITE, 4, Painter::RoundCap);
-  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
+  p->drawLine(Point(0, y0), Point(w*scaledist/dist, y0));
   p->setStroke(Color::BLACK, 2, Painter::RoundCap);
-  p->drawLine(Point(0, y0), Point(bbox.width()*scaledist/dist, y0));
+  p->drawLine(Point(0, y0), Point(w*scaledist/dist, y0));
   // render text
   p->setFontSize(12);
   p->setStroke(Color::WHITE, 2);
   p->setStrokeAlign(Painter::StrokeOuter);
   p->setFillBrush(Color::BLACK);
-  p->drawText(0, 0, str.c_str());
+  p->drawText(0, y0-6, str.c_str());
   p->restore();
 }
 
@@ -1658,6 +1661,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   crossHair = new CrosshairWidget();
   crossHair->setVisible(false);
+  crossHair->layoutIsolate = true;  // this doesn't really help since distance text also changes
   mapsContent->addWidget(crossHair);
 
   legendContainer = createColumn();
@@ -2184,23 +2188,21 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->setupGL();
     // Painter created here since GL context required to build shaders
     // ALIGN_SCISSOR needed only due to rotated direction-icon inside scroll area
-    painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
-    //painter.reset(new Painter(Painter::PAINT_SW | Painter::SW_BLIT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
-    scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
+    // SW painter looks like the better choice for mobile - better parallelism (CPU for UI, GPU for map),
+    //  don't have to rerender UI at all when interacting with map
+    if(config["ui"]["gpu_render"].as<bool>(false)) {
+      painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
+      scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
+      scaleBar->useDirectDraw = true;
+      crossHair->useDirectDraw = true;
+    }
+    else
+      painter.reset(new Painter(Painter::PAINT_SW | Painter::SW_BLIT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
     gui->fullRedraw = painter->usesGPU();
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
   }
 
   setWindowLayout(fbWidth, fbHeight);
-
-  // We could consider drawing to offscreen framebuffer to allow limiting update to dirty region, but since
-  //  we expect the vast majority of all frames drawn by app to be map changes (panning, zooming), the total
-  //  benefit from partial update would be relatively small.  Furthermore, smooth map interaction is even more
-  //  important than smooth UI interaction, so if map can't redraw at 60fps, we should focus on fixing that.
-  // ... but as a simple optimization, we call Painter:endFrame() again to draw UI over map if UI isn't dirty
-  painter->deviceRect = Rect::wh(fbWidth, fbHeight);
-  Rect dirty = gui->layoutAndDraw(painter.get());
-  TRACE_END(t0, "layoutAndDraw");
 
   if(flyToPickResult) {
     // ensure marker is visible and hasn't been covered by opening panel
@@ -2217,60 +2219,66 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   }
 
   // map rendering moved out of layoutAndDraw since object selection (which can trigger UI changes) occurs during render!
-  if(platform->notifyRender()) {
+  bool mapdirty = platform->notifyRender();
+  if(mapdirty) {
     auto now = std::chrono::high_resolution_clock::now();
     double currTime = std::chrono::duration<double>(now.time_since_epoch()).count();
     mapUpdate(currTime);
     TRACE_END(t0, "map update");
-    //mapsWidget->node->setDirty(SvgNode::PIXELS_DIRTY);  -- so we can draw unchanged UI over map
-
-    //Rect scissor = mapsWidget->viewport*gui->paintScale;
-    //nvgluSetScissor(0, 0, int(scissor.width() + 0.5), std::min(int(scissor.height() + 10), fbHeight));
-
-    map->render();
-    // selection queries are processed by render(); if nothing selected, tapLocation will still be valid
-    if(pickedMarkerId > 0) {
-      if(pickedMarkerId == locMarker) {
-        if(!mapsTracks->activeTrack)
-          showPanel(infoPanel);
-        setPickResult(currLocation.lngLat(), "Current location", "");
-      }
-      else
-        sendMapEvent(MARKER_PICKED);
-      pickedMarkerId = 0;
-    }
-    else if(!std::isnan(tapLocation.longitude)) {
-      if(!panelHistory.empty() && panelHistory.back() == infoPanel)
-        popPanel();  // closing info panel will clear pick result
-      mapsTracks->tapEvent(tapLocation);
-      tapLocation = {NAN, NAN};
-    }
+    //mapsWidget->redraw();  -- so we can draw unchanged UI over map
+    if(!scaleBarPainter) { scaleBar->redraw(); }
   }
-  else if(dirty.isValid())
-    map->render();  // only have to rerender map, not update
-  else
-    return false;  // neither map nor UI is dirty
 
+  painter->deviceRect = Rect::wh(fbWidth, fbHeight);
+  Rect dirty = gui->layoutAndDraw(painter.get());
+  TRACE_END(t0, "layoutAndDraw");
+
+  if(!mapdirty && !dirty.isValid())
+    return false;
+
+  //Rect scissor = mapsWidget->viewport*gui->paintScale;
+  //nvgluSetScissor(0, 0, int(scissor.width() + 0.5), std::min(int(scissor.height() + 10), fbHeight));
+  map->render();
   //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
-
+  // selection queries are processed by render(); if nothing selected, tapLocation will still be valid
+  if(pickedMarkerId > 0) {
+    if(pickedMarkerId == locMarker) {
+      if(!mapsTracks->activeTrack)
+        showPanel(infoPanel);
+      setPickResult(currLocation.lngLat(), "Current location", "");
+    }
+    else
+      sendMapEvent(MARKER_PICKED);
+    pickedMarkerId = 0;
+  }
+  else if(!std::isnan(tapLocation.longitude)) {
+    if(!panelHistory.empty() && panelHistory.back() == infoPanel)
+      popPanel();  // closing info panel will clear pick result
+    mapsTracks->tapEvent(tapLocation);
+    tapLocation = {NAN, NAN};
+  }
   TRACE_END(t0, "map render");
+
   // scale bar must be updated whenever map changes, but we don't want to redraw entire UI every frame
   // - a possible alternative is to draw with Tangram using something similar to DebugTextStyle/DebugStyle
-  scaleBarPainter->deviceRect = Rect::wh(fbWidth, fbHeight);
-  scaleBarPainter->beginFrame();
-  scaleBarPainter->setsRGBAdjAlpha(true);
-  scaleBarPainter->scale(gui->paintScale);  // beginFrame resets Painter state
-  scaleBar->directDraw(scaleBarPainter.get());
-  if(crossHair->isVisible())
-    crossHair->directDraw(scaleBarPainter.get());
-  scaleBarPainter->endFrame();
+  if(scaleBarPainter) {
+    scaleBarPainter->deviceRect = Rect::wh(fbWidth, fbHeight);
+    scaleBarPainter->beginFrame();
+    scaleBarPainter->setsRGBAdjAlpha(true);
+    scaleBarPainter->scale(gui->paintScale);  // beginFrame resets Painter state
+    scaleBar->directDraw(scaleBarPainter.get());
+    if(crossHair->isVisible())
+      crossHair->directDraw(scaleBarPainter.get());
+    scaleBarPainter->endFrame();
+  }
 
   if(painter->usesGPU())
-    painter->endFrame();  // render UI over map
+    painter->endFrame();  // render UI over map ... if UI not dirty, this just redraws previous frame
   else {  // nanovg_sw renderer
     if(dirty.isValid()) {
       painter->setBackgroundColor(Color::INVALID_COLOR);
-      painter->targetImage->fillRect(dirty, Color::TRANSPARENT_COLOR);
+      Rect clear = 2*dirty.width() > fbWidth ? Rect::ltrb(0, dirty.top, fbWidth, dirty.bottom) : dirty;
+      painter->targetImage->fillRect(clear, 0);
       painter->endFrame();
     }
     painter->blitImageToScreen(dirty, true);

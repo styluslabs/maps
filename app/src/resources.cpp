@@ -27,13 +27,12 @@
 
 #define NVG_LOG PLATFORM_LOG
 #ifndef NO_PAINTER_GL
-#include "nanovgXC/src/nanovg_vtex.h"
+#include "nanovgXC/src/nanovg_gl.h"
 #include "nanovgXC/src/nanovg_gl_utils.h"
 #endif
 
 #define NANOVG_SW_IMPLEMENTATION
 #define NVGSWU_GLES2
-#define NVGSW_QUIET_FRAME  // suppress axis-aligned scissor warning
 #include "nanovgXC/src/nanovg_sw.h"
 #include "nanovgXC/src/nanovg_sw_utils.h"
 
@@ -261,7 +260,7 @@ static std::unique_ptr<SvgPainter> boundsSvgPainter;
 
 void initResources(const char* baseDir)
 {
-  Painter::initFontStash(FONS_DELAY_LOAD | FONS_SUMMED);
+  Painter::initFontStash(FONS_DELAY_LOAD | FONS_SDF);  //FONS_SUMMED);
 #if PLATFORM_IOS || PLATFORM_OSX
   const char* dfltFont = "shared/fonts/SanFranciscoDisplay-Regular.otf";
   const char* boldFont = "shared/fonts/SanFranciscoDisplay-Bold.otf";

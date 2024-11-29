@@ -84,6 +84,7 @@ ui:
   theme: light
   ui_scale: 0.95
   map_scale: 0.95
+  #gpu_render: true
 
 #tile_cache_limit: 536870912
 

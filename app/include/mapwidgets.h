@@ -132,11 +132,14 @@ class CrosshairWidget : public Widget
 {
 public:
   CrosshairWidget() : Widget(new SvgCustomNode) {}
-  void draw(SvgPainter* svgp) const override {}
+  void draw(SvgPainter* svgp) const override;
   Rect bounds(SvgPainter* svgp) const override;
   void directDraw(Painter* p) const;
 
+  void setRoutePreviewOrigin(Point p = {0, 0});
+
   Point routePreviewOrigin;
+  bool useDirectDraw = false;
 };
 
 SvgNode* uiIcon(const char* id);

@@ -978,25 +978,40 @@ Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* ti
   return dialog;
 }
 
+void CrosshairWidget::setRoutePreviewOrigin(Point p)
+{
+  if(p != routePreviewOrigin) {
+    routePreviewOrigin = p;
+    node->invalidate(true);
+  }
+}
+
 Rect CrosshairWidget::bounds(SvgPainter* svgp) const
 {
-  return svgp->p->getTransform().mapRect(Rect::wh(32, 32));
+  real w = std::max(2*std::abs(routePreviewOrigin.x), 32.0);
+  real h = std::max(2*std::abs(routePreviewOrigin.y), 32.0);
+  return svgp->p->getTransform().mapRect(Rect::wh(w, h));
 }
+
+void CrosshairWidget::draw(SvgPainter* svgp) const { if(!useDirectDraw) directDraw(svgp->p); }
 
 void CrosshairWidget::directDraw(Painter* p) const
 {
   //Painter* p = svgp->p;
   Rect bbox = node->bounds();
+  if(!useDirectDraw)
+    bbox = bbox.toSize();
   p->save();
   p->translate(bbox.center());
   bbox.translate(-bbox.center());
   p->setFillBrush(Color::NONE);
   p->setStroke(Color::RED, 2.5);  //, Painter::FlatCap, Painter::BevelJoin);
-  if(!routePreviewOrigin.isNaN())
-    p->drawLine(routePreviewOrigin, Point(0,0));
-  p->drawLine(Point(bbox.left, 0), Point(-3, 0));
-  p->drawLine(Point(3, 0), Point(bbox.right, 0));
-  p->drawLine(Point(0, bbox.top), Point(0, -3));
-  p->drawLine(Point(0, 3), Point(0, bbox.bottom));
+  if(routePreviewOrigin != Point(0, 0))
+    p->drawLine(routePreviewOrigin, Point(0, 0));
+  real hw = 16, hh = 16;
+  p->drawLine(Point(-hw, 0), Point(-3, 0));
+  p->drawLine(Point(3, 0), Point(hw, 0));
+  p->drawLine(Point(0, -hh), Point(0, -3));
+  p->drawLine(Point(0, 3), Point(0, hh));
   p->restore();
 }
