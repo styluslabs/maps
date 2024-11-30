@@ -26,6 +26,7 @@
 #include "usvg/svgpainter.h"
 #include "usvg/svgparser.h"
 #include "nanovg_gl_utils.h"
+#include "nanovg_sw_utils.h"
 #include "mapwidgets.h"
 #include "resources.h"
 #if PLATFORM_IOS
@@ -145,14 +146,6 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
     viewport = dest;
     return true;
   };
-
-  addHandler([this](SvgGui* gui, SDL_Event* event){
-    // dividing by inputScale is a temporary hack - touchHandler should work in device independent coords (and
-    //  why doesn't map's pixel scale apply to coords?)
-    if(event->type == SDL_FINGERDOWN)  //&& event->tfinger.fingerId == SDL_BUTTON_LMASK)
-      gui->setPressed(this);
-    return app->touchHandler->sdlEvent(gui, event);
-  });
 }
 
 Rect MapsWidget::bounds(SvgPainter* svgp) const
@@ -1567,6 +1560,13 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsWidget->isFocusable = true;
   mapsContent->addWidget(mapsWidget);
 
+  // put handler on container so crosshair, etc. don't swallow pan
+  mapsContent->addHandler([this](SvgGui* gui, SDL_Event* event){
+    if(event->type == SDL_FINGERDOWN)
+      gui->setPressed(mapsContent);
+    return touchHandler->sdlEvent(gui, event);
+  });
+
   // recenter, reorient btns
   // we could switch to different orientation modes (travel direction, compass direction) w/ multiple taps
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
@@ -2170,6 +2170,11 @@ MapsApp::~MapsApp()
 
   gui->closeWindow(win.get());
   delete gui;  gui = NULL;
+
+  if(nvglFB)
+    nvgluDeleteFramebuffer(nvglFB);
+  if(nvglBlit)
+    nvgswuDeleteBlitter(nvglBlit);
 }
 
 bool MapsApp::drawFrame(int fbWidth, int fbHeight)
@@ -2188,17 +2193,18 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->setupGL();
     // Painter created here since GL context required to build shaders
     // ALIGN_SCISSOR needed only due to rotated direction-icon inside scroll area
-    // SW painter looks like the better choice for mobile - better parallelism (CPU for UI, GPU for map),
-    //  don't have to rerender UI at all when interacting with map
-    if(config["ui"]["gpu_render"].as<bool>(false)) {
+    if(config["ui"]["gpu_render"].as<bool>(true)) {
+      nvglFB = nvgluCreateFramebuffer(NULL, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
+      nvglBlit = nvgswuCreateBlitter();
       painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
-      scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
-      scaleBar->useDirectDraw = true;
-      crossHair->useDirectDraw = true;
+      painter->setBackgroundColor(Color::TRANSPARENT_COLOR);
+      //scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
+      //scaleBar->useDirectDraw = true;
+      //crossHair->useDirectDraw = true;
+      //gui->fullRedraw = true;
     }
     else
       painter.reset(new Painter(Painter::PAINT_SW | Painter::SW_BLIT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
-    gui->fullRedraw = painter->usesGPU();
     painter->setAtlasTextThreshold(24 * gui->paintScale);  // 24px font is default for dialog titles
   }
 
@@ -2272,8 +2278,24 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     scaleBarPainter->endFrame();
   }
 
-  if(painter->usesGPU())
-    painter->endFrame();  // render UI over map ... if UI not dirty, this just redraws previous frame
+  if(painter->usesGPU()) {
+    if(nvglFB) {
+      if(dirty.isValid()) {
+        int prevFBO = nvgluBindFramebuffer(nvglFB);
+        nvgluSetFramebufferSize(nvglFB, fbWidth, fbHeight, nvglFBFlags);
+        if(dirty != painter->deviceRect)
+          nvgluSetScissor(int(dirty.left), fbHeight - int(dirty.bottom), int(dirty.width()), int(dirty.height()));
+        nvgluClear(nvgRGBA(0, 0, 0, 0));
+        painter->endFrame();
+        nvgluSetScissor(0, 0, 0, 0);  // disable scissor for blit
+        nvgluBindFBO(prevFBO);
+      }
+      nvgswuSetBlend(1);
+      nvgswuBlitTex(nvglBlit, nvgluGetTexture(nvglFB), 0);
+    }
+    else
+      painter->endFrame();
+  }
   else {  // nanovg_sw renderer
     if(dirty.isValid()) {
       painter->setBackgroundColor(Color::INVALID_COLOR);

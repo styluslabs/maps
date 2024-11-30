@@ -1,4 +1,4 @@
-# Maps #
+# Ascend Maps #
 
 A cross-platform application for displaying vector and raster maps, built on [Tangram-ES](https://tangrams.readthedocs.io) and supporting [plugins](#plugin-system) for search, routing, map sources and more.  Includes a simple, customizable [style](#stylus-labs-osm-schema) for OpenStreetMap vector tiles.
 

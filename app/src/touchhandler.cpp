@@ -65,7 +65,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
           app->doubleTapEvent(initCOM.x, initCOM.y);
         }
       }
-      else if(gui->flingV != Point(0,0)) {
+      else if(gui->flingV != Point(0,0) && !altDragMode) {
         Point v = Point(gui->flingV).clamp(-2000, 2000)*xyScale;  // pixels per second
         // Tangram will ignore gestures if velocity is too low (as desired)
         if(tapState == DBL_TAP_DRAG_ACTIVE) {

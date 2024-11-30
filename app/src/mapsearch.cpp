@@ -271,6 +271,8 @@ void MapsSearch::clearSearchResults()
   resultCountText->setText(" ");  // use non-empty string to maintain layout height
   mapResults.clear();
   listResults.clear();
+  moreMapResultsAvail = false;
+  moreListResultsAvail = false;
   markers->reset();
   flyingToResults = false;  // just in case event got dropped
   saveToBkmksBtn->setEnabled(false);

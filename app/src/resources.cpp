@@ -27,7 +27,7 @@
 
 #define NVG_LOG PLATFORM_LOG
 #ifndef NO_PAINTER_GL
-#include "nanovgXC/src/nanovg_gl.h"
+#include "nanovgXC/src/nanovg_vtex.h"
 #include "nanovgXC/src/nanovg_gl_utils.h"
 #endif
 
@@ -260,7 +260,8 @@ static std::unique_ptr<SvgPainter> boundsSvgPainter;
 
 void initResources(const char* baseDir)
 {
-  Painter::initFontStash(FONS_DELAY_LOAD | FONS_SDF);  //FONS_SUMMED);
+  bool uigpu = MapsApp::config["ui"]["gpu_render"].as<bool>(true);
+  Painter::initFontStash(FONS_DELAY_LOAD | (uigpu ? FONS_SUMMED : FONS_SDF));
 #if PLATFORM_IOS || PLATFORM_OSX
   const char* dfltFont = "shared/fonts/SanFranciscoDisplay-Regular.otf";
   const char* boldFont = "shared/fonts/SanFranciscoDisplay-Bold.otf";

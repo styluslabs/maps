@@ -34,6 +34,8 @@ struct Rect;
 struct sqlite3;
 struct SDL_Window;
 union SDL_Event;
+struct NVGLUframebuffer;
+struct NVGSWUblitter;
 
 namespace YAML { class Node; }
 
@@ -233,4 +235,8 @@ private:
   bool panelMaximized = false;
   bool panelMinimized = false;
   int shuffleSeed = 0;
+
+  int nvglFBFlags = 0;
+  NVGLUframebuffer* nvglFB = NULL;
+  NVGSWUblitter* nvglBlit = NULL;
 };

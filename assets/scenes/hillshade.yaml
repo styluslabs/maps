@@ -318,7 +318,7 @@ layers:
                 angle: auto
                 # text_source: units will append units (m or ft) to label
                 #text_source: units
-                repeat_distance: 100px
+                repeat_distance: 40px
                 font:
                     family: global.primary_font
                     style: italic
