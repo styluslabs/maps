@@ -381,19 +381,16 @@ styles:
             data:image/svg+xml;utf8,<svg width="10pt" height="80pt" viewBox="-5 -40 10 80">
               <g fill="#fff"> <path d="M-5 -40 L-5 0 L0 -4 L5 0 L5 -40Z M-5 40 L-5 6 L0 2 L5 6 L5 40Z"/> </g>
             </svg>
-    transit-lines:
-        base: lines
-        blend: overlay
-        blend_order: -2
-        draw: # default draw parameters
-            color: gray  #function() { return feature.colour || 'gray'; }
-            alpha: 0.25
-            width: 6px
-            outline:
-                color: [.8, .8, .8]
-                alpha: 0.25
-                width: 1px
-            interactive: true
+    #transit-lines:
+    #    base: lines
+    #    blend: overlay
+    #    blend_order: -2
+    #    draw: # default draw parameters
+    #        color: gray  #function() { return feature.colour || 'gray'; }
+    #        alpha: 0.25
+    #        width: 6px
+    #        outline: { color: [.8, .8, .8], alpha: 0.25, width: 1px }
+    #        interactive: true
 
 
 layers:

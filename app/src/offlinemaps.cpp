@@ -19,7 +19,6 @@
 static bool runOfflineWorker = false;
 static std::unique_ptr<std::thread> offlineWorker;
 static Semaphore semOfflineWorker(1);
-static const char* polylineStyle = "{ style: lines, color: red, width: 4px, order: 5000 }";  //interactive: true,
 
 
 // Offline maps
@@ -37,11 +36,17 @@ struct OfflineSourceInfo
 
 struct OfflineMapInfo
 {
+  OfflineMapInfo(int _id, LngLat ll00, LngLat ll11, int _zoom, int _maxzoom)
+    : id(_id), lngLat00(ll00), lngLat11(ll11), zoom(_zoom), maxZoom(_maxzoom) {}
+  //OfflineMapInfo(OfflineMapInfo&&) = default;
+  //OfflineMapInfo(const OfflineMapInfo&) { assert(false); }
+
   int id;
   LngLat lngLat00, lngLat11;
   int zoom, maxZoom;
   std::vector<OfflineSourceInfo> sources;
-  bool canceled;
+  std::shared_ptr<Tangram::DataSourceContext> srcContext;
+  bool canceled = false;
 };
 
 struct OfflineTask
@@ -55,8 +60,7 @@ struct OfflineTask
 class OfflineDownloader
 {
 public:
-    OfflineDownloader(
-        Tangram::DataSourceContext& _context, const OfflineMapInfo& ofl, const OfflineSourceInfo& src);
+    OfflineDownloader(const OfflineMapInfo& ofl, const OfflineSourceInfo& src);
     ~OfflineDownloader();
     size_t remainingTiles() const { return m_queued.size() + m_pending.size(); }
     bool fetchNextTile(int maxPending);
@@ -74,7 +78,8 @@ private:
     std::deque<TileID> m_queued;
     std::vector<TileID> m_pending;
     std::mutex m_mutexQueue;
-    std::unique_ptr<Tangram::MBTilesDataSource> mbtiles;
+    std::shared_ptr<TileSource> tileSource;
+    Tangram::MBTilesDataSource* mbTiles;
     std::vector<SearchData> searchData;
 };
 
@@ -137,17 +142,20 @@ static void offlineDLMain()
   }
 }
 
-OfflineDownloader::OfflineDownloader(
-    Tangram::DataSourceContext& _context, const OfflineMapInfo& ofl, const OfflineSourceInfo& src)
+OfflineDownloader::OfflineDownloader(const OfflineMapInfo& ofl, const OfflineSourceInfo& src)
 {
-  mbtiles = std::make_unique<Tangram::MBTilesDataSource>(_context.getPlatform(), src.name, src.cacheFile, "", true);
+  auto mbtiles = std::make_unique<Tangram::MBTilesDataSource>(
+        ofl.srcContext->getPlatform(), src.name, src.cacheFile, "", true);
+  mbTiles = mbtiles.get();
   name = src.name + "-" + std::to_string(ofl.id);
   offlineId = ofl.id;
   searchData = MapsSearch::parseSearchFields(src.searchData);
   offlineSize = mbtiles->getOfflineSize();
   srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
 
-  mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(_context, src.url, src.urlOptions);
+  mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(*ofl.srcContext, src.url, src.urlOptions);
+  // TileSource shared_ptr is needed for thread synchronization in DataSources
+  tileSource = std::make_shared<TileSource>(name, std::move(mbtiles), TileSource::ZoomOptions());
   // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
   for(int z = std::min(ofl.zoom, srcMaxZoom); z <= srcMaxZoom; ++z) {
     TileID tile00 = lngLatTile(ofl.lngLat00, z);
@@ -168,7 +176,7 @@ OfflineDownloader::OfflineDownloader(
 
 OfflineDownloader::~OfflineDownloader()
 {
-  MapsApp::platform->notifyStorage(0, mbtiles->getOfflineSize() - offlineSize);
+  MapsApp::platform->notifyStorage(0, mbTiles->getOfflineSize() - offlineSize);
 }
 
 void OfflineDownloader::cancel()
@@ -182,15 +190,15 @@ bool OfflineDownloader::fetchNextTile(int maxPending)
 {
   std::unique_lock<std::mutex> lock(m_mutexQueue);
   if(m_queued.empty() || int(m_pending.size()) >= maxPending) return false;
-  auto task = std::make_shared<BinaryTileTask>(m_queued.front(), nullptr);
+  auto task = std::make_shared<BinaryTileTask>(m_queued.front(), tileSource);
   // prevent redundant write to offline_tiles table if importing from mbtiles file
   bool needdata = !searchData.empty() && task->tileId().z == srcMaxZoom;
-  task->offlineId = mbtiles->next ? (needdata ? -offlineId : offlineId) : 0;
+  task->offlineId = mbTiles->next ? (needdata ? -offlineId : offlineId) : 0;
   m_pending.push_back(m_queued.front());
   m_queued.pop_front();
   lock.unlock();
   TileTaskCb cb{[this](std::shared_ptr<TileTask> _task) { tileTaskCallback(_task); }};
-  mbtiles->loadTileData(task, cb);
+  mbTiles->loadTileData(task, cb);
   LOGD("%s: requested download of offline tile %s", name.c_str(), task->tileId().toString().c_str());
   return true;
 }
@@ -307,7 +315,7 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
   //int zoom = int(map->getZoom());
   // queue offline downloads
 
-  OfflineMapInfo olinfo = {mapid, lngLat00, lngLat11, zoom, maxZoom, {}, false};
+  OfflineMapInfo olinfo(mapid, lngLat00, lngLat11, zoom, maxZoom);
   auto& tileSources = map->getScene()->tileSources();
   for(auto& src : tileSources) {
     auto& info = src->offlineInfo();
@@ -320,13 +328,13 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
         Tangram::YamlPath("application.search_data").get(map->getScene()->config(), olinfo.sources.back().searchData);
     }
   }
-  //offlinePending.push_back(std::move(olinfo));
 
   YAML::Node globals = map->getScene()->config()["globals"];
-  queueOfflineTask(mapid, [olinfo=std::move(olinfo), globals=YAML::Clone(globals)](){
-    Tangram::DataSourceContext dataSourceContext(*MapsApp::platform, globals);
+  // shared_ptr needed due to std::function (note DataSourceContext itself is not copyable)
+  olinfo.srcContext = std::make_shared<Tangram::DataSourceContext>(*MapsApp::platform, YAML::Clone(globals));
+  queueOfflineTask(mapid, [olinfo=std::move(olinfo)](){
     for(auto& source : olinfo.sources)
-      offlineDownloaders.emplace_back(new OfflineDownloader(dataSourceContext, olinfo, source));
+      offlineDownloaders.emplace_back(new OfflineDownloader(olinfo, source));
   });
   //MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
 }
@@ -444,7 +452,7 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
   }
 
   int offlineId = int(time(NULL));
-  OfflineMapInfo olinfo = {offlineId, lngLat00, lngLat11, 0, maxZoom, {}, false};
+  OfflineMapInfo olinfo(offlineId, lngLat00, lngLat11, 0, maxZoom);
 
   if(app->mapsSources->mapSources[desc]) {
     if(importFile(desc, std::move(srcfile), olinfo, hasPois)) {
@@ -722,7 +730,7 @@ void MapsOffline::populateOffline()
         rectMarker = app->map->markerAdd();
       else
         app->map->markerSetVisible(rectMarker, true);
-      app->map->markerSetStylingFromString(rectMarker, polylineStyle);
+      app->map->markerSetStylingFromPath(rectMarker, "layers.offline-region.draw.marker");
       app->map->markerSetPolyline(rectMarker, bounds, 5);
       auto campos = app->map->getEnclosingCameraPosition(bounds[0], bounds[2]);  //, {32});
       campos.zoom -= 0.25f;

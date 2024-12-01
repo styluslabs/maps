@@ -82,19 +82,23 @@ textures:
 
 
 styles:
-    track-lines:
+    unlit-lines:
         base: lines
         mix: global.terrain_3d_mixin
         lighting: false
 
     track-direction:
-        mix: track-lines
+        mix: unlit-lines
         texture: |
             data:image/svg+xml;utf8,<svg width="10pt" height="80pt" viewBox="-5 -40 10 80">
               <!-- path fill="#fff" d="M-5 -40 L-5 40 L5 40 L5 -40Z"/ -->
               <!-- path fill="#000" d="M-5 -6 L-5 0 L0 -4 L5 0 L5 -6 L0 -10Z"/ -->
               <path fill="#fff" d="M-5 -40 L-5 0 L0 -4 L5 0 L5 -40Z M-5 40 L-5 6 L0 2 L5 6 L5 40Z"/>
             </svg>
+
+    overlay-lines:
+        base: lines
+        blend: overlay
 
     loc-points:
         mix: poi-points
@@ -294,7 +298,7 @@ layers:
         filter: { visible: 1 }
         draw:
             track:
-                style: track-lines
+                style: unlit-lines
                 interactive: true
                 color: function() { return feature.color || '#0000FF'; }
                 width: [[16, 2px], [17, 4px], [18, 6px]]
@@ -311,7 +315,7 @@ layers:
             draw:
                 track:
                     outline:
-                        style: track-lines
+                        style: unlit-lines
                         order: 1990
                         width: 2px
                         color: white
@@ -328,3 +332,7 @@ layers:
                 outline:
                     width: 1px
                     color: black
+
+    offline-region:
+        draw:
+            marker: { style: overlay-lines, color: red, width: 4px, order: 5000 }
