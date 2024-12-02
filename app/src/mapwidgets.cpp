@@ -63,8 +63,6 @@ static SvgDocument* createMobileDialogNode()
 
 static Dialog* setupMobileDialog(Dialog* dialog, const char* title, const char* acceptTitle, Widget* content = NULL)
 {
-  Widget* col = createColumn();
-  col->node->setAttribute("box-anchor", "hfill");  // vertical scrolling only
   TextBox* titleText = new TextLabel(createTextNode(title));
   titleText->node->addClass("dialog-title");
   titleText->node->setAttribute("box-anchor", "hfill");

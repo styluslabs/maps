@@ -35,8 +35,8 @@ public:
   std::list<PrevPinchPt> prevDists;
   Timer* tapTimer = nullptr;
 
-  enum { TOUCH_NONE, TOUCH_PINCH, TOUCH_ROTATE, TOUCH_SHOVE, TOUCH_ROTATE2 } multiTouchState;
-  enum { TAP_NONE, DBL_TAP_DRAG_PENDING, DBL_TAP_DRAG_ACTIVE } tapState;
+  enum { TOUCH_NONE, TOUCH_PINCH, TOUCH_ROTATE, TOUCH_SHOVE, TOUCH_ROTATE2 } multiTouchState = TOUCH_NONE;
+  enum { TAP_NONE, DBL_TAP_DRAG_PENDING, DBL_TAP_DRAG_ACTIVE } tapState = TAP_NONE;
   bool altDragMode = false;
 
   static TouchPt TOUCHPT_NAN;
