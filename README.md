@@ -9,13 +9,15 @@ Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](ht
 <img alt="Offline POI search" src="https://github.com/styluslabs/maps/assets/1332998/3a05679d-3a00-4c80-9886-253c72a10e07" width="270">
 <img alt="Wikipedia search; Shaded relief" src="https://github.com/styluslabs/maps/assets/1332998/f4f54f7f-9864-4908-9e03-7014879c99ee" width="270">
 <img alt="Ski runs; Slope angle shading; Map legend" src="https://github.com/styluslabs/maps/assets/1332998/2df92e7d-33cf-47e2-89f0-8eb6c2a64a52" width="270">
-<img alt="Saved places; Geotagged photo import; Bike lanes" src="https://github.com/styluslabs/maps/assets/1332998/c8a9cbef-71d4-4ee0-b59e-61617bb43acb" width="270">
+<img alt="3D Terrain" src="https://github.com/user-attachments/assets/bb3e1888-1fa6-46e2-961f-1a357c4c22ce" width="270">
 <img alt="3D buildings; POIs; Place info" src="https://github.com/styluslabs/maps/assets/1332998/0eb0c7ad-2f7b-4f36-a1ca-41f4170dac0e" width="270">
 <img alt="Sentinel-2 imagery; Map source GUI variables" src="https://github.com/styluslabs/maps/assets/1332998/e45b6de2-55d1-428c-aedc-ca376f710ce1" width="270">
-<img alt="Heatmap overlay; Trail visibility tag" src="https://github.com/styluslabs/maps/assets/1332998/146881fa-bccc-47d6-9419-02f12b6b4676" width="270">
+<img alt="3D Terrain; Heatmap overlay; Trail visibility tag" src="https://github.com/user-attachments/assets/388b8ea0-b42b-49e6-81b5-d43051f6c9b7" width="270">
 <img alt="Track recording" src="https://github.com/styluslabs/maps/assets/1332998/c798a867-9d7f-495a-ad48-4bc6bac73964" width="270">
 <img alt="Routing; MTB trail scale" src="https://github.com/styluslabs/maps/assets/1332998/1a6e79ef-f5c4-4ef2-995d-2986ec9aa68c" width="270">
 
+<!-- img alt="Saved places; Geotagged photo import; Bike lanes" src="https://github.com/styluslabs/maps/assets/1332998/c8a9cbef-71d4-4ee0-b59e-61617bb43acb" width="270" -->
+<!-- img alt="Heatmap overlay; Trail visibility tag" src="https://github.com/styluslabs/maps/assets/1332998/146881fa-bccc-47d6-9419-02f12b6b4676" width="270" -->
 <!-- img alt="Wikipedia Search" src="https://github.com/styluslabs/maps/assets/1332998/6bf64978-79fb-43d1-ad6e-713cbd44c54a" width="400" -->
 <!-- img alt="Hiking style" src="https://github.com/styluslabs/maps/assets/1332998/c088c07e-00f3-492e-aad5-a0d335205538" width="400" -->
 
