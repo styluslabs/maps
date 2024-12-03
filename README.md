@@ -2,24 +2,20 @@
 
 A cross-platform application for displaying vector and raster maps, built on [Tangram-ES](https://tangrams.readthedocs.io) and supporting [plugins](#plugin-system) for search, routing, map sources and more.  Includes a simple, customizable [style](#stylus-labs-osm-schema) for OpenStreetMap vector tiles.
 
-Features include offline search, managing saved places, creating and editing tracks and routes, and saving map tiles for offline use.
+Features include 3D terrain, offline search, track recording and editing, managing saved places, saving map tiles for offline use, and more.
 
 Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](https://github.com/styluslabs/maps/releases), and iOS: [App Store](https://apps.apple.com/us/app/ascend-maps/id6504321706), [Testflight](https://testflight.apple.com/join/3N1AUhj9).
 
-<img alt="Offline POI search" src="https://github.com/styluslabs/maps/assets/1332998/3a05679d-3a00-4c80-9886-253c72a10e07" width="270">
-<img alt="Wikipedia search; Shaded relief" src="https://github.com/styluslabs/maps/assets/1332998/f4f54f7f-9864-4908-9e03-7014879c99ee" width="270">
-<img alt="Ski runs; Slope angle shading; Map legend" src="https://github.com/styluslabs/maps/assets/1332998/2df92e7d-33cf-47e2-89f0-8eb6c2a64a52" width="270">
-<img alt="3D Terrain" src="https://github.com/user-attachments/assets/bb3e1888-1fa6-46e2-961f-1a357c4c22ce" width="270">
-<img alt="3D buildings; POIs; Place info" src="https://github.com/styluslabs/maps/assets/1332998/0eb0c7ad-2f7b-4f36-a1ca-41f4170dac0e" width="270">
-<img alt="Sentinel-2 imagery; Map source GUI variables" src="https://github.com/styluslabs/maps/assets/1332998/e45b6de2-55d1-428c-aedc-ca376f710ce1" width="270">
-<img alt="3D Terrain; Heatmap overlay; Trail visibility tag" src="https://github.com/user-attachments/assets/388b8ea0-b42b-49e6-81b5-d43051f6c9b7" width="270">
-<img alt="Track recording" src="https://github.com/styluslabs/maps/assets/1332998/c798a867-9d7f-495a-ad48-4bc6bac73964" width="270">
-<img alt="Routing; MTB trail scale" src="https://github.com/styluslabs/maps/assets/1332998/1a6e79ef-f5c4-4ef2-995d-2986ec9aa68c" width="270">
+<img alt="Wikipedia search; Shaded relief" src="https://github.com/user-attachments/assets/d00ca2ca-f4d1-4f71-bef8-4dfcbb0b7d36" width="270">
+<img alt="3D Terrain" src="https://github.com/user-attachments/assets/c59d61bb-f09b-41e8-902c-1e7984cbeae4" width="270">
+<img alt="Ski runs; Slope angle shading; Map legend" src="https://github.com/user-attachments/assets/22ea4327-b8af-47f0-b230-e57f4a8f0356" width="270">
+<img alt="Offline POI search" src="https://github.com/user-attachments/assets/b6ebf4a1-11c1-4665-9e34-da29ddc1ddbd" width="270">
+<img alt="3D buildings; POIs; Place info" src="https://github.com/user-attachments/assets/ddc5ec69-a052-4b9e-af6a-66b93286ea41" width="270">
+<img alt="Sentinel-2 imagery; Map source GUI variables" src="https://github.com/user-attachments/assets/b1d53aa8-c147-41c3-afe3-61f9e0d14514" width="270">
+<img alt="Track recording" src="https://github.com/user-attachments/assets/c699381a-4c61-4a68-8847-047cbc2cdce6" width="270">
+<img alt="3D Terrain; Heatmap overlay; Trail visibility tag" src="https://github.com/user-attachments/assets/480ee145-9d18-4e0f-a218-c56e1ae6573f" width="270">
+<img alt="Routing; MTB trail scale" src="https://github.com/user-attachments/assets/0fb87956-062b-4543-9906-454d9f482f99" width="270">
 
-<!-- img alt="Saved places; Geotagged photo import; Bike lanes" src="https://github.com/styluslabs/maps/assets/1332998/c8a9cbef-71d4-4ee0-b59e-61617bb43acb" width="270" -->
-<!-- img alt="Heatmap overlay; Trail visibility tag" src="https://github.com/styluslabs/maps/assets/1332998/146881fa-bccc-47d6-9419-02f12b6b4676" width="270" -->
-<!-- img alt="Wikipedia Search" src="https://github.com/styluslabs/maps/assets/1332998/6bf64978-79fb-43d1-ad6e-713cbd44c54a" width="400" -->
-<!-- img alt="Hiking style" src="https://github.com/styluslabs/maps/assets/1332998/c088c07e-00f3-492e-aad5-a0d335205538" width="400" -->
 
 ## Quick start ##
 1. [Build](#building) or [download](https://github.com/styluslabs/maps/releases)
@@ -64,7 +60,7 @@ The default configuration includes [markers.yaml](assets/scenes/markers.yaml) fo
 
 ### Application data ##
 
-Application data is stored in the executable's folder on Linux (will be changed to `~/.config/styluslabs/maps` in the future) and in `/Android/media/com.styluslabs.maps/files` on Android (this folder can be read and written by other applications, so it is possible to edit files).  Currently, there are only a few configuration options available in the GUI, but many more can be set by editing `config.yaml` (after exiting the app) in the application data folder.  See `config.default.yaml` for documentation.
+Application data is stored in the executable's folder on Linux (will be changed to `~/.config/styluslabs/maps` in the future).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more can be set by editing `config.yaml` (after exiting the app) in the application data folder.  See `config.default.yaml` for documentation.
 
 On Android, all files created by the application (except `config.yaml` and `mapsources.yaml`) will be replaced when a newer APK is installed, so edits should only be made to copies, not the original files.
 
