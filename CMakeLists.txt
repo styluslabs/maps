@@ -20,6 +20,23 @@ else()
   #add_definitions(-DGLM_FORCE_MESSAGES)
 endif()
 
+option(MAPS_USE_ASAN "Enable Address Sanitizer." OFF)
+if (MAPS_USE_ASAN)
+  message (STATUS "Enabling Address Sanitizer")
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+  add_definitions(-DMAPS_USE_ASAN)
+endif (MAPS_USE_ASAN)
+
+# TSAN and ASAN cannot be used together
+option(MAPS_USE_TSAN "Enable Thread Sanitizer." OFF)
+if (MAPS_USE_TSAN)
+  message (STATUS "Enabling Thread Sanitizer")
+  add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
+  add_definitions(-DMAPS_USE_TSAN)
+endif (MAPS_USE_TSAN)
+
 # executable
 include("app/${TANGRAM_PLATFORM}/config.cmake")
 # app library

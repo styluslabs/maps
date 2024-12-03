@@ -105,7 +105,7 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFi
     LOGE("NFD_OpenDialog error: %s", NFD_GetError());
 }
 
-void MapsApp::pickFolderDialog(FilePathFn_t callback)
+void MapsApp::pickFolderDialog(FilePathFn_t callback, bool readonly)
 {
   nfdchar_t* outPath;
   nfdresult_t result = NFD_PickFolder(&outPath, NULL);
@@ -192,6 +192,8 @@ int main(int argc, char* argv[])
   std::string winTitle = "Ascend";
 #ifdef MAPS_USE_ASAN
   winTitle += " - ASAN";
+#elif defined(MAPS_USE_TSAN)
+  winTitle += " - TSAN";
 #endif
   GLFWwindow* glfwWin = glfwCreateWindow(1000, 600, winTitle.c_str(), NULL, NULL);
   if(!glfwWin) { PLATFORM_LOG("glfwCreateWindow failed.\n"); return -1; }
@@ -301,6 +303,7 @@ int main(int argc, char* argv[])
   if(offscreenWorker) {
     // GLFW docs say a context must not be current on any other thread for glfwTerminate()
     offscreenWorker->enqueue([=](){ glfwMakeContextCurrent(NULL); });
+    offscreenWorker->waitForCompletion();
     offscreenWorker.reset();  // wait for thread exit
   }
 

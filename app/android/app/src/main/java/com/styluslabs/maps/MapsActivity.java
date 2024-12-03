@@ -174,7 +174,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       break;
     case PERM_REQ_MEDIA:
       if(grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-        pickFolder();
+        pickFolder(true);
       break;
     }
   }
@@ -565,7 +565,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   }
 
   private static final int ID_OPEN_DOCUMENT = 2;
-  private static final int ID_PICK_FOLDER = 3;
+  private static final int ID_READ_FOLDER = 3;
+  private static final int ID_WRITE_FOLDER = 3;
 
   public void openFile()  //Uri pickerInitialUri)
   {
@@ -576,7 +577,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     startActivityForResult(intent, ID_OPEN_DOCUMENT);
   }
 
-  public void pickFolder()
+  public void pickFolder(boolean readonly)
   {
     runOnUiThread(new Runnable() { @Override public void run() {
       if(Build.VERSION.SDK_INT >= 33) {
@@ -593,20 +594,24 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       }
 
       Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-      intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-      startActivityForResult(intent, ID_PICK_FOLDER);
+      int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION;
+      if(!readonly)
+        flags |= Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+      intent.addFlags(flags);
+      startActivityForResult(intent, readonly ? ID_READ_FOLDER : ID_WRITE_FOLDER);
     } });
   }
 
   @Override
   public void onActivityResult(int requestCode, int resultCode, Intent resultData)
   {
-    if(requestCode == ID_PICK_FOLDER) {
+    if(requestCode == ID_READ_FOLDER || requestCode == ID_WRITE_FOLDER) {
       if(resultCode == Activity.RESULT_OK && resultData != null) {
         try {
           // ref: https://android.googlesource.com/platform/frameworks/support/+/a9ac247af2afd4115c3eb6d16c05bc92737d6305/documentfile/src/main/java/androidx/documentfile/provider/DocumentFile.java
           Uri treeUri = resultData.getData();
-          getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+          int flags = requestCode == ID_WRITE_FOLDER ? Intent.FLAG_GRANT_WRITE_URI_PERMISSION : 0;
+          getContentResolver().takePersistableUriPermission(treeUri, flags | Intent.FLAG_GRANT_READ_URI_PERMISSION);
           Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
           ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
           MapsLib.openFileDesc(uri.getPath(), pfd.detachFd());  //pfd.getFd());

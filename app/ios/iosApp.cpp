@@ -107,7 +107,7 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, PlatformFileFn_t c
   iosPlatform_pickDocument(sdlWin);
 }
 
-void MapsApp::pickFolderDialog(FilePathFn_t callback)
+void MapsApp::pickFolderDialog(FilePathFn_t callback, bool readonly)
 {
   // ... not used on iOS (photos are loaded with PhotoKit API)
 }

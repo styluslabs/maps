@@ -15,6 +15,7 @@ public:
   void onMapEvent(MapEvent_t event);
   void updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload);
   void importSources(const std::string& src);
+  bool syncImportFile(const std::string& filename);
   Button* createPanel();
 
   std::string currSource;

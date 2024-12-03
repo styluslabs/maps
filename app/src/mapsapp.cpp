@@ -1679,10 +1679,33 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // need to update map sources from old version
   if(prevVersion == 1) {
     FSPath path = FSPath(configFile).parent().child("mapsources.default.yaml");
-    mapsSources->importSources("file://" + path.path);
+    mapsSources->syncImportFile(path.path);
   }
 
   gui->showWindow(win.get(), NULL);
+
+#if PLATFORM_ANDROID
+  if(prevVersion == 0) {
+    MapsApp::messageBox("Choose folder", "To use an external data folder, enable All Files Access for Ascend"
+        " in Android settings, then choose OK to select a folder.", {"OK", "Cancel"},
+        [=](std::string res){
+          if(res != "OK") { return; }
+          MapsApp::pickFolderDialog([this](const char* path){
+            PLATFORM_LOG("Selected data folder: %s\n", path);
+            if(!FSPath(path, ".nomedia").exists("wb")) {
+              messageBox("Error", "Unable to write to selected folder - All Files Access not enabled?", {"OK"});
+              config["prev_version"] = 0;  // try again when reopened
+              return;
+            }
+            config["base_directory"] = path;
+            saveConfig();
+            messageBox("Reopen", "Please reopen the application to use new data folder.", {"OK"});
+                //[](std::string){ runApplication = false; });  -- just freezes app w/o exiting
+          });
+        });
+  }
+#endif
+
   // on desktop, command line options could override startup behavior
 #if PLATFORM_MOBILE
   mapsOffline->resumeDownloads();
@@ -2007,6 +2030,13 @@ bool MapsApp::loadConfig(const char* assetPath)
         "Error loading config!  Restore config.yaml or reinstall the application.", {"OK"}); });
     //*(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
     return false;  // do not set configFile so we don't write to it!
+  }
+
+  std::string newdir = config["base_directory"].as<std::string>("");
+  // make sure we can still write the external directory
+  if(!newdir.empty() && FSPath(newdir, ".nomedia").exists("wb")) {
+    baseDir = FSPath(newdir, "").path;
+    return loadConfig(baseDir.c_str());
   }
 
   configFile = configPath.c_str();

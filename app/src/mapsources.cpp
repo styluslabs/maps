@@ -811,6 +811,21 @@ void MapsSources::importSources(const std::string& src)
   }
 }
 
+// needed for loading updated mapsources.default.yaml at startup
+bool MapsSources::syncImportFile(const std::string& filename)
+{
+  try {
+    YAML::Node yml = YAML::LoadFile(filename);
+    for(auto& node : yml)
+      mapSources[node.first.Scalar()] = node.second;
+    saveSources();
+    return true;
+  } catch (std::exception& e) {
+    MapsApp::messageBox("Import error", fstring("Error parsing '%s': %s", filename.c_str(), e.what()));
+  }
+  return false;
+}
+
 Button* MapsSources::createPanel()
 {
   // Source list panel

@@ -19,14 +19,6 @@ endif()
 add_compile_options(-Werror=return-type)
 #add_compile_options(-Werror=incompatible-pointer-types) -- only for C
 
-option(MAPS_USE_ASAN "Enable Address Sanitizer." OFF)
-if (MAPS_USE_ASAN)
-  message (STATUS "Enabling Address Sanitizer")
-  add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-  add_definitions(-DMAPS_USE_ASAN)
-endif (MAPS_USE_ASAN)
-
 add_definitions(-DTANGRAM_LINUX)
 
 set(OpenGL_GL_PREFERENCE GLVND)

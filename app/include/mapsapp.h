@@ -189,7 +189,7 @@ public:
   struct FileDialogFilter_t { const char* name; const char* spec; };
   static void openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFileFn_t callback);
   typedef std::function<void(const char*)> FilePathFn_t;
-  static void pickFolderDialog(FilePathFn_t callback);
+  static void pickFolderDialog(FilePathFn_t callback, bool readonly = true);
   static void saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback);
   static void notifyStatusBarBG(bool isLight);
   static void setSensorsEnabled(bool enabled);

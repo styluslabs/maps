@@ -353,7 +353,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   getClipboardMID = jniEnv->GetMethodID(cls, "getClipboard", "()Ljava/lang/String;");
   setClipboardMID = jniEnv->GetMethodID(cls, "setClipboard", "(Ljava/lang/String;)V");
   openFileMID = jniEnv->GetMethodID(cls, "openFile", "()V");
-  pickFolderMID = jniEnv->GetMethodID(cls, "pickFolder", "()V");
+  pickFolderMID = jniEnv->GetMethodID(cls, "pickFolder", "(Z)V");
   openUrlMID = jniEnv->GetMethodID(cls, "openUrl", "(Ljava/lang/String;)V");
   setImeTextMID = jniEnv->GetMethodID(cls, "setImeText", "(Ljava/lang/String;II)V");
   shareFileMID = jniEnv->GetMethodID(cls, "shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
@@ -476,11 +476,11 @@ void MapsApp::openFileDialog(std::vector<FileDialogFilter_t>, PlatformFileFn_t c
   jniEnv->CallVoidMethod(mapsActivityRef, openFileMID);
 }
 
-void MapsApp::pickFolderDialog(FilePathFn_t callback)
+void MapsApp::pickFolderDialog(FilePathFn_t callback, bool readonly)
 {
   pickFolderCallback = callback;
   JniThreadBinding jniEnv(JniHelpers::getJVM());
-  jniEnv->CallVoidMethod(mapsActivityRef, pickFolderMID);
+  jniEnv->CallVoidMethod(mapsActivityRef, pickFolderMID, readonly);
 }
 
 void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback)
