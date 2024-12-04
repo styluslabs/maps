@@ -9,6 +9,8 @@ else()
   set(STYLUSLABS_DEPS "deps")
 endif()
 
+add_definitions(-DMAPS_GIT_REV=${MAPS_GIT_REV})
+
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   add_definitions(-DDEBUG)
   add_definitions(-DLOG_LEVEL=3)

@@ -1389,7 +1389,7 @@ static Widget* createStatsRow(std::vector<const char*> items)  // const char* ti
       </text>
     </g>
   )";
-  std::unique_ptr<SvgNode> statBlockProto;
+  static std::unique_ptr<SvgNode> statBlockProto;
   if(!statBlockProto)
     statBlockProto.reset(loadSVGFragment(statBlockProtoSVG));
 

@@ -475,12 +475,21 @@ Button* PluginManager::createPanel()
   SvgText* resultTextNode = createTextNode("");
   TextBox* resultText = new TextBox(resultTextNode);
 
+  std::string about = std::string("Ascend Maps build ") + PPVALUE_TO_STRING(MAPS_GIT_REV)
+  + "; " + __DATE__ + (IS_DEBUG ? " DEBUG" : "") +
+  "\ngithub.com/styluslabs/maps\nsupport@styluslabs.com";
+
+  TextBox* creditsText = new TextBox(createTextNode(about.c_str()));
+  creditsText->node->addClass("weak");
+  creditsText->node->setAttribute("font-size", "12");
+  creditsText->node->setAttribute("margin", "8 0");
+
   runBtn->onClicked = [=](){
     resultText->setText( evalJS(jsEdit->text().c_str()).c_str() );
     resultText->setText( SvgPainter::breakText(resultTextNode, app->getPanelWidth() - 20).c_str() );
   };
 
-  Widget* pluginContent = createColumn({jsEdit, runBtn, resultText}, "", "", "fill");
+  Widget* pluginContent = createColumn({jsEdit, runBtn, resultText, createHRule(1), creditsText}, "", "", "fill");
 
   Button* refreshBtn = createToolbutton(MapsApp::uiIcon("refresh"), "Reload plugins");
   refreshBtn->onClicked = [=](){ reload(); };

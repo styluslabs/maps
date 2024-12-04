@@ -844,17 +844,35 @@ Button* MapsBookmarks::createPanel()
     populateBkmks(node.as<int>(-1), false);
 
   Menu* bkmkMenu = createMenu(Menu::VERT);
-  //bkmkMenu->autoClose = true;
   bkmkMenu->addHandler([this, bkmkMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
+      static const char* itemProtoSVG = R"(
+        <g box-anchor="left vfill" layout="flex" flex-direction="row">
+          <g class="menu-icon-container" layout="box" margin="0 2">
+            <use class="icon" width="36" height="36" xlink:href=":/ui-icons.svg#pin"/>
+          </g>
+          <g layout="box" box-anchor="vfill">
+            <text class="title main-text" box-anchor="left" margin="0 12 6 12"></text>
+            <text class="detail-text weak" box-anchor="left bottom" margin="0 12 2 12" font-size="12"></text>
+          </g>
+        </g>
+      )";
+      static std::unique_ptr<SvgNode> itemProto;
+      if(!itemProto)
+        itemProto.reset(loadSVGFragment(itemProtoSVG));
+
       gui->deleteContents(bkmkMenu->selectFirst(".child-container"));
       int uiWidth = app->getPanelWidth();
-      const char* query = "SELECT b.title, b.props, b.lng, b.lat FROM bookmarks AS b JOIN lists ON "
+      const char* query = "SELECT b.title, lists.title, b.props, b.lng, b.lat FROM bookmarks AS b JOIN lists ON "
           "lists.id = b.list_id WHERE lists.archived = 0 AND b.title <> '' ORDER BY timestamp DESC LIMIT 10;";
-      SQLiteStmt(app->bkmkDB, query).exec([&](std::string name, std::string props, double lng, double lat){
-        Button* item = bkmkMenu->addItem(name.c_str(), MapsApp::uiIcon("pin"),
-            [=](){ app->setPickResult(LngLat(lng, lat), name, props); });
+      SQLiteStmt(app->bkmkDB, query).exec([&](std::string name, std::string listname, std::string props, double lng, double lat){
+        Button* item = createMenuItem(new Widget(itemProto->clone()));
+        item->selectFirst(".main-text")->setText(name.c_str());
+        item->selectFirst(".detail-text")->setText(listname.c_str());
+        item->onClicked = [=](){ app->setPickResult(LngLat(lng, lat), name, props); };
+        bkmkMenu->addItem(item);
         SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".detail-text")->node), uiWidth - 100);
       });
     }
     return false;
