@@ -132,7 +132,7 @@ styles:
   // or maybe add a Url getParent() method to Url class
   std::string importstr;
   // before scene so scene can override things, but we can split into pre_imports and post_imports if needed
-  for(auto& imp : MapsApp::config["sources"]["common_imports"]) {
+  for(const auto& imp : MapsApp::config["sources"]["common_imports"]) {
     std::string url = imp.Scalar();
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   }
@@ -488,12 +488,7 @@ void MapsSources::onMapEvent(MapEvent_t event)
   if(event == SUSPEND) {
     if(saveSourcesNeeded)
       saveSources();
-    std::vector<std::string> order = sourcesContent->getOrder();
-    if(order.empty()) return;
-    YAML::Node ordercfg = app->config["sources"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
-    ordercfg.SetStyle(YAML::EmitterStyle::Flow);
-    for(const std::string& s : order)
-      ordercfg.push_back(s);
+    app->config.build()["sources"]["list_order"] = stringsToYamlArray(sourcesContent->getOrder());
     return;
   }
 
@@ -790,7 +785,7 @@ void MapsSources::importSources(const std::string& src)
           if(yml["global"] || yml["layers"] || yml["styles"] || yml["import"] || yml["sources"])
             createSource("", fstring("{title: '%s', scene: %s}", FSPath(src).baseName().c_str(), src.c_str()));
           else {
-            for(auto& node : yml)
+            for(const auto& node : yml)
               mapSources[node.first.Scalar()] = node.second;
           }
           saveSources();
@@ -816,7 +811,7 @@ bool MapsSources::syncImportFile(const std::string& filename)
 {
   try {
     YAML::Node yml = YAML::LoadFile(filename);
-    for(auto& node : yml)
+    for(const auto& node : yml)
       mapSources[node.first.Scalar()] = node.second;
     saveSources();
     return true;

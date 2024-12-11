@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mapscomponent.h"
-#include "yaml-cpp/yaml.h"
+#include "gaml/src/yaml.h"
 
 class MapsSources : public MapsComponent
 {

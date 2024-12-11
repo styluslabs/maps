@@ -117,10 +117,10 @@ void MapsSearch::onDelOfflineMap(int mapId)
 std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
 {
   std::vector<SearchData> searchData;
-  for(auto& elem : node) {
+  for(const auto& elem : node) {
     Tangram::SceneFunctions dummyFns;
     std::vector<std::string> fields;
-    for(auto& field : elem["fields"])
+    for(const auto& field : elem["fields"])
       fields.push_back(field.Scalar());
     auto filter = Tangram::SceneLoader::generateFilter(dummyFns, elem["filter"]);
     if(dummyFns.empty())

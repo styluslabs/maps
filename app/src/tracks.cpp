@@ -7,7 +7,7 @@
 #include "bookmarks.h"
 #include "trackwidgets.h"
 
-#include "yaml-cpp/yaml.h"
+#include "gaml/src/yaml.h"
 #include "sqlitepp.h"
 #include "util/yamlPath.h"
 #include "util/mapProjection.h"
@@ -1108,12 +1108,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     }
   }
   else if(event == SUSPEND) {
-    std::vector<std::string> order = tracksContent->getOrder();
-    if(order.empty()) return;
-    YAML::Node ordercfg = app->config["tracks"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
-    ordercfg.SetStyle(YAML::EmitterStyle::Flow);
-    for(const std::string& s : order)
-      ordercfg.push_back(s);
+    app->config.build()["tracks"]["list_order"] = stringsToYamlArray(tracksContent->getOrder());
     if(activeTrack && activeTrack->modified)
       activeTrack->modified = !saveTrack(activeTrack);
   }
@@ -2029,7 +2024,7 @@ Button* MapsTracks::createPanel()
   loadTracks(false);
   YAML::Node vistracks;
   Tangram::YamlPath("+tracks.visible").get(app->config, vistracks);  //node = app->getConfigPath("+places.visible");
-  for(auto& node : vistracks) {
+  for(const auto& node : vistracks) {
     int rowid = node.as<int>(-1);
     for(GpxFile& track : tracks) {
       if(track.rowid == rowid) {

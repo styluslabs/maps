@@ -5,7 +5,6 @@
 
 #include "sqlitepp.h"
 #include "rapidjson/document.h"
-#include "yaml-cpp/yaml.h"
 #include "util/yamlPath.h"
 #include "exif.h"
 
@@ -372,12 +371,7 @@ void MapsBookmarks::onMapEvent(MapEvent_t event)
     }
   }
   else if(event == SUSPEND) {
-    std::vector<std::string> order = listsContent->getOrder();
-    if(order.empty()) return;
-    YAML::Node ordercfg = app->config["places"]["list_order"] = YAML::Node(YAML::NodeType::Sequence);
-    ordercfg.SetStyle(YAML::EmitterStyle::Flow);
-    for(const std::string& s : order)
-      ordercfg.push_back(s);
+    app->config.build()["places"]["list_order"] = stringsToYamlArray(listsContent->getOrder());
   }
 }
 
@@ -840,7 +834,7 @@ Button* MapsBookmarks::createPanel()
   // handle visible bookmark lists
   YAML::Node vislists;
   Tangram::YamlPath("+places.visible").get(app->config, vislists);  //node = app->getConfigPath("+places.visible");
-  for(auto& node : vislists)
+  for(const auto& node : vislists)
     populateBkmks(node.as<int>(-1), false);
 
   Menu* bkmkMenu = createMenu(Menu::VERT);

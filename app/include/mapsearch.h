@@ -1,8 +1,6 @@
 #pragma once
 
 #include "mapscomponent.h"
-//#include "util.h"
-#include "yaml-cpp/yaml.h"
 #include "scene/filters.h"
 
 #include "ugui/svggui.h"
@@ -10,6 +8,8 @@
 using Tangram::TileTask;
 class MarkerGroup;
 class SQLiteDB;
+
+namespace YAML { class Node; }
 
 struct SearchData {
   std::string layer;

@@ -757,7 +757,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.elevationSource = config["sources"]["elevation"][0].as<std::string>("");
   // fallback fonts
   FSPath basePath(baseDir);
-  for(auto& font : config["fallback_fonts"])
+  for(const auto& font : config["fallback_fonts"])
     options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(basePath.child(font.Scalar()).path)));
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   options.numTileWorkers = config["num_tile_workers"].as<int>(2);
@@ -1387,7 +1387,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   customColorDialog.reset(new ManageColorsDialog(markerColors));
   customColorDialog->onColorListChanged = [this](){
     populateColorPickerMenu();
-    config["colors"] = YAML::Node(YAML::NodeType::Sequence);
+    config.build()["colors"] = YAML::JsonValue(YAML::Tag::ARRAY);  //YAML::NodeType::Sequence);
     for(Color& color : markerColors)
       config["colors"].push_back( colorToStr(color) );
   };
@@ -2078,12 +2078,9 @@ void MapsApp::saveConfig()
 
   config["ui"]["split_size"] = int(panelSplitter->currSize);
 
-  //std::string s = YAML::Dump(config);
-  YAML::Emitter emitter;
-  //emitter.SetStringFormat(YAML::DoubleQuoted);
-  emitter << config;
+  std::string s = yamlToStr(config, false, false);  //YAML::Writer emitter; emitter.convert(*config.value);
   FileStream fs(configFile.c_str(), "wb");
-  fs.write(emitter.c_str(), emitter.size());
+  fs.write(s.c_str(), s.size());
 }
 
 void MapsApp::setDpi(float dpi)

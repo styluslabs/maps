@@ -300,11 +300,12 @@ static int addMapSource(duk_context* ctx)
   const char* keystr = duk_require_string(ctx, 0);
   // accept string or JS object
   const char* yamlstr = duk_is_string(ctx, 1) ? duk_require_string(ctx, 1) : duk_json_encode(ctx, 1);
-  try {
-    MapsApp::inst->mapsSources->addSource(keystr, YAML::Load(yamlstr, strlen(yamlstr)));
-  } catch (std::exception& e) {
-    LOGE("Error parsing map source YAML: %s", e.what());
-  }
+
+  auto node = YAML::Load(yamlstr);
+  if(node)
+    MapsApp::inst->mapsSources->addSource(keystr, YAML::Load(yamlstr));  //, strlen(yamlstr)));
+  else
+    LOGE("Error parsing map source YAML: %s", yamlstr);
   return 0;
 }
 
@@ -405,14 +406,13 @@ static int writeSceneValue(duk_context* ctx)
   std::string yamlPath = duk_require_string(ctx, 0);
   std::string strVal = duk_safe_to_string(ctx, 1);
   if(yamlPath.substr(0, 7) == "config.") {
-    YAML::Node yamlVal;
-    YAML::Node node;
-    try {
-      yamlVal = YAML::Load(strVal);
-    } catch (const YAML::ParserException& e) {
-      LOGE("Parsing YAML string '%s' failed: %s", strVal.c_str(), e.what());
+    auto yamlVal = YAML::Load(strVal);
+    if(!yamlVal) {
+      LOGE("Error parsing YAML string: %s", strVal.c_str());  //, e.what());
       return 0;
     }
+
+    YAML::Node node;
     Tangram::YamlPath("+" + yamlPath.substr(7)).get(MapsApp::config, node);
     node = yamlVal;
   }
@@ -475,14 +475,11 @@ Button* PluginManager::createPanel()
   SvgText* resultTextNode = createTextNode("");
   TextBox* resultText = new TextBox(resultTextNode);
 
-  std::string about = std::string("Ascend Maps build ") + PPVALUE_TO_STRING(MAPS_GIT_REV)
-  + "; " + __DATE__ + (IS_DEBUG ? " DEBUG" : "") +
-  "\ngithub.com/styluslabs/maps\nsupport@styluslabs.com";
+  std::string aboutSVG = std::string("<text class='weak' box-anchor='left' font-size='12' margin='8 0'>Ascend Maps build ")
+  + PPVALUE_TO_STRING(MAPS_GIT_REV) + "; " + __DATE__ + (IS_DEBUG ? " DEBUG" : "") +
+  "\ngithub.com/styluslabs/maps | support@styluslabs.com<text>";
 
-  TextBox* creditsText = new TextBox(createTextNode(about.c_str()));
-  creditsText->node->addClass("weak");
-  creditsText->node->setAttribute("font-size", "12");
-  creditsText->node->setAttribute("margin", "8 0");
+  TextBox* creditsText = new TextBox(loadSVGFragment(aboutSVG.c_str()));
 
   runBtn->onClicked = [=](){
     resultText->setText( evalJS(jsEdit->text().c_str()).c_str() );

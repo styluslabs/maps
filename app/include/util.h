@@ -10,7 +10,7 @@
 using Tangram::LngLat;
 using Tangram::TileID;
 
-namespace YAML { class Node; }
+namespace YAML { class Node; class JsonValue; using Value = JsonValue; }
 
 double lngLatDist(LngLat r1, LngLat r2);
 double lngLatBearing(LngLat r1, LngLat r2);
@@ -20,9 +20,9 @@ LngLat parseLngLat(const char* s);
 std::string lngLatToStr(LngLat ll);
 int64_t packTileId(const TileID& tile);
 
-std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false);
-template<typename T>
-void yamlRemove(YAML::Node node, T key);
+std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false, bool flow = true);
+template<typename T> void yamlRemove(YAML::Node node, T key);
+YAML::Value stringsToYamlArray(const std::vector<std::string>& strs, bool flow = true);
 std::string osmIdFromJson(const rapidjson::Document& props);
 std::string rapidjsonToStr(const rapidjson::Document& props);
 rapidjson::Document strToJson(const char* json);

@@ -114,14 +114,11 @@ LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord)
   return MapProjection::projectedMetersToLngLat(meters);
 }
 
-std::string yamlToStr(const YAML::Node& node, bool quoteStrings)
+std::string yamlToStr(const YAML::Node& node, bool quoteStrings, bool flow)
 {
-  YAML::Emitter emitter;
-  if(quoteStrings) emitter.SetStringFormat(YAML::DoubleQuoted);
-  emitter.SetSeqFormat(YAML::Flow);
-  emitter.SetMapFormat(YAML::Flow);
-  emitter << node;
-  return std::string(emitter.c_str());
+  YAML::Writer emitter;
+  if(flow) emitter.flowLevel = 0;
+  return emitter.convert(*node.value);
 }
 
 template<typename T>
@@ -129,16 +126,26 @@ void yamlRemove(YAML::Node node, T key)
 {
   if(node.Type() != YAML::NodeType::Sequence)
     return;
-  YAML::Node newnode = YAML::Node(YAML::NodeType::Sequence);
-  for(YAML::Node& child : node) {
+  YAML::Value newval = YAML::Value(node.value->getFlags());
+  YAML::Node newnode(&newval);
+  for(const auto& child : node) {
     if(child.as<T>() != key)
-      newnode.push_back(child);
+      newnode.push_back(std::move(*child.value));
   }
-  node = newnode;
+  node = std::move(newval);  //node;
 }
 
 // explicit instantiations
 template void yamlRemove<int>(YAML::Node node, int key);
+
+YAML::Value stringsToYamlArray(const std::vector<std::string>& strs, bool flow)
+{
+  YAML::Value val(YAML::Tag::ARRAY | (flow ? YAML::Tag::YAML_FLOW : YAML::Tag::UNDEFINED));
+  YAML::Node node(&val);
+  for(const auto& str : strs) {
+    node.push_back(str);
+  }
+}
 
 std::string osmIdFromJson(const rapidjson::Document& props)
 {
