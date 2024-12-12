@@ -189,16 +189,14 @@ void MapsSources::saveSources()
 {
   saveSourcesNeeded = false;
   if(srcFile.empty()) return;
-  YAML::Node sources = YAML::Node(YAML::NodeType::Map);
-  for(auto& node : mapSources) {
-    if(!node.second["__plugin"])  // plugin can set this flag for sources which should not be saved
-      sources[node.first] = node.second;
+  for(auto node : mapSources) {
+    if(node.second["__plugin"])  // plugin can set this flag for sources which should not be saved
+      node.second.setNoWrite();
   }
-  YAML::Emitter emitter;
-  //emitter.SetStringFormat(YAML::DoubleQuoted);
-  emitter << sources;
+
+  std::string s = yamlToStr(mapSources, false, false);
   FileStream fs(srcFile.c_str(), "wb");
-  fs.write(emitter.c_str(), emitter.size());
+  fs.write(s.c_str(), s.size());
 }
 
 void MapsSources::sourceModified()
@@ -305,28 +303,31 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
 
   if(!yamlStr.empty()) {
     try {
-      mapSources[savekey] = YAML::Load(yamlStr);
+      mapSources.add(savekey) = YAML::Load(yamlStr);
     } catch (...) {
       return "";
     }
   }
   else {
-    YAML::Node node = mapSources[savekey] ? mapSources[savekey] : YAML::Node(YAML::NodeType::Map);
-    node["title"] = trimStr(titleEdit->text());
+    YAML::Node node = mapSources.add(savekey); // ? mapSources[savekey] : YAML::Node(YAML::NodeType::Map);
+    node.add("title") = trimStr(titleEdit->text());
     if(node["layers"] || !mapSources[savekey]) {
-      YAML::Node layers = YAML::Node(YAML::NodeType::Sequence);
+      YAML::Node layers = node.add("layers");  //](YAML::Tag::ARRAY);  // = YAML::Node(YAML::NodeType::Sequence);
       for(auto& src : currLayers)
-        layers.push_back(YAML::Load(src.opacity < 1 ?
-            fstring("{source: %s, opacity: %.2f}", src.source.c_str(), src.opacity) : src.source));
-      node["layers"] = layers;
+        layers.push_back(src.opacity < 1 ? YAML::Value({{"source", src.source}, {"opacity", src.opacity}}) : src.source);
+            //fstring("{source: %s, opacity: %.2f}", src.source.c_str(), src.opacity) : src.source));
+      //node["layers"] = layers;
     }
     else if(node["url"])
       node["url"] = trimStr(urlEdit->text());
-    YAML::Node updates = node["updates"] = YAML::Node(YAML::NodeType::Map);
-    // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
-    for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
-      updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;
-    if(!mapSources[savekey]) mapSources[savekey] = node;
+
+    if(!currUpdates.empty()) {
+      YAML::Node updates = node.add("updates", true);  // = YAML::Node(YAML::NodeType::Map);
+      // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
+      for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
+        updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;
+    }
+    //if(!mapSources[savekey]) mapSources[savekey] = node;
   }
 
   saveSources();
