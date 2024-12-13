@@ -31,7 +31,7 @@ struct OfflineSourceInfo
   std::string url;
   Tangram::UrlOptions urlOptions;
   int maxZoom;
-  YAML::Node searchData;
+  YAML::Document searchData;
 };
 
 struct OfflineMapInfo
@@ -46,6 +46,7 @@ struct OfflineMapInfo
   int zoom, maxZoom;
   std::vector<OfflineSourceInfo> sources;
   std::shared_ptr<Tangram::DataSourceContext> srcContext;
+  YAML::Document globals;
   bool canceled = false;
 };
 
@@ -324,14 +325,19 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
     else {
       olinfo.sources.push_back(
           {src->name(), info.cacheFile, info.url, info.urlOptions, src->maxZoom(), {}});
-      if(!src->isRaster())
-        Tangram::YamlPath("application.search_data").get(map->getScene()->config(), olinfo.sources.back().searchData);
+      if(!src->isRaster()) {
+        // search data must remain accessible even if map source changed
+        YAML::Node searchdata;
+        Tangram::YamlPath("application.search_data").get(map->getScene()->config(), searchdata);
+        olinfo.sources.back().searchData = searchdata.clone();
+      }
     }
   }
 
-  YAML::Node globals = map->getScene()->config()["globals"];
-  // shared_ptr needed due to std::function (note DataSourceContext itself is not copyable)
-  olinfo.srcContext = std::make_shared<Tangram::DataSourceContext>(*MapsApp::platform, YAML::Clone(globals));
+  olinfo.globals = map->getScene()->config()["globals"].clone();
+  // shared_ptr needed due to std::function (note DataSourceContext itself is not copyable but must live as
+  //  long as the lambda, i.e., can't be created in lambda call)
+  olinfo.srcContext = std::make_shared<Tangram::DataSourceContext>(*MapsApp::platform, olinfo.globals);
   queueOfflineTask(mapid, [olinfo=std::move(olinfo)](){
     for(auto& source : olinfo.sources)
       offlineDownloaders.emplace_back(new OfflineDownloader(olinfo, source));
@@ -455,7 +461,7 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
   OfflineMapInfo olinfo(offlineId, lngLat00, lngLat11, 0, maxZoom);
 
   if(app->mapsSources->mapSources[desc]) {
-    if(importFile(desc, std::move(srcfile), olinfo, hasPois)) {
+    if(importFile(desc, std::move(srcfile), std::move(olinfo), hasPois)) {
       populateOffline();
       updateProgress(offlineId, "Importing...");
     }
@@ -472,8 +478,8 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
     if(!selectDestDialog)
       selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
     selectDestDialog->addItems(layerTitles);
-    selectDestDialog->onSelected = [=, _srcfile=srcfile.release()](int idx){
-      if(importFile(layerKeys[idx], std::unique_ptr<PlatformFile>(_srcfile), olinfo, hasPois)) {
+    selectDestDialog->onSelected = [=, olinfo=std::move(olinfo), _srcfile=srcfile.release()](int idx) mutable {
+      if(importFile(layerKeys[idx], std::unique_ptr<PlatformFile>(_srcfile), std::move(olinfo), hasPois)) {
         populateOffline();
         updateProgress(offlineId, "Importing...");
       }

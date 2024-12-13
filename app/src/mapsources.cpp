@@ -327,6 +327,8 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
       for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
         updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;
     }
+    else
+      node.remove("updates");
     //if(!mapSources[savekey]) mapSources[savekey] = node;
   }
 

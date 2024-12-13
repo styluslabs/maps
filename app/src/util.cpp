@@ -140,7 +140,7 @@ template void yamlRemove<int>(YAML::Node node, int key);
 
 YAML::Value stringsToYamlArray(const std::vector<std::string>& strs, bool flow)
 {
-  YAML::Value val(YAML::Tag::ARRAY | (flow ? YAML::Tag::YAML_FLOW : YAML::Tag::UNDEFINED));
+  YAML::Value val(YAML::Tag::ARRAY | (flow ? YAML::Tag::YAML_FLOW : YAML::Tag::NONE));
   YAML::Node node(&val);
   for(const auto& str : strs) {
     node.push_back(str);
