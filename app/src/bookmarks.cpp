@@ -371,7 +371,7 @@ void MapsBookmarks::onMapEvent(MapEvent_t event)
     }
   }
   else if(event == SUSPEND) {
-    app->config.build()["places"]["list_order"] = stringsToYamlArray(listsContent->getOrder());
+    app->config["places"]["list_order"] = stringsToYamlArray(listsContent->getOrder());
   }
 }
 
@@ -832,8 +832,7 @@ Button* MapsBookmarks::createPanel()
   });
 
   // handle visible bookmark lists
-  YAML::Node vislists;
-  Tangram::YamlPath("+places.visible").get(app->config, vislists);  //node = app->getConfigPath("+places.visible");
+  YAML::Node& vislists = app->config["places"]["visible"];
   for(const auto& node : vislists)
     populateBkmks(node.as<int>(-1), false);
 

@@ -158,7 +158,7 @@ int main(int argc, char* argv[])
   // command line args
   std::string sceneFile, importFile;  // -f scenes/scene-omt.yaml
   for(int argi = 1; argi < argc-1; argi += 2) {
-    YAML::Node node;
+    YAML::Node* node = NULL;
     if(strcmp(argv[argi], "-f") == 0)
       sceneFile = canonicalPath(argv[argi+1]);
     else if(strcmp(argv[argi], "--import") == 0) {
@@ -170,8 +170,10 @@ int main(int argc, char* argv[])
         MapsApp::inst->mapsOffline->openForImport(std::make_unique<DesktopFile>(importFile));
       });
     }
-    else if(strncmp(argv[argi], "--", 2) == 0 && Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config, node))
-      node = argv[argi+1];
+    else if(strncmp(argv[argi], "--", 2) == 0 &&
+        (node = Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config))) {
+      *node = argv[argi+1];
+    }
     else
       LOGE("Unknown command line argument: %s", argv[argi]);
   }

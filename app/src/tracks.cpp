@@ -2022,8 +2022,7 @@ Button* MapsTracks::createPanel()
 
   // load tracks for quick menu and for visible tracks
   loadTracks(false);
-  YAML::Node vistracks;
-  Tangram::YamlPath("+tracks.visible").get(app->config, vistracks);  //node = app->getConfigPath("+places.visible");
+  const YAML::Node& vistracks = app->config["tracks"]["visible"];
   for(const auto& node : vistracks) {
     int rowid = node.as<int>(-1);
     for(GpxFile& track : tracks) {

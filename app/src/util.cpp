@@ -143,6 +143,7 @@ YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow)
   for(const auto& str : strs) {
     node.push_back(str);
   }
+  return node;
 }
 
 std::string osmIdFromJson(const rapidjson::Document& props)

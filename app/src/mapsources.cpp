@@ -493,11 +493,11 @@ void MapsSources::onMapEvent(MapEvent_t event)
   if(!legendsLoaded && app->map->getScene()->isReady()) {
     legendsLoaded = true;
     // adjust status bar color on mobile
-    app->notifyStatusBarBG(!app->readSceneValue("application.dark_base_map").as<bool>(false));
+    app->notifyStatusBarBG(!app->sceneConfig()["application"]["dark_base_map"].as<bool>(false));
     // load legend widgets
     app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
     app->gui->deleteContents(app->legendContainer);
-    const YAML::Node& legends = app->readSceneValue("application.legend");
+    const YAML::Node& legends = app->sceneConfig()["application"]["legend"];
     for(const auto& legend : legends.pairs()) {
       Widget* widget = new Widget(loadSVGFragment(legend.second["svg"].Scalar().c_str()));
       app->legendContainer->addWidget(widget);
@@ -587,7 +587,7 @@ void MapsSources::populateSceneVars()
   sceneVarsLoaded = true;
   app->gui->deleteContents(varsContent);
 
-  const YAML::Node& vars = app->readSceneValue("application.gui_variables");
+  const YAML::Node& vars = app->sceneConfig()["application"]["gui_variables"];
   for(const auto& var : vars.pairs()) {
     std::string name = var.first.Scalar();  //.as<std::string>("");
     std::string label = var.second["label"].as<std::string>("");
@@ -602,7 +602,7 @@ void MapsSources::populateSceneVars()
         varsContent->addWidget(createTitledRow(label.c_str(), uwidget));
     }
     else {  // global variable
-      std::string value = yamlToStr(app->readSceneValue("global." + name));  //.as<std::string>("");
+      std::string value = yamlToStr(app->sceneConfig()["global"][name]);  //.as<std::string>("");
       std::string valtype = var.second["type"].as<std::string>("");
       if(value == "true" || value == "false") {
         auto checkbox = createCheckBox("", value == "true");
@@ -660,7 +660,7 @@ void MapsSources::populateSceneVars()
   varsSeparator->setVisible(!varsContent->containerNode()->children().empty());
 
   std::string credits;
-  const YAML::Node& srcs = app->readSceneValue("sources");
+  const YAML::Node& srcs = app->sceneConfig()["sources"];
   for(const auto& src : srcs.pairs()) {
     //std::string name = var.first.Scalar();  //.as<std::string>("");
     std::string credit = src.second["attribution"].as<std::string>("");

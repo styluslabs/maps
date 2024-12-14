@@ -79,7 +79,7 @@ public:
   LngLat getMapCenter();
   double getElevation(LngLat pos, std::function<void(double)> callback = {});
   void setPickResult(LngLat pos, std::string namestr, const std::string& propstr);
-  const YAML::Node& readSceneValue(const std::string& yamlPath);
+  const YAML::Node& sceneConfig();
   void placeInfoPluginError(const char* err);
   int getPanelWidth() const;
   std::string getPlaceTitle(const Properties& props) const;

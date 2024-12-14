@@ -45,8 +45,8 @@ struct OfflineMapInfo
   LngLat lngLat00, lngLat11;
   int zoom, maxZoom;
   std::vector<OfflineSourceInfo> sources;
-  std::shared_ptr<Tangram::DataSourceContext> srcContext;
   YAML::Node globals;
+  std::unique_ptr<Tangram::DataSourceContext> srcContext;
   bool canceled = false;
 };
 
@@ -312,35 +312,35 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
   //  would do - these could potentially outnumber the number of desired tiles!)
   double heightkm = lngLatDist(lngLat00, LngLat(lngLat00.longitude, lngLat11.latitude));
   double widthkm = lngLatDist(lngLat11, LngLat(lngLat00.longitude, lngLat11.latitude));
-  int zoom = std::round(MapProjection::zoomAtMetersPerPixel( 1000*std::min(heightkm, widthkm)/MapProjection::tileSize() ));
+  int zoom = std::round(MapProjection::zoomAtMetersPerPixel(
+      1000*std::min(heightkm, widthkm)/MapProjection::tileSize() ));
   //int zoom = int(map->getZoom());
   // queue offline downloads
 
-  OfflineMapInfo olinfo(mapid, lngLat00, lngLat11, zoom, maxZoom);
+  // shared_ptr needed due to std::function
+  auto olinfo = std::make_shared<OfflineMapInfo>(mapid, lngLat00, lngLat11, zoom, maxZoom);
   auto& tileSources = map->getScene()->tileSources();
   for(auto& src : tileSources) {
     auto& info = src->offlineInfo();
     if(info.cacheFile.empty())
       LOGE("Cannot save offline tiles for source %s - no cache file specified", src->name().c_str());
     else {
-      olinfo.sources.push_back(
+      olinfo->sources.push_back(
           {src->name(), info.cacheFile, info.url, info.urlOptions, src->maxZoom(), {}});
       if(!src->isRaster()) {
         // search data must remain accessible even if map source changed
-        YAML::Node searchdata;
-        Tangram::YamlPath("application.search_data").get(map->getScene()->config(), searchdata);
-        olinfo.sources.back().searchData = searchdata.clone();
+        olinfo->sources.back().searchData = app->sceneConfig()["application"]["search_data"].clone();
       }
     }
   }
 
-  olinfo.globals = map->getScene()->config()["globals"].clone();
+  olinfo->globals = app->sceneConfig()["globals"].clone();
   // shared_ptr needed due to std::function (note DataSourceContext itself is not copyable but must live as
   //  long as the lambda, i.e., can't be created in lambda call)
-  olinfo.srcContext = std::make_shared<Tangram::DataSourceContext>(*MapsApp::platform, olinfo.globals);
+  olinfo->srcContext = std::make_unique<Tangram::DataSourceContext>(*MapsApp::platform, olinfo->globals);
   queueOfflineTask(mapid, [olinfo=std::move(olinfo)](){
-    for(auto& source : olinfo.sources)
-      offlineDownloaders.emplace_back(new OfflineDownloader(olinfo, source));
+    for(auto& source : olinfo->sources)
+      offlineDownloaders.emplace_back(new OfflineDownloader(*olinfo, source));
   });
   //MapsApp::platform->onUrlRequestsThreshold = [&](){ semOfflineWorker.post(); };  //onUrlClientIdle;
 }
@@ -478,8 +478,9 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
     if(!selectDestDialog)
       selectDestDialog.reset(createSelectDialog("Choose source", MapsApp::uiIcon("layers")));
     selectDestDialog->addItems(layerTitles);
-    selectDestDialog->onSelected = [=, olinfo=std::move(olinfo), _srcfile=srcfile.release()](int idx) mutable {
-      if(importFile(layerKeys[idx], std::unique_ptr<PlatformFile>(_srcfile), std::move(olinfo), hasPois)) {
+    auto olinfop = std::make_shared<OfflineMapInfo>(std::move(olinfo));
+    selectDestDialog->onSelected = [=, olinfop=std::move(olinfop), _srcfile=srcfile.release()](int idx) mutable {
+      if(importFile(layerKeys[idx], std::unique_ptr<PlatformFile>(_srcfile), std::move(*olinfop), hasPois)) {
         populateOffline();
         updateProgress(offlineId, "Importing...");
       }
@@ -661,12 +662,12 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
   campos.zoom -= 0.25f;
   app->gotoCameraPos(campos);  //app->map->setCameraPositionEased(, 0.5f);
 
-  YAML::Node searchYaml;
+  std::shared_ptr<YAML::Node> searchYaml;
   if(!poiimport && !tileSource->isRaster())
-    Tangram::YamlPath("application.search_data").get(app->map->getScene()->config(), searchYaml);
+      searchYaml = std::make_shared<YAML::Node>(app->sceneConfig()["application"]["search_data"].clone());
 
   int offlineId = olinfo.id, srcMaxZoom = tileSource->maxZoom();
-  queueOfflineTask(offlineId, [=, _srcfile=srcfile.release()](){
+  queueOfflineTask(offlineId, [=, searchYaml=std::move(searchYaml), _srcfile=srcfile.release()](){
     std::unique_ptr<PlatformFile> srcfile(_srcfile);
     SQLiteDB tileDB;
     if(sqlite3_open_v2(destpath.c_str(), &tileDB.db, SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
@@ -681,8 +682,8 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
       return;
     // refresh map to show new tiles
     app->mapsSources->rebuildSource(destsrc);
-    if(!poiimport)
-      indexImportedTiles(tileDB, offlineId, searchYaml, srcMaxZoom);
+    if(searchYaml)  // !poiimport)
+      indexImportedTiles(tileDB, offlineId, *searchYaml, srcMaxZoom);
     // detach src DB from tile DB before attaching to search index DB
     if(!tileDB.exec("DETACH DATABASE src;"))
       LOGE("SQL error detaching mbtiles: %s", tileDB.errMsg());

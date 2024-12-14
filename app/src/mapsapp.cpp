@@ -986,12 +986,11 @@ void MapsApp::toggleFollow()
   recenterBtn->setIcon(MapsApp::uiIcon(follow ? "nav-arrow" : "gps-location"));
 }
 
-const YAML::Node& MapsApp::readSceneValue(const std::string& yamlPath)
+const YAML::Node& MapsApp::sceneConfig()
 {
-  YAML::Node node;
-  if(map->getScene()->isReady())
-    Tangram::YamlPath(yamlPath).get(map->getScene()->config(), node);
-  return node;
+  static YAML::Node notReady;
+  if(!map->getScene()->isReady()) { return notReady; }
+  return map->getScene()->config();
 }
 
 std::shared_ptr<TileSource> MapsApp::getElevationSource()
@@ -1797,7 +1796,7 @@ void MapsApp::maximizePanel(bool maximize)
   panelSplitter->setEnabled(!maximize);
   bool isLight = config["ui"]["theme"].as<std::string>("") == "light";
   // top-inset uses panel header color, which is inverted from theme
-  notifyStatusBarBG(maximize ? !isLight : !readSceneValue("application.dark_base_map").as<bool>(false));
+  notifyStatusBarBG(maximize ? !isLight : !sceneConfig()["application"]["dark_base_map"].as<bool>(false));
 
   //Widget* minbtn = panelHistory.back()->selectFirst(".minimize-btn");
   //if(minbtn)
@@ -2049,7 +2048,7 @@ bool MapsApp::loadConfig(const char* assetPath)
     extractAssets(assetPath);
     auto newconfig = YAML::LoadFile(configDfltPath.path);
     if(newconfig) {
-      Tangram::YamlUtil::mergeMapFields(newconfig, config);
+      Tangram::YamlUtil::mergeMapFields(newconfig, std::move(config));
       config = std::move(newconfig);
     }
   }

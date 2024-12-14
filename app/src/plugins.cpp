@@ -388,13 +388,13 @@ static int notifyError(duk_context* ctx)
 static int readSceneValue(duk_context* ctx)
 {
   std::string yamlPath = duk_require_string(ctx, 0);
-  YAML::Node yamlVal;
+  const YAML::Node* yamlVal;
   if(yamlPath.substr(0, 7) == "config.")
-    Tangram::YamlPath(yamlPath.substr(7)).get(MapsApp::config, yamlVal);
+    yamlVal = Tangram::YamlPath(yamlPath.substr(7)).get(MapsApp::config);
   else
-    yamlVal = MapsApp::inst->readSceneValue(yamlPath);
+    yamlVal = Tangram::YamlPath(yamlPath).get(MapsApp::inst->sceneConfig());
   // we want blank string for null instead of "~"
-  std::string jsonStr = yamlVal.IsNull() ? "" : yamlToStr(yamlVal, true);
+  std::string jsonStr = yamlVal->IsNull() ? "" : yamlToStr(*yamlVal, true);
   duk_push_string(ctx, jsonStr.c_str());
   if(!jsonStr.empty())
     duk_json_decode(ctx, -1);
@@ -412,9 +412,8 @@ static int writeSceneValue(duk_context* ctx)
       return 0;
     }
 
-    YAML::Node node;
-    Tangram::YamlPath("+" + yamlPath.substr(7)).get(MapsApp::config, node);
-    node = yamlVal;
+    YAML::Node* node = Tangram::YamlPath("+" + yamlPath.substr(7)).get(MapsApp::config);
+    if(node) { *node = std::move(yamlVal); }
   }
   else
     MapsApp::inst->mapsSources->updateSceneVar(yamlPath, strVal, "", false);

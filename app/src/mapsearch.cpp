@@ -203,8 +203,7 @@ MapsSearch::MapsSearch(MapsApp* _app) : MapsComponent(_app)
 bool MapsSearch::indexMBTiles()
 {
   Map* map = app->map.get();
-  YAML::Node searchDataNode;
-  Tangram::YamlPath("application.search_data").get(map->getScene()->config(), searchDataNode);
+  const YAML::Node& searchDataNode = map->getScene()->config()["application"]["search_data"];
   auto searchData = parseSearchFields(searchDataNode);
   if(searchData.empty()) {
     LOGW("No search fields specified, cannot build index!\n");
