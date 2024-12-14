@@ -41,7 +41,7 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
 {
   // skip layer if already added
   for(auto& k : layerkeys) { if(k == key) return; }
-  YAML::Node src = sources[key];
+  const YAML::Node& src = sources[key];
   if(!src) {
     LOGE("Invalid map source %s", key.c_str());
     return;
@@ -55,7 +55,7 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     layerkeys.push_back(key);
     std::string rasterN = fstring("raster-%d", order);
     updates.emplace_back("+sources." + rasterN + ".type", "Raster");
-    for (const auto& attr : src) {
+    for (const auto& attr : src.pairs()) {
       const std::string& k = attr.first.Scalar();
       if(k != "title" && k != "archived" && k != "updates" && k != "layer" && k != "download_url")
         updates.emplace_back("+sources." + rasterN + "." + attr.first.Scalar(), yamlToStr(attr.second));
@@ -100,11 +100,11 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     layerkeys.push_back(key);
   }
 
-  for(const auto& update : src["updates"])
+  for(const auto& update : src["updates"].pairs())
     updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
   // raster/vector only updates
   const char* updkey = vectorBase ? "updates_vector" : "updates_raster";
-  for(const auto& update : src[updkey])
+  for(const auto& update : src[updkey].pairs())
     updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
 }
 
@@ -156,15 +156,11 @@ void MapsSources::reload()
   baseUrl = "file://" + path.path;
 
   FSPath srcfile = path.child(app->config["sources"]["file"].as<std::string>("mapsources.yaml"));
-  try {
-    mapSources = YAML::LoadFile(srcfile.c_str());
-  } catch (...) {
-    try {
-      mapSources = YAML::LoadFile(srcfile.parent().childPath(srcfile.baseName() + ".default.yaml"));
-    } catch (...) {
-      LOGE("Unable to load map sources!");
-      return;
-    }
+  mapSources = YAML::LoadFile(srcfile.exists() ? srcfile.c_str() :
+      srcfile.parent().childPath(srcfile.baseName() + ".default.yaml"));
+  if(!mapSources) {
+    LOGE("Unable to load map sources!");
+    return;
   }
   srcFile = srcfile.c_str();
   sourcesDirty = true;
@@ -174,7 +170,7 @@ void MapsSources::reload()
 
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 {
-  mapSources[key] = srcnode;
+  mapSources[key] = std::move(srcnode);
   if(!mapSources[key]["__plugin"])
     saveSourcesNeeded = true;
   sourcesDirty = true;
@@ -189,9 +185,9 @@ void MapsSources::saveSources()
 {
   saveSourcesNeeded = false;
   if(srcFile.empty()) return;
-  for(auto node : mapSources) {
-    if(node.second["__plugin"])  // plugin can set this flag for sources which should not be saved
-      node.second.setNoWrite();
+  for(auto& node : mapSources) {
+    if(node["__plugin"])  // plugin can set this flag for sources which should not be saved
+      node.setNoWrite();
   }
 
   std::string s = yamlToStr(mapSources, false, false);
@@ -207,7 +203,7 @@ void MapsSources::sourceModified()
 void MapsSources::promptDownload(const std::vector<std::string>& keys)
 {
   for(auto& key : keys) {
-    auto src = mapSources[key];
+    const auto& src = mapSources[key];
     if(src["download_url"]) {
       int hit = 0;
       SQLiteStmt(app->bkmkDB, "SELECT COUNT(1) FROM offlinemaps WHERE source = ?;").bind(key).onerow(hit);
@@ -234,12 +230,12 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
         currLayers.push_back({src, 1.0f});  //builder.addLayer(src);
     }
     else {
-      auto src = mapSources[srcname];
+      const auto& src = mapSources[srcname];
       if(!src) return;
       if(src["layers"] && !src["layer"].as<bool>(false)) {
         for(const auto& layer : src["layers"])
           currLayers.push_back({getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f});
-        for(const auto& update : src["updates"])
+        for(const auto& update : src["updates"].pairs())
           currUpdates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
       }
       else
@@ -252,7 +248,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     builder.addLayer(src.source, src.opacity);
   }
   if(MapsApp::terrain3D) {
-    for(const auto& update : MapsApp::config["terrain_3d"]["updates"])
+    for(const auto& update : MapsApp::config["terrain_3d"]["updates"].pairs())
       builder.updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
   }
   builder.updates.insert(builder.updates.end(), currUpdates.begin(), currUpdates.end());
@@ -302,34 +298,28 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   }
 
   if(!yamlStr.empty()) {
-    try {
-      mapSources.add(savekey) = YAML::Load(yamlStr);
-    } catch (...) {
-      return "";
-    }
+    auto src = YAML::Load(yamlStr);
+    if(!src) return "";
+    mapSources["savekey"] = std::move(src);
   }
   else {
-    YAML::Node node = mapSources.add(savekey); // ? mapSources[savekey] : YAML::Node(YAML::NodeType::Map);
-    node.add("title") = trimStr(titleEdit->text());
-    if(node["layers"] || !mapSources[savekey]) {
-      YAML::Node layers = node.add("layers");  //](YAML::Tag::ARRAY);  // = YAML::Node(YAML::NodeType::Sequence);
+    YAML::Node& node = mapSources["savekey"]; // ? mapSources[savekey] : YAML::Node(YAML::NodeType::Map);
+    bool newsrc = !mapSources[savekey];
+    node["title"] = trimStr(titleEdit->text());
+    if(newsrc || node.has("layers")) {
+      YAML::Node& layers = node["layers"] = YAML::Array();
       for(auto& src : currLayers)
-        layers.push_back(src.opacity < 1 ? YAML::Value({{"source", src.source}, {"opacity", src.opacity}}) : src.source);
+        layers.push_back(src.opacity < 1 ? YAML::Node({{"source", src.source}, {"opacity", src.opacity}}) : src.source);
             //fstring("{source: %s, opacity: %.2f}", src.source.c_str(), src.opacity) : src.source));
       //node["layers"] = layers;
     }
-    else if(node["url"])
+    else if(node.has("url"))
       node["url"] = trimStr(urlEdit->text());
 
-    if(!currUpdates.empty()) {
-      YAML::Node updates = node.add("updates", true);  // = YAML::Node(YAML::NodeType::Map);
-      // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
-      for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
-        updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;
-    }
-    else
-      node.remove("updates");
-    //if(!mapSources[savekey]) mapSources[savekey] = node;
+    YAML::Node& updates = node["updates"] = YAML::Map();  // default to undefined node (not written to output)
+    // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
+    for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
+      updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;
   }
 
   saveSources();
@@ -354,12 +344,12 @@ void MapsSources::populateSources()
   layerKeys = {};
 
   std::vector<std::string> allKeys;
-  for(const auto& src : mapSources)
+  for(const auto& src : mapSources.pairs())
     allKeys.push_back(src.first.Scalar());
   std::sort(allKeys.begin(), allKeys.end(), [&](auto& a, auto& b){
       return mapSources[a]["title"].Scalar() < mapSources[b]["title"].Scalar(); });
   for(const std::string& key : allKeys) {
-    auto src = mapSources[key];
+    const auto& src = mapSources[key];
     bool archived = src["archived"].as<bool>(false);
     bool isLayer = src["layer"].as<bool>(false);
     bool isRaster = bool(src["url"]);
@@ -400,7 +390,7 @@ void MapsSources::populateSources()
           // insert before first layer that is not an opaque raster
           auto it = currLayers.begin();
           for(; it != currLayers.end(); ++it) {
-            auto itsrc = mapSources[it->source];
+            const auto& itsrc = mapSources[it->source];
             if(!itsrc["url"] || itsrc["layer"].as<bool>(false)) break;
           }
           currLayers.insert(it, {key, 1.0f});
@@ -449,7 +439,7 @@ void MapsSources::populateSources()
     };
     overflowMenu->addItem("Delete", [=](){
       std::vector<std::string> dependents;
-      for (const auto& ssrc : mapSources) {
+      for (const auto& ssrc : mapSources.pairs()) {
         for (const auto& layer : ssrc.second["layers"]) {
           if(getLayerName(layer) == key)
             dependents.push_back(ssrc.second["title"].Scalar());
@@ -491,7 +481,7 @@ void MapsSources::onMapEvent(MapEvent_t event)
   if(event == SUSPEND) {
     if(saveSourcesNeeded)
       saveSources();
-    app->config.build()["sources"]["list_order"] = stringsToYamlArray(sourcesContent->getOrder());
+    app->config.add("sources").add("list_order") = stringsToYamlArray(sourcesContent->getOrder());
     return;
   }
 
@@ -507,8 +497,8 @@ void MapsSources::onMapEvent(MapEvent_t event)
     // load legend widgets
     app->gui->deleteContents(legendMenu->selectFirst(".child-container"));
     app->gui->deleteContents(app->legendContainer);
-    YAML::Node legends = app->readSceneValue("application.legend");
-    for(const auto& legend : legends) {
+    const YAML::Node& legends = app->readSceneValue("application.legend");
+    for(const auto& legend : legends.pairs()) {
       Widget* widget = new Widget(loadSVGFragment(legend.second["svg"].Scalar().c_str()));
       app->legendContainer->addWidget(widget);
       widget->setMargins(10, 0, 10, 0);
@@ -561,7 +551,7 @@ static Tangram::Style* findStyle(Tangram::Scene* scene, const std::string name)
   return NULL;
 }
 
-Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& varname, YAML::Node varnode)
+Widget* MapsSources::processUniformVar(const std::string& stylename, const std::string& varname, const YAML::Node& varnode)
 {
   Tangram::Style* style = findStyle(app->map->getScene(), stylename);
   if(style) {
@@ -597,8 +587,8 @@ void MapsSources::populateSceneVars()
   sceneVarsLoaded = true;
   app->gui->deleteContents(varsContent);
 
-  YAML::Node vars = app->readSceneValue("application.gui_variables");
-  for(const auto& var : vars) {
+  const YAML::Node& vars = app->readSceneValue("application.gui_variables");
+  for(const auto& var : vars.pairs()) {
     std::string name = var.first.Scalar();  //.as<std::string>("");
     std::string label = var.second["label"].as<std::string>("");
     std::string onchange = var.second["onchange"].as<std::string>("");
@@ -670,8 +660,8 @@ void MapsSources::populateSceneVars()
   varsSeparator->setVisible(!varsContent->containerNode()->children().empty());
 
   std::string credits;
-  YAML::Node srcs = app->readSceneValue("sources");
-  for(const auto& src : srcs) {
+  const YAML::Node& srcs = app->readSceneValue("sources");
+  for(const auto& src : srcs.pairs()) {
     //std::string name = var.first.Scalar();  //.as<std::string>("");
     std::string credit = src.second["attribution"].as<std::string>("");
     if(!credit.empty()) credits.append(credit).append("\n");
@@ -688,7 +678,7 @@ void MapsSources::populateSourceEdit(std::string key)
   app->gui->deleteContents(layersContent);
   if(currSource != key)
     rebuildSource(key);
-  auto src = mapSources[key];
+  const auto& src = mapSources[key];
   saveBtn->setEnabled(!src);
   if(src)
     titleEdit->setText(mapSources[key]["title"].Scalar().c_str());
@@ -783,19 +773,19 @@ void MapsSources::importSources(const std::string& src)
       if(response.error)
         MapsApp::messageBox("Import error", fstring("Unable to load '%s': %s", src.c_str(), response.error));
       else {
-        try {
-          YAML::Node yml = YAML::Load(response.content.data(), response.content.size());
+        YAML::Node yml = YAML::Load(response.content.data(), response.content.size());
+        if(yml) {
           if(yml["global"] || yml["layers"] || yml["styles"] || yml["import"] || yml["sources"])
             createSource("", fstring("{title: '%s', scene: %s}", FSPath(src).baseName().c_str(), src.c_str()));
           else {
-            for(const auto& node : yml)
-              mapSources[node.first.Scalar()] = node.second;
+            for(auto node : yml.pairs())
+              mapSources[node.first.Scalar()] = std::move(node.second);
           }
           saveSources();
           populateSources();
-        } catch (std::exception& e) {
-          MapsApp::messageBox("Import error", fstring("Error parsing '%s': %s", src.c_str(), e.what()));
         }
+        else
+          MapsApp::messageBox("Import error", fstring("YAML error parsing '%s'", src.c_str()));
       }
     } ); });
     return;
@@ -812,16 +802,16 @@ void MapsSources::importSources(const std::string& src)
 // needed for loading updated mapsources.default.yaml at startup
 bool MapsSources::syncImportFile(const std::string& filename)
 {
-  try {
-    YAML::Node yml = YAML::LoadFile(filename);
-    for(const auto& node : yml)
-      mapSources[node.first.Scalar()] = node.second;
-    saveSources();
-    return true;
-  } catch (std::exception& e) {
-    MapsApp::messageBox("Import error", fstring("Error parsing '%s': %s", filename.c_str(), e.what()));
+  YAML::Node yml = YAML::LoadFile(filename);
+  if(!yml) {
+    MapsApp::messageBox("Import error", fstring("Error parsing '%s'", filename.c_str()));
+    return false;
   }
-  return false;
+
+  for(auto node : yml.pairs())
+    mapSources[node.first.Scalar()] = std::move(node.second);
+  saveSources();
+  return true;
 }
 
 Button* MapsSources::createPanel()
@@ -962,7 +952,7 @@ Button* MapsSources::createPanel()
       int ii = 0;
       auto sources = sourcesContent->getOrder();
       for(const std::string& key : sources) {
-        auto src = mapSources[key];
+        const auto& src = mapSources[key];
         if(!src || src["layer"].as<bool>(false)) continue;
         auto onClicked = [this, key](){
           if(sourceEditPanel->isVisible() || key == currSource)

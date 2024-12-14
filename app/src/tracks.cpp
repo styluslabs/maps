@@ -1108,7 +1108,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     }
   }
   else if(event == SUSPEND) {
-    app->config.build()["tracks"]["list_order"] = stringsToYamlArray(tracksContent->getOrder());
+    app->config["tracks"]["list_order"] = stringsToYamlArray(tracksContent->getOrder());
     if(activeTrack && activeTrack->modified)
       activeTrack->modified = !saveTrack(activeTrack);
   }

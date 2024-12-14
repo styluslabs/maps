@@ -986,7 +986,7 @@ void MapsApp::toggleFollow()
   recenterBtn->setIcon(MapsApp::uiIcon(follow ? "nav-arrow" : "gps-location"));
 }
 
-YAML::Node MapsApp::readSceneValue(const std::string& yamlPath)
+const YAML::Node& MapsApp::readSceneValue(const std::string& yamlPath)
 {
   YAML::Node node;
   if(map->getScene()->isReady())
@@ -1387,9 +1387,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   customColorDialog.reset(new ManageColorsDialog(markerColors));
   customColorDialog->onColorListChanged = [this](){
     populateColorPickerMenu();
-    config.build()["colors"] = YAML::JsonValue(YAML::Tag::ARRAY);  //YAML::NodeType::Sequence);
+    auto& node = config["colors"] = YAML::Array();  //YAML::NodeType::Sequence);
     for(Color& color : markerColors)
-      config["colors"].push_back( colorToStr(color) );
+      node.push_back( colorToStr(color) );
   };
   populateColorPickerMenu();
 
@@ -2022,9 +2022,8 @@ bool MapsApp::loadConfig(const char* assetPath)
   if(firstrun)
     extractAssets(assetPath);
 
-  try {
-    config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
-  } catch(...) {
+  config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
+  if(!config) {
     LOGE("Unable to load config file %s", configPath.c_str());
     runOnMainThread([](){ messageBox("Error",
         "Error loading config!  Restore config.yaml or reinstall the application.", {"OK"}); });
@@ -2048,11 +2047,11 @@ bool MapsApp::loadConfig(const char* assetPath)
   // merge in new config.default.yaml
   if(prevVersion < versionCode && !firstrun) {
     extractAssets(assetPath);
-    try {
-      auto newconfig = YAML::LoadFile(configDfltPath.path);
+    auto newconfig = YAML::LoadFile(configDfltPath.path);
+    if(newconfig) {
       Tangram::YamlUtil::mergeMapFields(newconfig, config);
-      config = newconfig;
-    } catch(...) {}
+      config = std::move(newconfig);
+    }
   }
 
   return prevVersion < versionCode;

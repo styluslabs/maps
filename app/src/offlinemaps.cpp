@@ -31,7 +31,7 @@ struct OfflineSourceInfo
   std::string url;
   Tangram::UrlOptions urlOptions;
   int maxZoom;
-  YAML::Document searchData;
+  YAML::Node searchData;
 };
 
 struct OfflineMapInfo
@@ -46,7 +46,7 @@ struct OfflineMapInfo
   int zoom, maxZoom;
   std::vector<OfflineSourceInfo> sources;
   std::shared_ptr<Tangram::DataSourceContext> srcContext;
-  YAML::Document globals;
+  YAML::Node globals;
   bool canceled = false;
 };
 
@@ -469,7 +469,7 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
   else {
     std::vector<std::string> layerKeys;
     std::vector<std::string> layerTitles;
-    for(const auto& src : app->mapsSources->mapSources) {
+    for(const auto& src : app->mapsSources->mapSources.pairs()) {
       if(srcFmt == "pbf" ? src.second["scene"] : src.second["url"]) {
         layerKeys.push_back(src.first.Scalar());
         layerTitles.push_back(src.second["title"].Scalar());
@@ -715,7 +715,7 @@ void MapsOffline::populateOffline()
   const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title, timestamp, done FROM offlinemaps ORDER BY timestamp DESC;";
   SQLiteStmt(app->bkmkDB, query).exec([&](int mapid, double lng0, double lat0, double lng1, double lat1,
       std::string sourcestr, std::string titlestr, int64_t timestamp, int done){
-    auto srcinfo = app->mapsSources->mapSources[sourcestr];
+    const auto& srcinfo = app->mapsSources->mapSources[sourcestr];
     std::string detail = srcinfo ? srcinfo["title"].Scalar() : sourcestr;
     detail.append(u8" \u2022 ").append(ftimestr("%F %H:%M:%S", timestamp*1000));
     Button* item = createListItem(
@@ -821,7 +821,7 @@ Widget* MapsOffline::createPanel()
     auto xdist = MapsApp::distKmToStr(lngLatDist(lngLat00, {lngLat11.longitude, lngLat00.latitude}), 1);
     downloadText->setText(("Current region: " + xdist + " x " + ydist).c_str());
 
-    auto srcinfo = app->mapsSources->mapSources[app->mapsSources->currSource];
+    const auto& srcinfo = app->mapsSources->mapSources[app->mapsSources->currSource];
     std::string title = "Download " + (srcinfo ? srcinfo["title"].Scalar() : "");
     static_cast<TextLabel*>(downloadDialog->selectFirst(".dialog-title"))->setText(title.c_str());
     downloadDialog->focusedWidget = NULL;

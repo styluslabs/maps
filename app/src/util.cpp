@@ -118,30 +118,28 @@ std::string yamlToStr(const YAML::Node& node, bool quoteStrings, bool flow)
 {
   YAML::Writer emitter;
   if(flow) emitter.flowLevel = 0;
-  return emitter.convert(*node.value);
+  return emitter.convert(node);
 }
 
 template<typename T>
-void yamlRemove(YAML::Node node, T key)
+void yamlRemove(YAML::Node& node, T key)
 {
   if(node.Type() != YAML::NodeType::Sequence)
     return;
-  YAML::Value newval = YAML::Value(node.value->getFlags());
-  YAML::Node newnode(&newval);
-  for(const auto& child : node) {
+  YAML::Node newnode(node.getFlags());
+  for(auto& child : node) {
     if(child.as<T>() != key)
-      newnode.push_back(std::move(*child.value));
+      newnode.push_back(std::move(child));
   }
-  node = std::move(newval);  //node;
+  node = std::move(newnode);  //node;
 }
 
 // explicit instantiations
-template void yamlRemove<int>(YAML::Node node, int key);
+template void yamlRemove<int>(YAML::Node& node, int key);
 
-YAML::Value stringsToYamlArray(const std::vector<std::string>& strs, bool flow)
+YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow)
 {
-  YAML::Value val(YAML::Tag::ARRAY | (flow ? YAML::Tag::YAML_FLOW : YAML::Tag::NONE));
-  YAML::Node node(&val);
+  YAML::Node node(YAML::Tag::ARRAY | (flow ? YAML::Tag::YAML_FLOW : YAML::Tag::NONE));
   for(const auto& str : strs) {
     node.push_back(str);
   }
