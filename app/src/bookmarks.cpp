@@ -4,7 +4,6 @@
 #include "resources.h"
 
 #include "sqlitepp.h"
-#include "rapidjson/document.h"
 #include "util/yamlPath.h"
 #include "exif.h"
 

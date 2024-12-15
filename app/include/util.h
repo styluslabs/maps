@@ -2,7 +2,6 @@
 
 #include "ulib/stringutil.h"
 #include "ulib/painter.h"
-#include "rapidjson/fwd.h"
 
 #include "tangram.h"
 #include "glm/vec2.hpp"
@@ -23,11 +22,11 @@ int64_t packTileId(const TileID& tile);
 std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false, bool flow = true);
 template<typename T> void yamlRemove(YAML::Node& node, T key);
 YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow = true);
-std::string osmIdFromJson(const rapidjson::Document& props);
-std::string rapidjsonToStr(const rapidjson::Document& props);
-rapidjson::Document strToJson(const char* json);
+std::string osmIdFromJson(const YAML::Node& props);
+//std::string rapidjsonToStr(const rapidjson::Document& props);
+YAML::Node strToJson(const char* json);
 Tangram::Properties jsonToProps(const char* json);
-Tangram::Properties jsonToProps(const rapidjson::Document& tags);
+Tangram::Properties jsonToProps(const YAML::Node& tags);
 
 std::string ftimestr(const char* fmt, int64_t msec_epoch = 0);
 std::string colorToStr(const Color& c);

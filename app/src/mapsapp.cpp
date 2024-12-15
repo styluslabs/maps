@@ -4,7 +4,6 @@
 #include "debug/textDisplay.h"
 #include "util.h"
 #include "pugixml.hpp"
-#include "rapidjson/document.h"
 #include <sys/stat.h>
 #include <fstream>
 #include "sqlitepp.h"
@@ -333,8 +332,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   if(!placeInfoProto)
     placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
-  rapidjson::Document json;
-  json.Parse(propstr.c_str());
+  YAML::Node json = strToJson(propstr.c_str());
   Properties props = jsonToProps(json);
 
   std::string placetype = !propstr.empty() ? pluginManager->jsCallFn("getPlaceType", propstr) : "";
@@ -439,8 +437,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     }
   };
 
-  if(json.IsObject() && json.HasMember("ele"))
-    elevFn(json["ele"].GetDouble());
+  if(const auto& ele = json["ele"])
+    elevFn(ele.as<double>());
   else
     getElevation(pos, elevFn);
 
@@ -465,10 +463,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     providerSel->onChanged("");
   }
 
-  if(json.IsObject() && json.HasMember("place_info")) {
+  if(const auto& infos = json["place_info"]) {
     infoSection->setVisible(true);
-    for(auto& info : json["place_info"].GetArray())
-      addPlaceInfo(info["icon"].GetString(), info["title"].GetString(), info["value"].GetString());
+    for(const auto& info : infos)
+      addPlaceInfo(info["icon"].getCStr(), info["title"].getCStr(), info["value"].getCStr());
   }
 
   // must be last (or we must copy props)

@@ -2,8 +2,6 @@
 #include "tangram.h"
 #include "scene/scene.h"
 #include "sqlite3/sqlite3.h"
-#include "rapidjson/document.h"
-#include "rapidjson/writer.h"
 #include "usvg/svgwriter.h"
 
 #define PLATFORMUTIL_IMPLEMENTATION
@@ -146,49 +144,38 @@ YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow)
   return node;
 }
 
-std::string osmIdFromJson(const rapidjson::Document& props)
+std::string osmIdFromJson(const YAML::Node& props)
 {
-  std::string osm_id;
-  if(!props.IsObject()) {}
-  else if(props.HasMember("osm_id") && props.HasMember("osm_type"))
-    osm_id = props["osm_type"].GetString() + std::string(":") + props["osm_id"].GetString();
-  else if(props.HasMember("wiki"))
-    osm_id = std::string("wiki:") + props["wiki"].GetString();
-  return osm_id;
+  if(props.IsMap()) {
+    const auto& id = props["osm_id"];
+    const auto& type = props["osm_type"];
+    if(id && type)
+      return type.getString() + std::string(":") + id.getString();
+    if(const auto& wiki = props["wiki"])
+      return "wiki:" + wiki.getString();
+  }
+  return {};
 }
 
-std::string rapidjsonToStr(const rapidjson::Document& props)
+YAML::Node strToJson(const char* json)
 {
-  rapidjson::StringBuffer sb;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
-  props.Accept(writer);
-  return sb.GetString();
-}
-
-rapidjson::Document strToJson(const char* json)
-{
-  rapidjson::Document doc;
-  if(json[0])
-    doc.Parse(json);
-  return doc;
+  return YAML::parse(json, 0, YAML::PARSE_JSON);
 }
 
 Properties jsonToProps(const char* json)
 {
-  rapidjson::Document tags;
-  tags.Parse(json);
-  return jsonToProps(tags);
+  return jsonToProps(strToJson(json));
 }
 
-Properties jsonToProps(const rapidjson::Document& tags)
+Properties jsonToProps(const YAML::Node& tags)
 {
   Properties props;
-  if(!tags.IsObject()) return props;
-  for(auto& m : tags.GetObject()) {
-    if(m.value.IsNumber())
-      props.set(m.name.GetString(), m.value.GetDouble());
-    else if(m.value.IsString())
-      props.set(m.name.GetString(), m.value.GetString());
+  if(!tags.IsMap()) return props;
+  for(auto m : tags.pairs()) {
+    if(m.second.isNumber())
+      props.set(m.first.getString(), m.second.getNumber());
+    else if(m.second.isString())
+      props.set(m.first.getString(), m.second.getString());
   }
   return props;
 }
