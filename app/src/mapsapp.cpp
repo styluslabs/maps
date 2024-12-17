@@ -815,6 +815,12 @@ void MapsApp::mapUpdate(double time)
   if(tf != iconNode->getTransform())
     iconNode->setTransform(tf);
 
+  // update progress indicator
+  const auto& tileMgr = map->getScene()->tileManager();
+  real progress = 1 - tileMgr->numLoadingTiles()/real(tileMgr->getVisibleTiles().size());
+  progressWidget->setProgress(progress);
+  progressWidget->setVisible(progress < 1);
+
   // prompt for 3D terrain if first time tilting
   if(cpos.tilt != 0 && !terrain3D && !config["terrain_3d"]["enabled"].IsDefined()) {
     config["terrain_3d"]["enabled"] = false;
@@ -1645,8 +1651,11 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   gpsStatusBtn->setMargins(0, 0, 6, 0);
   gpsStatusBtn->setVisible(false);
 
+  progressWidget = new ProgressCircleWidget;
+  progressWidget->setVisible(false);
+
   bool revbtns = config["ui"]["reverse_map_btns"].as<bool>(false);
-  Widget* floatToolbar = createColumn({gpsStatusBtn, reorientBtn, recenterBtn});  //createVertToolbar();
+  Widget* floatToolbar = createColumn({progressWidget, gpsStatusBtn, reorientBtn, recenterBtn});
   floatToolbar->node->setAttribute("box-anchor", revbtns ? "bottom left" : "bottom right");
   floatToolbar->setMargins(10, 10);
   mapsContent->addWidget(floatToolbar);
@@ -2074,7 +2083,7 @@ void MapsApp::saveConfig()
 
   config["ui"]["split_size"] = int(panelSplitter->currSize);
 
-  std::string s = yamlToStr(config, false, false);  //YAML::Writer emitter; emitter.convert(*config.value);
+  std::string s = yamlToStr(config, 10);
   FileStream fs(configFile.c_str(), "wb");
   fs.write(s.c_str(), s.size());
 }

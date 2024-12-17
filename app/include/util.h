@@ -19,7 +19,8 @@ LngLat parseLngLat(const char* s);
 std::string lngLatToStr(LngLat ll);
 int64_t packTileId(const TileID& tile);
 
-std::string yamlToStr(const YAML::Node& node, bool quoteStrings = false, bool flow = true);
+// flowLevel = 0 to get flow YAML; flowLevel = 0 and indent = 0 to get JSON
+std::string yamlToStr(const YAML::Node& node, int flowLevel = 0, int indent = 2);
 template<typename T> void yamlRemove(YAML::Node& node, T key);
 YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow = true);
 std::string osmIdFromJson(const YAML::Node& props);

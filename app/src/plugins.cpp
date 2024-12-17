@@ -394,7 +394,7 @@ static int readSceneValue(duk_context* ctx)
   else
     yamlVal = Tangram::YamlPath(yamlPath).get(MapsApp::inst->sceneConfig());
   // we want blank string for null instead of "~"
-  std::string jsonStr = yamlVal->IsNull() ? "" : yamlToStr(*yamlVal, true);
+  std::string jsonStr = yamlVal && !yamlVal->IsNull() ? yamlToStr(*yamlVal, 0, 0) : "";
   duk_push_string(ctx, jsonStr.c_str());
   if(!jsonStr.empty())
     duk_json_decode(ctx, -1);

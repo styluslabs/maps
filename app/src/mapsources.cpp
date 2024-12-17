@@ -190,7 +190,7 @@ void MapsSources::saveSources()
       node.setNoWrite();
   }
 
-  std::string s = yamlToStr(mapSources, false, false);
+  std::string s = yamlToStr(mapSources, 10);
   FileStream fs(srcFile.c_str(), "wb");
   fs.write(s.c_str(), s.size());
 }

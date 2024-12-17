@@ -26,6 +26,7 @@ class SharedMenu;
 class MapsWidget;
 class ScaleBarWidget;
 class CrosshairWidget;
+class ProgressCircleWidget;
 class ManageColorsDialog;
 class SvgNode;
 class Color;
@@ -88,7 +89,7 @@ public:
   std::shared_ptr<TileSource> getElevationSource();
   void toggleFollow();
 
-  Location currLocation = {0};
+  Location currLocation = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   float orientation = 0;
   float locMarkerAngle = 0;
   //CameraPosition prevCamPos;
@@ -173,6 +174,7 @@ public:
   Menu* undeleteMenu = NULL;
   Pager* panelPager = NULL;
   Button* terrain3dCb = NULL;
+  ProgressCircleWidget* progressWidget = NULL;
   std::function<bool(SvgGui*, Widget*, SDL_Event*)> pagerEventFilter;
 
   std::atomic_int_fast64_t storageTotal = {0};

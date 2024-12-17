@@ -112,10 +112,11 @@ LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord)
   return MapProjection::projectedMetersToLngLat(meters);
 }
 
-std::string yamlToStr(const YAML::Node& node, bool quoteStrings, bool flow)
+std::string yamlToStr(const YAML::Node& node, int flowLevel, int indent)
 {
   YAML::Writer emitter;
-  if(flow) emitter.flowLevel = 0;
+  emitter.flowLevel = flowLevel;
+  emitter.indent = indent;
   return emitter.convert(node);
 }
 

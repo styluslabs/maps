@@ -142,6 +142,17 @@ public:
   bool useDirectDraw = false;
 };
 
+class ProgressCircleWidget : public Widget
+{
+public:
+  ProgressCircleWidget() : Widget(new SvgCustomNode) {}
+  void draw(SvgPainter* svgp) const override;
+  Rect bounds(SvgPainter* svgp) const override;
+
+  void setProgress(real p);
+  real mProgress = 0;
+};
+
 SvgNode* uiIcon(const char* id);
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
