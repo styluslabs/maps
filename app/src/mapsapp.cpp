@@ -1652,6 +1652,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   gpsStatusBtn->setVisible(false);
 
   progressWidget = new ProgressCircleWidget;
+  progressWidget->setMargins(0, 0, 6, 0);
   progressWidget->setVisible(false);
 
   bool revbtns = config["ui"]["reverse_map_btns"].as<bool>(false);

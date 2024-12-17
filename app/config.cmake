@@ -56,3 +56,10 @@ target_compile_definitions(maps-app PUBLIC GLM_FORCE_CTOR_INIT)
 target_compile_definitions(maps-app PUBLIC PUGIXML_NO_XPATH)
 target_compile_definitions(maps-app PUBLIC PUGIXML_NO_EXCEPTIONS)
 target_compile_definitions(maps-app PUBLIC SVGGUI_NO_SDL)
+
+# maybe this will prevent cmake from rebuilding everything when git hash changes
+set_source_files_properties(
+  app/src/plugins.cpp
+  PROPERTIES
+    COMPILE_OPTIONS "-DMAPS_GIT_REV=${MAPS_GIT_REV}"
+)
