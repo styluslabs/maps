@@ -762,7 +762,7 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
   track->waypoints.erase(it);
   track->modified = true;
   if(track->waypoints.empty())
-    app->crossHair->setRoutePreviewOrigin();
+    hideDirectRoutePreview();  //app->crossHair->setRoutePreviewOrigin();
   if(routed)
     createRoute(track);
   updateWayptCount(wayptTabLabel, track);
@@ -1081,6 +1081,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       if(jut > 100) {
         detailstr += " | Jut " + MapsApp::elevToStr(jut);
       }
+      previewDistText->setVisible(true);
       previewDistText->selectFirst(".main-text")->setText(mainstr.c_str());
       previewDistText->selectFirst(".detail-text")->setText(detailstr.c_str());
     }
@@ -1134,11 +1135,17 @@ void MapsTracks::setRouteMode(const std::string& mode)
   if(directRoutePreview && mode == "direct")
     onMapEvent(MAP_CHANGE);
   else
-    app->crossHair->setRoutePreviewOrigin();
+    hideDirectRoutePreview();  //app->crossHair->setRoutePreviewOrigin();
   app->drawOnMap = routeEditTb->isVisible() && mode == "draw";
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
   createRoute(activeTrack);
+}
+
+void MapsTracks::hideDirectRoutePreview()
+{
+  previewDistText->setVisible(false);
+  app->crossHair->setRoutePreviewOrigin();
 }
 
 void MapsTracks::toggleRouteEdit(bool show)
@@ -1284,6 +1291,7 @@ void MapsTracks::startRecording()
   editTrackContent->setVisible(true);
   tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));
   recordTrackBtn->setChecked(true);
+  app->config["tracks"]["recording"] = recordedTrack.rowid;
 }
 
 void MapsTracks::setTrackEdit(bool show)
@@ -1800,7 +1808,7 @@ void MapsTracks::createWayptContent()
       directRoutePreview = false;
       app->drawOnMap = false;
       app->crossHair->setVisible(false);
-      app->crossHair->setRoutePreviewOrigin();
+      hideDirectRoutePreview();  //app->crossHair->setRoutePreviewOrigin();
     }
     return false;
   });
@@ -1847,6 +1855,7 @@ void MapsTracks::createTrackPanel()
     pauseRecordBtn->setChecked(false);
     tracksBtn->setIcon(MapsApp::uiIcon("track"));
     recordTrackBtn->setChecked(false);
+    app->config["tracks"].remove("recording");
     populateTrack(&tracks.back());
   };
 
@@ -2031,6 +2040,18 @@ Button* MapsTracks::createPanel()
         showTrack(&track, true);
         break;
       }
+    }
+  }
+
+  if(const auto& rectrack = app->cfg()["tracks"]["recording"]) {
+    int recid = rectrack.as<int>(-1);
+    auto it = std::find_if(tracks.begin(), tracks.end(), [&](const GpxFile& t){ return t.rowid == recid; });
+    if(it != tracks.end()) {
+      recordedTrack = std::move(*it);
+      tracks.erase(it);
+      recordTrackBtn->setChecked(true);
+      pauseRecordBtn->setChecked(true);
+      tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));
     }
   }
 

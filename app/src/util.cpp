@@ -158,15 +158,11 @@ std::string osmIdFromJson(const YAML::Node& props)
   return {};
 }
 
-YAML::Node strToJson(const char* json)
-{
-  return YAML::parse(json, 0, YAML::PARSE_JSON);
-}
+YAML::Node strToJson(const char* json) { return YAML::parse(json, 0, YAML::PARSE_JSON); }
+YAML::Node strToJson(const std::string& json) { return YAML::parse(json, YAML::PARSE_JSON); }
 
-Properties jsonToProps(const char* json)
-{
-  return jsonToProps(strToJson(json));
-}
+Tangram::Properties jsonToProps(const char* json) { return jsonToProps(strToJson(json)); }
+Tangram::Properties jsonToProps(const std::string& json) { return jsonToProps(strToJson(json.c_str())); }
 
 Properties jsonToProps(const YAML::Node& tags)
 {

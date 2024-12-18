@@ -2,10 +2,12 @@
 
 #include "mapscomponent.h"
 #include "scene/filters.h"
+#include "util/asyncWorker.h"
 
 #include "ugui/svggui.h"
 
 using Tangram::TileTask;
+using Tangram::AsyncWorker;
 class MarkerGroup;
 class SQLiteDB;
 
@@ -50,6 +52,7 @@ public:
   bool moreListResultsAvail = false;
   // search flags
   enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, FLY_TO = 0x8, UPDATE_RESULTS = 0x4000, MORE_RESULTS = 0x8000 };
+  static constexpr size_t MAX_MAP_RESULTS = 1000;
 
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
   static void importPOIs(std::string srcuri, int offlineId);
@@ -75,8 +78,12 @@ private:
   bool isCurrLocDistOrigin = true;
   int selectedResultIdx = -1;
 
+  AsyncWorker searchWorker;
+  std::atomic_int_fast64_t mapSearchGen = {0};
+  std::atomic_int_fast64_t listSearchGen = {0};
+
   bool initSearch();
-  void offlineListSearch(std::string queryStr, LngLat, LngLat);
+  void offlineListSearch(std::string queryStr, LngLat, LngLat, int flags = 0);
   void offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11);
   void updateMapResultBounds(LngLat lngLat00, LngLat lngLat11);
   void updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags);

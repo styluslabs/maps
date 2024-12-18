@@ -34,6 +34,7 @@ class Painter;
 struct Rect;
 struct sqlite3;
 struct SDL_Window;
+struct Timer;
 union SDL_Event;
 struct NVGLUframebuffer;
 struct NVGSWUblitter;
@@ -121,7 +122,6 @@ public:
   // members constructed in declaration order, destroyed in reverse order, so Map will be destroyed last
   std::unique_ptr<Map> map;
   std::unique_ptr<Painter> painter;
-  std::unique_ptr<Painter> scaleBarPainter;
   std::unique_ptr<Window> win;
 
   std::shared_ptr<ClientDataSource> tracksDataSource;
@@ -177,6 +177,9 @@ public:
   ProgressCircleWidget* progressWidget = NULL;
   std::function<bool(SvgGui*, Widget*, SDL_Event*)> pagerEventFilter;
 
+  Timer* progressTimer = NULL;
+  float currProgress = 1;
+
   std::atomic_int_fast64_t storageTotal = {0};
   std::atomic_int_fast64_t storageOffline = {0};
 
@@ -200,6 +203,7 @@ public:
   static void extractAssets(const char* assetPath);
   static bool loadConfig(const char* assetPath);
   static void sdlEvent(SDL_Event* event);
+  static const YAML::Node& cfg() { return config; }  // for use when reading config
 
   static std::string elevToStr(double meters);
   static std::string distKmToStr(double dist, int prec = 2, int sigdig = 100);

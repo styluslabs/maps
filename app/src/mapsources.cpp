@@ -589,6 +589,7 @@ void MapsSources::populateSceneVars()
 
   const YAML::Node& vars = app->sceneConfig()["application"]["gui_variables"];
   for(const auto& var : vars.pairs()) {
+    if(!var.second["enabled"].as<bool>(true)) { continue; }
     std::string name = var.first.Scalar();  //.as<std::string>("");
     std::string label = var.second["label"].as<std::string>("");
     std::string onchange = var.second["onchange"].as<std::string>("");

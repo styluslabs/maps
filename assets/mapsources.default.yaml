@@ -175,7 +175,7 @@ enable-slope-angle:
     layer: true
     layers: [ hillshade ]
     updates:
-        styles.hillshade.shaders.defines.SHOW_ANGLE: true
+        global.show_slope_angle: true
 
 mix-base-raster:
     title: Mix Hillshade Base Raster

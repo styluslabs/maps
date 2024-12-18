@@ -29,6 +29,7 @@ import:
 global:
     contour_color: '#C56008'  #vec4(0.773,0.376,0.031,1.)
     show_contours: false
+    show_slope_angle: false
 
 
 application:
@@ -37,6 +38,7 @@ application:
             style: hillshade
             label: Hillshade Exaggeration
         u_min_slope_angle:
+            enabled: global.show_slope_angle
             style: hillshade
             label: Min Slope Angle (°)
             min: 0
@@ -100,9 +102,9 @@ styles:
         blend_order: -1002
         shaders:
             defines:
-                SHOW_CONTOURS: global.show_contours
                 METRIC_UNITS: global.metric_units
-                SHOW_ANGLE: false
+                SHOW_CONTOURS: global.show_contours
+                SHOW_ANGLE: global.show_slope_angle
                 RASTER_BASE_COLOR: 'sampleRaster(0)'
             uniforms:
                 u_exaggerate: 4.5

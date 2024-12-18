@@ -58,6 +58,12 @@ target_compile_definitions(maps-app PUBLIC PUGIXML_NO_EXCEPTIONS)
 target_compile_definitions(maps-app PUBLIC SVGGUI_NO_SDL)
 
 # maybe this will prevent cmake from rebuilding everything when git hash changes
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE MAPS_GIT_REV
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
 set_source_files_properties(
   app/src/plugins.cpp
   PROPERTIES

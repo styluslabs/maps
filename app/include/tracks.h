@@ -73,6 +73,7 @@ private:
   void setTrackWidgets(TrackView_t view);
   void startRecording();
   void closeActiveTrack();
+  void hideDirectRoutePreview();
   // UI setup
   void createStatsContent();
   void createPlotContent();

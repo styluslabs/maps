@@ -279,8 +279,7 @@ static int addSearchResult(duk_context* ctx)
 
   auto& ms = MapsApp::inst->mapsSearch;
   if(flags & MapsSearch::UPDATE_RESULTS) {
-    if(flags & MapsSearch::LIST_SEARCH)
-      ms->resultsUpdated(flags);
+    ms->resultsUpdated(flags);
   }
   else {
     if(flags & MapsSearch::MAP_SEARCH) {

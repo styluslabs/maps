@@ -289,6 +289,7 @@ void MapsSearch::clearSearch()
   app->searchActive = false;
 }
 
+// addMapResult() and addListResult() are now only used by online search (plugins)
 void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, const char* json)
 {
   // for online searches, we don't want to clear previous results until we get new results
@@ -297,15 +298,7 @@ void MapsSearch::addMapResult(int64_t id, double lng, double lat, float rank, co
     markers->reset();
     newMapSearch = false;
   }
-  size_t idx = mapResults.size();
   mapResults.push_back({id, {lng, lat}, rank, json});
-  auto onPicked = [this, idx](){
-    SearchResult& res = mapResults[idx];
-    app->setPickResult(res.pos, "", res.tags);
-  };
-  markers->createMarker({lng, lat}, onPicked, jsonToProps(json));
-  if(idx == 0)
-    saveToBkmksBtn->setEnabled(true);
 }
 
 void MapsSearch::addListResult(int64_t id, double lng, double lat, float rank, const char* json)
@@ -322,30 +315,73 @@ void MapsSearch::searchPluginError(const char* err)
 
 void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat lngLat11)
 {
-  const char* query = "SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON pois.ROWID = pois_fts.ROWID WHERE pois_fts "
-      "MATCH ? AND pois.lng >= ? AND pois.lat >= ? AND pois.lng <= ? AND pois.lat <= ? ORDER BY rank LIMIT 1000;";
-  searchDB.stmt(query)
-      .bind(queryStr, lnglat00.longitude, lnglat00.latitude, lngLat11.longitude, lngLat11.latitude)
-      .exec([&](int rowid, double lng, double lat, double score, const char* json){
-        addMapResult(rowid, lng, lat, score, json);
-      });
-  moreMapResultsAvail = mapResults.size() >= 1000;
+  int64_t gen = ++mapSearchGen;
+  searchWorker.enqueue([=](){
+    if(gen < mapSearchGen) { return; }
+    std::vector<SearchResult> res;
+    res.reserve(MAX_MAP_RESULTS);
+    bool abort = false;
+    const char* query = "SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois "
+        "ON pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? AND pois.lng >= ? AND pois.lat >= ? AND "
+        "pois.lng <= ? AND pois.lat <= ? ORDER BY rank LIMIT 1000;";
+    searchDB.stmt(query)
+        .bind(queryStr, lnglat00.longitude, lnglat00.latitude, lngLat11.longitude, lngLat11.latitude)
+        .exec([&](int rowid, double lng, double lat, double score, const char* json){
+          res.push_back({rowid, {lng, lat}, float(score), json});
+          if(gen < mapSearchGen) { abort = true; }
+        }, false, &abort);
+
+    if(gen < mapSearchGen) {
+      LOGD("Map search aborted - generation %d < %d", gen, mapSearchGen.load());
+      return;
+    }
+    MapsApp::runOnMainThread([this, res=std::move(res)]() mutable {
+      mapResults = std::move(res);
+      resultsUpdated(MAP_SEARCH);
+    });
+  });
 }
 
-void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat)
+void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int flags)
 {
   // if results don't fill height, scroll area won't scroll, so onScroll won't be called to get more results!
   int limit = std::max(20, int(app->win->winBounds().height()/42 + 1));
   int offset = listResults.size();
   // if '*' not appended to string, we assume categorical search - no info for ranking besides dist
   bool sortByDist = queryStr.back() != '*' || app->config["search"]["sort"].as<std::string>("rank") == "dist";
-  // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
-  std::string query = fstring("SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON"
-      " pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT %d OFFSET ?;",
-      sortByDist ? "-1.0" : "rank", limit);
-  searchDB.stmt(query).bind(queryStr, offset).exec([&](int rowid, double lng, double lat,
-      double score, const char* json){ addListResult(rowid, lng, lat, score, json); });
-  moreListResultsAvail = int(listResults.size()) - offset >= limit;
+  int64_t gen = ++listSearchGen;
+
+  searchWorker.enqueue([=](){
+    if(gen < listSearchGen) { return; }
+    std::vector<SearchResult> res;
+    res.reserve(limit);
+    bool abort = false;
+    // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
+    std::string query = fstring("SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON"
+        " pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT %d OFFSET ?;",
+        sortByDist ? "-1.0" : "rank", limit);
+    searchDB.stmt(query)
+        .bind(queryStr, offset)
+        .exec([&](int rowid, double lng, double lat, double score, const char* json){
+          res.push_back({rowid, {lng, lat}, float(score), json});
+          if(gen < listSearchGen) { abort = true; }
+        }, false, &abort);
+
+    if(gen < listSearchGen) {
+      LOGD("List search aborted - generation %d < %d", gen, listSearchGen.load());
+      return;
+    }
+    MapsApp::runOnMainThread([this, flags, limit, res=std::move(res)]() mutable {
+      moreListResultsAvail = res.size() >= limit;
+      if(listResults.empty())
+        listResults = std::move(res);
+      else {
+        listResults.insert(listResults.end(),
+            std::make_move_iterator(res.begin()), std::make_move_iterator(res.end()));
+      }
+      resultsUpdated(LIST_SEARCH | flags);
+    });
+  });
 }
 
 void MapsSearch::onMapEvent(MapEvent_t event)
@@ -394,8 +430,8 @@ void MapsSearch::updateMapResultBounds(LngLat lngLat00, LngLat lngLat11)
 {
   double lng01 = fabs(lngLat11.longitude - lngLat00.longitude);
   double lat01 = fabs(lngLat11.latitude - lngLat00.latitude);
-  dotBounds00 = LngLat(lngLat00.longitude - lng01/8, lngLat00.latitude - lat01/8);
-  dotBounds11 = LngLat(lngLat11.longitude + lng01/8, lngLat11.latitude + lat01/8);
+  dotBounds00 = LngLat(lngLat00.longitude - lng01/4, lngLat00.latitude - lat01/4);
+  dotBounds11 = LngLat(lngLat11.longitude + lng01/4, lngLat11.latitude + lat01/4);
 }
 
 void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
@@ -411,6 +447,21 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 
 void MapsSearch::resultsUpdated(int flags)
 {
+  if(flags & MAP_SEARCH) {
+    moreMapResultsAvail = mapResults.size() >= MAX_MAP_RESULTS;
+    for(size_t idx = 0; idx < mapResults.size(); ++idx) {
+      auto& mapres = mapResults[idx];
+      auto onPicked = [this, idx](){
+        SearchResult& res = mapResults[idx];
+        app->setPickResult(res.pos, "", res.tags);
+      };
+      markers->createMarker(mapres.pos, onPicked, jsonToProps(mapres.tags));
+    }
+    if(!mapResults.empty())
+      saveToBkmksBtn->setEnabled(true);
+  }
+
+  if(!(flags & LIST_SEARCH)) { return; }
   populateResults();
   int nresults = std::max(mapResults.size(), listResults.size());
   bool more = mapResults.size() > listResults.size() ? moreMapResultsAvail : moreListResultsAvail;
@@ -514,7 +565,6 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     populateAutocomplete(autocomplete);
     if(query.size() > 1 && providerIdx == 0) {  // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
       offlineListSearch("name:(" + searchStr + ")", lngLat00, lngLat11);  // restrict live search to name
-      resultsUpdated(0);
     }
     return;
   }
@@ -536,10 +586,8 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
   }
 
-  if(providerIdx == 0) {
-    offlineListSearch(searchStr, lngLat00, lngLat11);
-    resultsUpdated(phase == RETURN ? FLY_TO : 0);
-  }
+  if(providerIdx == 0)
+    offlineListSearch(searchStr, lngLat00, lngLat11, phase == RETURN ? FLY_TO : 0);
   else {
     bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);

@@ -10,6 +10,7 @@
 // for elevation
 #include "util/imageLoader.h"
 #include "util/elevationManager.h"
+#include "debug/frameInfo.h"
 
 #include "touchhandler.h"
 #include "bookmarks.h"
@@ -815,11 +816,28 @@ void MapsApp::mapUpdate(double time)
   if(tf != iconNode->getTransform())
     iconNode->setTransform(tf);
 
-  // update progress indicator
+  // update progress indicator (shown if still loading tiles after 1 sec)
   const auto& tileMgr = map->getScene()->tileManager();
-  real progress = 1 - tileMgr->numLoadingTiles()/real(tileMgr->getVisibleTiles().size());
-  progressWidget->setProgress(progress);
-  progressWidget->setVisible(progress < 1);
+  currProgress = 1 - tileMgr->numLoadingTiles()/real(tileMgr->getVisibleTiles().size());
+  if(currProgress < 1) {
+    if(progressWidget->isVisible())
+      progressWidget->setProgress(currProgress);
+    else if(!progressTimer) {
+      progressTimer = gui->setTimer(1000, win.get(), progressTimer, [this](){
+        progressTimer = NULL;
+        progressWidget->setProgress(currProgress);
+        progressWidget->setVisible(currProgress < 1);
+        return 0;
+      });
+    }
+  }
+  else {
+    if(progressTimer) {
+      gui->removeTimer(progressTimer);
+      progressTimer = NULL;
+    }
+    progressWidget->setVisible(false);
+  }
 
   // prompt for 3D terrain if first time tilting
   if(cpos.tilt != 0 && !terrain3D && !config["terrain_3d"]["enabled"].IsDefined()) {
@@ -1538,7 +1556,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     appDebugMenu->addItem("Dump YAML", [this](){
       std::string filename = baseDir + "dump_scene.yaml";
       std::ofstream fout(filename);
-      fout << map->getScene()->config();
+      fout << yamlToStr(map->getScene()->config(), 10);
       LOGW("Scene YAML dumped to %s", filename.c_str());
     });
     appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
@@ -1659,6 +1677,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   Widget* floatToolbar = createColumn({progressWidget, gpsStatusBtn, reorientBtn, recenterBtn});
   floatToolbar->node->setAttribute("box-anchor", revbtns ? "bottom left" : "bottom right");
   floatToolbar->setMargins(10, 10);
+  floatToolbar->layoutIsolate = true;
   mapsContent->addWidget(floatToolbar);
 
   scaleBar = new ScaleBarWidget(map.get());
@@ -2212,8 +2231,7 @@ MapsApp::~MapsApp()
 
 bool MapsApp::drawFrame(int fbWidth, int fbHeight)
 {
-  static uint64_t t0 = 0;
-  TRACE_END(t0, "wait events");
+  using Tangram::FrameInfo;
 
   std::function<void()> queuedFn;
   while(taskQueue.pop_front(queuedFn))
@@ -2263,14 +2281,14 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     auto now = std::chrono::high_resolution_clock::now();
     double currTime = std::chrono::duration<double>(now.time_since_epoch()).count();
     mapUpdate(currTime);
-    TRACE_END(t0, "map update");
     //mapsWidget->redraw();  -- so we can draw unchanged UI over map
-    if(!scaleBarPainter) { scaleBar->redraw(); }
+    scaleBar->redraw();  //if(!scaleBarPainter) {  }
   }
 
+  FrameInfo::begin("UI update");
   painter->deviceRect = Rect::wh(fbWidth, fbHeight);
   Rect dirty = gui->layoutAndDraw(painter.get());
-  TRACE_END(t0, "layoutAndDraw");
+  FrameInfo::end("UI update");
 
   if(!mapdirty && !dirty.isValid())
     return false;
@@ -2296,21 +2314,8 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     mapsTracks->tapEvent(tapLocation);
     tapLocation = {NAN, NAN};
   }
-  TRACE_END(t0, "map render");
 
-  // scale bar must be updated whenever map changes, but we don't want to redraw entire UI every frame
-  // - a possible alternative is to draw with Tangram using something similar to DebugTextStyle/DebugStyle
-  if(scaleBarPainter) {
-    scaleBarPainter->deviceRect = Rect::wh(fbWidth, fbHeight);
-    scaleBarPainter->beginFrame();
-    scaleBarPainter->setsRGBAdjAlpha(true);
-    scaleBarPainter->scale(gui->paintScale);  // beginFrame resets Painter state
-    scaleBar->directDraw(scaleBarPainter.get());
-    if(crossHair->isVisible())
-      crossHair->directDraw(scaleBarPainter.get());
-    scaleBarPainter->endFrame();
-  }
-
+  FrameInfo::begin("UI render");
   if(painter->usesGPU()) {
     if(nvglFB) {
       if(dirty.isValid()) {
@@ -2338,7 +2343,6 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     }
     painter->blitImageToScreen(dirty, true);
   }
-  TRACE_END(t0, fstring("UI render %d x %d", fbWidth, fbHeight).c_str());
-  TRACE_FLUSH();
+  FrameInfo::end("UI render");
   return true;
 }

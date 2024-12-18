@@ -26,7 +26,9 @@ YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow = 
 std::string osmIdFromJson(const YAML::Node& props);
 //std::string rapidjsonToStr(const rapidjson::Document& props);
 YAML::Node strToJson(const char* json);
+YAML::Node strToJson(const std::string& json);
 Tangram::Properties jsonToProps(const char* json);
+Tangram::Properties jsonToProps(const std::string& json);
 Tangram::Properties jsonToProps(const YAML::Node& tags);
 
 std::string ftimestr(const char* fmt, int64_t msec_epoch = 0);
