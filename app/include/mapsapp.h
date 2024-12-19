@@ -64,8 +64,9 @@ public:
   void onSuspend();
   void onResume();
   void onLowMemory();
+  void onLowPower(int state);
   void updateLocation(const Location& _loc);
-  void updateOrientation(float azimuth, float pitch, float roll);
+  void updateOrientation(double time, float azimuth, float pitch, float roll);
   void updateGpsStatus(int satsVisible, int satsUsed);
 
   void tapEvent(float x, float y);
@@ -93,8 +94,9 @@ public:
   Location currLocation = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   float orientation = 0;
   float locMarkerAngle = 0;
-  //CameraPosition prevCamPos;
+  CameraPosition prevCamPos;
   enum { NO_FOLLOW = 0, FOLLOW_PENDING, FOLLOW_ACTIVE } followState = NO_FOLLOW;
+  double orientationTime = 0;
 
   MarkerID pickResultMarker = 0;
   MarkerID pickedMarkerId = 0;
@@ -174,6 +176,7 @@ public:
   Menu* undeleteMenu = NULL;
   Pager* panelPager = NULL;
   Button* terrain3dCb = NULL;
+  Button* followGPSBtn = NULL;
   ProgressCircleWidget* progressWidget = NULL;
   std::function<bool(SvgGui*, Widget*, SDL_Event*)> pagerEventFilter;
 
@@ -222,6 +225,7 @@ public:
   static std::thread::id mainThreadId;
   static bool runApplication;
   static bool simulateTouch;
+  static bool lowPowerMode;
   static int prevVersion;
 
 private:

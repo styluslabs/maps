@@ -111,6 +111,10 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
 std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 {
   static const char* stylestr = R"(
+global:
+  earth_color: '#E0E0E0'
+  earth_order: 1
+
 styles:
   raster-opacity:
     blend: nonopaque

@@ -703,6 +703,11 @@ JNI_FN(onLowMemory)(JNIEnv* env, jclass)
   MapsApp::runOnMainThread([=](){ app->onLowMemory(); });
 }
 
+JNI_FN(onLowPower)(JNIEnv* env, jclass, jint state)
+{
+  MapsApp::runOnMainThread([=](){ app->onLowPower(state); });
+}
+
 JNI_FN(touchEvent)(JNIEnv* env, jclass, jint ptrId, jint action, jint t, jfloat x, jfloat y, jfloat p)
 {
   // ACTION_DOWN = 0, ACTION_UP = 1, ACTION_MOVE = 2, ACTION_CANCEL = 3,
@@ -796,9 +801,9 @@ JNI_FN(updateLocation)(JNIEnv* env, jclass, long time, double lat, double lng, f
   });
 }
 
-JNI_FN(updateOrientation)(JNIEnv* env, jclass, jfloat azimuth, jfloat pitch, jfloat roll)
+JNI_FN(updateOrientation)(JNIEnv* env, jclass, jlong nsec, jfloat azimuth, jfloat pitch, jfloat roll)
 {
-  MapsApp::runOnMainThread([=](){ app->updateOrientation(azimuth*180/M_PI, pitch*180/M_PI, roll*180/M_PI); });
+  MapsApp::runOnMainThread([=](){ app->updateOrientation(nsec/1.0E9, azimuth*180/M_PI, pitch*180/M_PI, roll*180/M_PI); });
 }
 
 JNI_FN(updateGpsStatus)(JNIEnv* env, jclass, int satsVisible, int satsUsed)

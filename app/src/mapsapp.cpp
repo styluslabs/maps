@@ -55,6 +55,7 @@ std::vector<Color> MapsApp::markerColors;
 SvgGui* MapsApp::gui = NULL;
 bool MapsApp::runApplication = true;
 bool MapsApp::simulateTouch = false;
+bool MapsApp::lowPowerMode = false;
 int MapsApp::prevVersion = 0;
 ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 std::thread::id MapsApp::mainThreadId;
@@ -856,6 +857,11 @@ void MapsApp::onLowMemory()
   map->onMemoryWarning();
 }
 
+void MapsApp::onLowPower(int state)
+{
+  lowPowerMode = state && cfg()["general"]["enable_low_power"].as<bool>(true);
+}
+
 void MapsApp::onSuspend()
 {
   // send events here instead of from androidApp/iosApp.cpp just to eliminate cut and paste code
@@ -885,7 +891,9 @@ void MapsApp::gotoCameraPos(const CameraPosition& campos)
     toggleFollow();
 
   Point scr;
-  map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y);
+  bool vis = map->lngLatToScreenPosition(campos.longitude, campos.latitude, &scr.x, &scr.y);
+  if(!vis)
+    prevCamPos = map->getCameraPosition();  // save prev position unless new position already on screen
   // if point is close enough, use simple ease instead of flyTo
   Rect viewport = getMapViewport();
   Point offset = scr - viewport.center();
@@ -933,11 +941,18 @@ void MapsApp::updateLocation(const Location& _loc)
   double dt = _loc.time - currLocation.time;
   if(std::abs(dt) < 0.1 && _loc.lngLat() == currLocation.lngLat() && _loc.alt == currLocation.alt)
     return;
+
   double dr = lngLatDist(_loc.lngLat(), currLocation.lngLat());
   double dh = _loc.alt - currLocation.alt;
   float spd = currLocation.spd > 1.0f ? currLocation.spd : 1.0f;  // handle NaN
   if(_loc.poserr > dr && _loc.alterr > std::abs(dh) && _loc.poserr > currLocation.poserr + dt*spd) {
     LOGW("Rejecting location update: dt = %.3f s, dr = %.2f m, err = %.2f m", dt, dr, _loc.poserr);
+    return;
+  }
+
+  if(lowPowerMode && dt < 1 && !mapsTracks->recordTrack && followState != FOLLOW_ACTIVE &&
+      dh < 10 && dr < 5*MapProjection::metersPerPixelAtZoom(int(map->getZoom()))) {
+    LOGD("Low Power mode - discarding location update: dt = %.3f s, dr = %.2f m, err = %.2f m", dt, dr, _loc.poserr);
     return;
   }
 
@@ -983,11 +998,14 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
 }
 
 // values should be in degrees, not radians
-void MapsApp::updateOrientation(float azimuth, float pitch, float roll)
+void MapsApp::updateOrientation(double time, float azimuth, float pitch, float roll)
 {
   float deg = azimuth - 360*std::floor(azimuth/360);
-  if(std::abs(deg - orientation) < (followState == FOLLOW_ACTIVE ? 0.1f : 1.0f)) return;
+  float threshold = followState == FOLLOW_ACTIVE ? 0.1f :
+      (lowPowerMode && time - orientationTime < 1 ? 5.0f : 1.0f);
+  if(std::abs(deg - orientation) < threshold) { return; }
   orientation = deg;
+  orientationTime = time;
   // we might have to add a low-pass for this
   if(followState == FOLLOW_ACTIVE) {
     auto campos = map->getCameraPosition();
@@ -1006,6 +1024,7 @@ void MapsApp::toggleFollow()
   campos.rotation = follow ? -orientation*float(M_PI)/180 : 0;
   map->setCameraPositionEased(campos, 1.0f);
   recenterBtn->setIcon(MapsApp::uiIcon(follow ? "nav-arrow" : "gps-location"));
+  followGPSBtn->setChecked(follow);
 }
 
 const YAML::Node& MapsApp::sceneConfig()
@@ -1605,6 +1624,30 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // prevent complete UI layout when compass icon is rotated
   reorientBtn->selectFirst(".toolbutton-content")->layoutIsolate = true;
 
+  // Recenter (i.e. jump to GPS location) button
+
+  Menu* recenterMenu = createMenu(Menu::VERT);
+  Button* enableGPSBtn = createCheckBoxMenuItem("Enable GPS");
+  enableGPSBtn->onClicked = [=](){
+    sensorsEnabled = !sensorsEnabled;
+    setSensorsEnabled(sensorsEnabled);
+    enableGPSBtn->setChecked(sensorsEnabled);
+    recenterBtn->setIcon(MapsApp::uiIcon(sensorsEnabled ? "gps-location" : "gps-location-off"));
+    hasLocation = false;  // if enabling, still need to wait for GPS status update
+    if(!sensorsEnabled) {
+      gpsStatusBtn->setVisible(false);
+      updateLocMarker();
+    }
+  };
+  enableGPSBtn->setChecked(true);
+  recenterMenu->addItem(enableGPSBtn);
+
+  followGPSBtn = createCheckBoxMenuItem("Follow");
+  followGPSBtn->onClicked = [this](){ toggleFollow(); };
+  recenterMenu->addItem(followGPSBtn);
+
+  recenterMenu->addItem("Previous View", [this](){ gotoCameraPos(CameraPosition(prevCamPos)); });
+
   //recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
   recenterBtn = new Button(widgetNode("#roundbutton"));
   recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
@@ -1612,6 +1655,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     if(!sensorsEnabled) {
       setSensorsEnabled(true);
       sensorsEnabled = true;
+      enableGPSBtn->setChecked(true);
       recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
       return;
     }
@@ -1634,7 +1678,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       gotoCameraPos(campos);  //, 1.0);
     }
     else {
-      if(campos.zoom < 12) campos.zoom = 15;
+      if(campos.zoom < 12) { campos.zoom = 15; }
       if(flyingToCurrLoc)
         map->setCameraPosition(campos);  // stop animation and go to final position immediately
       else
@@ -1643,27 +1687,15 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
     }
   };
 
-  // should we forward motion events to map (so if user accidently starts drag on button it still works?)
-  recenterBtn->addHandler([=](SvgGui* gui, SDL_Event* event){
-    if(isLongPressOrRightClick(event)) {
-      sensorsEnabled = !sensorsEnabled;
-      setSensorsEnabled(sensorsEnabled);
-      recenterBtn->setIcon(MapsApp::uiIcon(sensorsEnabled ? "gps-location" : "gps-location-off"));
-      hasLocation = false;  // if enabling, still need to wait for GPS status update
-      if(!sensorsEnabled) {
-        gpsStatusBtn->setVisible(false);
-        updateLocMarker();
-      }
-    }
-    //else if(event->type == SDL_FINGERUP && gui->fingerClicks == 2)
-    //  toggleFollow();
-    else
-      return false;
-    // prevent click event; should OUTSIDE_PRESSED be sent by SvgGui before long press event?
-    recenterBtn->sdlUserEvent(gui, SvgGui::OUTSIDE_PRESSED, 0, event, recenterBtn);
-    gui->pressedWidget = NULL;
-    return true;
+  recenterBtn->addWidget(recenterMenu);
+  SvgGui::setupRightClick(recenterBtn, [=](SvgGui* gui, Widget* w, Point p){
+    gui->showMenu(recenterMenu);  //gui->showContextMenu(recenterMenu, p, w);
+    gui->setPressed(recenterMenu);
+    recenterBtn->node->setXmlClass(
+        addWord(removeWord(recenterBtn->node->xmlClass(), "hovered"), "pressed").c_str());
   });
+
+  // GPS status button (show satellite status when searching for position)
 
   gpsStatusBtn = new Widget(loadSVGFragment(gpsStatusSVG));
   gpsStatusBtn->setMargins(0, 0, 6, 0);
@@ -2090,15 +2122,16 @@ void MapsApp::saveConfig()
   config["storage"]["offline"] = storageOffline.load();
   config["storage"]["total"] = storageTotal.load();
 
-  CameraPosition pos = map->getCameraPosition();
+  CameraPosition pos = map->getCameraPosition(true);  // get 2D pos since pos restored before scene loaded
   // should never happen, but if camera position is corrupted, don't persist it!
   if(!std::isnan(pos.longitude) && !std::isnan(pos.latitude)
        && pos.zoom > 0 && !std::isnan(pos.rotation) && !std::isnan(pos.tilt)) {
-    config["view"]["lng"] = pos.longitude;
-    config["view"]["lat"] = pos.latitude;
-    config["view"]["zoom"] = pos.zoom;
-    config["view"]["rotation"] = pos.rotation;
-    config["view"]["tilt"] = pos.tilt;
+    auto& view = config["view"];
+    view["lng"] = pos.longitude;
+    view["lat"] = pos.latitude;
+    view["zoom"] = pos.zoom;
+    view["rotation"] = pos.rotation;
+    view["tilt"] = pos.tilt;
   }
 
   config["ui"]["split_size"] = int(panelSplitter->currSize);

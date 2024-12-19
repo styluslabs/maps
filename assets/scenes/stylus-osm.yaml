@@ -243,6 +243,7 @@ global:
     show_trails: false
     show_parking: false
     show_motorways: true
+    show_land_polygons: global.show_polygons
 
 
 application:
@@ -396,7 +397,7 @@ styles:
 layers:
     landcover:
         data: { source: osm, layer: landuse }
-        enabled: global.show_polygons
+        enabled: global.show_land_polygons
         #filter: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
         draw:
             polygons:
@@ -446,7 +447,7 @@ layers:
 
     landuse:
         data: { source: osm, layer: landuse }
-        enabled: global.show_polygons
+        enabled: global.show_land_polygons
         #filter: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
         draw:
             polygons:
@@ -469,7 +470,7 @@ layers:
 
     park:
         data: { source: osm, layer: landuse }
-        enabled: global.show_polygons
+        enabled: global.show_land_polygons
         filter:
             class: [national_park, protected_area, nature_reserve]
             #any: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
@@ -481,7 +482,7 @@ layers:
 
     pier:
         data: { source: osm, layer: landuse }
-        enabled: global.show_polygons
+        enabled: global.show_land_polygons
         filter: { man_made: [pier, breakwater, groyne] }
         pier_areas:
             filter: { $geometry: polygon }  #$zoom: { min: 13 }
@@ -810,7 +811,7 @@ layers:
             filter: { class: piste, $zoom: { min: 10 } }
             piste_areas:
                 filter: { $geometry: polygon, $zoom: { min: 13 } }
-                enabled: global.show_polygons
+                enabled: global.show_land_polygons
                 draw:
                     polygons:
                         #visible: global.show_trails
@@ -1041,6 +1042,7 @@ layers:
             filter: { aeroway: aerodrome }
             draw:
                 polygons:
+                    visible: global.show_land_polygons
                     style: global.earth_style
                     order: global.order.airport
                     color: global.color.airport

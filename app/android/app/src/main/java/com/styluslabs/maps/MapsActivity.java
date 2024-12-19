@@ -150,6 +150,15 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
           }
         }
       }, new IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION));
+
+    // detect low power mode
+    registerReceiver(new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+          PowerManager pm = (PowerManager)context.getSystemService(Context.POWER_SERVICE);
+          MapsLib.onLowPower(pm.isPowerSaveMode() ? 1 : 0);
+        }
+      }, new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED));
   }
 
   @Override
@@ -264,6 +273,9 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     //mSensorManager.registerListener(this, mAccelSensor, SensorManager.SENSOR_DELAY_UI);
     //mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
     mSensorManager.registerListener(this, mOrientSensor, SensorManager.SENSOR_DELAY_UI);
+
+    PowerManager pm = (PowerManager)context.getSystemService(Context.POWER_SERVICE);
+    MapsLib.onLowPower(pm.isPowerSaveMode() ? 1 : 0);
   }
 
   public void stopSensors()
@@ -422,7 +434,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
       System.arraycopy(event.values, 0, values, 0, 4);
       SensorManager.getRotationMatrixFromVector(rotmat, values);
       SensorManager.getOrientation(rotmat, orient);
-      MapsLib.updateOrientation(orient[0] + mDeclination, orient[1], orient[2]);
+      MapsLib.updateOrientation(event.timestamp, orient[0] + mDeclination, orient[1], orient[2]);
     }
 
     //if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)

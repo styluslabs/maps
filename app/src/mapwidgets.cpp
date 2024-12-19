@@ -1038,13 +1038,13 @@ void ProgressCircleWidget::draw(SvgPainter* svgp) const
   p->setFillBrush(Color::NONE);
   //p->setStroke(Color(128, 128, 128, 96), 4);
   //p->drawPath(Path2D().addEllipse(0, 0, 18, 18));
-  p->setStroke(Color(64, 128, 255, 128), 4);  //, Painter::FlatCap, Painter::BevelJoin);
+  p->setStroke(Color(62, 152, 200, 255), 4);  //, Painter::FlatCap, Painter::BevelJoin);
   Path2D done;
   done.moveTo(0, -16);
   done.addArc(0, 0, 16, 16, -0.5*M_PI, rad);
   p->drawPath(done);
 
-  p->setStroke(Color(64, 64, 64, 128), 4);
+  p->setStroke(Color(214, 214, 214, 255), 4);
   Path2D rest;
   rest.moveTo(done.currentPosition());
   rest.addArc(0, 0, 16, 16, rad-0.5*M_PI, 2*M_PI - rad);

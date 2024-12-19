@@ -7,8 +7,7 @@ global:
     terrain_3d_mixin: terrain-3d
     elevation_sources: [elevation]
     fog_color: '#FFFFFF'
-    #show_polygons: false
-    #show_water: true
+    #show_land_polygons: false  -- set in config updates
 
 
 # need to add support for uniform appearing in multiple shaders
@@ -22,9 +21,6 @@ global:
 
 
 styles:
-    terrain-3d-polygons:
-        mix: []
-
     fog:
         shaders:
             uniforms:

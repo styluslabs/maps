@@ -478,13 +478,16 @@ Button* PluginManager::createPanel()
   "\ngithub.com/styluslabs/maps | support@styluslabs.com<text>";
 
   TextBox* creditsText = new TextBox(loadSVGFragment(aboutSVG.c_str()));
+  creditsText->setMargins(6, 6);
+  Widget* creditsHRule = createHRule(1);
+  creditsHRule->setMargins(4, 0);
 
   runBtn->onClicked = [=](){
     resultText->setText( evalJS(jsEdit->text().c_str()).c_str() );
     resultText->setText( SvgPainter::breakText(resultTextNode, app->getPanelWidth() - 20).c_str() );
   };
 
-  Widget* pluginContent = createColumn({jsEdit, runBtn, resultText, createHRule(1), creditsText}, "", "", "fill");
+  Widget* pluginContent = createColumn({jsEdit, runBtn, resultText, creditsHRule, creditsText}, "", "", "fill");
 
   Button* refreshBtn = createToolbutton(MapsApp::uiIcon("refresh"), "Reload plugins");
   refreshBtn->onClicked = [=](){ reload(); };

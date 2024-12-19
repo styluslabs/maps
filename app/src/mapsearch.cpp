@@ -439,8 +439,10 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
   updateMapResultBounds(lngLat00, lngLat11);
   // should we do clearJsSearch() to prevent duplicate results?
   newMapSearch = true;
-  if(providerIdx > 0)
+  if(providerIdx > 0) {
+    if(unifiedSearch && listResults.empty()) { flags |= LIST_SEARCH; }
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, flags);
+  }
   else
     offlineMapSearch(searchStr, dotBounds00, dotBounds11);
 }

@@ -30,7 +30,7 @@ terrain_3d:
   #enabled: true  -- missing value will trigger prompt when map is tilted
   import: scenes/terrain-3d.yaml
   updates:
-    global.earth_style: terrain-3d-polygons
+    global.show_land_polygons: false
 
 # use https://github.com/aosp-mirror/platform_frameworks_base/raw/de0fe2daafb769cc37ca922ffef6dbafb8c6cae2/data/fonts/DroidSansFallback.ttf because next version removes a bunch of characters
 fallback_fonts:

@@ -33,6 +33,7 @@ public:
   GpxFile recordedTrack;
   GpxFile navRoute;
   GpxFile* activeTrack = NULL;
+  bool recordTrack = false;
 
   double currSpeed = 0;
   double speedInvTau = 0.5;
@@ -130,7 +131,6 @@ private:
   double cropStart = 0;
   double cropEnd = 1;
   double recordLastSave = 0;
-  bool recordTrack = false;
   //bool drawTrack = false;
   bool directRoutePreview = false;
   bool tracksDirty = true;
