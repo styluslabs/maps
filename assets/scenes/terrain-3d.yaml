@@ -48,4 +48,5 @@ styles:
                 position: |
                     #ifdef TANGRAM_TERRAIN_3D
                     position.z += max(getElevation(), TANGRAM_MIN_ELEVATION);
+                    v_world_position.z = position.z;
                     #endif

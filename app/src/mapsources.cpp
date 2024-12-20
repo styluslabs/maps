@@ -485,7 +485,7 @@ void MapsSources::onMapEvent(MapEvent_t event)
   if(event == SUSPEND) {
     if(saveSourcesNeeded)
       saveSources();
-    app->config.add("sources").add("list_order") = stringsToYamlArray(sourcesContent->getOrder());
+    saveListOrder(app->config["sources"]["list_order"], sourcesContent->getOrder());
     return;
   }
 

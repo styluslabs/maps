@@ -136,13 +136,14 @@ void yamlRemove(YAML::Node& node, T key)
 // explicit instantiations
 template void yamlRemove<int>(YAML::Node& node, int key);
 
-YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow)
+// key point here is that we don't overwrite node with empty list
+void saveListOrder(YAML::Node& node, const std::vector<std::string>& strs)
 {
-  YAML::Node node(YAML::Tag::ARRAY | (flow ? YAML::Tag::YAML_FLOW : YAML::Tag::NONE));
+  if(strs.empty()) { return; }
+  node = YAML::Node(YAML::Tag::ARRAY | YAML::Tag::YAML_FLOW);
   for(const auto& str : strs) {
     node.push_back(str);
   }
-  return node;
 }
 
 std::string osmIdFromJson(const YAML::Node& props)

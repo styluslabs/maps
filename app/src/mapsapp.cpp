@@ -1527,11 +1527,12 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
     // fake location updates to test track recording
     auto fakeLocFn = [this](){
-      real lat = currLocation.lat + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
-      real lng = currLocation.lng + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
-      real alt = currLocation.alt + 10*std::rand()/real(RAND_MAX);
-      updateLocation(Location{mSecSinceEpoch()/1000.0, lat, lng, 10, alt, 10, NAN, 0, NAN, 0});
-      updateOrientation(orientation + 5*std::rand()/real(RAND_MAX), 0, 0);
+      double t = mSecSinceEpoch()/1000.0;
+      double lat = currLocation.lat + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
+      double lng = currLocation.lng + 0.00005*(0.5 + std::rand()/real(RAND_MAX));
+      double alt = currLocation.alt + 10*std::rand()/real(RAND_MAX);
+      updateLocation(Location{t, lat, lng, 10, alt, 10, NAN, 0, NAN, 0});
+      updateOrientation(t, orientation + 5*std::rand()/real(RAND_MAX), 0, 0);
     };
 
     Menu* appDebugMenu = createMenu(Menu::HORZ);

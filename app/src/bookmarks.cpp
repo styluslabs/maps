@@ -370,7 +370,7 @@ void MapsBookmarks::onMapEvent(MapEvent_t event)
     }
   }
   else if(event == SUSPEND) {
-    app->config["places"]["list_order"] = stringsToYamlArray(listsContent->getOrder());
+    saveListOrder(app->config["places"]["list_order"], listsContent->getOrder());
   }
 }
 

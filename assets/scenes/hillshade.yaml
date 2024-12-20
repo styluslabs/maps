@@ -158,11 +158,6 @@ styles:
                 color: |
                     // Using 9 texel patch, estimate 1st and 2nd deriv to smooth elevation and normal
                     vec2 st = currentRasterUV(ELEVATION_INDEX);
-                    // polygons are not clipped to tile, so prevent drawing outside of tile where no elevation data
-                    // this creates seams between raster tiles when MSAA enabled - if we end up keeping MSAA we
-                    //  can create a separate style for raster tiles
-                    //if(st.x < 0.0 || st.x > 1.0 || st.y < 0.0 || st.y > 1.0)
-                    //  discard;
                     vec2 texwh = rasterPixelSize(ELEVATION_INDEX);
                     vec2 duv = 1./texwh;
                     vec2 ij = st * texwh;
@@ -232,8 +227,6 @@ styles:
                         // contour lines
                         // slope from gradient calculated above
                         float slope = length(grad);
-                        // contour line radius in pixels
-                        //float linehw = 0.5;
                         // spacing between contour lines in meters - 10m has too many artifacts
                     #ifdef METRIC_UNITS
                         float interval = z >= 14. ? 25. : z >= 12. ? 50. : 100.;
@@ -241,17 +234,21 @@ styles:
                         float interval = (z >= 14. ? 100. : z >= 12. ? 200. : 500.)/3.28084;
                     #endif
                         float zstep = z >= 13.5 ? 13.5 : z >= 11.5 ? 11.5 : 9.5;
-                        float linehw = mix(0.3, 0.5, clamp(0.5*(z - zstep), 0., 1.));
+                        // contour line half width in pixels
+                        float linehw = mix(0.3, 0.5, clamp(0.5*(z - zstep), 0., 1.));  // 0.5;
                     #ifdef TANGRAM_TERRAIN_3D
                         //linehw *= 0.01/(1.0 - gl_FragCoord.z);  // reduce variation of line width with depth
+                        linehw *= 1.25;
+                        elev = mix(elev, v_world_position.z, clamp(5.0*abs(elev - v_world_position.z)/interval, 0., 1.));
+                        float px_per_elev = 1./fwidth(v_world_position.z);
+                    #else
+                        float px_per_elev = 1./(slope * u_meters_per_pixel);
                     #endif
-                        //float intervals[4] = float[](10., 20., 50., 100.);  -- need GLES 3
-                        //float interval = 10.*clamp(exp2(15. - u_tile_origin.z), 1., 100.);
                         // no underwater contour lines!
                         float hc = max(elev, u_min_contour_elev + interval/2.);
                         // distance in pixels to nearest contour lines (above and below)
-                        float dup = fract(hc/interval)*interval/slope / u_meters_per_pixel;
-                        float ddn = abs(1. - fract(hc/interval))*interval/slope / u_meters_per_pixel;
+                        float dup = fract(hc/interval)*interval * px_per_elev;
+                        float ddn = abs(1. - fract(hc/interval))*interval * px_per_elev;
                         // contour line pixel coverage
                         float cov = max(0.5 - dup + linehw, 0.) + max(0.5 - ddn + linehw, 0.);
                         // coarse lines
@@ -261,8 +258,8 @@ styles:
                     #else
                         float coarse = (z >= 14. ? 500. : z >= 12. ? 1000. : 2000.)/3.28084;
                     #endif
-                        dup = fract(hc/coarse)*coarse/slope / u_meters_per_pixel;
-                        ddn = abs(1. - fract(hc/coarse))*coarse/slope / u_meters_per_pixel;
+                        dup = fract(hc/coarse)*coarse * px_per_elev;
+                        ddn = abs(1. - fract(hc/coarse))*coarse * px_per_elev;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
                     #ifdef SHOW_ANGLE
                         float degs = atan(slope/coslat)*180.0/3.14159;
@@ -320,7 +317,7 @@ layers:
                 angle: auto
                 # text_source: units will append units (m or ft) to label
                 #text_source: units
-                repeat_distance: 40px
+                repeat_distance: 200px
                 font:
                     family: global.primary_font
                     style: italic

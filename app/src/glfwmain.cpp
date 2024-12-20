@@ -261,7 +261,7 @@ int main(int argc, char* argv[])
   // Alamo square
   app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, NAN, 0, NAN, 0});
   app->updateGpsStatus(10, 10);  // turn location maker blue
-  app->updateOrientation(M_PI/2, 0, 0);
+  app->updateOrientation(0, M_PI/2, 0, 0);
 
   while(MapsApp::runApplication) {
     app->needsRender() ? glfwPollEvents() : glfwWaitEvents();

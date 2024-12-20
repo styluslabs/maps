@@ -22,7 +22,7 @@ int64_t packTileId(const TileID& tile);
 // flowLevel = 0 to get flow YAML; flowLevel = 0 and indent = 0 to get JSON
 std::string yamlToStr(const YAML::Node& node, int flowLevel = 0, int indent = 2);
 template<typename T> void yamlRemove(YAML::Node& node, T key);
-YAML::Node stringsToYamlArray(const std::vector<std::string>& strs, bool flow = true);
+void saveListOrder(YAML::Node& node, const std::vector<std::string>& strs);
 std::string osmIdFromJson(const YAML::Node& props);
 //std::string rapidjsonToStr(const rapidjson::Document& props);
 YAML::Node strToJson(const char* json);
