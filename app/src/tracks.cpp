@@ -11,6 +11,7 @@
 #include "sqlitepp.h"
 #include "util/yamlPath.h"
 #include "util/mapProjection.h"
+#include "isect2d.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"

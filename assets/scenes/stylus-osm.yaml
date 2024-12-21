@@ -60,10 +60,10 @@ global:
         transit: '#EB322F'
         rail: '#96ABB2'  #[0.588,0.671,0.698]
         rail_tunnel: '#A9C3CB'
-        dashed_rail_core: white
-        dashed_rail: '#555555'
-        service_rail: '#999999'
-        dashed_rail_tunnel: '#777777'
+        dashed_rail_core: '#E6E9EC'  #white
+        dashed_rail: '#919BA4'  #'#555555'
+        service_rail: '#B1BBC4'  #'#999999'
+        dashed_rail_tunnel: '#A1ABB4'  #'#777777'
         pier: '#F2EFE9'  #[0.993,0.993,0.993]
         breakwater: '#AAAAAA'
         ferry: hsl(205, 42%, 62%)  #'#8db3ce'
@@ -226,7 +226,7 @@ global:
         place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
         place_fn: |
             function() {
-                return (global.priority.place[feature.place] || 14) + Math.round(Math.sqrt(feature.population || 1))/65536;
+                return (global.priority.place[feature.place] || 14) - Math.round(Math.sqrt(feature.population || 1))/65536;
                 //return (global.priority.place[feature.place] || 14) + 100.0/(100 + (feature.population || 1));
             }
 
@@ -520,14 +520,17 @@ layers:
         data: { source: osm, layer: water }
         filter:
             name: true
-            #water: true
             $geometry: [polygon, point]
-            any: [ { $zoom: { min: 17 } }, { area: { min: 500px2 } } ]
+            any:
+                - { $zoom: { min: 17 } }
+                - { area: { min: 500px2 } }
+                - all: [ { rank: true }, 'function() { return $zoom - feature.rank > 4; }' ]
         draw:
             text:
                 #interactive: true
                 text_source: global.names_two_lines
                 transition: { show: { time: 0s }, hide: { time: 1s } }
+                repeat_distance: 500px
                 font:
                     family: global.primary_font
                     fill: global.color.water_name
@@ -1611,7 +1614,7 @@ layers:
                 draw: { points: { text: { font: { size: [[8, 12px], [12, 18px]] } } } }
             city-500k:
                 filter: { population: { min: 500000 } }
-                draw: { points: { text: { font: { size: [[8, 14px], [12, 20px]] } } } }
+                draw: { points: { text: { font: { size: [[6, 12px], [8, 14px], [12, 20px]] } } } }
 
 
         # places w/text-only labels (not accompanying point)
@@ -1632,12 +1635,16 @@ layers:
             countries:
                 exclusive: true
                 filter:
-                    class: country
+                    place: country
                     any:
-                        - { population: { min: 100000000 } }
+                        - { population: { min: 10000000 } }
                         - { $zoom: { min: 5, max: 8 }, population: { min: 1000000 } }
-                        # - population: { min: 10000000 }
-                draw: { text: { visible: true, font: { weight: bold, size: [[6, 14px], [8, 20px]] } } }
+                        - { $zoom: { min: 7, max: 8 } }
+                draw:
+                    text:
+                        visible: true
+                        text_source: global.names_one_line_fn
+                        font: { weight: 600, size: [[6, 14px], [8, 20px]] }
 
             regions:
                 exclusive: true

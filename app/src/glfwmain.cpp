@@ -5,6 +5,7 @@
 #include "../linux/src/linuxPlatform.h"
 #include "util/yamlPath.h"
 #include "util/elevationManager.h"
+#include "util.h"
 #include "nfd.h"
 
 #include "mapsources.h"
@@ -169,6 +170,19 @@ int main(int argc, char* argv[])
         MapsApp::inst->mapsOffline->populateOffline();
         MapsApp::inst->mapsOffline->openForImport(std::make_unique<DesktopFile>(importFile));
       });
+    }
+    else if(strcmp(argv[argi], "--bbox") == 0) {
+      if(argi + 5 >= argc) {
+        LOGE("--bbox requires 5 arguments: minlng minlat maxlng maxlat zoom");
+        return -1;
+      }
+      LngLat minLngLat(std::stod(argv[argi+1]), std::stod(argv[argi+2]));
+      LngLat maxLngLat(std::stod(argv[argi+3]), std::stod(argv[argi+4]));
+      int zoom = std::stoi(argv[argi+5]);
+      auto bbox = tileCoveringBounds(minLngLat, maxLngLat, zoom);
+      logMsg("Tilemaker bbox for min zoom %d: %.16f,%.16f,%.16f,%.16f\n\n", zoom,
+          bbox.first.longitude, bbox.first.latitude, bbox.second.longitude, bbox.second.latitude);
+      return 0;
     }
     else if(strncmp(argv[argi], "--", 2) == 0 &&
         (node = Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config))) {

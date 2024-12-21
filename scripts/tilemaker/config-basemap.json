@@ -1,45 +1,55 @@
 {
 	"layers": {
-    "water": { "minzoom": 6, "maxzoom": 14, "simplify_below": 12, "simplify_level": 0.0003, "simplify_ratio": 2 },
+		"place":            { "minzoom":  0, "maxzoom": 14 },
 
-		"ocean": { "minzoom": 0, "maxzoom": 14, "source": "coastline/water_polygons.shp", "simplify_below": 13, "simplify_level": 0.0001, "simplify_ratio": 2, "write_to": "water" },
+		"boundary":         { "minzoom":  0, "maxzoom": 14, "simplify_below": 12, "simplify_level": 0.0003, "simplify_ratio": 2 },
 
-		"ne_lakes": { "minzoom": 0, "maxzoom": 14, "source": "landcover/ne_10m_lakes/ne_10m_lakes.shp", "source_columns": ["wikidataid", "name"], "simplify_below": 13, "simplify_level": 0.0001, "simplify_ratio": 2, "write_to": "water" },
+		"poi":              { "minzoom": 12, "maxzoom": 14 },
+		"poi_detail":       { "minzoom": 14, "maxzoom": 14, "write_to": "poi" },
+		"mountain_peak":    { "minzoom": 11, "maxzoom": 14, "write_to": "poi" },
 
-    "place": { "minzoom": 0, "maxzoom": 14 },
+		"transportation":   { "minzoom": 4,  "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003 },
+
+    "transit":          { "minzoom": 4,  "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003 },
+
+		"building":         { "minzoom": 13, "maxzoom": 14 },
+
+		"water":            { "minzoom": 6,  "maxzoom": 14, "simplify_below": 12, "simplify_level": 0.0003, "simplify_ratio": 2 },
+		"ocean":            { "minzoom": 0,  "maxzoom": 14, "source": "coastline/water_polygons.shp", "simplify_below": 13, "simplify_level": 0.0001, "simplify_ratio": 2, "write_to": "water", "index": true },
+		"waterway":         { "minzoom":  8,  "maxzoom": 14, "simplify_below": 12, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "water" },
+		"waterway_detail":  { "minzoom": 12,  "maxzoom": 14, "write_to": "water" },
+
+		"landuse":          { "minzoom":  0, "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003, "simplify_ratio": 2 },
+
+    "urban_areas":      { "minzoom":  4, "maxzoom":  8, "source": "landcover/ne_10m_urban_areas/ne_10m_urban_areas.shp", "source_columns": ["featurecla"], "simplify_below": 7, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "landuse" },
+		"ice_shelf":        { "minzoom":  0, "maxzoom":  9, "source": "landcover/ne_10m_antarctic_ice_shelves_polys/ne_10m_antarctic_ice_shelves_polys.shp", "source_columns": ["featurecla"], "simplify_below": 13, "simplify_level": 0.0005, "write_to": "landuse" },
+		"glacier":          { "minzoom":  2, "maxzoom":  9, "source": "landcover/ne_10m_glaciated_areas/ne_10m_glaciated_areas.shp", "source_columns": ["featurecla"], "simplify_below": 13, "simplify_level": 0.0005, "write_to": "landuse" },
+
+
+		"ne_lakes": { "minzoom": 0, "maxzoom": 14, "source": "landcover/ne_10m_lakes/ne_10m_lakes.shp", "source_columns": ["featurecla", "wikidataid", "name", "scalerank"], "simplify_below": 13, "simplify_level": 0.0001, "simplify_ratio": 2, "write_to": "water" },
 
     "ne_populated_places": { "minzoom": 3, "maxzoom": 14, "source": "cultural/ne_10m_populated_places/ne_10m_populated_places.shp", "source_columns": ["featurecla", "name", "scalerank", "pop_max", "wikidataid"], "write_to": "place" },
 
-    "transportation": { "minzoom": 4, "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003 },
-
     "ne_roads": { "minzoom": 3, "maxzoom": 14, "source": "cultural/ne_10m_roads/ne_10m_roads.shp", "source_columns": ["featurecla", "name", "scalerank", "expressway"], "simplify_below": 13, "simplify_level": 0.0003, "write_to": "transportation" },
 
-		"boundary": { "minzoom": 0, "maxzoom": 14, "simplify_below": 12, "simplify_level": 0.0003, "simplify_ratio": 2 },
+    "ne_boundaries": { "minzoom": 0, "maxzoom": 8, "source": "cultural/ne_10m_admin_0_boundary_lines_land/ne_10m_admin_0_boundary_lines_land.shp", "source_columns": ["featurecla", "adm0_left", "adm0_right"], "simplify_below": 7, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "boundary" }
 
-    "ne_boundaries": { "minzoom": 0, "maxzoom": 8, "source": "cultural/ne_10m_admin_0_boundary_lines_land/ne_10m_admin_0_boundary_lines_land.shp", "source_columns": ["featurecla", "adm0_left", "adm0_right"], "simplify_below": 7, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "boundary" },
-
-		"landuse": { "minzoom":  0, "maxzoom": 14, "simplify_below": 13, "simplify_level": 0.0003, "simplify_ratio": 2 },
-
-    "urban_areas": { "minzoom": 4, "maxzoom": 8, "source": "landcover/ne_10m_urban_areas/ne_10m_urban_areas.shp", "source_columns": ["featurecla"], "simplify_below": 7, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "landuse" },
-		"ice_shelf": { "minzoom": 0, "maxzoom": 9, "source": "landcover/ne_10m_antarctic_ice_shelves_polys/ne_10m_antarctic_ice_shelves_polys.shp", "source_columns": ["featurecla"], "simplify_below": 13, "simplify_level": 0.0005, "write_to": "landuse" },
-		"glacier": { "minzoom": 2, "maxzoom": 9, "source": "landcover/ne_10m_glaciated_areas/ne_10m_glaciated_areas.shp", "source_columns": ["featurecla"], "simplify_below": 13, "simplify_level": 0.0005, "write_to": "landuse" }
 	},
 	"settings": {
 		"minzoom": 0,
-		"maxzoom": 8,
-		"basezoom": 8,
+		"maxzoom": 7,
+		"basezoom": 7,
 		"include_ids": false,
 		"combine_below": 14,
 		"name": "Tilemaker Stylus Labs schema",
 		"version": "3.0",
-		"description": "Tile config based on Stylus Labs schema",
+		"description": "stylus-osm",
 		"compress": "gzip",
 		"filemetadata": {
 			"tilejson": "2.0.0",
 			"scheme": "xyz",
 			"type": "baselayer",
-			"format": "pbf",
-            "tiles": ["https://example.com/liechtenstein/{z}/{x}/{y}.pbf"]
+			"format": "pbf"
 		}
 	}
 }

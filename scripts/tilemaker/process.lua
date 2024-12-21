@@ -1,7 +1,19 @@
--- Data processing based on openmaptiles.org schema
--- https://openmaptiles.org/schema/
--- Copyright (c) 2016, KlokanTech.com & OpenMapTiles contributors.
--- Used under CC-BY 4.0
+-- Tilemaker processing script for Stylus Labs / Ascend Maps OSM schema
+
+-- extracting OSM data w/ Overpass
+-- 1. get all country labels: [out:xml][timeout:25]; node["place"="country"]({{bbox}}); out geom;
+-- 1. cut and paste xml
+-- 1. convert xml to pbf: `osmium cat overpass_countries.xml -o overpass_countries.pbf`
+-- 1. pass pbf as input to tilemaker
+
+-- tilemaker world map
+-- .\build\tilemaker.exe .\cultural\overpass_countries.pbf --output basemap7.mbtiles --bbox -180,-85,180,85 --process .\process.lua --config .\config-basemap.json
+
+-- tilemaker extract
+-- 1. get bounds: `osmium fileinfo andorra-latest.osm.pbf`
+-- 1. expand to zoom = 6 tile bounds: ascend --bbox minlng minlat maxlng maxlat zoom
+-- 1. use expanded bounds for tilemaker bbox:
+-- .\build\tilemaker.exe .\Sydney.osm.pbf --output sydney2.mbtiles --bbox 146.2500008983152497,-36.5978884118672738,151.8749989941716194,-31.9521630914605268 --process .\process.lua --config .\config.json
 
 --------
 -- Alter these lines to control which languages are written for place/streetnames
@@ -80,6 +92,7 @@ function node_function(node)
     local rank = nil
     local mz = 13
     local pop = tonumber(node:Find("population")) or 0
+    local sqkm = tonumber(node:Find("sqkm")) or 0
     local placeCN = node:Find("place:CN")
 
     if     place == "continent"     then mz=0
@@ -106,6 +119,7 @@ function node_function(node)
     node:MinZoom(mz)
     if rank then node:AttributeNumeric("rank", rank) end
     if pop then node:AttributeNumeric("population", pop) end
+    if sqkm then node:AttributeNumeric("sqkm", sqkm) end
     if place=="country" then node:Attribute("iso_a2", node:Find("ISO3166-1:alpha2")) end
     if placeCN ~= "" then node:Attribute("place_CN", placeCN) end
     SetNameAttributes(node, 0, "node")
@@ -634,17 +648,50 @@ function way_function(way)
   end
 end
 
--- Remap coastlines
-function attribute_function(attr,layer)
-  if attr["featurecla"]=="Glaciated areas" then
-    return { subclass="glacier" }
-  elseif attr["featurecla"]=="Antarctic Ice Shelf" then
-    return { subclass="ice_shelf" }
-  elseif attr["featurecla"]=="Urban area" then
-    return { class="residential" }
+-- attributes for features from shapefiles (set in config.json)
+-- we set featurecla so scene YAML can distinguish features from Natural Earth
+-- an alternative approach to using shapefiles is to convert shapefiles to OSM PBF using ogr2osm script and
+--  pass multiple PBFs to Tilemaker
+function attribute_function(attr, layer)
+  local featurecla = attr["featurecla"]
+
+	if featurecla=="Glaciated areas" then
+		return { class="ice", natural="glacier" }
+	elseif featurecla=="Antarctic Ice Shelf" then
+		return { class="ice", natural="glacier", glacier_type="shelf" }
+	elseif featurecla=="Urban area" then
+		return { class="residential" }
+	elseif layer=="ocean" then
+		return { class="ocean" }
+
+  -- ne_10m_lakes
+  elseif layer=="ne_lakes" then
+		return { class="lake", water="lake", name=attr["name"], wikidata=attr["wikidataid"], rank=attr["scalerank"], featurecla=featurecla }
+
+  -- ne_10m_admin_0_boundary_lines_land; can't use ne_10m_admin_0_countries because it includes shoreline
+  elseif layer=="ne_boundaries" then
+    local res = { admin_level=2, adm0_l=attr["adm0_left"], adm0_r=attr["adm0_right"], featurecla=featurecla }
+    if featurecla~="International boundary (verify)" then res["disputed"] = 1 end
+    return res
+
+  -- ne_10m_populated_places
+  elseif layer=="ne_populated_places" then
+    local rank = attr["scalerank"]
+    local z = rank < 6 and 3 or 6
+    return { _minzoom=z, class="city", place="city", name=attr["name"], population=attr["pop_max"], rank=rank, wikidata=attr["wikidataid"], featurecla=featurecla }
+
+  -- ne_10m_roads
+  elseif layer=="ne_roads" then
+    if featurecla=="Ferry" then
+      return { _minzoom=3, class="ferry", route="ferry", ref=attr["name"], rank=attr["scalerank"], featurecla=featurecla }
+    elseif attr["expressway"] == 1 then
+      return { _minzoom=3, class="motorway", highway="motorway", ref=attr["name"], rank=attr["scalerank"], featurecla=featurecla }
+    end
+    return { _minzoom=6, class="trunk", highway="trunk", ref=attr["name"], rank=attr["scalerank"], featurecla=featurecla }
+
   else
-    return { class="ocean" }
-  end
+		return attr
+	end
 end
 
 -- ==========================================================

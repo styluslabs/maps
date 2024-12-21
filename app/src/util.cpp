@@ -112,6 +112,28 @@ LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord)
   return MapProjection::projectedMetersToLngLat(meters);
 }
 
+static glm::dvec2 projMetersToTileCoords(Tangram::ProjectedMeters meters, int zoom)
+{
+  double hc = MapProjection::EARTH_HALF_CIRCUMFERENCE_METERS;
+  double invTileSize = (1 << zoom) / MapProjection::EARTH_CIRCUMFERENCE_METERS;
+  glm::dvec2 tileSpaceOrigin(-hc, hc);
+  glm::dvec2 tileSpaceAxes(invTileSize, -invTileSize);
+  return (meters - tileSpaceOrigin) * tileSpaceAxes;
+}
+
+// expand bbox {minLngLat, maxLngLat} to tile boundaries at specified zoom (used for Tilemaker)
+std::pair<LngLat, LngLat> tileCoveringBounds(LngLat minLngLat, LngLat maxLngLat, int zoom)
+{
+  auto minMeters = MapProjection::lngLatToProjectedMeters(minLngLat);
+  auto maxMeters = MapProjection::lngLatToProjectedMeters(maxLngLat);
+  auto minTile = glm::floor(projMetersToTileCoords(minMeters, zoom));
+  auto maxTile = glm::floor(projMetersToTileCoords(maxMeters, zoom));
+  double eps = 0.1/MapProjection::metersPerTileAtZoom(zoom);
+  LngLat minBBox = tileCoordToLngLat(TileID(minTile.x, minTile.y, zoom), {eps, eps});
+  LngLat maxBBox = tileCoordToLngLat(TileID(maxTile.x, maxTile.y, zoom), {1-eps, 1-eps});
+  return {minBBox, maxBBox};
+}
+
 std::string yamlToStr(const YAML::Node& node, int flowLevel, int indent)
 {
   YAML::Writer emitter;

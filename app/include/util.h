@@ -6,6 +6,9 @@
 #include "tangram.h"
 #include "glm/vec2.hpp"
 
+// for MarkerGroup
+#include "mapscomponent.h"
+
 using Tangram::LngLat;
 using Tangram::TileID;
 
@@ -15,6 +18,7 @@ double lngLatDist(LngLat r1, LngLat r2);
 double lngLatBearing(LngLat r1, LngLat r2);
 TileID lngLatTile(LngLat ll, int z);
 LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord);
+std::pair<LngLat, LngLat> tileCoveringBounds(LngLat minLngLat, LngLat maxLngLat, int zoom);
 LngLat parseLngLat(const char* s);
 std::string lngLatToStr(LngLat ll);
 int64_t packTileId(const TileID& tile);
@@ -43,9 +47,6 @@ struct sqlite3_context;
 struct sqlite3_value;
 extern LngLat searchRankOrigin;
 void udf_osmSearchRank(sqlite3_context* context, int argc, sqlite3_value** argv);
-
-#include "isect2d.h"
-#include "mapscomponent.h"
 
 class MarkerGroup
 {

@@ -23,11 +23,20 @@
 
     "urban_areas":      { "minzoom":  4, "maxzoom":  8, "source": "landcover/ne_10m_urban_areas/ne_10m_urban_areas.shp", "source_columns": ["featurecla"], "simplify_below": 7, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "landuse" },
 		"ice_shelf":        { "minzoom":  0, "maxzoom":  9, "source": "landcover/ne_10m_antarctic_ice_shelves_polys/ne_10m_antarctic_ice_shelves_polys.shp", "source_columns": ["featurecla"], "simplify_below": 13, "simplify_level": 0.0005, "write_to": "landuse" },
-		"glacier":          { "minzoom":  2, "maxzoom":  9, "source": "landcover/ne_10m_glaciated_areas/ne_10m_glaciated_areas.shp", "source_columns": ["featurecla"], "simplify_below": 13, "simplify_level": 0.0005, "write_to": "landuse" }
+		"glacier":          { "minzoom":  2, "maxzoom":  9, "source": "landcover/ne_10m_glaciated_areas/ne_10m_glaciated_areas.shp", "source_columns": ["featurecla"], "simplify_below": 13, "simplify_level": 0.0005, "write_to": "landuse" },
+
+
+		"ne_lakes": { "minzoom": 0, "maxzoom": 14, "source": "landcover/ne_10m_lakes/ne_10m_lakes.shp", "source_columns": ["featurecla", "wikidataid", "name", "scalerank"], "simplify_below": 13, "simplify_level": 0.0001, "simplify_ratio": 2, "write_to": "water" },
+
+    "ne_populated_places": { "minzoom": 3, "maxzoom": 14, "source": "cultural/ne_10m_populated_places/ne_10m_populated_places.shp", "source_columns": ["featurecla", "name", "scalerank", "pop_max", "wikidataid"], "write_to": "place" },
+
+    "ne_roads": { "minzoom": 3, "maxzoom": 14, "source": "cultural/ne_10m_roads/ne_10m_roads.shp", "source_columns": ["featurecla", "name", "scalerank", "expressway"], "simplify_below": 13, "simplify_level": 0.0003, "write_to": "transportation" },
+
+    "ne_boundaries": { "minzoom": 0, "maxzoom": 8, "source": "cultural/ne_10m_admin_0_boundary_lines_land/ne_10m_admin_0_boundary_lines_land.shp", "source_columns": ["featurecla", "adm0_left", "adm0_right"], "simplify_below": 7, "simplify_level": 0.0003, "simplify_ratio": 2, "write_to": "boundary" }
 
 	},
 	"settings": {
-		"minzoom": 0,
+		"minzoom": 6,
 		"maxzoom": 14,
 		"basezoom": 14,
 		"include_ids": false,
