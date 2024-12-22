@@ -230,8 +230,10 @@ styles:
                         // spacing between contour lines in meters - 10m has too many artifacts
                     #ifdef METRIC_UNITS
                         float interval = z >= 14. ? 25. : z >= 12. ? 50. : 100.;
+                        float coarse = z >= 14. ? 100. : z >= 12. ? 200. : 500.;
                     #else
                         float interval = (z >= 14. ? 100. : z >= 12. ? 200. : 500.)/3.28084;
+                        float coarse = (z >= 14. ? 500. : z >= 12. ? 1000. : 2000.)/3.28084;
                     #endif
                         float zstep = z >= 13.5 ? 13.5 : z >= 11.5 ? 11.5 : 9.5;
                         // contour line half width in pixels
@@ -253,11 +255,6 @@ styles:
                         float cov = max(0.5 - dup + linehw, 0.) + max(0.5 - ddn + linehw, 0.);
                         // coarse lines
                         float coarsehw = 2.*linehw;  //0.75;
-                    #ifdef METRIC_UNITS
-                        float coarse = z >= 14. ? 100. : z >= 12. ? 200. : 500.;
-                    #else
-                        float coarse = (z >= 14. ? 500. : z >= 12. ? 1000. : 2000.)/3.28084;
-                    #endif
                         dup = fract(hc/coarse)*coarse * px_per_elev;
                         ddn = abs(1. - fract(hc/coarse))*coarse * px_per_elev;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
@@ -302,9 +299,14 @@ lights:
     light2: { type: directional, direction: [1, -1, -1], diffuse: 0.2, ambient: 0.35 }
 
 
-#scene: { background: { color: '#E0E0E0' } }
+#scene: { background: { color: '#E0E0E0' } }  -- default now set in markers.yaml
 
 layers:
+    earth:
+        enabled: false  # enabled by update from mapsources.yaml entry (only for vector base map)
+        data: { source: elevation }
+        draw: { hillshade: { color: global.earth_color, order: global.earth_order } }
+
     contour-labels:
         data: { source: elevation }
         filter: { $zoom: { min: 12 } }
@@ -321,7 +323,7 @@ layers:
                 font:
                     family: global.primary_font
                     style: italic
-                    size: 7pt
+                    size: 9.33px
                     fill: global.color.default_label
                     stroke: { color: global.color.default_halo, width: 2 }
 
@@ -334,6 +336,3 @@ layers:
     #            style: contour-debug
     #            color: red
     #            order: 0
-
-#    worldcover: { data: { source: worldcover }, draw: { translucent-raster: { order: 1 } } }
-#    earth: { data: { source: osmand-raster }, draw: { hillshade: { color: white, order: 0 } } }

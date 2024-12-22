@@ -246,11 +246,7 @@ hillshade:
     layer: true
     scene: scenes/hillshade.yaml
     updates_vector:
-        #global.elevation_sources: [elevation]
-        #global.earth_style: hillshade
-        layers.earth:
-            data: { source: elevation }
-            draw: { hillshade: { color: global.earth_color, order: global.earth_order } }
+        layers.earth.enabled: true
     updates_raster:
         styles.hillshade.shaders.defines.ELEVATION_INDEX: 1
         sources.raster-0.rasters: [elevation]

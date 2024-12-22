@@ -66,7 +66,7 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     if(MapsApp::terrain3D)
       updates.emplace_back("+sources." + rasterN + ".rasters", "global.elevation_sources");
     // separate style is required for each overlay layer
-    //  use translucent instead of overlay so that depth test can place proxy tiles underneath other tiles
+    //  use blend=nonopaque instead of overlay so that depth test can place proxy tiles underneath other tiles
     //  text and points are drawn w/ blend_order -1, so use blend_order < -1 to place rasters underneath
     // note that lines and polygons are normally drawn w/ opaque blend mode, which ignores blend_order and is
     //  drawn before all other blend modes; default raster style uses opaque!
@@ -111,10 +111,6 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
 std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 {
   static const char* stylestr = R"(
-global:
-  earth_color: '#E0E0E0'
-  earth_order: 1
-
 styles:
   raster-opacity:
     blend: nonopaque
@@ -169,7 +165,7 @@ void MapsSources::reload()
   srcFile = srcfile.c_str();
   sourcesDirty = true;
   sceneVarsLoaded = false;
-  currSource.clear();
+  //currSource.clear();
 }
 
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
@@ -219,6 +215,13 @@ void MapsSources::promptDownload(const std::vector<std::string>& keys)
       }
     }
   }
+}
+
+bool MapsSources::isLayerShown(const std::string& key, const std::vector<std::string>& layerkeys)
+{
+  return std::find_if(currLayers.begin(), currLayers.end(),
+      [&](auto& l) { return l.source == key; }) != currLayers.end()
+      || std::find(layerkeys.begin(), layerkeys.end(), key) != layerkeys.end();
 }
 
 void MapsSources::rebuildSource(const std::string& srcname, bool async)
@@ -278,12 +281,8 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
       if(!currSource.empty())
         static_cast<Button*>(item)->setChecked(key == currSource);
       Button* showbtn = static_cast<Button*>(item->selectFirst(".show-btn"));
-      if(showbtn) {
-        bool shown = std::find_if(currLayers.begin(), currLayers.end(),
-            [&](auto& l) { return l.source == key; }) != currLayers.end()
-            || std::find(builder.layerkeys.begin(), builder.layerkeys.end(), key) != builder.layerkeys.end();
-        showbtn->setChecked(key != currSource && shown);
-      }
+      if(showbtn)
+        showbtn->setChecked(key != currSource && isLayerShown(key, builder.layerkeys));
     }
     if(async)  // don't prompt for download when importing tiles!
       promptDownload(builder.layerkeys);
@@ -343,6 +342,10 @@ void MapsSources::populateSources()
   sourcesContent->clear();
   sourcesContent->onApplyLayout = {};
   app->gui->deleteContents(archivedContent, ".listitem");
+
+  // we need to use SourceBuilder to determine checked state of show buttons
+  SourceBuilder builder(mapSources);
+  for(auto& src : currLayers) { builder.addLayer(src.source, src.opacity); }
 
   std::vector<std::string> layerTitles = {};  //"None"
   layerKeys = {};
@@ -406,7 +409,9 @@ void MapsSources::populateSources()
         titleEdit->setText("Untitled");
         rebuildSource();  //currLayers
       };
+      showBtn->setChecked(key != currSource && isLayerShown(key, builder.layerkeys));
       container->addWidget(showBtn);
+
       item->onClicked = [=](){
         showBtn->setChecked(false);
         if(key != currSource)

@@ -384,6 +384,16 @@ document.addEventListener('DOMContentLoaded', function(event) {
   <path transform="scale(0.75) translate(-25, -24)" class="icon" d="M25 6c-1.263 0-1.834.616-2.21 1.286l-15.71 29.572h-3.395c-1.482 0-2.685 1.145-2.685 2.571 0 1.423 1.203 2.57 2.685 2.57h42.632c1.481 0 2.685-1.147 2.685-2.57 0-1.427-1.203-2.571-2.685-2.571h-3.397l-15.709-29.573c-.377-.669-.947-1.285-2.211-1.285zm0 12.857l8.842 18.001h-17.684l8.842-18.001z"/>
 </svg>
 
+<!-- Trailhead: https://upload.wikimedia.org/wikipedia/commons/4/48/Map_symbols_US_NPS.svg -->
+<svg id="trailhead" class="public" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
+  <rect class="poi-bg" x="-22.5" y="-22.5" width="45" height="45" rx="6" ry="6"/>
+  <g transform="scale(5) translate(-194, -820.5)" class="icon">
+    <circle cx="195.023" cy="817.249" r="0.628"/>
+    <path d="M194.435,817.744c0,0-0.361-0.051-0.712,0.466c0,0-0.124,0.104-0.228,0.454l-0.506,1.373   c0,0-0.155,0.238,0.062,0.703l-0.496,1.549l-0.671,1.746l0.558,0.454l0.775-1.478l0.599-1.27l0.392,0.443l0.599,2.283l0.795-0.154   l-0.506-2.449l-0.723-1.518l0.434-0.723l0.279,0.464l1.022,0.455l-2.251,3.677l0.269,0.206l2.313-3.749l0.134,0.073l0.3-0.362   l-1.425-0.971c0,0-0.217-1.333-0.63-1.57C194.816,817.847,194.641,817.724,194.435,817.744z"/>
+    <polygon points="193.543,817.569 192.759,819.459 192.118,819.21 193.027,817.363"/>
+  </g>
+</svg>
+
 <!-- Information:  -->
 <svg id="information" class="public" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
   <rect class="poi-bg" x="-22.5" y="-22.5" width="45" height="45" rx="6" ry="6"/>
@@ -404,6 +414,21 @@ document.addEventListener('DOMContentLoaded', function(event) {
 <!-- peak -->
 <svg id="peak" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
   <path fill="#000000" d="M -15 10l30 0l-15 -20z"/>
+</svg>
+
+<!-- Spring: https://upload.wikimedia.org/wikipedia/commons/4/48/Map_symbols_US_NPS.svg -->
+<svg id="spring" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
+  <g transform="scale(5) translate(-315.5, -597.8)" fill="none" stroke="#FF0000">
+    <circle stroke-width="0.9" cx="316.619" cy="596.252" r="1.114"/>
+    <path stroke-width="0.9" d="M316.021,597.2c0,0-0.281,0.17-0.574,0.122c0,0-0.656-0.039-0.752,0.401   c0,0-0.027,0.212,0.179,0.593c0,0,0.265,0.808-0.042,1.059c0,0-0.168,0.206-0.898,0.083c0,0-0.359,0.03-0.249,0.505   c0,0,0.122,0.271-0.141,0.582l-0.302,0.418"/>
+  </g>
+</svg>
+
+<!-- Cave -->
+<svg id="cave" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
+  <g transform="scale(-2, 1.75) translate(-12, -12.5)">
+    <path d="M15,20 L20,20 L12,3 L8,13 L6,9 L3,20 L10,20 C10,16 10.34,13 12.5,13 C14.66,13 15,16 15,20 Z"/>
+  </g>
 </svg>
 
 <!-- one way arrow -->

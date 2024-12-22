@@ -29,6 +29,7 @@ private:
   void sourceModified();
   void saveSources();
   void promptDownload(const std::vector<std::string>& keys);
+  bool isLayerShown(const std::string& key, const std::vector<std::string>& layerkeys);
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;

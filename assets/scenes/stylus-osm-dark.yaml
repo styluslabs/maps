@@ -8,6 +8,7 @@ global:
         # polygons
         #earth: '#404040'
         water: '#004080'
+        spring: hsl(205, 50%, 74%)
         parks: hsl(135, 33%, 27%)  #was '#385038'
         forest: hsl(135, 33%, 35%)
         scrub: hsl(135, 33%, 22%)

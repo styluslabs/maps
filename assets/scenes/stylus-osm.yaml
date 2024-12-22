@@ -39,6 +39,7 @@ global:
         water: '#9dc3de'  # == hsl(205, 50%, 74%) (compare ferry color)
         water_name: "#51909c"
         water_halo: "#e2eef0"
+        spring: hsl(210, 100%, 45%)
         beach: '#FEEFC3'  #[1.000,0.953,0.900]
         ice: white
         rock: '#F5F0E5'
@@ -181,7 +182,10 @@ global:
         district_CN: 9
         neighborhood: 10
         peak: 14
-        boundary: 15  # boundaries often follow mountain ridges, so don't let them hide peaks
+        saddle: 15
+        cave: 16
+        spring: 17
+        boundary: 19  # boundaries often follow mountain ridges, so don't let them hide peaks or saddles
         park: 20
         golf: 21
         cemetery: 22
@@ -1093,6 +1097,7 @@ layers:
 
     bicycle:
         data: { source: osm, layer: transportation }
+        enabled: global.show_bike
         filter:
             - bicycle: [designated, yes]
             - highway: cycleway
@@ -1100,7 +1105,6 @@ layers:
             - cycleway_right: true
             - cycleway_left: true
             - mtb_scale: true
-        enabled: global.show_bike
         draw:
             lines:
                 style: unlit-lines
@@ -1227,11 +1231,10 @@ layers:
 
     peaks:
         data: { source: osm, layer: poi }
-        enabled: global.show_trails
         filter:
-            any:
-                - natural: [peak, volcano]
-                - class: [peak, volcano]
+            all:
+                - any: [ { natural: [peak, volcano] }, { class: [peak, volcano] } ]
+                - any: [ { $zoom: { min: 17 } }, global.show_trails ]
             ele: true
         draw:
             points:
@@ -1259,9 +1262,43 @@ layers:
                     font:
                         family: global.primary_font
                         style: italic
-                        size: 8pt
+                        size: 10.67px
                         fill: global.color.default_label
                         stroke: { color: global.color.default_halo, width: 3 }
+
+
+    text_pois:
+        data: { source: osm, layer: poi }
+        filter:
+            name: true
+            any: [ { natural: saddle }, { landuse: forest }, { natural: wood } ]
+        draw:
+            text:
+                font:
+                    family: global.primary_font
+                    size: 12px
+                    style: italic
+                    fill: global.color.default_label
+                    stroke: { color: global.color.default_halo, width: 3 }
+        saddle:
+            filter:
+                natural: saddle
+                any: [ { $zoom: { min: 17 } }, global.show_trails ]
+            text:
+                priority: global.priority.saddle
+                font:
+                    size: 9.5px
+        forest:
+            filter:
+                any: [ { landuse: forest }, { natural: wood } ]
+                $zoom: { min: 12 }
+            draw:
+                text:
+                    priority: global.priority.forest
+                    font:
+                        fill: global.color.park_name
+                        stroke: { color: global.color.park_halo, width: 3 }
+
 
     pois:
         data: { source: osm, layer: poi }
@@ -1326,25 +1363,6 @@ layers:
                     - { area: { min: 2000px2 } }
                 draw: { points: { visible: true } }
 
-        forest:
-            exclusive: true
-            priority: 2
-            filter:
-                class: forest
-                any:
-                    - { $zoom: { min: 7 }, tier: 1 }
-                    - { $zoom: { min: 9 }, tier: { max: 3 } }
-            draw:
-                points:
-                    visible: false
-                text:
-                    priority: global.priority.forest
-                    font:
-                        size: 13px
-                        style: italic
-                        fill: global.color.park_name
-                        stroke: { color: global.color.park_halo, width: 3 }
-
         station:
             exclusive: true
             priority: 3
@@ -1379,7 +1397,7 @@ layers:
         bus_stop:
             exclusive: true
             priority: 4
-            filter: { highway: bus_stop,  $zoom: { min: 16 } }
+            filter: { highway: bus_stop, $zoom: { min: 16 } }
             draw:
                 points:
                     sprite: bus
@@ -1392,9 +1410,30 @@ layers:
                 filter: { $zoom: { min: 19 } }
                 draw: { points: { visible: true } }
 
-        traffic_signals:
+        spring:
             exclusive: true
             priority: 5
+            filter: { $zoom: { min: 15 }, natural: [spring, hot_spring, fumarole, geyser] }
+            draw:
+                points:
+                    sprite: spring
+                    color: global.color.spring
+                    size: 24px  #[[16, 14px], [18, 18px]]
+                    priority: global.priority.spring
+                    text:
+                        font:
+                            size: 11px
+                            style: italic
+                            fill: global.color.spring
+                            stroke: { color: global.color.default_halo, width: 2 }
+
+            default:
+                filter: { $zoom: { max: 17 } }
+                draw: { points: { text: { visible: false } } }
+
+        traffic_signals:
+            exclusive: true
+            priority: 6
             filter: { $zoom: { min: 19 }, highway: traffic_signals }
             draw:
                 points:
@@ -1404,6 +1443,20 @@ layers:
                     priority: global.priority.traffic_light
                     text: { visible: false }
 
+        cave:
+            exclusive: true
+            priority: 7
+            filter: { $zoom: { min: 15 }, natural: cave_entrance }
+            draw:
+                points:
+                    style: points
+                    sprite: cave
+                    priority: global.priority.cave
+                    text: { font: { size: 11px, style: italic } }
+            default:
+                filter: { $zoom: { max: 16 } }
+                draw: { points: { text: { visible: false } } }
+
         not_landuse:
             exclusive: true
             filter:
@@ -1411,6 +1464,7 @@ layers:
                 any:
                     - name: true
                     - tourism: [viewpoint, camp_site, information]
+                    - highway: [trailhead]
                     - amenity: [parking, bicycle_rental, drinking_water, water_point, toilets]
                 not:
                     - { railway: subway_entrance }
@@ -1437,9 +1491,9 @@ layers:
                 filter: { $zoom: { min: 18 }, name: true }
                 draw: { points: { sprite_default: generic } }
             points:
-                viewpoint:
+                hike_camp_view:
                     exclusive: true
-                    filter: { tourism: [viewpoint, camp_site] }
+                    filter: [ { tourism: [viewpoint, camp_site] }, { highway: [trailhead] } ]
                     draw:
                         points:
                             visible: global.show_trails
@@ -1638,8 +1692,9 @@ layers:
                     place: country
                     any:
                         - { population: { min: 10000000 } }
+                        - { $zoom: { min: 5, max: 8 }, population: 0 }
                         - { $zoom: { min: 5, max: 8 }, population: { min: 1000000 } }
-                        - { $zoom: { min: 7, max: 8 } }
+                        - { $zoom: { min: 6, max: 8 } }
                 draw:
                     text:
                         visible: true
