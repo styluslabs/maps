@@ -220,7 +220,7 @@ function relation_function(rel)
     local route = rel:Find("route")
     if route == "ferry" then
       rel:Layer("transportation", false)
-      rel:Attribute("class", "ferry")
+      rel:Attribute("route", "ferry")
       rel:MinZoom(9)
       SetNameAttributes(rel, 12, "relation")
       return
@@ -492,7 +492,7 @@ function way_function(way)
   -- 'Ferry'
   if route=="ferry" then
     way:Layer("transportation", false)
-    way:Attribute("class", "ferry")
+    --way:Attribute("class", "ferry")
     way:Attribute("route", route)
     --SetZOrder(way)
     way:MinZoom(9)

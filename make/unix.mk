@@ -3,11 +3,11 @@
 # - using a precompiled header with gcc (or clang) is not worth the hassle
 
 # common C and C++ flags
-CFLAGS += -MMD -Wall -Werror=return-type -Wno-strict-aliasing -Wno-class-memaccess
+CFLAGS += -MMD -Wall -Werror=return-type -Wno-strict-aliasing
 #-Wshadow
 # C++; -Wconditionally-supported catches passing non-POD to varargs fn
 CXX = g++
-CXXFLAGS += --std=c++14 -Werror=conditionally-supported
+CXXFLAGS += --std=c++14 -Werror=conditionally-supported -Wno-class-memaccess
 #-fno-rtti -fno-exceptions -Wno-unused-parameter -Wno-unused-function -Wno-unused
 # C
 CC = gcc
@@ -25,10 +25,17 @@ else
   CFLAGS += -O2 -DNDEBUG
 endif
 
-SANITIZE ?= 0
-ifneq ($(SANITIZE), 0)
-  CFLAGS += -fsanitize=address -fsanitize=undefined -fsanitize=float-divide-by-zero
-  LDFLAGS += -lasan -lubsan
+ASAN ?= 0
+ifneq ($(ASAN), 0)
+  CFLAGS += -fsanitize=address
+  #-fsanitize=undefined -fsanitize=float-divide-by-zero
+  LDFLAGS += -fsanitize=address
+endif
+
+TSAN ?= 0
+ifneq ($(TSAN), 0)
+  CFLAGS += -fsanitize=thread
+  LDFLAGS += -fsanitize=thread
 endif
 
 # disable optimizations which make profiling difficult, esp. inlining; frame pointer needed for sampling
@@ -92,12 +99,12 @@ $(TGT): $(OBJ)
 
 # strip $(TGT) -- remove symbols to get smaller exe
 $(TGZ): $(TGT) $(DISTRES)
+	make -f tests.mk
 	strings $(TGT) | grep "^GLIBC_"
 	mkdir -p $(BUILDDIR)/.dist
 	mv $(TGT) $(BUILDDIR)/.dist
 	rsync -Lvr --exclude .git $(DISTRES) $(BUILDDIR)/.dist
-	mv $(BUILDDIR)/.dist $(BUILDDIR)/$(TARGET)
-	(cd $(BUILDDIR) && tar --remove-files -czvf $@ $(TARGET))
+	(cd $(BUILDDIR) && mv .dist $(TARGET) && tar --remove-files -czvf $@ $(TARGET))
 
 # | (pipe) operator causes make to just check for existence instead of timestamp
 $(OBJ): | $(BUILDDIRS)

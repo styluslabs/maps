@@ -10,33 +10,37 @@ android {
     minSdkVersion 21
     targetSdkVersion 33
     externalNativeBuild {
-      cmake {
-        // Available arguments are inside ${SDK}/cmake/.../android.toolchain.cmake file
-        targets 'droidmaps'
-        arguments '-DTANGRAM_PLATFORM=android',
-                  '-DANDROID_STL=c++_shared',
-                  '-DCMAKE_VERBOSE_MAKEFILE=ON'
-        cppFlags '-std=c++14',
-                 '-fvisibility=hidden', // export only JNIEXPORT
-                 '-pedantic',
-                 '-fPIC',
-                 '-fexceptions',
-                 '-frtti',
-                 // linker
-                 '-Wl,--exclude-libs,ALL', // dont export static lib symbols
-                 //warnings
-                 '-Wall',
-                 '-Wignored-qualifiers',
-                 '-Wtype-limits',
-                 '-Wno-missing-field-initializers',
-                 '-Wno-format-pedantic',
-                 '-Wno-gnu-statement-expression',
-                 '-Wno-gnu-anonymous-struct',
-                 '-Wno-nested-anon-types',
-                 '-Wno-unused-command-line-argument', // for -Wl linker flags..
-                 '-Wno-unknown-warning-option'
-        abiFilters 'arm64-v8a'
+      ndkBuild {
+          arguments "APP_PLATFORM=android-21", "V=1"
+          abiFilters 'arm64-v8a'
       }
+      //cmake {
+      //  // Available arguments are inside ${SDK}/cmake/.../android.toolchain.cmake file
+      //  targets 'droidmaps'
+      //  arguments '-DTANGRAM_PLATFORM=android',
+      //            '-DANDROID_STL=c++_shared',
+      //            '-DCMAKE_VERBOSE_MAKEFILE=ON'
+      //  cppFlags '-std=c++14',
+      //           '-fvisibility=hidden', // export only JNIEXPORT
+      //           '-pedantic',
+      //           '-fPIC',
+      //           '-fexceptions',
+      //           '-frtti',
+      //           // linker
+      //           '-Wl,--exclude-libs,ALL', // dont export static lib symbols
+      //           //warnings
+      //           '-Wall',
+      //           '-Wignored-qualifiers',
+      //           '-Wtype-limits',
+      //           '-Wno-missing-field-initializers',
+      //           '-Wno-format-pedantic',
+      //           '-Wno-gnu-statement-expression',
+      //           '-Wno-gnu-anonymous-struct',
+      //           '-Wno-nested-anon-types',
+      //           '-Wno-unused-command-line-argument', // for -Wl linker flags..
+      //           '-Wno-unknown-warning-option'
+      //  abiFilters 'arm64-v8a'
+      //}
     }
   }
 
@@ -51,10 +55,13 @@ android {
   }
 
   externalNativeBuild {
-    cmake {
-      version '3.18.1'
-      path '../../../CMakeLists.txt'
+    ndkBuild {
+        path 'src/main/jni/Android.mk'
     }
+    //cmake {
+    //  version '3.18.1'
+    //  path '../../../CMakeLists.txt'
+    //}
   }
   ndkVersion '26.3.11579264'
 

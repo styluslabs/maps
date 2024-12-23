@@ -1,25 +1,8 @@
-# cross-platform C/C++ makefile for Write
-# - platform-specific, project-independent stuff moved to Makefile.msvc, .ios, .unix
-# - generates files in ./Release (default) or ./Debug (with DEBUG=1 passed to make)
-# - while it is tempting to try to move generic code to a shared file, the complete make file
-#   is part of a project and should be included with it
-# useful ref: https://www.gnu.org/software/make/manual/html_node/Quick-Reference.html
+# cross-platform C/C++ makefile for Ascend Maps
 
 TARGET = ascend
 
-DEBUG ?= 0
-ifneq ($(DEBUG), 0)
-  BUILDDIR ?= Debug
-else
-  BUILDDIR ?= Release
-endif
-
-# define as immediately evaluated so appending for modules works
-SOURCES :=
-INC :=
-DEFS :=
-INCSYS =
-INC_PRIVATE =
+include make/shared.mk
 
 ifneq ($(wildcard styluslabs/.),)
   STYLUSLABS_DEPS=styluslabs
@@ -33,23 +16,10 @@ else
   DEFS += LOG_LEVEL=2
 endif
 
-# if source contains ../ paths, this should be the <current> directory; if ../../, <parent>/<current>; etc.
-# - this ensures object files remain under build directory
-#~TOPDIR = syncscribble
-
-ifneq ($(TOPDIR),)
-  OBJDIR=$(BUILDDIR)/$(TOPDIR)
-else
-  OBJDIR=$(BUILDDIR)
-endif
-
-## module functions
-GET_MAKE_BASE = $(patsubst %/module.mk,%,$(lastword $(MAKEFILE_LIST)))
-ADD_MODULE = make/add_module.mk
-
 ## modules
 include module.mk
 include tangram-es/core/module.mk
+include tangram-es/platforms/common/glfw/module.mk
 
 
 ## platform
@@ -65,7 +35,6 @@ SOURCES += \
 
 RESOURCES = windows/resources.rc
 INCSYS += ../SDL/include
-DEFS += SCRIBBLE_TEST_PATH="\"$(CURDIR)/../scribbletest\""
 DEFS += _USE_MATH_DEFINES UNICODE NOMINMAX FONS_WPATH
 
 # only dependencies under this path will be tracked in .d files; note [\\] must be used for "\"
@@ -110,30 +79,24 @@ include make/ios.mk
 
 else ifneq ($(BUILD_SHARED_LIBRARY),)
 # Android
-# Uses SDL 2.0.9 (branch write-android)
 # ./start_gradle assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.keystore && mv signed_app-release.apk write300.apk
-
-# working dir is android/app apparently
-ifneq ($(shell git -C ../../../SDL rev-parse --abbrev-ref HEAD),write-android)
-  $(error Not on write-android branch!)
-endif
 
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 SOURCES += android/androidhelper.cpp
 
-# SDLActivity is hardcoded to load "libmain.so"
-LOCAL_MODULE := main
+# System.loadLibrary("droidmaps") in MapsLib.java
+LOCAL_MODULE := droidmaps
 
-ALL_INC := $(INC) $(INCSYS) ../SDL/include
+ALL_INC := $(INC) $(INCSYS)
 LOCAL_C_INCLUDES := $(addprefix $(LOCAL_PATH)/, $(ALL_INC))
 
 LOCAL_CFLAGS := $(addprefix -D, $(DEFS))
 LOCAL_CPPFLAGS := -std=c++14 -Wno-unused -Wno-error=format-security
 
 LOCAL_SRC_FILES := $(addprefix $(LOCAL_PATH)/, $(SOURCES))
-LOCAL_SHARED_LIBRARIES := SDL2
+#LOCAL_SHARED_LIBRARIES := SDL2
 # libandroid needed for ANativeWindow_* fns
 LOCAL_LDLIBS := -lGLESv3 -llog -ljnigraphics -landroid
 
@@ -154,7 +117,7 @@ MODULE_SOURCES += \
 MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) $(STYLUSLABS_DEPS)/nanovgXC/src $(STYLUSLABS_DEPS)/pugixml/src deps/nfd/src/include tangram-es/platforms/common app/include
 MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
 
-PKGS = dbus-1
+PKGS = dbus-1 x11
 
 DEFS += TANGRAM_LINUX
 LIBS = -pthread -lOpenGL -lfontconfig -lcurl
@@ -164,14 +127,14 @@ LIBS = -pthread -lOpenGL -lfontconfig -lcurl
 GITREV := $(shell git rev-parse --short HEAD)
 TGZ = $(TARGET)-$(GITREV).tar.gz
 DISTRES = \
-	assets/config.default.yaml \
-	assets/mapsources.default.yaml \
-	assets/plugins \
-	assets/res \
-	assets/scenes \
-	assets/shared \
-	app/linux/setup \
-	app/linux/INSTALL
+  assets/config.default.yaml \
+  assets/mapsources.default.yaml \
+  assets/plugins \
+  assets/res \
+  assets/scenes \
+  assets/shared \
+  app/linux/setup \
+  app/linux/INSTALL
 
 PLATFORM_MK = make/unix.mk
 

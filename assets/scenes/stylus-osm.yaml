@@ -215,9 +215,9 @@ global:
         # POIs - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
         # - looks like it's faster to let Tangram convert string to number instead of using Number() in JS fn
         poi_default:     function() { return 101 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
-        poi_viewpoint:   function() { return  31 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
-        poi_toilet:      function() { return  32 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
-        poi_university:  function() { return  33 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_viewpoint:   31  #function() { return  31 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_toilet:      32  #function() { return  32 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_university:  33  #function() { return  33 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_grocery:     function() { return  34 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_culture:     function() { return  41 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_restaurant:  function() { return  43 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
@@ -758,7 +758,7 @@ layers:
                 draw: { lines: { color: global.color.rail_tunnel } }
 
         ferry:
-            filter: { class: ferry }
+            filter: [ { class: ferry }, { route: ferry } ]
             draw:
                 lines:
                     style: dashed-track
@@ -1030,7 +1030,7 @@ layers:
 
         ferry:
             exclusive: true
-            filter: { class: ferry }
+            filter: [ { class: ferry }, { route: ferry } ]
             draw:
                 text:
                     text_wrap: 20
@@ -1284,10 +1284,11 @@ layers:
             filter:
                 natural: saddle
                 any: [ { $zoom: { min: 17 } }, global.show_trails ]
-            text:
-                priority: global.priority.saddle
-                font:
-                    size: 9.5px
+            draw:
+                text:
+                    priority: global.priority.saddle
+                    font:
+                        size: 9.5px
         forest:
             filter:
                 any: [ { landuse: forest }, { natural: wood } ]
@@ -1493,12 +1494,21 @@ layers:
             points:
                 hike_camp_view:
                     exclusive: true
+                    priority: 1
                     filter: [ { tourism: [viewpoint, camp_site] }, { highway: [trailhead] } ]
                     draw:
                         points:
                             visible: global.show_trails
                             priority: global.priority.poi_viewpoint
                     default:
+                        filter: { $zoom: { min: 17 } }
+                        draw: { points: { visible: true } }
+                information:
+                    exclusive: true
+                    priority: 2
+                    filter: { tourism: information }
+                    draw: { points: { visible: false } }
+                    show:
                         filter: { $zoom: { min: 17 } }
                         draw: { points: { visible: true } }
                 parking:
@@ -1510,13 +1520,6 @@ layers:
                             priority: global.priority.poi_parking
                     default:
                         filter: { $zoom: { min: 18 } }
-                        draw: { points: { visible: true } }
-                information:
-                    exclusive: true
-                    filter: { tourism: information }
-                    draw: { points: { visible: false } }
-                    show:
-                        filter: { $zoom: { min: 17 } }
                         draw: { points: { visible: true } }
                 bike_rental:
                     exclusive: true

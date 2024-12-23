@@ -12,7 +12,7 @@ global:
         historic: { "monument": "artwork" }
         leisure: { "fitness_centre": "gym", "sports_centre": "gym", "park": "tree", "golf_course": "golf" }
         amenity: { "parking": "parking", "bicycle_rental": "bike_shop", "university": "school",
-          "school": "school", "college": "scholl", "kindergarten": "school", "restaurant": "restaurant",
+          "school": "school", "college": "school", "kindergarten": "school", "restaurant": "restaurant",
           "fast_food": "restaurant", "food_court": "restaurant", "ice_cream": "restaurant", "cafe": "cafe",
           "pharmacy": "pharmacy", "bar": "bar", "pub": "bar", "nightclub": "bar", "library": "library",
           "cinema": "theatre", "theatre": "theatre", "concert_hall": "theatre", "arts_centre": "theatre",
@@ -49,9 +49,9 @@ global:
     poi_sprite_fn: |
         function() {
           const t = global.poi_icons;
-          return t.tourism[feature.tourism] || t.leisure[feature.leisure] || t.religion[feature.religion]
-              || t.amenity[feature.amenity] || t.historic[feature.historic] || t.shop[feature.shop]
-              || t.highway[feature.highway] || (feature.shop ? "shop" : "");
+          return t.highway[feature.highway] || t.tourism[feature.tourism] || t.leisure[feature.leisure]
+              || t.religion[feature.religion] || t.amenity[feature.amenity] || t.historic[feature.historic]
+              || t.shop[feature.shop] || (feature.shop ? "shop" : "");
         }
 
 
