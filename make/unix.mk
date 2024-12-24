@@ -22,7 +22,9 @@ ifneq ($(DEBUG), 0)
   # rdynamic needed to get backtrace symbols from, e.g., catchsegv
   LDFLAGS += -rdynamic
 else
-  CFLAGS += -O2 -DNDEBUG
+  # use ffunction-sections + gc-sections to remove unused functions
+  CFLAGS += -O2 -DNDEBUG -ffunction-sections
+  LDFLAGS += --gc-sections
 endif
 
 ASAN ?= 0

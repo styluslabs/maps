@@ -431,6 +431,25 @@ document.addEventListener('DOMContentLoaded', function(event) {
   </g>
 </svg>
 
+<!-- Mine: https://wiki.openstreetmap.org/wiki/Tag:man_made%3Dadit -->
+<svg id="mine" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
+  <g transform="scale(0.7) translate(-30 -30)" fill="#000000" stroke-width="5" >
+    <path fill="none" stroke="#000000" d="M 52,52 16,16"/>
+    <path fill="none" stroke="#000000" d="M 12,52 48,16"/>
+    <path d="m 38,13 7,-7 12,12 0,7 -7,0 z"/>
+    <path d="m 19,6 7,7 c -5.183487,3.928605 -9.442936,8.473236 -13,13.486123 L 6,20 C 9.4503786,14.554256 14.020749,10.096739 19,6 z" />
+  </g>
+</svg>
+
+<svg id="abandoned_mine" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
+  <g transform="scale(0.7, -0.7) translate(-30 -30)" fill="#555" stroke-width="5" >
+    <path fill="none" stroke="#555" d="M 52,52 16,16"/>
+    <path fill="none" stroke="#555" d="M 12,52 48,16"/>
+    <path d="m 38,13 7,-7 12,12 0,7 -7,0 z"/>
+    <path d="m 19,6 7,7 c -5.183487,3.928605 -9.442936,8.473236 -13,13.486123 L 6,20 C 9.4503786,14.554256 14.020749,10.096739 19,6 z" />
+  </g>
+</svg>
+
 <!-- one way arrow -->
 <svg id="arrow" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
   <path class="poi-bg" transform="rotate(90) scale(0.25) translate(-105, -210)" d="m 169.26688,222.66539 -83.4725,0 5.14,15.41125 c 0.16375,0.4925 0.2525,1.01875 0.2525,1.56625 0,2.73875 -2.22,4.9575 -4.9575,4.9575 -1.03875,0 -2.0025,-0.31875 -2.79875,-0.865 l -48.56875,-33.845 48.56875,-33.845 c 0.79625,-0.545 1.76,-0.865 2.79875,-0.865 2.7375,0 4.9575,2.22 4.9575,4.9575 0,0.5475 -0.0887,1.07375 -0.2525,1.56625 l -5.14,15.41125 83.4725,0 0,25.55 z"/>

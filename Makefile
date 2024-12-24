@@ -1,81 +1,147 @@
-# cut and paste from tangram-es Makefile
+# cross-platform C/C++ makefile for Ascend Maps
 
-.PHONY: all clean-linux linux cmake-linux tgz clean-ios ios cmake-ios
+TARGET = ascend
 
-# Default build type is Release
-BUILD_TYPE ?= Release
+include make/shared.mk
 
-LINUX_BUILD_DIR = build/${BUILD_TYPE}
-IOS_BUILD_DIR = build/${BUILD_TYPE}
-IOS_SIM_BUILD_DIR = build/Sim${BUILD_TYPE}
+ifneq ($(wildcard styluslabs/.),)
+  STYLUSLABS_DEPS=styluslabs
+else
+  STYLUSLABS_DEPS=deps
+endif
 
-LINUX_CMAKE_PARAMS = \
-	-DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-	-DTANGRAM_PLATFORM=linux \
-	-DCMAKE_EXPORT_COMPILE_COMMANDS=TRUE \
-	${CMAKE_OPTIONS}
+ifneq ($(DEBUG),0)
+  DEFS += LOG_LEVEL=3
+else
+  DEFS += LOG_LEVEL=2
+endif
 
-IOS_CMAKE_PARAMS = \
-	-DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-	-DTANGRAM_PLATFORM=ios \
-	-DCMAKE_SYSTEM_NAME=iOS \
-	-DTANGRAM_IOS=ON \
-	-DTANGRAM_USE_JSCORE=OFF \
-	${CMAKE_OPTIONS}
-#	-G Xcode \
-#	-DCMAKE_XCODE_GENERATE_SCHEME=0 \
-# -- these seems to give arm64 Mac not iOS - need to use --target=arm64-apple-ios12.0
-#	-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-#	-DCMAKE_OSX_ARCHITECTURES=arm64 \
+## modules
+include module.mk
+include tangram-es/core/module.mk
+include tangram-es/platforms/common/glfw/module.mk
 
-GITREV := $(shell git rev-parse --short HEAD)
-TGZ = ascend-$(GITREV).tar.gz
-TGT = $(LINUX_BUILD_DIR)/ascend
 
-# apt-get install --no-install-recommends cmake libfontconfig-dev libcurl4-openssl-dev libdbus-1-dev
-# trailing / should be omitted (so we can use rsync to exclude .git)
+## platform
+MODULE_BASE := .
+
+ifneq ($(windir),)
+# Windows
+
+SOURCES += \
+  windows/winhelper.cpp \
+  windows/wintab/Utils.c \
+  ../nanovg-2/glad/glad.c
+
+RESOURCES = windows/resources.rc
+INCSYS += ../SDL/include
+DEFS += _USE_MATH_DEFINES UNICODE NOMINMAX FONS_WPATH
+
+# only dependencies under this path will be tracked in .d files; note [\\] must be used for "\"
+# ensure that no paths containing spaces are included
+DEPENDBASE ?= c:[\\]temp[\\]maps
+
+# shell32 for ShellExecute; user32 for clipboard fns; libs below opengl32.lib needed only for static SDL
+LIBS = \
+  ws2_32.lib \
+  shell32.lib \
+  user32.lib \
+  glu32.lib \
+  opengl32.lib \
+  gdi32.lib \
+  winmm.lib \
+  ole32.lib \
+  oleaut32.lib \
+  advapi32.lib \
+  setupapi.lib \
+  imm32.lib \
+  version.lib
+
+# distribution package
+ZIPFILE = write$(HGREV).zip
+ZIPDIR = Write
 DISTRES = \
-	assets/config.default.yaml \
-	assets/mapsources.default.yaml \
-	assets/plugins \
-	assets/res \
-	assets/scenes \
-	assets/shared \
-	app/linux/setup \
-	app/linux/INSTALL
+  ../scribbleres/fonts/Roboto-Regular.ttf \
+  ../scribbleres/fonts/DroidSansFallback.ttf \
+  ../scribbleres/Intro.svg
+# installer
+WXS = windows/InstallWrite.wxs
 
-# targets
-all: linux
+PLATFORM_MK = make/msvc.mk
 
-clean-linux:
-	rm -rf ${LINUX_BUILD_DIR}
+else ifneq ($(XPC_FLAGS),)
+# iOS (XPC_FLAGS seems to be defined on macOS)
 
-linux: cmake-linux
-	cmake --build ${LINUX_BUILD_DIR} ${CMAKE_BUILD_OPTIONS}
+SOURCES += ios/ioshelper.m
+DEFS += GLES_SILENCE_DEPRECATION
 
-cmake-linux:
-	cmake -H. -B${LINUX_BUILD_DIR} ${LINUX_CMAKE_PARAMS}
+include make/ios.mk
 
-#	cp -R -L $(DISTRES) $(LINUX_BUILD_DIR)/.dist
-tgz: linux $(DISTRES)
-	build/Debug/tests/tests.out
-	strings $(TGT) | grep "^GLIBC_"
-	mkdir -p $(LINUX_BUILD_DIR)/.dist
-	mv $(TGT) $(LINUX_BUILD_DIR)/.dist
-	rsync -Lvr --exclude .git $(DISTRES) $(LINUX_BUILD_DIR)/.dist
-	(cd $(LINUX_BUILD_DIR) && mv .dist Ascend && tar --remove-files -czvf $(TGZ) Ascend)
+else ifneq ($(BUILD_SHARED_LIBRARY),)
+# Android
+# ./start_gradle assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.keystore && mv signed_app-release.apk write300.apk
 
-clean-ios:
-	rm -rf ${IOS_BUILD_DIR}
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
 
-ios: cmake-ios
-	cmake --build ${IOS_BUILD_DIR} ${CMAKE_BUILD_OPTIONS}
+SOURCES += android/androidhelper.cpp
 
-cmake-ios:
-	cmake -H. -B${IOS_BUILD_DIR} ${IOS_CMAKE_PARAMS}
+# System.loadLibrary("droidmaps") in MapsLib.java
+LOCAL_MODULE := droidmaps
 
-ios-sim: cmake-ios-sim
-	cmake --build ${IOS_SIM_BUILD_DIR} ${CMAKE_BUILD_OPTIONS}
+ALL_INC := $(INC) $(INCSYS)
+LOCAL_C_INCLUDES := $(addprefix $(LOCAL_PATH)/, $(ALL_INC))
 
-cmake-ios-sim:
-	cmake -H. -B${IOS_SIM_BUILD_DIR} ${IOS_CMAKE_PARAMS} -DTANGRAM_IOS_SIM=ON -DCMAKE_OSX_SYSROOT=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk
+LOCAL_CFLAGS := $(addprefix -D, $(DEFS))
+LOCAL_CPPFLAGS := -std=c++14 -Wno-unused -Wno-error=format-security
+
+LOCAL_SRC_FILES := $(addprefix $(LOCAL_PATH)/, $(SOURCES))
+#LOCAL_SHARED_LIBRARIES := SDL2
+# libandroid needed for ANativeWindow_* fns
+LOCAL_LDLIBS := -lGLESv3 -llog -ljnigraphics -landroid
+
+include $(BUILD_SHARED_LIBRARY)
+
+else
+# Linux
+
+MODULE_SOURCES += \
+  tangram-es/platforms/linux/src/linuxPlatform.cpp \
+  tangram-es/platforms/common/platform_gl.cpp \
+  tangram-es/platforms/common/urlClient.cpp \
+  tangram-es/platforms/common/linuxSystemFontHelper.cpp \
+  deps/nfd/src/nfd_portal.cpp \
+  app/src/glfwmain.cpp \
+  $(STYLUSLABS_DEPS)/ugui/example/glfwSDL.c
+
+MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) $(STYLUSLABS_DEPS)/nanovgXC/src $(STYLUSLABS_DEPS)/pugixml/src deps/nfd/src/include tangram-es/platforms/common app/include
+MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
+
+PKGS = dbus-1 x11
+
+DEFS += TANGRAM_LINUX
+LIBS = -pthread -lOpenGL -lfontconfig -lcurl
+#CFLAGS = -pthread
+
+# distribution package
+GITREV := $(shell git rev-parse --short HEAD)
+TGZ = $(TARGET)-$(GITREV).tar.gz
+DISTRES = \
+  assets/config.default.yaml \
+  assets/mapsources.default.yaml \
+  assets/plugins \
+  assets/res \
+  assets/scenes \
+  assets/shared \
+  app/linux/setup \
+  app/linux/INSTALL
+
+PLATFORM_MK = make/unix.mk
+
+endif
+
+# platform sources
+include $(ADD_MODULE)
+
+include $(PLATFORM_MK)
+.DEFAULT_GOAL := all

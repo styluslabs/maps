@@ -5,6 +5,13 @@ DEBUG ?= 1
 
 include make/shared.mk
 
+# only needed for fontstash.h for mockPlatform.cpp
+ifneq ($(wildcard styluslabs/.),)
+  STYLUSLABS_DEPS=styluslabs
+else
+  STYLUSLABS_DEPS=deps
+endif
+
 DEFS += LOG_LEVEL=3
 
 ## modules

@@ -1382,6 +1382,7 @@ layers:
                     text:
                         #visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
                         optional: 'function() { return !global.show_transit; }'
+            # some stations have railway=station, station=light_rail, so we need this sublayer to override parent
             tram:
                 filter:
                     - railway: tram_stop
