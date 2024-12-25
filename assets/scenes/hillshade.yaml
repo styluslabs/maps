@@ -34,6 +34,10 @@ global:
 
 application:
     gui_variables:
+        contour_color:
+            enabled: global.show_contours
+            label: Contour Color
+            type: color
         u_exaggerate:
             style: hillshade
             label: Hillshade Exaggeration
@@ -44,6 +48,7 @@ application:
             min: 0
             max: 90
         u_min_contour_elev:
+            enabled: global.show_contours
             style: hillshade
             label: Min Contour Elevation (m)
             step: 100

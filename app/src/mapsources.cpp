@@ -8,6 +8,7 @@
 #include "sqlitepp.h"
 
 #include "usvg/svgpainter.h"
+#include "usvg/svgparser.h"
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
@@ -531,10 +532,11 @@ static void replaceSceneVar(std::vector<SceneUpdate>& vars, const std::string& p
   vars.push_back(SceneUpdate{path, newval});
 }
 
-void MapsSources::updateSceneVar(const std::string& path, const std::string& newval, const std::string& onchange, bool reload)
+void MapsSources::updateSceneVar(const std::string& path, YAML::Node newval, const std::string& onchange, bool reload)
 {
-  replaceSceneVar(app->sceneUpdates, path, newval);
-  replaceSceneVar(currUpdates, path, newval);
+  std::string newstr = yamlToStr(newval);
+  replaceSceneVar(app->sceneUpdates, path, newstr);
+  replaceSceneVar(currUpdates, path, newstr);
   sourceModified();
 
   if(!onchange.empty()) {
@@ -573,7 +575,7 @@ Widget* MapsSources::processUniformVar(const std::string& stylename, const std::
           auto spinBox = createTextSpinBox(uniform.second.get<float>(), stepval, minval, maxval, "%.2f");
           spinBox->onValueChanged = [=, &uniform](real val){
             std::string path = "styles." + stylename + ".shaders.uniforms." + varname;
-            std::string newval = std::to_string(val);
+            std::string newval = yamlToStr(YAML::Node(val));  //std::to_string(val);
             replaceSceneVar(app->sceneUpdates, path, newval);
             replaceSceneVar(currUpdates, path, newval);
             uniform.second.set<float>(val);
@@ -612,12 +614,12 @@ void MapsSources::populateSceneVars()
         varsContent->addWidget(createTitledRow(label.c_str(), uwidget));
     }
     else {  // global variable
-      std::string value = yamlToStr(app->sceneConfig()["global"][name]);  //.as<std::string>("");
+      std::string value = app->sceneConfig()["global"][name].as<std::string>("");  //yamlToStr()
       std::string valtype = var.second["type"].as<std::string>("");
       if(value == "true" || value == "false") {
         auto checkbox = createCheckBox("", value == "true");
         checkbox->onToggled = [=](bool newval){
-          updateSceneVar("global." + name, newval ? "true" : "false", onchange, reload);
+          updateSceneVar("global." + name, YAML::Node(newval), onchange, reload);
         };
         varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
       }
@@ -628,7 +630,7 @@ void MapsSources::populateSceneVars()
         auto combobox = createComboBox(choices);
         combobox->setText(value.c_str());
         combobox->onChanged = [=](const char* val){
-          updateSceneVar("global." + name, val, onchange, reload);
+          updateSceneVar("global." + name, YAML::Node(val), onchange, reload);
         };
         varsContent->addWidget(createTitledRow(label.c_str(), combobox));
       }
@@ -639,9 +641,16 @@ void MapsSources::populateSceneVars()
         int month0 = atoi(parts[1].c_str());  // + (parts[1].front() == '0' ? 1 : 0));
         int day0 = atoi(parts[2].c_str());  // + (parts[2].front() == '0' ? 1 : 0));
         auto datepicker = createDatePicker(year0, month0, day0, [=](int year, int month, int day){
-          updateSceneVar("global." + name, fstring("%04d-%02d-%02d", year, month, day), onchange, reload);
+          updateSceneVar("global." + name, YAML::Node(fstring("%04d-%02d-%02d", year, month, day)), onchange, reload);
         });
         varsContent->addWidget(createTitledRow(label.c_str(), NULL, datepicker));
+      }
+      else if(valtype == "color") {
+        ColorPicker* cp = createColorPicker(app->colorPickerMenu, parseColor(value.c_str(), Color::WHITE));
+        cp->onColor = [=](Color newcolor){
+          updateSceneVar("global." + name, YAML::Node(colorToStr(newcolor)), onchange, reload);
+        };
+        varsContent->addWidget(createTitledRow(label.c_str(), cp));
       }
       else if(var.second["min"] || var.second["max"] || var.second["step"] || valtype == "int") {
         float stepval = var.second["step"].as<float>(1);
@@ -650,7 +659,7 @@ void MapsSources::populateSceneVars()
         const char* format = valtype == "int" ? "%.0f" : "%.2f";
         auto spinBox = createTextSpinBox(atof(value.c_str()), stepval, minval, maxval, format);
         spinBox->onValueChanged = [=](real val){
-          updateSceneVar("global." + name, std::to_string(val), onchange, reload);
+          updateSceneVar("global." + name, YAML::Node(val), onchange, reload);
         };
         varsContent->addWidget(createTitledRow(label.c_str(), spinBox));
       }
@@ -658,7 +667,7 @@ void MapsSources::populateSceneVars()
         auto textedit = createTitledTextEdit(label.c_str(), value.c_str());
         textedit->addHandler([=](SvgGui* gui, SDL_Event* event){
           if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
-            updateSceneVar("global." + name, trimStr(textedit->text()), onchange, reload);
+            updateSceneVar("global." + name, YAML::Node(trimStr(textedit->text())), onchange, reload);
             return true;
           }
           return false;

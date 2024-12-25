@@ -622,6 +622,16 @@ void MapsTracks::updateStats(GpxFile* track)
   }
 }
 
+static std::string wayptDetailStr(double distm, double alt, const std::string& desc)
+{
+  std::string s = MapsApp::distKmToStr(distm/1000);
+  if(alt > 0)
+    s.append(" | ").append(MapsApp::elevToStr(alt));
+  if(!desc.empty())
+    s.append(u8" \u2022 ").append(desc);  //u8" \u2022 " -- filled circle
+  return s;
+}
+
 void MapsTracks::updateDistances()
 {
   if(!activeTrack || activeTrack->routes.empty()) return;
@@ -636,13 +646,8 @@ void MapsTracks::updateDistances()
       if(!it->routed) continue;
       while(rteidx < route.size()-1 && route[rteidx].lngLat() != it->lngLat()) ++rteidx;
       TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
-      std::string s = MapsApp::distKmToStr(route[rteidx].dist/1000);
       double alt = it->loc.alt > 0 ? it->loc.alt : route[rteidx].loc.alt;
-      if(alt > 0)
-        s.append(" | ").append(MapsApp::elevToStr(alt));
-      if(!it->desc.empty())
-        s.append(" | ").append(it->desc);  //u8" \u2022 " -- filled circle
-      detail->setText(s.c_str());
+      detail->setText(wayptDetailStr(route[rteidx].dist, alt, it->desc).c_str());
       it->dist = route[rteidx].dist;  // for stats plot
     }
     return;
@@ -684,12 +689,9 @@ void MapsTracks::updateDistances()
     }, false);
 
     if(!rtePt) continue;  // should never happen
-    double distkm = rtePt->dist/1000 + lngLatDist(rtePt->lngLat(), it->lngLat());
+    double distm = rtePt->dist + 1000*lngLatDist(rtePt->lngLat(), it->lngLat());
     TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
-    std::string s = MapsApp::distKmToStr(distkm);
-    if(!it->desc.empty())
-      s.append(u8" \u2022 ").append(it->desc);  // or \u00B7
-    detail->setText(s.c_str());
+    detail->setText(wayptDetailStr(distm, it->loc.alt, it->desc).c_str());
     it->dist = rtePt->dist;  // for stats plot
   }
 }
@@ -940,8 +942,8 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
 {
   std::string uid = wp.uid;
   std::string wpname = wp.name.empty() ? lngLatToStr(wp.lngLat()) : wp.name;
-  const char* desc = wp.desc.empty() ? " " : wp.desc.c_str();  // make sure detail text is non-empty
-  Button* item = createListItem(MapsApp::uiIcon("waypoint"), wpname.c_str(), desc);
+  std::string desc = wayptDetailStr(wp.dist, wp.loc.alt, wp.desc);
+  Button* item = createListItem(MapsApp::uiIcon("waypoint"), wpname.c_str(), desc.c_str());
   Widget* container = item->selectFirst(".child-container");
 
   item->onClicked = [this, uid](){
@@ -1016,22 +1018,23 @@ bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
 {
   double id;
   if(result->properties->getNumber("track_feature_id", id)) {
-    if(activeTrack && activeTrack->marker && activeTrack->marker->featureId == id) {
-      //if(trackPanel->isVisible()) {
-      //  // find the track point closest to chosen position
-      //  double mindist = DBL_MAX;
-      //  const Waypoint* closestWpt = NULL;
-      //  for(const Waypoint& pt : activeTrack->activeWay()->pts) {
-      //    double dist = lngLatDist(pt.lngLat(), app->pickResultCoord);
-      //    if(dist > mindist) continue;
-      //    mindist = dist;
-      //    closestWpt = &pt;
-      //  }
-      //  if(closestWpt)
-      //    trackSliders->trackSlider->setValue(trackPlot->plotVsDist ? closestWpt->dist/trackPlot->maxDist
-      //        : closestWpt->loc.time - trackPlot->minTime/(trackPlot->maxTime - trackPlot->minTime));
-      //}
-      return true;
+    if(activeTrack && activeTrack->marker && activeTrack->marker->featureId == id && trackPanel->isVisible() &&
+        !trackSliders->editMode && plotWidgets[0]->isVisible() && !std::isnan(app->tapLocation.longitude)) {
+      // find the track point closest to chosen position; must be within 10 pixels
+      double mindist = MapProjection::metersPerPixelAtZoom(app->map->getZoom())*10/1000.0;  // meters to km
+      const Waypoint* closestWpt = NULL;
+      for(const Waypoint& pt : activeTrack->activeWay()->pts) {
+        double dist = lngLatDist(pt.lngLat(), app->tapLocation);
+        if(dist > mindist) continue;
+        mindist = dist;
+        closestWpt = &pt;
+      }
+      if(closestWpt) {
+        trackSliders->trackSlider->setVisible(true);
+        trackSliders->trackSlider->setValue(trackPlot->plotVsDist ? closestWpt->dist/trackPlot->maxDist
+            : closestWpt->loc.time - trackPlot->minTime/(trackPlot->maxTime - trackPlot->minTime));
+        return true;
+      }
     }
     for(GpxFile& track : tracks) {
       if(track.visible && &track != activeTrack && track.marker->featureId == id) {
@@ -1183,7 +1186,8 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     Button* addWptBtn = createActionbutton(MapsApp::uiIcon("waypoint"), "Add waypoint", true);
     addWptBtn->onClicked = [=](){
       std::string nm = app->currLocPlaceInfo ? "Location at " + ftimestr("%H:%M:%S %F") : app->pickResultName;
-      Waypoint* wpt = addWaypoint({app->pickResultCoord, nm, "", app->pickResultProps});
+      Waypoint* wpt = addWaypoint(app->pickResultCoord == trackHoverLoc.lngLat() ?
+          trackHoverLoc : Waypoint{app->pickResultCoord, nm, "", app->pickResultProps});
       if(wpt)
         setPlaceInfoSection(activeTrack, *wpt);
     };
@@ -1362,7 +1366,7 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
 
   Button* saveBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
   saveBtn->setIcon(uiIcon("save"));
-  Button* saveCopyBtn = createToolbutton(uiIcon("save-copy"), "Save Copy", true);
+  Button* saveCopyBtn = createToolbutton(uiIcon("save-copy"), "Save copy", true);
   saveCopyBtn->onClicked = [=](){ saveTrackContent->setVisible(false); saveTrackFn(true); };
   saveBtn->parent()->containerNode()->addChild(saveCopyBtn->node, saveBtn->node);
 
@@ -1522,7 +1526,7 @@ void MapsTracks::createPlotContent()
     cropSliderChanged();
   };
 
-  Button* cropTrackBtn = createToolbutton(NULL, "Crop to segment", true);
+  Button* cropTrackBtn = createToolbutton(MapsApp::uiIcon("crop-outer"), "Crop", true);
   cropTrackBtn->onClicked = [=](){
     if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
     auto& locs = activeTrack->activeWay()->pts;
@@ -1541,7 +1545,7 @@ void MapsTracks::createPlotContent()
     updateStats(activeTrack);
   };
 
-  Button* deleteSegmentBtn = createToolbutton(NULL, "Delete Segment", true);
+  Button* deleteSegmentBtn = createToolbutton(MapsApp::uiIcon("crop-inner"), "Excise", true);
   deleteSegmentBtn->onClicked = [=](){
     if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
     auto& locs = activeTrack->activeWay()->pts;
@@ -1567,10 +1571,11 @@ void MapsTracks::createPlotContent()
   };
 
   Button* moreTrackOptionsBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More options");
-  Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT, false);
+  Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT);
   moreTrackOptionsBtn->setMenu(trackPlotOverflow);
 
-  trackPlotOverflow->addItem("Append track", [this](){
+  Button* appendTrackBtn = createToolbutton(MapsApp::uiIcon("add-track"), "Append", true);
+  appendTrackBtn->onClicked = [=](){
     if(!selectTrackDialog) {
       selectTrackDialog.reset(createSelectDialog("Choose Track", MapsApp::uiIcon("track")));
       selectTrackDialog->onSelected = [this](int idx){
@@ -1600,9 +1605,9 @@ void MapsTracks::createPlotContent()
     }
     selectTrackDialog->addItems(items);
     showModalCentered(selectTrackDialog.get(), MapsApp::gui);
-  });
+  };
 
-  trackPlotOverflow->addItem("Reverse Track", [this](){
+  trackPlotOverflow->addItem("Reverse", MapsApp::uiIcon("reverse-direction"), [this](){
     if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
     auto& locs = activeTrack->activeWay()->pts;
     std::reverse(locs.begin(), locs.end());
@@ -1612,7 +1617,7 @@ void MapsTracks::createPlotContent()
     updateStats(activeTrack);
   });
 
-  editTrackTb = createToolbar({cropTrackBtn, deleteSegmentBtn, createStretch(), moreTrackOptionsBtn});
+  editTrackTb = createToolbar({cropTrackBtn, deleteSegmentBtn, appendTrackBtn, createStretch(), moreTrackOptionsBtn});
   editTrackTb->setVisible(false);
 
   trackSliders->trackSlider->onValueChanged = [=](real s){
@@ -1660,6 +1665,7 @@ void MapsTracks::createPlotContent()
           trackPlot->setTrack({}, activeTrack->waypoints);
       }
       plotDirty = false;
+      app->map->markerSetVisible(trackHoverMarker, trackSliders->trackSlider->isVisible());
     }
     else if(event->type == SvgGui::INVISIBLE) {
       app->map->markerSetVisible(trackHoverMarker, false);

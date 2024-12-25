@@ -132,8 +132,8 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   maxZoom = locs.size()/8;  // min 8 points in view
   // exclude first and last waypoints and waypoints missing name or distance along path
   waypoints.clear();
-  for(size_t ii = 1; ii+1 < wpts.size(); ++ii) {
-    if(!wpts[ii].name.empty() && wpts[ii].dist > 0)
+  for(size_t ii = 0; ii < wpts.size(); ++ii) {
+    if(!wpts[ii].name.empty() && wpts[ii].dist > 0 && wpts[ii].dist < locs.end()->dist)
       waypoints.push_back(wpts[ii]);
   }
   updateZoomOffset(0);

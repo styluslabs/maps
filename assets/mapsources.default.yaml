@@ -168,7 +168,6 @@ enable-contours:
     layers: [ hillshade ]
     updates:
         global.show_contours: true
-        application.gui_variables.contour_color: { label: Contour Color }
 
 enable-slope-angle:
     title: Slope Angle

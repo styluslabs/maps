@@ -120,22 +120,6 @@ MapsWidget::MapsWidget(MapsApp* _app) : Widget(new SvgCustomNode), app(_app)
       int desth = int(dest.height()*pxscale + 0.5);
       map->setPadding(Tangram::EdgePadding(0, 0, 0, h - desth, false));
 
-      /*
-      Rect r0 = dest;
-      real winh = window()->winBounds().height();
-      // expand map down a bit to account for (possibly) rounded corners of UI
-      r0.bottom = std::min(r0.bottom + 10, winh);
-      Rect r = r0 * (1/app->gui->inputScale);
-      real y = winh/app->gui->inputScale - r.bottom;
-      int w = int(r.width() + 0.5), h = int(r.height() + 0.5);
-      LngLat pos;
-      map->screenPositionToLngLat(w/2.0, h/2.0, &pos.longitude, &pos.latitude);
-      map->setViewport(int(r.left + 0.5), int(y + 0.5), w, h);
-      // by default, map center is preserved by resize, but we want upper left corner to be fixed instead
-      // ... but skip on initial layout (detected by Rect viewport not yet set)
-      if(viewport.isValid())
-        map->setPosition(pos.longitude, pos.latitude);
-      */
       auto margins = app->currLayout->node->hasClass("window-layout-narrow") ?
             glm::vec4(app->topInset, 0, (h - desth)/pxscale + 10, 0) :
             glm::vec4(0, 0, 0, app->getPanelWidth()+20);  // TRBL
