@@ -1,6 +1,4 @@
 # Hillshading and contour lines from DEM (elevation) tiles
-# - contours calculated in shader actually look pretty good, although we will eventually have to generate
-#  vector contours w/ elevation labels of course
 
 # - elevation tile data format: https://github.com/tilezen/joerd/blob/master/docs/formats.md
 #  - cannot be used with linear filtering (GL_LINEAR), and GLES doesn't support filtering with f32 (only f16

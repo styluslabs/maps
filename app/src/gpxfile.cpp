@@ -44,8 +44,10 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
   if(extnode) {
     //wpt.visible = extnode.attribute("visible").as_bool(wpt.visible);
     pugi::xml_node slroute = extnode.child("sl:route");
-    if(slroute)
+    if(slroute) {
       wpt.routed = slroute.attribute("routed").as_bool(wpt.routed);
+      wpt.dist = slroute.attribute("dist").as_double(wpt.dist);
+    }
     pugi::xml_node slprops = extnode.child("sl:props");
     if(slprops)
       wpt.props = slprops.child_value();
@@ -161,7 +163,7 @@ static std::string saveGpxTime(double time)
   return std::string(timebuf);
 }
 
-void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd)
+void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd, bool savedist)
 {
   trkpt.append_attribute("lat").set_value(fstring("%.7f", wpt.loc.lat).c_str());
   trkpt.append_attribute("lon").set_value(fstring("%.7f", wpt.loc.lng).c_str());
@@ -175,10 +177,14 @@ void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd)
   if(!wpt.desc.empty())
     trkpt.append_child("desc").append_child(pugi::node_pcdata).set_value(wpt.desc.c_str());
 
-  if(!wpt.routed || !wpt.props.empty()) {
+  savedist = savedist && wpt.dist > 0;
+  if(!wpt.routed || !wpt.props.empty() || savedist) {
     pugi::xml_node extnode = trkpt.append_child("extensions");
-    if(!wpt.routed)
-      extnode.append_child("sl:route").append_attribute("routed").set_value(wpt.routed);
+    if(!wpt.routed || savedist) {
+      pugi::xml_node rtenote = extnode.append_child("sl:route");
+      if(!wpt.routed) { rtenote.append_attribute("routed").set_value(wpt.routed); }
+      if(savedist) { rtenote.append_attribute("dist").set_value(wpt.dist); }
+    }
     if(!wpt.props.empty())
       extnode.append_child("sl:props").append_child(pugi::node_pcdata).set_value(wpt.props.c_str());
   }
@@ -200,7 +206,7 @@ bool saveGPX(GpxFile* track, const char* filename)
   }
 
   for(const Waypoint& wpt : track->waypoints)
-    saveWaypoint(gpx.append_child("wpt"), wpt);
+    saveWaypoint(gpx.append_child("wpt"), wpt, false, true);
 
   for(const GpxWay& route : track->routes) {
     pugi::xml_node rte = gpx.append_child("rte");

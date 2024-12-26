@@ -93,7 +93,7 @@ struct GpxFile
 };
 
 namespace pugi { class xml_node; }
-void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd = false);
+void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd = false, bool savedist = false);
 bool loadGPX(GpxFile* track, const char* gpxSrc = NULL);
 bool saveGPX(GpxFile* track, const char* filename = NULL);
 std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double precision = 1E6);

@@ -764,8 +764,10 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
     insertionWpt.clear();
   track->waypoints.erase(it);
   track->modified = true;
-  if(track->waypoints.empty())
+  if(track->waypoints.empty()) {
+    track->wayPtSerial = 0;  // we'll have to remove this if we add undo/redo functionality
     hideDirectRoutePreview();  //app->crossHair->setRoutePreviewOrigin();
+  }
   if(routed)
     createRoute(track);
   updateWayptCount(wayptTabLabel, track);
