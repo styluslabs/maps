@@ -176,6 +176,13 @@ enable-slope-angle:
     updates:
         global.show_slope_angle: true
 
+custom-slope-shading:
+  title: Custom Slope Shading
+  scene: scenes/custom-slope-shading.yaml
+  layer: true
+  updates:
+    styles.hillshade.mix#-1: custom_slope_shading
+
 mix-base-raster:
     title: Mix Hillshade Base Raster
     archived: true

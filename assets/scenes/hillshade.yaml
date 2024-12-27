@@ -205,6 +205,9 @@ styles:
                     float hscale = elev > 0. ? u_exaggerate : 0.;  // /pow(u_meters_per_pixel, 0.7)/65536.;
                     normal = normalize(vec3(-hscale*grad/coslat, 1.));
                     //color: |
+                    // slope from gradient calculated above
+                    float slope = length(grad);
+                    float slope_degs = atan(slope/coslat)*180.0/3.141592;
                     #if ELEVATION_INDEX
                     vec4 base_color = RASTER_BASE_COLOR;
                     #elif defined(TANGRAM_TERRAIN_3D)
@@ -228,8 +231,6 @@ styles:
                     #endif
                     } else {
                         // contour lines
-                        // slope from gradient calculated above
-                        float slope = length(grad);
                         // spacing between contour lines in meters - 10m has too many artifacts
                     #ifdef METRIC_UNITS
                         float interval = z >= 14. ? 25. : z >= 12. ? 50. : 100.;
@@ -262,17 +263,17 @@ styles:
                         ddn = abs(1. - fract(hc/coarse))*coarse * px_per_elev;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
                     #ifdef SHOW_ANGLE
-                        float degs = atan(slope/coslat)*180.0/3.14159;
-                        vec4 tint = texture2D(u_slope_angle, vec2(degs/90.0, 0.5));
-                        base_color = mix(base_color, vec4(tint.rgb, 0.0), elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
+                        vec4 tint = texture2D(u_slope_angle, vec2(slope_degs/90.0, 0.5));
+                        if(elev > 0. && slope_degs >= u_min_slope_angle)
+                          base_color = mix(base_color, vec4(tint.rgb, 0.0), 0.5);
                     #endif
                         base_color = mix(base_color, vec4(CONTOUR_COLOR.rgb, 0.0), min(cov, 1.));
                     }
                     #else  // no contours
                     #ifdef SHOW_ANGLE
-                        float degs = atan(length(grad)/coslat)*180.0/3.14159;
-                        vec4 tint = texture2D(u_slope_angle, vec2(degs/90.0, 0.5));
-                        base_color = mix(base_color, vec4(tint.rgb, 0.0), elev > 0. && degs >= u_min_slope_angle ? 0.5 : 0.0);
+                        vec4 tint = texture2D(u_slope_angle, vec2(slope_degs/90.0, 0.5));
+                        if(elev > 0. && slope_degs >= u_min_slope_angle)
+                          base_color = mix(base_color, vec4(tint.rgb, 0.0), 0.5);
                     #endif
                     //color = base_color;
                     #endif

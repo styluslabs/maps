@@ -1,0 +1,83 @@
+# overlay for user defined range of slope angle, slope aspect, and elevation
+
+import:
+    - hillshade.yaml
+
+
+global:
+    custom_slope_color_0: '#FF0000'
+    custom_slope_color_1: '#0000FF'
+
+
+application:
+    gui_variables:
+        custom_slope_color_0:
+            label: Start color
+            type: color
+        custom_slope_color_1:
+            label: End color
+            type: color
+
+        u_min_slope:
+            style: hillshade
+            label: Min Slope (°)
+            min: 0
+            max: 90
+        u_max_slope:
+            style: hillshade
+            label: Max Slope (°)
+            min: 0
+            max: 90
+
+        u_min_aspect:
+            style: hillshade
+            label: Min Aspect (°)
+            min: 0
+            max: 360
+        u_max_aspect:
+            style: hillshade
+            label: Max Aspect (°)
+            min: 0
+            max: 360
+
+        u_min_elev:
+            style: hillshade
+            label: Min Elevation (m)
+            min: 0
+            max: 9000
+        u_max_elev:
+            style: hillshade
+            label: Max Elevation (m)
+            min: 0
+            max: 9000
+
+
+styles:
+    custom_slope_shading:
+        shaders:
+            #defines:
+            uniforms:
+                u_custom_color_0: global.custom_slope_color_0
+                u_custom_color_1: global.custom_slope_color_1
+                u_min_slope: 27.5
+                u_max_slope: 45.0
+                u_min_aspect: 0.0
+                u_max_aspect: 0.0
+                u_min_elev: 0.0
+                u_max_elev: 0.0
+            blocks:
+                # mixed blocks placed before style's own blocks, so use 'filter' to place after hillshade 'color'
+                filter: |
+                    float aspect = 180.0 - atan(normal.x, -normal.y)*180.0/3.141592;
+                    bool en_slope = u_min_slope < u_max_slope;
+                    bool en_aspect = (normal.x != 0.0 || normal.y != 0.0) && u_min_aspect < u_max_aspect;
+                    bool en_elev = u_min_elev < u_max_elev;
+                    float fslope = en_slope ? (slope_degs - u_min_slope)/(u_max_slope - u_min_slope) : 1.0;
+                    float faspect = en_aspect ? (aspect - u_min_aspect)/(u_max_aspect - u_min_aspect) : 1.0;
+                    float felev = en_elev ? (elev - u_min_elev)/(u_max_elev - u_min_elev) : 1.0;
+                    float num_en = float(en_slope) + float(en_aspect) + float(en_elev);
+                    if(num_en > 0.0 && fslope >= 0.0 && fslope <= 1.0 && faspect >= 0.0 && faspect <= 1.0 && felev >= 0.0 && felev <= 1.0) {
+                      float fmix = pow(fslope*faspect*felev, 1.0/num_en);
+                      vec4 c = mix(u_custom_color_0, u_custom_color_1, fmix);
+                      color.rgb = mix(color, c, c.a).rgb;
+                    }
