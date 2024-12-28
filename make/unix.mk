@@ -24,7 +24,7 @@ ifneq ($(DEBUG), 0)
 else
   # use ffunction-sections + gc-sections to remove unused functions
   CFLAGS += -O2 -DNDEBUG -ffunction-sections
-  LDFLAGS += --gc-sections
+  LDFLAGS += -Wl,--gc-sections
 endif
 
 ASAN ?= 0
