@@ -879,6 +879,7 @@ void ManageColorsDialog::populateColorList()
   setSaveDelState();
 }
 
+// we should probably have separate sets of saved colors for markers (no alpha) and for map style (w/ alpha)
 ManageColorsDialog::ManageColorsDialog(std::vector<Color>& _colors) : Dialog(createMobileDialogNode()), colors(_colors)
 {
   static const char* colorListSVG = R"#(
@@ -886,9 +887,12 @@ ManageColorsDialog::ManageColorsDialog(std::vector<Color>& _colors) : Dialog(cre
     </g>
   )#";
 
-  colorList = new Widget(loadSVGFragment(colorListSVG));
-  colorEditBox = createColorEditBox(false, false);
+  ColorSliders* colorSliders = new ColorSliders(new SvgG(), true);
+  colorSliders->node->setAttribute("box-anchor", "hfill");
+  colorEditBox = createColorEditBox(true, colorSliders);
   colorEditBox->onColorChanged = [=](Color c){ setSaveDelState(); };
+
+  colorList = new Widget(loadSVGFragment(colorListSVG));
 
   saveBtn = createToolbutton(uiIcon("save"), "Save", true);
   deleteBtn = createToolbutton(uiIcon("discard"), "Delete", true);
@@ -905,18 +909,19 @@ ManageColorsDialog::ManageColorsDialog(std::vector<Color>& _colors) : Dialog(cre
       onColorListChanged();
   };
 
-  Toolbar* toolbar = createToolbar();
+  Toolbar* toolbar = createToolbar({colorEditBox, createStretch(), saveBtn, deleteBtn});
   toolbar->node->setAttribute("margin", "0 3");
-  toolbar->addWidget(colorEditBox);
-  toolbar->addWidget(createStretch());
-  toolbar->addWidget(saveBtn);
-  toolbar->addWidget(deleteBtn);
 
-  Widget* content = createColumn();
+  auto setVisibleGroup = [=](int tabnum){
+    colorList->setVisible(tabnum == 0);
+    colorSliders->setVisible(tabnum != 0);
+    colorSliders->setVisibleGroup(tabnum == 2);
+  };
+  Widget* tabBar = createTabBar({"Saved", "RGB", "HSV"}, setVisibleGroup);
+  tabBar->addWidget(createStretch());
+  Widget* content = createColumn({toolbar, tabBar, colorList, colorSliders, createStretch()}, "", "", "hfill");
   content->node->setAttribute("box-anchor", "fill");
-  content->addWidget(toolbar);
-  content->addWidget(colorList);
-  content->addWidget(createStretch());
+  setVisibleGroup(0);
 
   //auto scrollWidget = new ScrollWidget(new SvgDocument(), colorList);
   setupMobileDialog(this, "Colors", "Accept", content);

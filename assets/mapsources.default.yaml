@@ -170,30 +170,27 @@ enable-contours:
         global.show_contours: true
 
 enable-slope-angle:
-    title: Slope Angle
-    layer: true
-    layers: [ hillshade ]
-    updates:
-        global.show_slope_angle: true
+  title: Slope Angle
+  scene: scenes/slope-angle.yaml
+  layer: true
+  updates:
+    styles.hillshade.mix#-1: slope-angle
 
 custom-slope-shading:
   title: Custom Slope Shading
   scene: scenes/custom-slope-shading.yaml
   layer: true
   updates:
-    styles.hillshade.mix#-1: custom_slope_shading
+    styles.hillshade.mix#-1: custom-slope-shading
 
 mix-base-raster:
-    title: Mix Hillshade Base Raster
-    archived: true
-    layer: true
-    layers: [ hillshade ]
-    updates:
-        styles.hillshade.shaders.defines.RASTER_BASE_COLOR: |
-            vec4(mix(sampleRaster(0).rgb, base_mix_color.rgb, base_mix_color.a), 1.0)
-        styles.hillshade.shaders.uniforms.base_mix_color: global.base_mix_color
-        global.base_mix_color: [0.9, 0.9, 0.9, 0.8]
-        application.gui_variables.base_mix_color: { label: Base Mix Color }
+  title: Mix Hillshade Base Raster
+  archived: true
+  layer: true
+  layers: [hillshade]
+  updates:
+    styles.hillshade.mix#-1: mix-base-raster
+    application.gui_variables.base_mix_color: { label: Base Mix Color, type: color }
 
 # other possible sources:
 # - https://ic.imagery1.arcgis.com/arcgis/rest/services/Sentinel2_10m_LandCover/ImageServer

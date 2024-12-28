@@ -5,6 +5,7 @@
 #include "style/style.h"  // for making uniforms avail as GUI variables
 #include "data/mbtilesDataSource.h"
 #include "data/networkDataSource.h"
+#include "util/yamlUtil.h"
 #include "sqlitepp.h"
 
 #include "usvg/svgpainter.h"
@@ -614,28 +615,23 @@ void MapsSources::populateSceneVars()
         varsContent->addWidget(createTitledRow(label.c_str(), uwidget));
     }
     else {  // global variable
-      std::string value = app->sceneConfig()["global"][name].as<std::string>("");  //yamlToStr()
+      //std::string value = app->sceneConfig()["global"][name].as<std::string>("");
+      const YAML::Node& value = app->sceneConfig()["global"][name];
       std::string valtype = var.second["type"].as<std::string>("");
-      if(value == "true" || value == "false") {
-        auto checkbox = createCheckBox("", value == "true");
-        checkbox->onToggled = [=](bool newval){
-          updateSceneVar("global." + name, YAML::Node(newval), onchange, reload);
-        };
-        varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
-      }
-      else if(var.second["choices"]) {
+      bool boolval = false;
+      if(var.second["choices"]) {
         std::vector<std::string> choices;
         for(const auto& choice : var.second["choices"])
           choices.push_back(choice.Scalar());
         auto combobox = createComboBox(choices);
-        combobox->setText(value.c_str());
+        combobox->setText(value.as<std::string>().c_str());
         combobox->onChanged = [=](const char* val){
           updateSceneVar("global." + name, YAML::Node(val), onchange, reload);
         };
         varsContent->addWidget(createTitledRow(label.c_str(), combobox));
       }
       else if(valtype == "date") {
-        auto parts = splitStr<std::vector>(value, " -/");
+        auto parts = splitStr<std::vector>(value.as<std::string>(), " -/");
         if(parts.size() != 3) parts = {"2024", "01", "01"};
         int year0 = atoi(parts[0].c_str());
         int month0 = atoi(parts[1].c_str());  // + (parts[1].front() == '0' ? 1 : 0));
@@ -646,7 +642,8 @@ void MapsSources::populateSceneVars()
         varsContent->addWidget(createTitledRow(label.c_str(), NULL, datepicker));
       }
       else if(valtype == "color") {
-        ColorPicker* cp = createColorPicker(app->colorPickerMenu, parseColor(value.c_str(), Color::WHITE));
+        auto c = Tangram::YamlUtil::getColorAsVec4(value);
+        ColorPicker* cp = createColorPicker(app->colorPickerMenu, Color::fromFloat(c.r, c.g, c.b, c.a));
         cp->onColor = [=](Color newcolor){
           updateSceneVar("global." + name, YAML::Node(colorToStr(newcolor)), onchange, reload);
         };
@@ -657,14 +654,21 @@ void MapsSources::populateSceneVars()
         float minval = var.second["min"].as<float>(-INFINITY);
         float maxval = var.second["max"].as<float>(INFINITY);
         const char* format = valtype == "int" ? "%.0f" : "%.2f";
-        auto spinBox = createTextSpinBox(atof(value.c_str()), stepval, minval, maxval, format);
+        auto spinBox = createTextSpinBox(value.as<double>(0.0), stepval, minval, maxval, format);
         spinBox->onValueChanged = [=](real val){
           updateSceneVar("global." + name, YAML::Node(val), onchange, reload);
         };
         varsContent->addWidget(createTitledRow(label.c_str(), spinBox));
       }
+      else if(Tangram::YamlUtil::getBool(value, boolval)) {
+        auto checkbox = createCheckBox("", boolval);
+        checkbox->onToggled = [=](bool newval){
+          updateSceneVar("global." + name, YAML::Node(newval), onchange, reload);
+        };
+        varsContent->addWidget(createTitledRow(label.c_str(), checkbox));
+      }
       else {
-        auto textedit = createTitledTextEdit(label.c_str(), value.c_str());
+        auto textedit = createTitledTextEdit(label.c_str(), value.as<std::string>().c_str());
         textedit->addHandler([=](SvgGui* gui, SDL_Event* event){
           if(event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN) {
             updateSceneVar("global." + name, YAML::Node(trimStr(textedit->text())), onchange, reload);

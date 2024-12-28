@@ -53,7 +53,7 @@ application:
 
 
 styles:
-    custom_slope_shading:
+    custom-slope-shading:
         shaders:
             #defines:
             uniforms:
@@ -66,8 +66,8 @@ styles:
                 u_min_elev: 0.0
                 u_max_elev: 0.0
             blocks:
-                # mixed blocks placed before style's own blocks, so use 'filter' to place after hillshade 'color'
-                filter: |
+                # mixed blocks placed before style's own blocks
+                color: |
                     float aspect = 180.0 - atan(normal.x, -normal.y)*180.0/3.141592;
                     bool en_slope = u_min_slope < u_max_slope;
                     bool en_aspect = (normal.x != 0.0 || normal.y != 0.0) && u_min_aspect < u_max_aspect;
@@ -79,5 +79,5 @@ styles:
                     if(num_en > 0.0 && fslope >= 0.0 && fslope <= 1.0 && faspect >= 0.0 && faspect <= 1.0 && felev >= 0.0 && felev <= 1.0) {
                       float fmix = pow(fslope*faspect*felev, 1.0/num_en);
                       vec4 c = mix(u_custom_color_0, u_custom_color_1, fmix);
-                      color.rgb = mix(color, c, c.a).rgb;
+                      base_color.rgb = mix(base_color.rgb, c.rgb, c.a);
                     }
