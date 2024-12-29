@@ -241,6 +241,20 @@ static const char* moreWidgetSVG = R"#(
     <circle class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" cx="21" cy="21" r="15.5" />
   </g>
 
+  <!-- need to add support for non-rectangular clipping paths to nanovgXC! -->
+  <!-- g id="colorbutton" class="color_preview previewbtn">
+    <pattern id="checkerboard" x="0" y="0" width="18" height="18"
+        patternUnits="userSpaceOnUse" patternContentUnits="userSpaceOnUse">
+      <rect fill="black" fill-opacity="0.1" x="0" y="0" width="9" height="9"/>
+      <rect fill="black" fill-opacity="0.1" x="9" y="9" width="9" height="9"/>
+    </pattern>
+
+    <rect fill="none" width="42" height="42"/>
+    <circle fill="white" cx="21" cy="21" r="15.5" />
+    <circle fill="url(#checkerboard)" cx="21" cy="21" r="15.5" />
+    <circle class="btn-color" stroke="currentColor" stroke-width="2" fill="blue" cx="21" cy="21" r="15.5" />
+  </g -->
+
   <svg id="mobile-dialog" class="window dialog" layout="box">
     <rect class="dialog-bg background" box-anchor="fill" width="20" height="20"/>
     <g class="dialog-layout" box-anchor="fill" layout="flex" flex-direction="column">

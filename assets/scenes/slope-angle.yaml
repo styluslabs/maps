@@ -1,6 +1,6 @@
-import:
-    - hillshade.yaml
+# Slope angle shading - colormap set by SVG <linearGradient>
 
+#import: [ hillshade.yaml ]  -- now handled in mapsources.yaml
 
 application:
     gui_variables:

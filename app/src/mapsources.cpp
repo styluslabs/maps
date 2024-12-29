@@ -48,13 +48,16 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     LOGE("Invalid map source %s", key.c_str());
     return;
   }
+
+  layerkeys.push_back(key);
+  // allow layers together w/ url or scene for mixins like slope-angle
   if(src["layers"]) {  // multi-layer
     for (const auto& layer : src["layers"]) {
       addLayer(getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f);
     }
   }
-  else if(src["url"]) {  // raster tiles
-    layerkeys.push_back(key);
+
+  if(src["url"]) {  // raster tiles
     std::string rasterN = fstring("raster-%d", order);
     updates.emplace_back("+sources." + rasterN + ".type", "Raster");
     for (const auto& attr : src.pairs()) {
@@ -95,11 +98,7 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
   }
   else if(src["scene"]) {  // vector map
     imports.push_back(src["scene"].Scalar());
-    layerkeys.push_back(key);
     ++order;  //order = 9001;  // subsequent rasters should be drawn on top of the vector map
-  }
-  else {  // update only
-    layerkeys.push_back(key);
   }
 
   for(const auto& update : src["updates"].pairs())

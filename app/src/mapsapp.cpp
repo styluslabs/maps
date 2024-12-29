@@ -56,10 +56,12 @@ SvgGui* MapsApp::gui = NULL;
 bool MapsApp::runApplication = true;
 bool MapsApp::simulateTouch = false;
 bool MapsApp::lowPowerMode = false;
-int MapsApp::prevVersion = 0;
 ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
+
+static constexpr int versionCode = 2;
+int MapsApp::prevVersion = 0;
 
 struct JSCallInfo { int ncalls = 0; double secs = 0; };
 static std::vector<JSCallInfo> jsCallStats;
@@ -1719,8 +1721,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   themeCb->setChecked(config["ui"]["theme"].as<std::string>("") != "light");
   themeCb->onClicked();
 
-  // need to update map sources from old version
-  if(prevVersion == 1) {
+  // need to update map sources from old version ... there will probably be changes to default sources
+  //  in every release for the forseeable future
+  if(prevVersion < versionCode) {  //if(prevVersion == 1) {
     FSPath path = FSPath(configFile).parent().child("mapsources.default.yaml");
     mapsSources->syncImportFile(path.path);
   }
@@ -2057,8 +2060,6 @@ bool MapsApp::openURL(const char* url)
 
 bool MapsApp::loadConfig(const char* assetPath)
 {
-  static constexpr int versionCode = 2;
-
   FSPath configPath(baseDir, "config.yaml");
   FSPath configDfltPath(baseDir, "config.default.yaml");
   bool firstrun = !configDfltPath.exists();
