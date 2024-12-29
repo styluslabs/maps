@@ -19,7 +19,7 @@ endif
 ## modules
 include module.mk
 include tangram-es/core/module.mk
-include tangram-es/platforms/common/glfw/module.mk
+include tangram-es/platforms/common/module.mk
 
 
 ## platform

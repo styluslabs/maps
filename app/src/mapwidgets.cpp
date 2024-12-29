@@ -82,6 +82,7 @@ static Dialog* setupMobileDialog(Dialog* dialog, const char* title, const char* 
   dialog->selectFirst(".title-container")->addWidget(titleTb);
   if(content)
     dialog->selectFirst(".body-container")->addWidget(content);
+  dialog->setVisible(false);  // start hidden
   return dialog;
 }
 

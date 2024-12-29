@@ -1295,7 +1295,7 @@ void MapsTracks::startRecording()
   setTrackVisible(&recordedTrack, true);
   populateTrack(&recordedTrack);
   setTrackWidgets(TRACK_STATS);  // plot isn't very useful until there are enough points
-  editTrackContent->setVisible(true);
+  //editTrackContent->setVisible(true);
   tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));
   recordTrackBtn->setChecked(true);
   app->config["tracks"]["recording"] = recordedTrack.rowid;
@@ -1305,6 +1305,7 @@ void MapsTracks::setTrackEdit(bool show)
 {
   if(show == editTrackTb->isVisible()) return;
   if(show && (!plotWidgets[0]->isVisible() || recordTrack)) return;
+  plotEditBtn->setChecked(show);
   editTrackTb->setVisible(show);
   trackSliders->setEditMode(show);
   app->map->markerSetVisible(trackHoverMarker, !show);
@@ -1324,7 +1325,7 @@ void MapsTracks::setTrackEdit(bool show)
 }
 
 // currently, we need to create separate widgets for stats and waypoints panels
-Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
+void MapsTracks::createEditDialog()
 {
   TextEdit* editTrackTitle = createTitledTextEdit("Title");
   ColorPicker* editTrackColor = createColorPicker(app->colorPickerMenu, Color::BLUE);
@@ -1363,17 +1364,20 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
     }
     setTrackEdit(false);
   };
-  Widget* saveTrackContent = createInlineDialog(
-      {editTrackRow}, "Save", [=](){ saveTrackFn(false); }, [=](){ setTrackEdit(false); });
+  //Widget* saveTrackContent = createInlineDialog(
+  //    {editTrackRow}, "Save", [=](){ saveTrackFn(false); }, [=](){ setTrackEdit(false); });
 
-  Button* saveBtn = static_cast<Button*>(saveTrackContent->selectFirst(".accept-btn"));
+  editTrackDialog.reset(createInputDialog(
+      {editTrackRow}, "Edit Track", "Save", [=](){ saveTrackFn(false); }, [=](){ setTrackEdit(false); }));
+
+  Button* saveBtn = static_cast<Button*>(editTrackDialog->selectFirst(".accept-btn"));
   saveBtn->setIcon(uiIcon("save"));
   Button* saveCopyBtn = createToolbutton(uiIcon("save-copy"), "Save copy", true);
-  saveCopyBtn->onClicked = [=](){ saveTrackContent->setVisible(false); saveTrackFn(true); };
+  saveCopyBtn->onClicked = [=](){ editTrackDialog->finish(Dialog::CANCELLED); saveTrackFn(true); };
   saveBtn->parent()->containerNode()->addChild(saveCopyBtn->node, saveBtn->node);
 
   editTrackTitle->onChanged = [=](const char* s){ saveBtn->setEnabled(s[0]); saveCopyBtn->setEnabled(s[0]); };
-  saveTrackContent->addHandler([=](SvgGui* gui, SDL_Event* event) {
+  editTrackDialog->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SvgGui::VISIBLE) {
       editTrackTitle->setText(activeTrack->title.c_str());
       editTrackColor->setColor(parseColor(activeTrack->style, Color::BLUE));
@@ -1384,7 +1388,6 @@ Widget* MapsTracks::createEditDialog(Button* editTrackBtn)
     }
     return false;
   });
-  return saveTrackContent;
 }
 
 static Widget* createStatsRow(std::vector<const char*> items)  // const char* title1, const char* class1, const char* title2, const char* class2)
@@ -1488,10 +1491,19 @@ void MapsTracks::createPlotContent()
   plotVsTimeBtn->onClicked = [=](){ horzAxisSelFn(false); };
   plotVsDistBtn->onClicked = [=](){ horzAxisSelFn(true); };
 
-  Toolbar* axisSelRow = createToolbar({vertAxisSelBtn, new TextBox(createTextNode("vs.")), horzAxisSelBtn});
+  plotEditBtn = createToolbutton(uiIcon("edit"), "Edit Track");
+  plotEditBtn->onClicked = [=](){
+    //if(activeTrack != &recordedTrack || recordTrack)
+    bool edit = !editTrackTb->isVisible();
+    setTrackEdit(edit);
+  };
+
+  Toolbar* axisSelRow = createToolbar(
+      {vertAxisSelBtn, new TextBox(createTextNode("vs.")), horzAxisSelBtn, createStretch(), plotEditBtn});
 
   trackPlot = new TrackPlot();
-  trackPlot->node->setAttribute("box-anchor", "hfill");
+  //trackPlot->node->setAttribute("box-anchor", "fill");
+  trackPlot->node->addClass("scrollwidget-var-height");  // MapsApp::setWindowLayout() will set hfill or fill
   // trackSliders is container for trackPlot and slider handles
   trackSliders = createTrackSliders(trackPlot, 17, 21);
   trackPlot->sliders = trackSliders;
@@ -1527,6 +1539,12 @@ void MapsTracks::createPlotContent()
     cropEnd = trackPlot->plotPosToTrackPos(val);
     cropSliderChanged();
   };
+
+  Button* savePlotEdit = createToolbutton(MapsApp::uiIcon("save"), "Save...", true);
+  savePlotEdit->onClicked = [=](){ showModalCentered(editTrackDialog.get(), app->gui); };
+
+  Button* cancelPlotEdit = createToolbutton(MapsApp::uiIcon("cancel"), "Cancel");
+  cancelPlotEdit->onClicked = [=](){ setTrackEdit(false); };
 
   Button* cropTrackBtn = createToolbutton(MapsApp::uiIcon("crop-outer"), "Crop", true);
   cropTrackBtn->onClicked = [=](){
@@ -1576,8 +1594,7 @@ void MapsTracks::createPlotContent()
   Menu* trackPlotOverflow = createMenu(Menu::VERT_LEFT);
   moreTrackOptionsBtn->setMenu(trackPlotOverflow);
 
-  Button* appendTrackBtn = createToolbutton(MapsApp::uiIcon("add-track"), "Append", true);
-  appendTrackBtn->onClicked = [=](){
+  trackPlotOverflow->addItem("Append", MapsApp::uiIcon("add-track"), [=](){
     if(!selectTrackDialog) {
       selectTrackDialog.reset(createSelectDialog("Choose Track", MapsApp::uiIcon("track")));
       selectTrackDialog->onSelected = [this](int idx){
@@ -1607,7 +1624,7 @@ void MapsTracks::createPlotContent()
     }
     selectTrackDialog->addItems(items);
     showModalCentered(selectTrackDialog.get(), MapsApp::gui);
-  };
+  });
 
   trackPlotOverflow->addItem("Reverse", MapsApp::uiIcon("reverse-direction"), [this](){
     if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
@@ -1619,7 +1636,7 @@ void MapsTracks::createPlotContent()
     updateStats(activeTrack);
   });
 
-  editTrackTb = createToolbar({cropTrackBtn, deleteSegmentBtn, appendTrackBtn, createStretch(), moreTrackOptionsBtn});
+  editTrackTb = createToolbar({cancelPlotEdit, savePlotEdit, createStretch(), cropTrackBtn, deleteSegmentBtn, moreTrackOptionsBtn});
   editTrackTb->setVisible(false);
 
   trackSliders->trackSlider->onValueChanged = [=](real s){
@@ -1653,8 +1670,8 @@ void MapsTracks::createPlotContent()
   };
 
   // stack (invisible) sliders on top of plot
-  auto* plotContent = createColumn({axisSelRow, trackSliders, editTrackTb}, "", "", "hfill");
-  auto* plotContainer = createScrollWidget(plotContent);
+  auto* plotContainer = createColumn({axisSelRow, trackSliders, editTrackTb}, "", "", "fill");
+  //auto* plotContainer = createScrollWidget(plotContent);
   trackContainer->addWidget(plotContainer);
   plotWidgets.push_back(plotContainer);
 
@@ -1829,8 +1846,7 @@ void MapsTracks::createTrackPanel()
   trackOverflow = createMenu(Menu::VERT_LEFT);
   trackContainer = createColumn({}, "", "", "fill");
 
-  editTrackContent = createEditDialog(NULL);
-  trackContainer->addWidget(editTrackContent);
+  createEditDialog();
 
   pauseRecordBtn = createToolbutton(MapsApp::uiIcon("pause"), "Pause");
   stopRecordBtn = createToolbutton(MapsApp::uiIcon("stop"), "Stop");
@@ -1883,7 +1899,7 @@ void MapsTracks::createTrackPanel()
       else if(plotWidgets[0]->isVisible()) { for(Widget* w : plotWidgets) w->sdlEvent(gui, event); }
       else if(wayptWidgets[0]->isVisible()) { for(Widget* w : wayptWidgets) w->sdlEvent(gui, event); }
       if(event->type == SvgGui::INVISIBLE) {
-        editTrackContent->setVisible(false);
+        //editTrackContent->setVisible(false);
         setTrackEdit(false);
       }
     }
@@ -1942,9 +1958,8 @@ void MapsTracks::createTrackPanel()
 
   // bottom of menu ... need icon on edit since menu needs space for checkbox menu items
   Button* editItem = trackOverflow->addItem("Edit", uiIcon("edit"), [=](){
-    showInlineDialogModal(editTrackContent);
-    if(activeTrack != &recordedTrack || recordTrack)
-      setTrackEdit(true);
+    //showInlineDialogModal(editTrackContent);
+    showModalCentered(editTrackDialog.get(), app->gui);
   });
   static_cast<SvgUse*>(editItem->node->selectFirst("use"))->setViewport(Rect::wh(24, 24));
 

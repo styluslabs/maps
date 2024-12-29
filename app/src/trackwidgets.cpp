@@ -189,7 +189,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   p->setFontSize(12);
   p->setTextAlign(Painter::AlignLeft | Painter::AlignBaseline);
   real labelw = 0;
-  int nvert = 5;
+  int nvert = h < 100 ? 2 : h < 300 ? 5 : h < 600 ? 10 : 20;  //5 * std::exp2(std::floor(std::log2(h/200)));
   real dhalt = (maxAlt - minAlt)/nvert;
   for(int ii = 0; ii <= nvert; ++ii)
     labelw = std::max(labelw, p->textBounds(0, 0, fstring("%.0f", minAlt + (nvert-ii)*dhalt).c_str()));
@@ -486,7 +486,7 @@ SliderHandle* createSliderHandle(Widget* bg, real lmargin, real bmargin)
 TrackSliders* createTrackSliders(Widget* bg, real lmargin, real bmargin)
 {
   TrackSliders* widget = new TrackSliders(new SvgG);
-  widget->node->setAttribute("box-anchor", "hfill");
+  widget->node->setAttribute("box-anchor", "fill");
   widget->node->setAttribute("layout", "box");
 
   widget->trackSlider = createSliderHandle(bg, lmargin, bmargin);

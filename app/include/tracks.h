@@ -65,7 +65,7 @@ private:
   bool findPickedWaypoint(GpxFile* track);
   void toggleRouteEdit(bool show);
   void newRoute(bool measure);
-  Widget* createEditDialog(Button* editTrackBtn);
+  void createEditDialog();
   void editWaypoint(GpxFile* track, const Waypoint& wpt, std::function<void()> callback);
   void setStatsText(const char* selector, std::string str);
   void setTrackEdit(bool show);
@@ -114,10 +114,11 @@ private:
   Widget* nonliveStatsRow = NULL;
   Widget* wayptTabLabel = NULL;
   Toolbar* editTrackTb = NULL;
-  Widget* editTrackContent = NULL;
+  //Widget* editTrackContent = NULL;
   TrackSliders* trackSliders = NULL;
   Button* tracksBtn = NULL;
   Button* recordTrackBtn = NULL;
+  Button* plotEditBtn = NULL;
 
   std::unique_ptr<FileStream> recordGPXStrm;
   Timer* recordTimer = NULL;
@@ -145,4 +146,5 @@ private:
   std::unique_ptr<SelectDialog> selectTrackDialog;
   std::unique_ptr<Dialog> editWayptDialog;
   std::unique_ptr<Dialog> newTrackDialog;
+  std::unique_ptr<Dialog> editTrackDialog;
 };
