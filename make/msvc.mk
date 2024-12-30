@@ -69,7 +69,7 @@ BUILDDIRS=$(sort $(dir $(OBJ)))
 # on Windows, existence check doesn't work for directories (?), so use an empty file in each directory instead
 BUILDDIRSMADE=$(BUILDDIRS:%=%.made)
 # packaging
-ZIP =  $(BUILDDIR)/$(ZIPFILE)
+ZIP = $(BUILDDIR)/$(ZIPFILE)
 WIXBASE=$(basename $(WXS))
 MSI = $(BUILDDIR)/$(WIXBASE).msi
 

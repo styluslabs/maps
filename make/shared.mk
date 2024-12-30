@@ -21,6 +21,7 @@ INC :=
 DEFS :=
 INCSYS =
 INC_PRIVATE =
+GENERATED =
 
 ## module functions
 GET_MAKE_BASE = $(patsubst %/module.mk,%,$(lastword $(MAKEFILE_LIST)))

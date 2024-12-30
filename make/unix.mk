@@ -108,6 +108,9 @@ $(TGZ): $(TGT) $(DISTRES)
 	rsync -Lvr --exclude .git $(DISTRES) $(BUILDDIR)/.dist
 	(cd $(BUILDDIR) && mv .dist $(TARGET) && tar --remove-files -czvf $@ $(TARGET))
 
+# files that need to be generated, downloaded, etc.
+$(OBJ): $(GENERATED)
+
 # | (pipe) operator causes make to just check for existence instead of timestamp
 $(OBJ): | $(BUILDDIRS)
 
