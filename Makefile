@@ -2,6 +2,19 @@
 
 TARGET = ascend
 
+DEBUG ?= 0
+ifneq ($(DEBUG), 0)
+  BUILDTYPE = Debug
+else
+  BUILDTYPE = Release
+endif
+
+ifneq ($(ANDROID),)
+  BUILDDIR ?= build/Android$(BUILDTYPE)
+else
+  BUILDDIR ?= build/$(BUILDTYPE)
+endif
+
 include make/shared.mk
 
 ifneq ($(wildcard styluslabs/.),)
@@ -16,14 +29,10 @@ else
   DEFS += LOG_LEVEL=2
 endif
 
-## modules
+## common modules
 include module.mk
 include tangram-es/core/module.mk
-include tangram-es/platforms/common/module.mk
 
-
-## platform
-MODULE_BASE := .
 
 ifneq ($(windir),)
 # Windows
@@ -67,7 +76,7 @@ DISTRES = \
 # installer
 WXS = windows/InstallWrite.wxs
 
-PLATFORM_MK = make/msvc.mk
+include make/msvc.mk
 
 else ifneq ($(XPC_FLAGS),)
 # iOS (XPC_FLAGS seems to be defined on macOS)
@@ -77,33 +86,41 @@ DEFS += GLES_SILENCE_DEPRECATION
 
 include make/ios.mk
 
-else ifneq ($(BUILD_SHARED_LIBRARY),)
-# Android
-# ./start_gradle assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.keystore && mv signed_app-release.apk write300.apk
-
-LOCAL_PATH := $(call my-dir)
-include $(CLEAR_VARS)
-
-SOURCES += android/androidhelper.cpp
+else ifneq ($(ANDROID),)
+# ./gww assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.keystore && mv signed_app-release.apk ascend.apk
 
 # System.loadLibrary("droidmaps") in MapsLib.java
-LOCAL_MODULE := droidmaps
+TARGET = libdroidmaps.so
+ANDROID_NDK = $(HOME)/android-sdk/ndk/26.3.11579264
 
-ALL_INC := $(INC) $(INCSYS)
-LOCAL_C_INCLUDES := $(addprefix $(LOCAL_PATH)/, $(ALL_INC))
+# platform
+MODULE_BASE := .
 
-LOCAL_CFLAGS := $(addprefix -D, $(DEFS))
-LOCAL_CPPFLAGS := -std=c++14 -Wno-unused -Wno-error=format-security
+MODULE_SOURCES += \
+  app/android/app/src/main/cpp/androidApp.cpp \
+  tangram-es/platforms/common/platform_gl.cpp \
+  tangram-es/platforms/android/tangram/src/main/cpp/JniHelpers.cpp \
+  tangram-es/platforms/android/tangram/src/main/cpp/AndroidPlatform.cpp \
+  tangram-es/platforms/android/tangram/src/main/cpp/sqlite_fdvfs.c \
+  tangram-es/platforms/android/tangram/src/main/cpp/sqlite3ndk.cpp
 
-LOCAL_SRC_FILES := $(addprefix $(LOCAL_PATH)/, $(SOURCES))
-#LOCAL_SHARED_LIBRARIES := SDL2
-# libandroid needed for ANativeWindow_* fns
-LOCAL_LDLIBS := -lGLESv3 -llog -ljnigraphics -landroid
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/android/tangram/src/main/cpp $(STYLUSLABS_DEPS)
+MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
 
-include $(BUILD_SHARED_LIBRARY)
+include $(ADD_MODULE)
+
+DEFS += TANGRAM_ANDROID
+LIBS = android atomic GLESv3 EGL log z jnigraphics
+
+include make/android.mk
 
 else
 # Linux
+# GLFW
+include tangram-es/platforms/common/module.mk
+
+# Linux platfrom
+MODULE_BASE := .
 
 MODULE_SOURCES += \
   tangram-es/platforms/linux/src/linuxPlatform.cpp \
@@ -114,8 +131,10 @@ MODULE_SOURCES += \
   app/src/glfwmain.cpp \
   $(STYLUSLABS_DEPS)/ugui/example/glfwSDL.c
 
-MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) $(STYLUSLABS_DEPS)/nanovgXC/src $(STYLUSLABS_DEPS)/pugixml/src deps/nfd/src/include tangram-es/platforms/common app/include
-MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
+MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) deps/nfd/src/include tangram-es/platforms/common app/include
+MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
+
+include $(ADD_MODULE)
 
 PKGS = dbus-1 x11
 
@@ -136,12 +155,8 @@ DISTRES = \
   app/linux/setup \
   app/linux/INSTALL
 
-PLATFORM_MK = make/unix.mk
+include make/unix.mk
 
 endif
 
-# platform sources
-include $(ADD_MODULE)
-
-include $(PLATFORM_MK)
 .DEFAULT_GOAL := all

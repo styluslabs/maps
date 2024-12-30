@@ -36,6 +36,18 @@
 #include "nanovgXC/src/nanovg_sw.h"
 #include "nanovgXC/src/nanovg_sw_utils.h"
 
+// ulib impl
+#define PLATFORMUTIL_IMPLEMENTATION
+#include "ulib/platformutil.h"
+
+#define STRINGUTIL_NO_STB_IMPL
+#define STRINGUTIL_IMPLEMENTATION
+#include "ulib/stringutil.h"
+
+#define FILEUTIL_IMPLEMENTATION
+#include "ulib/fileutil.h"
+
+// default GUI theme
 #include "ugui/theme.cpp"
 
 

@@ -1,7 +1,8 @@
 #pragma once
 
 #include "ulib/stringutil.h"
-#include "ulib/painter.h"
+#include "ulib/fileutil.h"
+#include "ulib/color.h"
 
 #include "tangram.h"
 #include "glm/vec2.hpp"

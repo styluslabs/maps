@@ -1,10 +1,3 @@
-DEBUG ?= 0
-ifneq ($(DEBUG), 0)
-  BUILDDIR ?= Debug
-else
-  BUILDDIR ?= Release
-endif
-
 # if source contains ../ paths, this should be the <current> directory; if ../../, <parent>/<current>; etc.
 # - this ensures object files remain under build directory
 #~TOPDIR = syncscribble

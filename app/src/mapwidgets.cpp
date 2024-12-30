@@ -1,5 +1,6 @@
 #include "mapwidgets.h"
 #include "usvg/svgpainter.h"
+#include "ulib/stringutil.h"
 
 
 SvgNode* uiIcon(const char* id)

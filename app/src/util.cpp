@@ -4,16 +4,6 @@
 #include "sqlite3/sqlite3.h"
 #include "usvg/svgwriter.h"
 
-#define PLATFORMUTIL_IMPLEMENTATION
-#include "ulib/platformutil.h"
-
-#define STRINGUTIL_NO_STB_IMPL
-#define STRINGUTIL_IMPLEMENTATION
-#include "ulib/stringutil.h"
-
-#define FILEUTIL_IMPLEMENTATION
-#include "ulib/fileutil.h"
-
 
 template<typename T>
 static constexpr T clamp(T val, T min, T max) {

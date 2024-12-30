@@ -139,7 +139,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     onNewIntent(getIntent());
 
     // detect location enabled/disabled
-    registerReceiver(new BroadcastReceiver() {
+    /*registerReceiver(new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
           if(LocationManager.PROVIDERS_CHANGED_ACTION.equals(intent.getAction())) {
@@ -149,13 +149,13 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
             }
           }
         }
-      }, new IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION));
+      }, new IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION));*/
 
     // detect low power mode
     registerReceiver(new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-          PowerManager pm = (PowerManager)context.getSystemService(Context.POWER_SERVICE);
+          PowerManager pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
           MapsLib.onLowPower(pm.isPowerSaveMode() ? 1 : 0);
         }
       }, new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED));
@@ -274,7 +274,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     //mSensorManager.registerListener(this, mMagSensor, SensorManager.SENSOR_DELAY_UI);
     mSensorManager.registerListener(this, mOrientSensor, SensorManager.SENSOR_DELAY_UI);
 
-    PowerManager pm = (PowerManager)context.getSystemService(Context.POWER_SERVICE);
+    PowerManager pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
     MapsLib.onLowPower(pm.isPowerSaveMode() ? 1 : 0);
   }
 
@@ -381,6 +381,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
   }
 
+  // LocationListener
   @Override
   public void onLocationChanged(Location loc)
   {
@@ -392,6 +393,21 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     updateLocation(loc);
   }
 
+  @Override
+  public void onProviderEnabled (String provider) {}
+
+  @Override
+  public void onProviderDisabled (String provider) {
+    if(LocationManager.GPS_PROVIDER.equals(provider)) {
+      MapsLib.updateGpsStatus(-1, 0);  // hide GPS status icon
+      hasGpsFix = false;
+    }
+  }
+
+  @Override
+  public void onStatusChanged (String provider, int status, Bundle extras) {}  // deprecated in API 29
+
+  // GpsStatus.Listener
   // see https://gitlab.com/mvglasow/satstat ... MainActivity.java
   @Override
   public void onGpsStatusChanged(int event)

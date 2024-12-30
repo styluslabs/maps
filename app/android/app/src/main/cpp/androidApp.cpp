@@ -20,7 +20,7 @@ using Tangram::AndroidPlatform;
 using Tangram::JniHelpers;
 
 #include "ugui/svggui.h"
-//#include "ugui/svggui_platform.h"
+#include "ulib/stringutil.h"
 #include "ulib/fileutil.h"
 
 static SDL_Keycode Android_Keycodes[] = {

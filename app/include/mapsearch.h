@@ -4,8 +4,6 @@
 #include "scene/filters.h"
 #include "util/asyncWorker.h"
 
-#include "ugui/svggui.h"
-
 using Tangram::TileTask;
 using Tangram::AsyncWorker;
 class MarkerGroup;

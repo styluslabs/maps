@@ -1,6 +1,7 @@
 #include "trackwidgets.h"
 #include "mapsapp.h"
 #include "usvg/svgpainter.h"
+#include "ulib/stringutil.h"
 
 
 TrackPlot::TrackPlot()  // : CustomWidget()
