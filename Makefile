@@ -131,7 +131,7 @@ MODULE_SOURCES += \
   app/src/glfwmain.cpp \
   $(STYLUSLABS_DEPS)/ugui/example/glfwSDL.c
 
-MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) deps/nfd/src/include tangram-es/platforms/common app/include
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/common deps/nfd/src/include $(STYLUSLABS_DEPS)
 MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
 
 include $(ADD_MODULE)

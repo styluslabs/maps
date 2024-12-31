@@ -77,7 +77,7 @@ android {
 }
 
 task generateNativeLib(type: Exec) {
-    commandLine 'make', 'OUTPUT=app/android/app/src/main/jniLibs/arm64-v8a/libdroidmaps.so', 'stripped'
+    commandLine 'make', 'ANDROID=1', 'OUTPUT=app/android/app/src/main/jniLibs/arm64-v8a/libdroidmaps.so', 'stripped'
     workingDir '../../..'
 }
 

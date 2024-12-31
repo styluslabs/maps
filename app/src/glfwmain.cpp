@@ -291,22 +291,19 @@ int main(int argc, char* argv[])
       takeScreenshot = false;
     }
     if(debugHovered && MapsApp::gui->hoveredWidget) {
-      XmlStreamWriter xmlwriter;
-      SvgWriter::DEBUG_CSS_STYLE = true;
-      SvgWriter(xmlwriter).serialize(MapsApp::gui->hoveredWidget->node);
-      SvgWriter::DEBUG_CSS_STYLE = false;
       MemStream buff;
-      xmlwriter.save(buff);
+      SvgWriter::DEBUG_CSS_STYLE = true;
+      SvgWriter::save(MapsApp::gui->hoveredWidget->node, buff);
+      SvgWriter::DEBUG_CSS_STYLE = false;
       buff.write("", 1);  // write null terminator
       PLATFORM_LOG("%s:\n%s\n", SvgNode::nodePath(MapsApp::gui->hoveredWidget->node).c_str(), buff.data());
       debugHovered = false;
     }
     if(SvgGui::debugLayout) {
-      XmlStreamWriter xmlwriter;
+      FileStream strm("debug_layout.svg", "wb");
       SvgWriter::DEBUG_CSS_STYLE = true;
-      SvgWriter(xmlwriter).serialize(app->win->modalOrSelf()->documentNode());
+      SvgWriter::save(app->win->modalOrSelf()->documentNode(), strm);
       SvgWriter::DEBUG_CSS_STYLE = false;
-      xmlwriter.saveFile("debug_layout.svg");
       PLATFORM_LOG("Post-layout SVG written to debug_layout.svg\n");
       SvgGui::debugLayout = false;
     }

@@ -1,4 +1,6 @@
 # (mostly) project-independent Makefile fragment for Android
+# refs:
+# - https://android.googlesource.com/platform/ndk/+/master/docs/BuildSystemMaintainers.md
 
 # common C and C++ flags
 CFLAGS += -MMD -fPIC -fvisibility=hidden -ffunction-sections -fdata-sections -Wall -Werror=return-type -Wno-strict-aliasing
@@ -10,8 +12,8 @@ CC = $(ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aar
 CCFLAGS += --std=c99 -Werror=implicit-function-declaration -Werror=int-conversion
 # linker
 LD = $(CXX) -shared
-LDFLAGS += --std=c++14 -fexceptions -frtti -fPIC -fvisibility=hidden -Wl,-soname,$(TARGET) -Wl,--exclude-libs,ALL -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments -Wl,--gc-sections
-# strip/objcopy
+LDFLAGS += --std=c++14 -static-libstdc++ -fexceptions -frtti -fPIC -fvisibility=hidden -Wl,-soname,$(TARGET) -Wl,--exclude-libs,ALL -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments -Wl,--gc-sections
+# strip/objcopy; alternatively, we could let gradle strip library
 STRIP = $(ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip -s
 
 

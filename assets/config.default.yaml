@@ -13,6 +13,7 @@ sources:
     - stylus-worldcover
     - enable-slope-angle
     - enable-contours
+    - custom-slope-shading
     - hillshade
     - hillshade-usgs
     - opentopomap

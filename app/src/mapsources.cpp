@@ -172,7 +172,7 @@ void MapsSources::reload()
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 {
   mapSources[key] = std::move(srcnode);
-  if(!mapSources[key]["__plugin"])
+  if(!mapSources[key].has("__plugin"))
     saveSourcesNeeded = true;
   sourcesDirty = true;
   if(sourcesPanel && sourcesPanel->isVisible())
@@ -187,7 +187,7 @@ void MapsSources::saveSources()
   saveSourcesNeeded = false;
   if(srcFile.empty()) return;
   for(auto& node : mapSources) {
-    if(node["__plugin"])  // plugin can set this flag for sources which should not be saved
+    if(node.has("__plugin"))  // plugin can set this flag for sources which should not be saved
       node.setNoWrite();
   }
 
@@ -797,7 +797,8 @@ void MapsSources::importSources(const std::string& src)
       else {
         YAML::Node yml = YAML::Load(response.content.data(), response.content.size());
         if(yml) {
-          if(yml["global"] || yml["layers"] || yml["styles"] || yml["import"] || yml["sources"])
+          const auto& y = yml;
+          if(y["global"] || y["layers"] || y["styles"] || y["import"] || y["sources"])
             createSource("", fstring("{title: '%s', scene: %s}", FSPath(src).baseName().c_str(), src.c_str()));
           else {
             for(auto node : yml.pairs())

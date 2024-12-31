@@ -612,7 +612,7 @@ static void exportPOIs(const char* dest, int offlineId)
     return;
   }
   if(poiOutDB.exec(fstring(poiExportSQL, searchDB.c_str(), offlineId))) {
-    int nPois;
+    int nPois = 0;
     poiOutDB.stmt("SELECT count(1) FROM main.pois;").onerow(nPois);
     if(!nPois) {
       poiOutDB.exec("DROP TABLE IF EXISTS main.pois;");
