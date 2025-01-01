@@ -805,8 +805,8 @@ void MapsApp::mapUpdate(double time)
 
   // update progress indicator (shown if still loading tiles after 1 sec)
   const auto& tileMgr = map->getScene()->tileManager();
-  currProgress = 1 - tileMgr->numLoadingTiles()/real(tileMgr->getVisibleTiles().size());
-  if(currProgress < 1) {
+  currProgress = 1 - tileMgr->numLoadingTiles()/float(std::max(1, tileMgr->numTotalTiles()));
+  if(currProgress >= 0 && currProgress < 1) {  // < 0 should not be possible ...
     if(progressWidget->isVisible())
       progressWidget->setProgress(currProgress);
     else if(!progressTimer) {
@@ -1101,7 +1101,8 @@ double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
   if(!elevSrc) return 0;
   TileID tileId = lngLatTile(pos, elevSrc->maxZoom());
   // do not use RasterSource::createTask() because we can't use its cached Textures!
-  auto task = std::make_shared<BinaryTileTask>(tileId, elevSrc);  //rsrc->createTask(tileId);
+  auto task = std::make_shared<BinaryTileTask>(tileId, elevSrc.get());
+  task->setScenePrana(map->getScene()->prana());
   elevSrc->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
     runOnMainThread([=](){
       if(_task->hasData()) {
@@ -1173,7 +1174,8 @@ void MapsApp::dumpTileContents(float x, float y)
       TileID tileId = lngLatTile(LngLat(lng, lat), int(map->getZoom()));
       while(tileId.z > src->maxZoom())
         tileId = tileId.getParent();
-      auto task = std::make_shared<BinaryTileTask>(tileId, src);
+      auto task = std::make_shared<BinaryTileTask>(tileId, src.get());
+      task->setScenePrana(map->getScene()->prana());
       src->loadTileData(task, cb);
     }
   }

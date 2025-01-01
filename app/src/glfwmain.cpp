@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
   glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
   GLFWwindow* glfwOffscreen = glfwCreateWindow(100, 100, "Ascend Offscreen", NULL, glfwWin);
 
-  auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>();
+  auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>("Ascend offscreen GL worker");
   offscreenWorker->enqueue([=](){ glfwMakeContextCurrent(glfwOffscreen); });
   Tangram::ElevationManager::offscreenWorker = std::move(offscreenWorker);
 

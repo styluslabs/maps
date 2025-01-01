@@ -207,7 +207,7 @@ global:
         bus_stop: 20  # bus stops only shown when show_transit = true
         station_transit: 5 # transit station priority when show_transit = true
         station_default: 29  # transit station priority when show_transit = false
-        station_tram: 6  # only shown when show_transit = true
+        #station_tram: 6  # only shown when show_transit = true
         # we want to show every traffic light if showing any
         traffic_light: 4
         # housenumbers only shown at high zoom and unlikely to collide
@@ -1368,7 +1368,9 @@ layers:
             exclusive: true
             priority: 3
             filter:
-                railway: [station, halt, tram_stop]
+                any:
+                    - railway: [station, halt, tram_stop]
+                    - amenity: [ferry_terminal]
                 $zoom: { min: 13 }
             # show_transit: stations at 13, station labels at 14; default: stations at 15, station labels at 16
             # - trying to implement this logic w/o using JS functions was a horrible disaster
@@ -1382,6 +1384,9 @@ layers:
                     text:
                         #visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
                         optional: 'function() { return !global.show_transit; }'
+            ferry:
+                filter: { amenity: [ferry_terminal] }
+                draw: { points: { sprite: ferry } }
             # some stations have railway=station, station=light_rail, so we need this sublayer to override parent
             tram:
                 filter:
@@ -1390,9 +1395,12 @@ layers:
                 draw:
                     points:
                         sprite: tram
-                        priority: global.priority.station_tram
+                        priority: |
+                            function() {
+                                return 1 + (global.show_transit ? global.priority.station_transit : global.priority.station_default);
+                            }
                         size: [[13, 10px], [15, 16px]]
-                        visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
+                        visible: 'function() { return $zoom >= (global.show_transit ? 14 : 17); }'
                         text:
                             visible: 'function() { return $zoom >= (global.show_transit ? 16 : 18); }'
 

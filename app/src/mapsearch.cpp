@@ -193,74 +193,9 @@ bool MapsSearch::initSearch()
   return true;
 }
 
+MapsSearch::MapsSearch(MapsApp* _app) : MapsComponent(_app) { initSearch(); }
+
 MapsSearch::~MapsSearch() {}
-
-MapsSearch::MapsSearch(MapsApp* _app) : MapsComponent(_app)
-{
-  initSearch();
-}
-
-bool MapsSearch::indexMBTiles()
-{
-  Map* map = app->map.get();
-  const YAML::Node& searchDataNode = map->getScene()->config()["application"]["search_data"];
-  auto searchData = parseSearchFields(searchDataNode);
-  if(searchData.empty()) {
-    LOGW("No search fields specified, cannot build index!\n");
-    return false;
-  }
-
-  for(auto& tileSrc : map->getScene()->tileSources()) {
-    if(tileSrc->isRaster()) continue;
-    std::string dbfile = tileSrc->offlineInfo().cacheFile;
-    if(dbfile.empty()) {
-      dbfile = tileSrc->offlineInfo().url;
-      if(dbfile.substr(0, 7) == "file://")
-        dbfile = dbfile.substr(7);
-    }
-
-    // get bounds from mbtiles DB
-    // mbtiles spec: https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md
-    sqlite3* tileDB;
-    if(sqlite3_open_v2(dbfile.c_str(), &tileDB, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
-      LOGE("Error opening tile DB: %s\n", sqlite3_errmsg(tileDB));
-      sqlite3_close(tileDB);
-      continue;
-    }
-    int min_row, max_row, min_col, max_col, max_zoom;
-    const char* boundsSql = "SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column), max(zoom_level) FROM tiles WHERE zoom_level = (SELECT max(zoom_level) FROM tiles);";
-    DB_exec(tileDB, boundsSql, [&](sqlite3_stmt* stmt){
-      min_row = sqlite3_column_int(stmt, 0);
-      max_row = sqlite3_column_int(stmt, 1);
-      min_col = sqlite3_column_int(stmt, 2);
-      max_col = sqlite3_column_int(stmt, 3);
-      max_zoom = sqlite3_column_int(stmt, 4);
-    });
-    sqlite3_close(tileDB);
-
-    tileCount = (max_row-min_row+1)*(max_col-min_col+1);
-    searchDB.exec("BEGIN TRANSACTION");
-    auto tilecb = TileTaskCb{[searchData, this](std::shared_ptr<TileTask> task) {
-      if(task->hasData())
-        processTileData(task.get(), insertStmt, searchData);
-      if(--tileCount == 0) {
-        searchDB.exec("COMMIT TRANSACTION");
-        //sqlite3_finalize(insertStmt);  // then ... stmt = NULL;
-        LOG("Search index built.\n");
-      }
-    }};
-
-    for(int row = min_row; row <= max_row; ++row) {
-      for(int col = min_col; col <= max_col; ++col) {
-        TileID tileid(col, (1 << max_zoom) - 1 - row, max_zoom);
-        tileSrc->loadTileData(std::make_shared<BinaryTileTask>(tileid, tileSrc), tilecb);
-      }
-    }
-    //break; ???
-  }
-
-  return true;
-}
 
 void MapsSearch::clearSearchResults()
 {
@@ -337,6 +272,7 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
     }
     MapsApp::runOnMainThread([this, res=std::move(res)]() mutable {
       mapResults = std::move(res);
+      markers->reset();
       resultsUpdated(MAP_SEARCH);
     });
   });
@@ -438,8 +374,8 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 {
   updateMapResultBounds(lngLat00, lngLat11);
   // should we do clearJsSearch() to prevent duplicate results?
-  newMapSearch = true;
   if(providerIdx > 0) {
+    newMapSearch = true;
     if(unifiedSearch && listResults.empty()) { flags |= LIST_SEARCH; }
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, flags);
   }

@@ -31,7 +31,6 @@ public:
   MapsSearch(MapsApp* _app);
   ~MapsSearch();  // to allow unique_ptr to incomplete class
   void clearSearch();
-  bool indexMBTiles();
   void addListResult(int64_t id, double lng, double lat, float rank, const char* json);
   void addMapResult(int64_t id, double lng, double lat, float rank, const char* json);
   void searchPluginError(const char* err);
@@ -76,7 +75,7 @@ private:
   bool isCurrLocDistOrigin = true;
   int selectedResultIdx = -1;
 
-  AsyncWorker searchWorker;
+  AsyncWorker searchWorker = {"Ascend MapsSearch worker"};
   std::atomic_int_fast64_t mapSearchGen = {0};
   std::atomic_int_fast64_t listSearchGen = {0};
 

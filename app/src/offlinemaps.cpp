@@ -80,6 +80,7 @@ private:
     std::vector<TileID> m_pending;
     std::mutex m_mutexQueue;
     std::shared_ptr<TileSource> tileSource;
+    std::shared_ptr<Tangram::ScenePrana> scenePrana;
     Tangram::MBTilesDataSource* mbTiles;
     std::vector<SearchData> searchData;
 };
@@ -157,6 +158,7 @@ OfflineDownloader::OfflineDownloader(const OfflineMapInfo& ofl, const OfflineSou
   mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(*ofl.srcContext, src.url, src.urlOptions);
   // TileSource shared_ptr is needed for thread synchronization in DataSources
   tileSource = std::make_shared<TileSource>(name, std::move(mbtiles), TileSource::ZoomOptions());
+  scenePrana = std::make_shared<Tangram::ScenePrana>(nullptr);
   // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
   for(int z = std::min(ofl.zoom, srcMaxZoom); z <= srcMaxZoom; ++z) {
     TileID tile00 = lngLatTile(ofl.lngLat00, z);
@@ -191,7 +193,8 @@ bool OfflineDownloader::fetchNextTile(int maxPending)
 {
   std::unique_lock<std::mutex> lock(m_mutexQueue);
   if(m_queued.empty() || int(m_pending.size()) >= maxPending) return false;
-  auto task = std::make_shared<BinaryTileTask>(m_queued.front(), tileSource);
+  auto task = std::make_shared<BinaryTileTask>(m_queued.front(), tileSource.get());
+  task->setScenePrana(scenePrana);
   // prevent redundant write to offline_tiles table if importing from mbtiles file
   bool needdata = !searchData.empty() && task->tileId().z == srcMaxZoom;
   task->offlineId = mbTiles->next ? (needdata ? -offlineId : offlineId) : 0;

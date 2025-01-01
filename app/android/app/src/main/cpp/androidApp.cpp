@@ -584,10 +584,10 @@ int eglMain(ANativeWindow* nativeWin, float dpi)
     const EGLint eglAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
     context = eglCreateContext(display, config, EGL_NO_CONTEXT, eglAttribs);
     if(!context) { LOGE("eglCreateContext() error %X", eglGetError()); return -1; }
-    if(app) app->glNeedsInit = true;
+    if(app) { app->glNeedsInit = true; }
 
     // shared context for offscreen worker
-    auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>();
+    auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>("Android offscreen GL worker");
     offscreenWorker->enqueue([=](){
       EGLContext context2 = eglCreateContext(display, config, context, eglAttribs);
       if(!context2) { LOGE("Offscreen context: eglCreateContext() error %X", eglGetError()); return; }
