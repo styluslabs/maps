@@ -59,8 +59,6 @@ public:
   static SQLiteDB searchDB;
 
 private:
-  std::atomic_int tileCount;
-
   std::vector<SearchResult> listResults;
   std::vector<SearchResult> mapResults;
 

@@ -304,18 +304,18 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   if(!yamlStr.empty()) {
     auto src = YAML::Load(yamlStr);
     if(!src) return "";
-    mapSources["savekey"] = std::move(src);
+    mapSources[savekey] = std::move(src);
   }
   else {
-    YAML::Node& node = mapSources["savekey"]; // ? mapSources[savekey] : YAML::Node(YAML::NodeType::Map);
+    YAML::Node& node = mapSources[savekey];
     bool newsrc = !mapSources[savekey];
     node["title"] = trimStr(titleEdit->text());
     if(newsrc || node.has("layers")) {
       YAML::Node& layers = node["layers"] = YAML::Array();
-      for(auto& src : currLayers)
-        layers.push_back(src.opacity < 1 ? YAML::Node({{"source", src.source}, {"opacity", src.opacity}}) : src.source);
-            //fstring("{source: %s, opacity: %.2f}", src.source.c_str(), src.opacity) : src.source));
-      //node["layers"] = layers;
+      for(auto& src : currLayers) {
+        layers.push_back(src.opacity < 1 ?
+            YAML::Node({{"source", src.source}, {"opacity", src.opacity}}) : src.source);
+      }
     }
     else if(node.has("url"))
       node["url"] = trimStr(urlEdit->text());

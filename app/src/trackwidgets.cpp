@@ -3,6 +3,7 @@
 #include "usvg/svgpainter.h"
 #include "ulib/stringutil.h"
 
+static constexpr int LEFT_MARGIN = 15;
 
 TrackPlot::TrackPlot()  // : CustomWidget()
 {
@@ -19,9 +20,10 @@ TrackPlot::TrackPlot()  // : CustomWidget()
       real pinchdist = std::abs(pt1.x - pt2.x);
       SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
       if(prevPinchDist > 0 && fevent->tfinger.type == SDL_FINGERMOTION) {
-        //zoomOffset += pinchcenter - prevCOM;
-        zoomScale = std::min(std::max(1.0, zoomScale*pinchdist/prevPinchDist), maxZoom);
-        updateZoomOffset(pinchcenter - prevCOM);
+        real dx = pinchcenter - (node->bounds().left + LEFT_MARGIN);
+        real s = pinchdist/prevPinchDist;
+        zoomScale = std::min(std::max(1.0, zoomScale*s), maxZoom);
+        updateZoomOffset(dx*(1-s) + (pinchcenter - prevCOM));
         redraw();
       }
       prevCOM = pinchcenter;
@@ -48,8 +50,10 @@ TrackPlot::TrackPlot()  // : CustomWidget()
       }
     }
     else if(event->type == SDL_MOUSEWHEEL) {
-      zoomScale = std::min(std::max(1.0, zoomScale*std::exp(0.25*event->wheel.y/120.0)), maxZoom);
-      updateZoomOffset(0);
+      real s = std::exp(0.25*event->wheel.y/120.0);
+      real dx = gui->prevFingerPos.x - (node->bounds().left + LEFT_MARGIN);
+      zoomScale = std::min(std::max(1.0, zoomScale*s), maxZoom);
+      updateZoomOffset(dx*(1-s));
       redraw();
     }
     else if(onHovered && event->type == SDL_FINGERMOTION && !gui->pressedWidget)
@@ -195,7 +199,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
   for(int ii = 0; ii <= nvert; ++ii)
     labelw = std::max(labelw, p->textBounds(0, 0, fstring("%.0f", minAlt + (nvert-ii)*dhalt).c_str()));
 
-  int lmargin = vertAxis ? labelw+10 : 15;
+  int lmargin = vertAxis ? labelw+10 : LEFT_MARGIN;
   int tmargin = 5;  // need to leave some room for topmost vertical axis label
   int plotw = w - 2*lmargin;
   int ploth = h - 20 - tmargin;
@@ -295,13 +299,13 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setStroke(Color(0, 0xC0, 0), 1.5);
     p->drawLine(Point(start*plotw, 0), Point(start*plotw, ploth));
     p->setFillBrush(Color(0, 0xC0, 0, 128));
-    p->drawPath(Path2D().addEllipse(start*plotw, ploth - 15, 10, 10));
+    p->drawPath(Path2D().addEllipse(start*plotw, ploth - 22, 10, 10));
 
     p->setFillBrush(Brush::NONE);
     p->setStroke(Color::RED, 1.5);
     p->drawLine(Point(end*plotw, 0), Point(end*plotw, ploth));
     p->setFillBrush(Color(Color::RED).setAlpha(128));
-    p->drawPath(Path2D().addEllipse(end*plotw, ploth - 15, 10, 10));
+    p->drawPath(Path2D().addEllipse(end*plotw, ploth - 22, 10, 10));
   }
   else if(sliders->trackSlider->isVisible()) {
     real s = sliders->trackSlider->sliderPos;
@@ -309,7 +313,7 @@ void TrackPlot::draw(SvgPainter* svgp) const
     p->setStroke(sliderColor, 1.5);
     p->drawLine(Point(s*plotw, 0), Point(s*plotw, ploth));
     p->setFillBrush(Color(sliderColor).setAlpha(128));
-    p->drawPath(Path2D().addEllipse(s*plotw, ploth - 15, 10, 10));
+    p->drawPath(Path2D().addEllipse(s*plotw, ploth - 22, 10, 10));
   }
 
   // draw vertical labels
@@ -443,6 +447,7 @@ void SliderHandle::setValue(real value, int update)
   real w = sliderBg->node->bounds().width() - 2*bgMargin;
   setLayoutTransform(Transform2D::translating(w*(sliderPos-value), 0)*m_layoutTransform);
   sliderPos = value;
+  sliderBg->redraw();
   if(update > NO_UPDATE && onValueChanged)
     onValueChanged(sliderPos);
 }
@@ -474,13 +479,14 @@ SliderHandle* createSliderHandle(Widget* bg, real lmargin, real bmargin)
   // all sliders hidden intially
   static const char* slidersSVG = R"#(
     <g class="slider-handle draggable" display="none" box-anchor="left bottom">
-      <rect fill="none" x="-11" y="-11" width="22" height="22"/>
+      <rect fill="none" stroke="none" x="-11" y="-11" width="22" height="22"/>
       <!-- rect class="slider-handle-inner" x="-4" y="0" width="8" height="12"/ -->
     </g>
   )#";
 
   SliderHandle* widget = new SliderHandle(loadSVGFragment(slidersSVG), bg, lmargin);
   widget->setMargins(0, 0, bmargin, 0);
+  widget->setLayoutIsolate(true);
   return widget;
 }
 

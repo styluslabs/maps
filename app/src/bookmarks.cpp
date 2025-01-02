@@ -724,7 +724,7 @@ Button* MapsBookmarks::createPanel()
   listsPanel = app->createMapPanel(listHeader, NULL, listsContent, false);
 
   archivedContent = createColumn();
-  auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Bookmaks");
+  auto archivedHeader = app->createPanelHeader(MapsApp::uiIcon("archive"), "Archived Places");
   archivedPanel = app->createMapPanel(archivedHeader, archivedContent, NULL, false);
 
   listsPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {

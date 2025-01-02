@@ -228,19 +228,21 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
   }
   else {
     overflowMenu->addItem(track->archived ? "Unarchive" : "Archive", [=](){
-      std::string q2 = fstring("UPDATE tracks SET archived = %d WHERE rowid = ?;", track->archived ? 0 : 1);
-      SQLiteStmt(app->bkmkDB, q2).bind(track->rowid).exec();
       track->archived = !track->archived;
+      std::string q2 = fstring("UPDATE tracks SET archived = %d WHERE rowid = ?;", track->archived ? 1 : 0);
+      SQLiteStmt(app->bkmkDB, q2).bind(track->rowid).exec();
       if(track->archived) {
         if(track->visible)
           setTrackVisible(track, false);
         if(!archiveLoaded)
           tracks.remove_if([](const GpxFile& t){ return t.archived; });
         archiveDirty = true;
+        populateTrackList();  // update archived count
       }
-      else
+      else {
         tracksDirty = true;
-      app->gui->deleteWidget(item);  // must be last!
+        app->gui->deleteWidget(item);  // must be last!
+      }
     });
 
     overflowMenu->addItem("Delete", [=](){
@@ -322,7 +324,11 @@ void MapsTracks::populateTrackList()
     if(!track.archived)
       tracksContent->addItem(std::to_string(track.rowid), createTrackEntry(&track));
   }
-  Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived Tracks");
+
+  int narchived = 0;
+  SQLiteStmt(app->bkmkDB, "SELECT COUNT(1) FROM tracks WHERE archived = 1;").onerow(narchived);
+  Button* item = createListItem(MapsApp::uiIcon("archive"), "Archived",
+      narchived == 1 ? "1 track" : fstring("%d tracks", narchived).c_str());
   item->onClicked = [this](){ app->showPanel(archivedPanel, true);  populateArchived(); };
   tracksContent->addItem("-1", item);
   tracksContent->setOrder(order);
@@ -949,18 +955,18 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
   Widget* container = item->selectFirst(".child-container");
 
   item->onClicked = [this, uid](){
-    if(activeTrack == &navRoute && navRoute.routeMode != "direct") {
-      replaceWaypt = true;
-      insertionWpt = uid;
-      app->showPanel(app->mapsSearch->searchPanel, true);
-    }
-    else {
+    //if(activeTrack == &navRoute && navRoute.routeMode != "direct") {
+    //  replaceWaypt = true;
+    //  insertionWpt = uid;
+    //  app->showPanel(app->mapsSearch->searchPanel, true);
+    //}
+    //else {
       auto it = activeTrack->findWaypoint(uid);
       bool wasTapToAdd = std::exchange(tapToAddWaypt, false);
       app->setPickResult(it->lngLat(), it->name, it->props);
       tapToAddWaypt = wasTapToAdd;
       setPlaceInfoSection(activeTrack, *it);
-    }
+    //}
   };
 
   if(!activeTrack->routes.empty() || activeTrack->tracks.empty()) {
@@ -1179,7 +1185,7 @@ void MapsTracks::newRoute(bool measure)
   if(!measure && km > 0.01)
     addWaypoint(wp1);  //"Current location"
   addWaypoint(wp2);
-  toggleRouteEdit(measure);
+  toggleRouteEdit(measure);  // should we also show route edit for navigation?
 }
 
 void MapsTracks::addPlaceActions(Toolbar* tb)

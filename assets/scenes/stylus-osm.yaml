@@ -86,9 +86,9 @@ global:
         place_halo: white
         hood_name: rgba(136, 45, 23, 0.9)
         hood_halo: white
-        bldg: [.83, .83, .83]
+        bldg: [.83, .83, .83, 0.75]
         bldg_3d: [.83, .83, .83, 0.5]
-        bldg_3d_line: [.75, .75, .73, 0.5]
+        bldg_3d_line: [.65, .65, .63, 0.5]
         park_name: darkgreen
         park_halo: white
         housenumber: [0.30,0.30,0.30]  #"#d2b17d"
@@ -146,6 +146,8 @@ global:
         bridge: 700
         bicycle: 720
         transit: 750
+        # put bus routes on top so they aren't hidden by wider route train/subway/tram routes
+        transit_routes: { subway: 1, train: 2, light_rail: 3, tram: 4, bus: 5, trolleybus: 5 }
         aerialway: 760
         border: 790
         bldg_3d_line: 799
@@ -160,6 +162,12 @@ global:
         }
 
     mtb_color_fn: function() { return global.color.mtb[feature.mtb_scale] || global.color.bike_unpaved; }
+
+    transit_order_fn: |
+        function() {
+            const offset = global.order.transit_routes[feature.route] || 0;
+            return global.order.transit + offset + (Number(feature.osm_id) & 65535)/65536;
+        }
 
     transit_color_fn: |
         function() {
@@ -321,7 +329,13 @@ styles:
         lighting: vertex
         shaders:
             blocks:
-                color: "color.rgb += vec3(worldPosition().z / 800.);"
+                # worldPosition() will include elevation if 3D enabled, but we only want building height
+                color: |
+                    #ifdef TANGRAM_MODEL_POSITION_BASE_ZOOM_VARYING
+                    color.rgb += vec3(v_modelpos_base_zoom.z * u_model[2][2] / 800.);
+                    #else
+                    color.rgb += vec3(worldPosition().z / 800.);
+                    #endif
 
     heightglowline:
         base: lines
@@ -1155,7 +1169,7 @@ layers:
         draw:
             lines:
                 width: [[10, 2px], [13, 3px], [14, 4px]]
-                order: global.order.transit
+                order: global.transit_order_fn
                 #style: transit-lines
                 style: unlit-lines
                 color: global.transit_color_fn
@@ -1208,7 +1222,7 @@ layers:
                     order: global.order.bldg_3d
                 lines:
                     style: heightglowline
-                    width: 2px
+                    width: [[15, 1px], [17, 2px]]
                     color: global.color.bldg_3d_line
                     order: global.order.bldg_3d_line
                     extrude: ["render_min_height", "render_height"]
@@ -1400,9 +1414,9 @@ layers:
                                 return 1 + (global.show_transit ? global.priority.station_transit : global.priority.station_default);
                             }
                         size: [[13, 10px], [15, 16px]]
-                        visible: 'function() { return $zoom >= (global.show_transit ? 14 : 17); }'
+                        visible: 'function() { return $zoom >= (global.show_transit ? 15 : 17); }'
                         text:
-                            visible: 'function() { return $zoom >= (global.show_transit ? 16 : 18); }'
+                            visible: 'function() { return $zoom >= (global.show_transit ? 17 : 19); }'
 
         bus_stop:
             exclusive: true
