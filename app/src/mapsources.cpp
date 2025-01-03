@@ -700,7 +700,7 @@ void MapsSources::populateSourceEdit(std::string key)
   app->gui->deleteContents(layersContent);
   if(currSource != key)
     rebuildSource(key);
-  const auto& src = mapSources[key];
+  const auto& src = mapSources.at(key);
   saveBtn->setEnabled(!src);
   if(src)
     titleEdit->setText(mapSources[key]["title"].Scalar().c_str());

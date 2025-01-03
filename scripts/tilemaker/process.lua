@@ -245,20 +245,24 @@ function relation_function(rel)
     local boundary = rel:Find("boundary")
     if parkValues[boundary] then
       local leisure = rel:Find("leisure")
+      local protect_class = rel:Find("protect_class")
+      -- tilemaker doesn't calculate area for relations
       local area = rel:Area();
       rel:Layer("landuse", true)
-      SetMinZoomByArea(rel, area)
+      rel:MinZoom(8)  --SetMinZoomByArea(rel, area)
       rel:Attribute("class", boundary)
       rel:Attribute("boundary", boundary)
       if leisure~="" then rel:Attribute("leisure", leisure) end
+      if protect_class~="" then rel:Attribute("protect_class", protect_class) end
       SetNameAttributes(rel, 0, "relation")
       rel:AttributeNumeric("area", area)
       -- write POI at centroid
       rel:LayerAsCentroid("poi")
-      SetMinZoomByArea(rel, area)
+      rel:MinZoom(8)  --SetMinZoomByArea(rel, area)
       rel:Attribute("class", boundary)
       rel:Attribute("boundary", boundary)
       if leisure~="" then rel:Attribute("leisure", leisure) end
+      if protect_class~="" then rel:Attribute("protect_class", protect_class) end
       SetNameAttributes(rel, 0, "relation")
       rel:AttributeNumeric("area", area)
     end
@@ -428,9 +432,9 @@ function way_function(way)
       end
 
       -- Write names
-		  --"transportation_name":        { "minzoom": 8,  "maxzoom": 14 },
-		  --"transportation_name_mid":    { "minzoom": 12, "maxzoom": 14, "write_to": "transportation_name" },
-		  --"transportation_name_detail": { "minzoom": 14, "maxzoom": 14, "write_to": "transportation_name" },
+      --"transportation_name":        { "minzoom": 8,  "maxzoom": 14 },
+      --"transportation_name_mid":    { "minzoom": 12, "maxzoom": 14, "write_to": "transportation_name" },
+      --"transportation_name_detail": { "minzoom": 14, "maxzoom": 14, "write_to": "transportation_name" },
       --if minzoom < 8 then
       --  minzoom = 8
       --end
@@ -502,11 +506,13 @@ function way_function(way)
 
   if piste_diff~="" then
     local piste_type = way:Find("piste:type")
+    local grooming = way:Find("piste:grooming")
     way:Layer("transportation", isClosed)
     way:Attribute("class", "piste")
     way:Attribute("route", "piste")
     way:Attribute("difficulty", piste_diff)
     if piste_type~="" then way:Attribute("piste_type", piste_type) end
+    if grooming~="" then way:Attribute("piste_grooming", grooming) end  -- so we can ignore backcountry "pistes"
     way:MinZoom(10)
     SetNameAttributes(way, 14)
   end
@@ -630,11 +636,13 @@ function way_function(way)
   -- Parks
   local park_boundary = parkValues[boundary]
   if park_boundary or leisure=="nature_reserve" then
+    local protect_class = way:Find("protect_class")
     way:Layer("landuse", true)
     SetMinZoomByArea(way)
     way:Attribute("class", park_boundary and boundary or leisure)
     if park_boundary then way:Attribute("boundary", boundary) end
     if leisure~="" then way:Attribute("leisure", leisure) end
+    if protect_class~="" then way:Attribute("protect_class", protect_class) end
     SetNameAttributes(way)
     landuse_poi = true
   end
@@ -655,18 +663,18 @@ end
 function attribute_function(attr, layer)
   local featurecla = attr["featurecla"]
 
-	if featurecla=="Glaciated areas" then
-		return { class="ice", natural="glacier" }
-	elseif featurecla=="Antarctic Ice Shelf" then
-		return { class="ice", natural="glacier", glacier_type="shelf" }
-	elseif featurecla=="Urban area" then
-		return { class="residential" }
-	elseif layer=="ocean" then
-		return { class="ocean" }
+  if featurecla=="Glaciated areas" then
+    return { class="ice", natural="glacier" }
+  elseif featurecla=="Antarctic Ice Shelf" then
+    return { class="ice", natural="glacier", glacier_type="shelf" }
+  elseif featurecla=="Urban area" then
+    return { class="residential" }
+  elseif layer=="ocean" then
+    return { class="ocean" }
 
   -- ne_10m_lakes
   elseif layer=="ne_lakes" then
-		return { class="lake", water="lake", name=attr["name"], wikidata=attr["wikidataid"], rank=attr["scalerank"], featurecla=featurecla }
+    return { class="lake", water="lake", name=attr["name"], wikidata=attr["wikidataid"], rank=attr["scalerank"], featurecla=featurecla }
 
   -- ne_10m_admin_0_boundary_lines_land; can't use ne_10m_admin_0_countries because it includes shoreline
   elseif layer=="ne_boundaries" then
@@ -690,8 +698,8 @@ function attribute_function(attr, layer)
     return { _minzoom=6, class="trunk", highway="trunk", ref=attr["name"], rank=attr["scalerank"], featurecla=featurecla }
 
   else
-		return attr
-	end
+    return attr
+  end
 end
 
 -- ==========================================================

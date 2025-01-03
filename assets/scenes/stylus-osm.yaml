@@ -26,6 +26,7 @@ global:
         default_halo: white
         landuse: honeydew
         parks: hsl(135, 33%, 81%)  #'#bddec5'
+        parks_border: hsl(135, 63%, 41%)
         forest: hsl(135, 33%, 75%)  # darker
         scrub: hsl(135, 33%, 87%)  # lighter
         farmland: hsl(105, 33%, 81%)  # decr hue -> more yellow
@@ -149,7 +150,8 @@ global:
         # put bus routes on top so they aren't hidden by wider route train/subway/tram routes
         transit_routes: { subway: 1, train: 2, light_rail: 3, tram: 4, bus: 5, trolleybus: 5 }
         aerialway: 760
-        border: 790
+        border_inner: 790
+        border: 791
         bldg_3d_line: 799
         bldg_3d: 800
 
@@ -382,14 +384,9 @@ styles:
     aerialway:
         mix: unlit-lines
         # both approaches have issue w/ circles being stretched due to change of line width w/ zoom
-        #blend: nonopaque
-        #texcoords: true
-        #shaders:
-        #    defines: { dotSize: 0.2 }
-        #    blocks:
-        #        color: |
-        #            vec2 st = vec2(v_texcoord.x, 4.0*fract(v_texcoord.y / 4.0)) - 0.5;
-        #            color.a = 1. - step(dotSize, dot(st,st)*2.);
+        #blend: nonopaque; texcoords: true; shaders: defines: { dotSize: 0.2 }; blocks.color: |
+        #  vec2 st = vec2(v_texcoord.x, 4.0*fract(v_texcoord.y / 4.0)) - 0.5;
+        #  color.a = 1. - step(dotSize, dot(st,st)*2.);
         texture: |
             data:image/svg+xml;utf8,<svg width="10pt" height="40pt" viewBox="-5 -20 10 40">
               <g fill="#fff"> <circle cx="0" cy="0" r="4"/> </g>
@@ -400,6 +397,14 @@ styles:
             data:image/svg+xml;utf8,<svg width="10pt" height="80pt" viewBox="-5 -40 10 80">
               <g fill="#fff"> <path d="M-5 -40 L-5 0 L0 -4 L5 0 L5 -40Z M-5 40 L-5 6 L0 2 L5 6 L5 40Z"/> </g>
             </svg>
+    inner-lines:
+        mix: unlit-lines
+        blend: nonopaque
+        texcoords: true
+        shaders:
+            blocks:
+                color: |
+                    if (v_texcoord.x < 0.5) { discard; }
     #transit-lines:
     #    base: lines
     #    blend: overlay
@@ -490,13 +495,22 @@ layers:
         data: { source: osm, layer: landuse }
         enabled: global.show_land_polygons
         filter:
-            class: [national_park, protected_area, nature_reserve]
+            - { boundary: national_park, $zoom: { min: 8 } }
+            - { boundary: protected_area, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
+            - { leisure: nature_reserve, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
             #any: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
         draw:
-            polygons:
-                style: global.earth_style
-                order: global.order.parks
+            lines:
+                style: unlit-lines
+                order: global.order.border
+                color: global.color.parks_border
+                width: 1px
+            inner-lines:
+                style: inner-lines
+                order: global.order.border_inner
                 color: global.color.parks
+                alpha: 0.5
+                width: 8px
 
     pier:
         data: { source: osm, layer: landuse }
@@ -1305,8 +1319,11 @@ layers:
                         size: 9.5px
         forest:
             filter:
-                any: [ { landuse: forest }, { natural: wood } ]
-                $zoom: { min: 12 }
+                - { boundary: national_park, $zoom: { min: 8 } }
+                - { boundary: protected_area, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
+                - { leisure: nature_reserve, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
+                - { landuse: forest, $zoom: { min: 12 } }
+                - { natural: wood, $zoom: { min: 12 } }
             draw:
                 text:
                     priority: global.priority.forest
