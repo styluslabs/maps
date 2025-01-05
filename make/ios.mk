@@ -30,26 +30,24 @@ ARFLAGS =
 # strip (removes debug symbols from exe) - what Xcode uses and smaller result than '-Xlinker -S' (or -s)
 STRIP = $(XCODE)/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip
 
-CFLAGS = -MMD -Wall -Werror=return-type
+CFLAGS += -MMD -Wall -Werror=return-type
 #-Wshadow
 CXX = $(CLANG)
-CXXFLAGS = --std=c++14 -fexceptions -frtti
+CXXFLAGS += --std=c++14 -fexceptions -frtti
 CC = $(CLANG) -x c
-CCFLAGS = --std=c99
+CCFLAGS += --std=c99
 MC = $(CLANG) -x objective-c
-MFLAGS = -fobjc-arc
+MFLAGS += -fobjc-arc
 # linker
 LD = $(CXX)
-LDFLAGS =
+LDFLAGS +=
 
 DEBUG ?= 1
 ifneq ($(DEBUG), 0)
   CFLAGS += -O0 -g
   LDFLAGS += -rdynamic
-  BUILDDIR = Debug
 else
   CFLAGS += -O2 -g -DNDEBUG
-  BUILDDIR = Release
   LDFLAGS += -dead_strip
 endif
 
@@ -59,6 +57,11 @@ endif
 
 
 # project independent stuff
+
+# assumes *FLAGS variables use deferred evaluation
+CFLAGS += $(CFLAGS_PRIVATE)
+CCFLAGS += $(CCFLAGS_PRIVATE)
+CXXFLAGS += $(CXXFLAGS_PRIVATE)
 
 # include files
 INCFLAGS = $(INC:%=-I%) $(INC_PRIVATE:%=-I%) $(INCSYS:%=-isystem %) $(INCFILES:%=-include %)
