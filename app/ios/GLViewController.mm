@@ -71,7 +71,7 @@
 }
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateHeading:(CLHeading *)newHeading {
-    iosApp_updateOrientation(newHeading.trueHeading, 0, 0);
+    iosApp_updateOrientation(newHeading.timestamp.timeIntervalSince1970, newHeading.trueHeading, 0, 0);
 }
 
 @end

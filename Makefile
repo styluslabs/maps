@@ -87,10 +87,8 @@ else ifneq ($(XPC_FLAGS),)
 MODULE_BASE := .
 
 MODULE_SOURCES += \
-  tangram-es/platforms/common/appleAllowedFonts.h \
   tangram-es/platforms/common/appleAllowedFonts.mm \
   tangram-es/platforms/common/platform_gl.cpp \
-  tangram-es/platforms/ios/framework/src/iosPlatform.h \
   tangram-es/platforms/ios/framework/src/iosPlatform.mm \
   tangram-es/platforms/ios/framework/src/TGURLHandler.mm \
   app/ios/AppDelegate.m \
@@ -98,7 +96,7 @@ MODULE_SOURCES += \
   app/ios/GLViewController.mm \
   app/ios/iosApp.cpp
 
-MODULE_INC_PRIVATE = app/include tangram-es/platforms/ios/framework/src $(STYLUSLABS_DEPS)
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/common tangram-es/platforms/ios/framework/src $(STYLUSLABS_DEPS)
 MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
 
 include $(ADD_MODULE)

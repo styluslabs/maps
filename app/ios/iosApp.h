@@ -25,7 +25,7 @@ void iosApp_onPause();
 void iosApp_onResume();
 void iosApp_updateLocation(double time, double lat, double lng, float poserr,
     double alt, float alterr, float dir, float direrr, float spd, float spderr);
-void iosApp_updateOrientation(float azimuth, float pitch, float roll);
+void iosApp_updateOrientation(double time, float azimuth, float pitch, float roll);
 void iosApp_getGLConfig(int* samplesOut);
 
 // app -> iOS; in GLViewController.m

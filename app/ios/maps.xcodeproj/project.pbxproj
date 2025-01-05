@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		EF50547B2C23FA5800065499 /* maps-ios in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E662C16197700317BC9 /* maps-ios */; };
 		EF5D42DA240F4B8500BA10F4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42CF240F4B8400BA10F4 /* Foundation.framework */; };
 		EF5D42DC240F4B8500BA10F4 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D1240F4B8500BA10F4 /* QuartzCore.framework */; };
 		EF5D42DE240F4B8500BA10F4 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D3240F4B8500BA10F4 /* CoreMotion.framework */; };
 		EF5D42E1240F4B8500BA10F4 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D6240F4B8500BA10F4 /* CoreGraphics.framework */; };
 		EF5D42E2240F4B8500BA10F4 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */; };
 		EF5D42E3240F4B8500BA10F4 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D8240F4B8500BA10F4 /* UIKit.framework */; };
+		EFC895F92D2A88C600585128 /* libascend.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EFC895F82D2A88C600585128 /* libascend.a */; };
 		EFE14E282C12AE5300317BC9 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E272C12AE5300317BC9 /* CoreLocation.framework */; };
 		EFE14E2A2C12AEBF00317BC9 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = EFE14E292C12AEBF00317BC9 /* main.m */; settings = {COMPILER_FLAGS = "-I."; }; };
 		EFE14E692C16226700317BC9 /* LaunchView.xib in Resources */ = {isa = PBXBuildFile; fileRef = EFE14E2F2C12B08C00317BC9 /* LaunchView.xib */; };
@@ -35,6 +35,7 @@
 		EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGLES.framework; path = System/Library/Frameworks/OpenGLES.framework; sourceTree = SDKROOT; };
 		EF5D42D8240F4B8500BA10F4 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		EF5D42D9240F4B8500BA10F4 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		EFC895F82D2A88C600585128 /* libascend.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libascend.a; path = ../../build/Release/libascend.a; sourceTree = "<group>"; };
 		EFE14E252C12ADF300317BC9 /* libmaps-ios.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libmaps-ios.a"; path = "../../build/Release/libmaps-ios.a"; sourceTree = "<group>"; };
 		EFE14E272C12AE5300317BC9 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
 		EFE14E292C12AEBF00317BC9 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = main.m; path = maps/main.m; sourceTree = "<group>"; };
@@ -57,7 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EF50547B2C23FA5800065499 /* maps-ios in Frameworks */,
+				EFC895F92D2A88C600585128 /* libascend.a in Frameworks */,
 				EFE14E752C1A09AA00317BC9 /* Photos.framework in Frameworks */,
 				EF5D42DA240F4B8500BA10F4 /* Foundation.framework in Frameworks */,
 				EF5D42DC240F4B8500BA10F4 /* QuartzCore.framework in Frameworks */,
@@ -75,6 +76,7 @@
 		EF5D42CE240F4B8400BA10F4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				EFC895F82D2A88C600585128 /* libascend.a */,
 				EF5054782C2147B200065499 /* maps-ios */,
 				EFE14E742C1A09AA00317BC9 /* Photos.framework */,
 				EFE14E722C17AD0300317BC9 /* JavaScriptCore.framework */,
@@ -204,7 +206,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n(cd $HOME/maps && make ios)\n";
+			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n(cd $HOME/maps && make DEBUG=0 lib)\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -350,6 +352,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1.0.1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 8U8646Y4MM;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 8U8646Y4MM;
 				ENABLE_BITCODE = NO;

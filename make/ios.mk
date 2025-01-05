@@ -38,6 +38,8 @@ CC = $(CLANG) -x c
 CCFLAGS += --std=c99
 MC = $(CLANG) -x objective-c
 MFLAGS += -fobjc-arc
+MXX = $(CLANG) -x objective-c++
+MXXFLAGS += $(CXXFLAGS) -fobjc-arc
 # linker
 LD = $(CXX)
 LDFLAGS +=
@@ -47,7 +49,7 @@ ifneq ($(DEBUG), 0)
   CFLAGS += -O0 -g
   LDFLAGS += -rdynamic
 else
-  CFLAGS += -O2 -g -DNDEBUG
+  CFLAGS += -O2 -fno-omit-frame-pointer -g -DNDEBUG
   LDFLAGS += -dead_strip
 endif
 
@@ -97,11 +99,17 @@ lib: $(LIBTGT)
 $(OBJDIR)/%.o: %.cpp
 	$(CXX) -c $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) -o $@ $<
 
+$(OBJDIR)/%.o: %.cc
+	$(CXX) -c $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) -o $@ $<
+
 $(OBJDIR)/%.o: %.c
 	$(CC) -c $(CFLAGS) $(CCFLAGS) $(INCFLAGS) -o $@ $<
 
 $(OBJDIR)/%.o: %.m
 	$(MC) -c $(CFLAGS) $(MFLAGS) $(INCFLAGS) -o $@ $<
+
+$(OBJDIR)/%.o: %.mm
+	$(MXX) -c $(CFLAGS) $(MXXFLAGS) $(INCFLAGS) -o $@ $<
 
 $(OBJDIR)/%.nib: %.xib
 	$(IBTOOL) --module $(TARGET) --compile $@ $<

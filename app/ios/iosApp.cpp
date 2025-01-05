@@ -1,7 +1,7 @@
 #include "iosApp.h"
 #include "mapsapp.h"
 
-#include "yaml-cpp/yaml.h"
+#include "gaml/src/yaml.h"
 #include "ugui/svggui_platform.h"
 #include "ulib/fileutil.h"
 
@@ -185,7 +185,7 @@ static int mainLoop(int width, int height, float dpi, float topinset, float boti
     // docs say ~/Library/Caches can be cleared by iOS, so tiles should not be stored there!
     iosPlatform_excludeFromBackup(FSPath(MapsApp::baseDir, "cache/").c_str());
 
-    auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>();
+    auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>("Offscreen GL worker");
     offscreenWorker->enqueue([](){ iosPlatform_createSharedContext(sdlWin); });
     Tangram::ElevationManager::offscreenWorker = std::move(offscreenWorker);
   }
@@ -245,7 +245,7 @@ void iosApp_stopLoop()
 
 void iosApp_getGLConfig(int* samplesOut)
 {
-  *samplesOut = MapsApp::config["msaa_samples"].as<int>(2);
+  *samplesOut = MapsApp::cfg()["msaa_samples"].as<int>(2);
 }
 
 void iosApp_imeTextUpdate(const char* text, int selStart, int selEnd)
@@ -304,7 +304,7 @@ void iosApp_updateLocation(double time, double lat, double lng, float poserr,
   });
 }
 
-void iosApp_updateOrientation(float azimuth, float pitch, float roll)
+void iosApp_updateOrientation(double time, float azimuth, float pitch, float roll)
 {
-  MapsApp::runOnMainThread([=](){ app->updateOrientation(azimuth, pitch, roll); });
+  MapsApp::runOnMainThread([=](){ app->updateOrientation(time, azimuth, pitch, roll); });
 }
