@@ -29,6 +29,9 @@ else
   DEFS += LOG_LEVEL=2
 endif
 
+# if deferred eval, make sure to only use for source that needs GITREV
+GITREV := $(shell git rev-parse --short HEAD)
+
 ## common modules
 include module.mk
 include tangram-es/core/module.mk
@@ -81,8 +84,60 @@ include make/msvc.mk
 else ifneq ($(XPC_FLAGS),)
 # iOS (XPC_FLAGS seems to be defined on macOS)
 
-SOURCES += ios/ioshelper.m
-DEFS += GLES_SILENCE_DEPRECATION
+MODULE_BASE := .
+
+MODULE_SOURCES += \
+  tangram-es/platforms/common/appleAllowedFonts.h \
+  tangram-es/platforms/common/appleAllowedFonts.mm \
+  tangram-es/platforms/common/platform_gl.cpp \
+  tangram-es/platforms/ios/framework/src/iosPlatform.h \
+  tangram-es/platforms/ios/framework/src/iosPlatform.mm \
+  tangram-es/platforms/ios/framework/src/TGURLHandler.mm \
+  app/ios/AppDelegate.m \
+  app/ios/OpenGLView.m \
+  app/ios/GLViewController.mm \
+  app/ios/iosApp.cpp
+
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/ios/framework/src $(STYLUSLABS_DEPS)
+MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
+
+include $(ADD_MODULE)
+
+DEFS += TANGRAM_IOS GLES_SILENCE_DEPRECATION
+
+## For now, we'll only support building lib w/ make and let Xcode build the final app
+#XIB = ios/LaunchView.xib
+## app store now requires app icon be in an asset catalog
+#XCASSETS = ../scribbleres/Assets.xcassets
+#IOSRES = \
+#  ../scribbleres/fonts/SanFranciscoDisplay-Regular.otf \
+#  ../scribbleres/fonts/DroidSansFallback.ttf \
+#  ../scribbleres/Intro.svg
+#INFOPLIST = ios/Info.plist
+#PLISTENV = CURRENT_PROJECT_VERSION=1.5 MARKETING_VERSION=1.5
+#
+#DIST ?= 0
+#ifeq ($(DIST), 0)
+#  APPDIR = Write.app
+#  PROVISIONING_PROFILE = /Users/mwhite/Documents/mwhite_iOS_Dev_2024.mobileprovision
+#  XCENT = ios/Dev.app.xcent
+#  CODESIGN = /usr/bin/codesign --force --sign 9E6635D070FC516CD66467812DDFA3CFDD010E3D --timestamp=none
+#else
+#  ifneq ($(DEBUG), 0)
+#    $(error DIST build requires DEBUG=0)
+#  endif
+#  APPDIR = Payload/Write.app
+#  ifeq ("$(DIST)", "appstore")
+#    PROVISIONING_PROFILE = /Users/mwhite/Documents/Stylus_Labs_App_Store_2024.mobileprovision
+#    XCENT = ios/AppStore.app.xcent
+#  else
+#    PROVISIONING_PROFILE = /Users/mwhite/Documents/Stylus_Labs_AdHoc_2020.mobileprovision
+#    XCENT = ios/AdHoc.app.xcent
+#  endif
+#  CODESIGN = /usr/bin/codesign --force --sign 55648202533A2234B7ED12254A2C271BC52ACED187E0 --timestamp=none
+#endif
+
+#FRAMEWORKS = AVFoundation GameController CoreMotion Foundation UIKit CoreGraphics OpenGLES QuartzCore CoreAudio AudioToolbox Metal StoreKit
 
 include make/ios.mk
 
@@ -143,7 +198,6 @@ LIBS = -pthread -lOpenGL -lfontconfig -lcurl
 #CFLAGS = -pthread
 
 # distribution package
-GITREV := $(shell git rev-parse --short HEAD)
 TGZ = $(TARGET)-$(GITREV).tar.gz
 DISTRES = \
   assets/config.default.yaml \

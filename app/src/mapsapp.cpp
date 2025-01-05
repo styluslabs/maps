@@ -1015,8 +1015,10 @@ void MapsApp::toggleFollow()
 
 const YAML::Node& MapsApp::sceneConfig()
 {
-  static YAML::Node notReady;
-  if(!map->getScene()->isReady()) { return notReady; }
+  if(!map->getScene()->isReady() && !map->getScene()->isPendingCompletion()) {
+    //assert(false);
+    LOGW("MapsApp::sceneConfig(): scene still loading!");
+  }
   return map->getScene()->config();
 }
 

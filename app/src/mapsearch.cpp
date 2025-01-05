@@ -308,7 +308,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int fla
       return;
     }
     MapsApp::runOnMainThread([this, flags, limit, res=std::move(res)]() mutable {
-      moreListResultsAvail = res.size() >= limit;
+      moreListResultsAvail = int(res.size()) >= limit;
       if(listResults.empty())
         listResults = std::move(res);
       else {
@@ -424,7 +424,7 @@ void MapsSearch::resultsUpdated(int flags)
       double scrx, scry;
       if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
           || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
-        auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat, {32});
+        auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);  //, {32});
         pos.zoom = std::min(pos.zoom, 16.0f);
         pos.tilt = map->getTilt();
         pos.rotation = map->getRotation();
@@ -502,7 +502,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
         .exec([&](const char* q){ autocomplete.emplace_back(q); });
     populateAutocomplete(autocomplete);
     if(query.size() > 1 && providerIdx == 0) {  // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
-      offlineListSearch("name:(" + searchStr + ")", lngLat00, lngLat11);  // restrict live search to name
+      offlineListSearch("name : " + searchStr, lngLat00, lngLat11);  // restrict live search to name
     }
     return;
   }
@@ -680,7 +680,7 @@ Button* MapsSearch::createPanel()
     if(event->type == SDL_KEYDOWN) {
       if(event->key.keysym.sym == SDLK_RETURN) {
         auto& resultNodes = resultsContent->containerNode()->children();
-        if(selectedResultIdx >= 0 && selectedResultIdx < resultNodes.size()) {
+        if(selectedResultIdx >= 0 && selectedResultIdx < int(resultNodes.size())) {
           auto it = resultNodes.begin();
           std::advance(it, selectedResultIdx);
           static_cast<Button*>((*it)->ext())->onClicked();

@@ -405,16 +405,6 @@ styles:
             blocks:
                 color: |
                     if (v_texcoord.x < 0.5) { discard; }
-    #transit-lines:
-    #    base: lines
-    #    blend: overlay
-    #    blend_order: -2
-    #    draw: # default draw parameters
-    #        color: gray  #function() { return feature.colour || 'gray'; }
-    #        alpha: 0.25
-    #        width: 6px
-    #        outline: { color: [.8, .8, .8], alpha: 0.25, width: 1px }
-    #        interactive: true
 
 
 layers:
@@ -493,24 +483,28 @@ layers:
 
     park:
         data: { source: osm, layer: landuse }
-        enabled: global.show_land_polygons
+        enabled: global.show_polygons
         filter:
             - { boundary: national_park, $zoom: { min: 8 } }
             - { boundary: protected_area, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
             - { leisure: nature_reserve, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
             #any: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
-        draw:
-            lines:
-                style: unlit-lines
-                order: global.order.border
-                color: global.color.parks_border
-                width: 1px
-            inner-lines:
-                style: inner-lines
-                order: global.order.border_inner
-                color: global.color.parks
-                alpha: 0.5
-                width: 8px
+        default:
+            filter:
+                name: true
+                any: [ global.show_land_polygons, { $zoom: { max: 11 } } ]  # more succinct than all: [ {any: []}, {any: []} ]
+            draw:
+                lines:
+                    style: unlit-lines
+                    order: global.order.border
+                    color: global.color.parks_border
+                    width: 1px
+                inner-lines:
+                    style: inner-lines
+                    order: global.order.border_inner
+                    color: global.color.parks
+                    alpha: 0.5
+                    width: 8px
 
     pier:
         data: { source: osm, layer: landuse }
@@ -1257,206 +1251,126 @@ layers:
                     stroke: { color: global.color.housenumber_halo, width: 2px }
 
 
-    peaks:
-        data: { source: osm, layer: poi }
-        filter:
-            all:
-                - any: [ { natural: [peak, volcano] }, { class: [peak, volcano] } ]
-                - any: [ { $zoom: { min: 17 } }, global.show_trails ]
-            ele: true
-        draw:
-            points:
-                texture: pois
-                sprite: peak
-                size: 14px
-                interactive: true
-                collide: true
-                priority: function() { return global.priority.peak + (1 - feature.ele/16384.0); }
-                transition: { show: { time: 0s }, hide: { time: 1s } }
-                text:
-                    interactive: true
-                    # give text same priority as icon
-                    #priority: function() { return 30 + (1 - feature.ele/10000.0); }
-                    text_source: |
-                        function() {
-                            const name = global.show_name_en && feature.name_en ? feature.name_en : feature.name;
-                            const ele = global.metric_units ? feature.ele : feature.ele*3.2808399;
-                            if(!name) { return ele.toFixed(0); }
-                            const elided = name.length > 17 ? name.substring(0, 17) + "…" : name;
-                            return elided + "\n" + ele.toFixed(0);
-                        }
-                    text_wrap: 100
-                    max_lines: 2
-                    font:
-                        family: global.primary_font
-                        style: italic
-                        size: 10.67px
-                        fill: global.color.default_label
-                        stroke: { color: global.color.default_halo, width: 3 }
-
-
-    text_pois:
-        data: { source: osm, layer: poi }
-        filter:
-            name: true
-            any: [ { natural: saddle }, { landuse: forest }, { natural: wood } ]
-        draw:
-            text:
-                font:
-                    family: global.primary_font
-                    size: 12px
-                    style: italic
-                    fill: global.color.default_label
-                    stroke: { color: global.color.default_halo, width: 3 }
-        saddle:
-            filter:
-                natural: saddle
-                any: [ { $zoom: { min: 17 } }, global.show_trails ]
-            draw:
-                text:
-                    priority: global.priority.saddle
-                    font:
-                        size: 9.5px
-        forest:
-            filter:
-                - { boundary: national_park, $zoom: { min: 8 } }
-                - { boundary: protected_area, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
-                - { leisure: nature_reserve, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
-                - { landuse: forest, $zoom: { min: 12 } }
-                - { natural: wood, $zoom: { min: 12 } }
-            draw:
-                text:
-                    priority: global.priority.forest
-                    font:
-                        fill: global.color.park_name
-                        stroke: { color: global.color.park_halo, width: 3 }
-
-
     pois:
         data: { source: osm, layer: poi }
         draw:
             points:
-                style: poi-points
                 texture: pois
-                size: [[13, 16px], [16, 18px]]
                 interactive: true
                 collide: true
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 text:
                     interactive: true
                     text_source: global.names_one_line
-                    anchor: [right, left, bottom, top]
-                    max_lines: 2
                     font:
                         family: global.primary_font
                         size: 12px
                         fill: global.color.default_label
                         stroke: { color: global.color.default_halo, width: 3 }
 
-        parks:
+        peak:
             exclusive: true
-            priority: 1
             filter:
-                - { leisure: [park, golf_course], name: true }
-                - { amenity: grave_yard }
-                - { landuse: cemetery }
-                - { tourism: zoo, name: true }
+                all:
+                    - any: [ { natural: [peak, volcano] }, { class: [peak, volcano] } ]
+                    - any: [ { $zoom: { min: 17 } }, global.show_trails ]
+                ele: true
             draw:
                 points:
-                    visible: false
-                    color: global.poi_color.outdoor
+                    sprite: peak
+                    size: 14px
+                    priority: function() { return global.priority.peak + (1 - feature.ele/16384.0); }
                     text:
+                        text_source: |
+                            function() {
+                                const name = global.show_name_en && feature.name_en ? feature.name_en : feature.name;
+                                const ele = global.metric_units ? feature.ele : feature.ele*3.2808399;
+                                if(!name) { return ele.toFixed(0); }
+                                const elided = name.length > 17 ? name.substring(0, 17) + "…" : name;
+                                return elided + "\n" + ele.toFixed(0);
+                            }
+                        text_wrap: 100
+                        max_lines: 2
                         font:
-                            size: 13px
                             style: italic
-                            fill: global.color.park_name
-                            stroke: { color: global.color.park_halo, width: 3 }
-            park:
-                filter:
-                    - { leisure: park }
-                    - { tourism: zoo }
-                draw:
-                    points:
-                        sprite: tree
-                        priority: global.priority.park
-                        text: { font: { size: 14px } }
-            golf:
-                filter: { leisure: golf_course }
-                draw: { points: { sprite: golf, priority: global.priority.golf } }
-            cemetery:
-                filter:
-                    - { amenity: grave_yard }
-                    - { landuse: cemetery }
-                draw: { points: { sprite: cemetery, priority: global.priority.cemetery } }
+                            size: 10.67px
+
+        saddle:
+            exclusive: true
+            filter:
+                natural: saddle
+                any: [ { $zoom: { min: 17 } }, global.show_trails ]
+                name: true
+            draw:
+                points: { visible: false }
+                text:
+                    text_source: global.names_one_line
+                    transition: { show: { time: 0s }, hide: { time: 1s } }
+                    priority: global.priority.saddle
+                    font:
+                        family: global.primary_font
+                        size: 9.5px
+                        style: italic
+                        fill: global.color.default_label
+                        stroke: { color: global.color.default_halo, width: 3 }
+
+        forest:
+            exclusive: true
+            filter:
+                 name: true
+                 any:
+                    - { boundary: national_park, $zoom: { min: 8 } }
+                    #boundary: protected_area, leisure: nature_reserve
+                    - { protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
+                    - { any: [ { landuse: forest }, { natural: wood } ], $zoom: { min: 11 } }
+            draw:
+                points: { visible: false }
+                text:
+                    visible: false
+                    text_source: global.names_one_line
+                    transition: { show: { time: 0s }, hide: { time: 1s } }
+                    priority: global.priority.forest
+                    font:
+                        family: global.primary_font
+                        size: 12px
+                        style: italic
+                        fill: global.color.park_name
+                        stroke: { color: global.color.park_halo, width: 3 }
             show:
                 filter:
-                    - { leisure: park, $zoom: { min: 14 }, area: { min: 1500px2 } }
-                    - { $zoom: { min: 17 } }
-                    - { area: { min: 2000px2 } }
-                draw: { points: { visible: true } }
+                    - $zoom: { max: 11 }
+                    - all: [ global.show_land_polygons, { $zoom: { max: 12 } } ]
+                draw: { text: { visible: true } }
 
-        station:
+        traffic_signal:
             exclusive: true
-            priority: 3
-            filter:
-                any:
-                    - railway: [station, halt, tram_stop]
-                    - amenity: [ferry_terminal]
-                $zoom: { min: 13 }
-            # show_transit: stations at 13, station labels at 14; default: stations at 15, station labels at 16
-            # - trying to implement this logic w/o using JS functions was a horrible disaster
+            filter: { $zoom: { min: 19 }, highway: traffic_signals }
             draw:
                 points:
-                    visible: 'function() { return $zoom >= (global.show_transit ? 13 : 15); }'
-                    priority: 'function() { return global.show_transit ? global.priority.station_transit : global.priority.station_default; }'
-                    sprite: train
-                    color: global.poi_color.public
-                    size: [[13, 12px], [15, 18px]]
-                    text:
-                        #visible: 'function() { return $zoom >= (global.show_transit ? 14 : 16); }'
-                        optional: 'function() { return !global.show_transit; }'
-            ferry:
-                filter: { amenity: [ferry_terminal] }
-                draw: { points: { sprite: ferry } }
-            # some stations have railway=station, station=light_rail, so we need this sublayer to override parent
-            tram:
-                filter:
-                    - railway: tram_stop
-                    - station: light_rail
-                draw:
-                    points:
-                        sprite: tram
-                        priority: |
-                            function() {
-                                return 1 + (global.show_transit ? global.priority.station_transit : global.priority.station_default);
-                            }
-                        size: [[13, 10px], [15, 16px]]
-                        visible: 'function() { return $zoom >= (global.show_transit ? 15 : 17); }'
-                        text:
-                            visible: 'function() { return $zoom >= (global.show_transit ? 17 : 19); }'
-
-        bus_stop:
-            exclusive: true
-            priority: 4
-            filter: { highway: bus_stop, $zoom: { min: 16 } }
-            draw:
-                points:
-                    sprite: bus
-                    color: global.poi_color.public
-                    size: [[16, 12px], [18, 16px]]
-                    visible: global.show_transit
-                    priority: global.priority.bus_stop
+                    interactive: false
+                    sprite: traffic_light
+                    priority: global.priority.traffic_light
                     text: { visible: false }
-            default:
-                filter: { $zoom: { min: 19 } }
-                draw: { points: { visible: true } }
+
+        cave:
+            exclusive: true
+            filter: { $zoom: { min: 15 }, natural: cave_entrance }
+            draw:
+                points:
+                    sprite: cave
+                    size: 20px
+                    priority: global.priority.cave
+                    text: { font: { size: 11px, style: italic } }
+            hide_text:
+                filter: { $zoom: { max: 16 } }
+                draw: { points: { text: { visible: false } } }
 
         spring:
             exclusive: true
-            priority: 5
             filter: { $zoom: { min: 15 }, natural: [spring, hot_spring, fumarole, geyser] }
             draw:
                 points:
+                    style: poi-points
                     sprite: spring
                     color: global.color.spring
                     size: 24px  #[[16, 14px], [18, 18px]]
@@ -1467,154 +1381,227 @@ layers:
                             style: italic
                             fill: global.color.spring
                             stroke: { color: global.color.default_halo, width: 2 }
-
-            default:
+            hide_text:
                 filter: { $zoom: { max: 17 } }
                 draw: { points: { text: { visible: false } } }
 
-        traffic_signals:
-            exclusive: true
-            priority: 6
-            filter: { $zoom: { min: 19 }, highway: traffic_signals }
+        icon_pois:
+            # not exclusive, so lower priority than above
             draw:
                 points:
-                    style: points
-                    interactive: false
-                    sprite: traffic_light
-                    priority: global.priority.traffic_light
-                    text: { visible: false }
-
-        cave:
-            exclusive: true
-            priority: 7
-            filter: { $zoom: { min: 15 }, natural: cave_entrance }
-            draw:
-                points:
-                    style: points
-                    sprite: cave
-                    priority: global.priority.cave
-                    text: { font: { size: 11px, style: italic } }
-            default:
-                filter: { $zoom: { max: 16 } }
-                draw: { points: { text: { visible: false } } }
-
-        not_landuse:
-            exclusive: true
-            filter:
-                $zoom: { min: 14 }
-                any:
-                    - name: true
-                    - tourism: [viewpoint, camp_site, information]
-                    - highway: [trailhead]
-                    - amenity: [parking, bicycle_rental, drinking_water, water_point, toilets]
-                not:
-                    - { railway: subway_entrance }
-                    #- 'function() { return global.search_active; }'
-            draw:
-                points:
-                    #interactive: true  -- already set on parent
-                    sprite: global.poi_sprite_fn
-                    color: global.poi_color_fn
-                    priority: global.priority.poi_default
-                    # transition.selected < 0 to indicate label should be hidden when search results shown
-                    transition: { selected: { time: -1s } }
+                    style: poi-points
+                    size: [[13, 16px], [16, 18px]]
                     text:
-                        font:
-                            size: 12px
-                            fill: global.color.default_label
-                            stroke: { color: global.color.default_halo, width: 3 }
-            # make label optional at higher zoom to show more POI icons
-            labels:
-                filter: { $zoom: { min: 17 } }
-                draw: { points: { text: { optional: true } } }
-            # add generic icon at high zoom
-            generic:
-                filter: { $zoom: { min: 18 }, name: true }
-                draw: { points: { sprite_default: generic } }
-            points:
-                hike_camp_view:
-                    exclusive: true
-                    priority: 1
-                    filter: [ { tourism: [viewpoint, camp_site] }, { highway: [trailhead] } ]
+                        anchor: [right, left, bottom, top]
+                        max_lines: 2
+
+            park:
+                exclusive: true
+                priority: 10
+                filter:
+                    - { leisure: [park, golf_course], name: true }
+                    - { amenity: grave_yard }
+                    - { landuse: cemetery }
+                    - { tourism: zoo, name: true }
+                draw:
+                    points:
+                        visible: false
+                        color: global.poi_color.outdoor
+                        text:
+                            font:
+                                size: 13px
+                                style: italic
+                                fill: global.color.park_name
+                                stroke: { color: global.color.park_halo, width: 3 }
+                park:
+                    filter: [ { leisure: park }, { tourism: zoo } ]
                     draw:
                         points:
-                            visible: global.show_trails
-                            priority: global.priority.poi_viewpoint
-                    default:
-                        filter: { $zoom: { min: 17 } }
-                        draw: { points: { visible: true } }
-                information:
-                    exclusive: true
-                    priority: 2
-                    filter: { tourism: information }
-                    draw: { points: { visible: false } }
-                    show:
-                        filter: { $zoom: { min: 17 } }
-                        draw: { points: { visible: true } }
-                parking:
-                    exclusive: true
-                    filter: { amenity: parking }
+                            sprite: tree
+                            priority: global.priority.park
+                            text: { font: { size: 14px } }
+                golf:
+                    filter: { leisure: golf_course }
+                    draw: { points: { sprite: golf, priority: global.priority.golf } }
+                cemetery:
+                    filter: [ { amenity: grave_yard }, { landuse: cemetery } ]
+                    draw: { points: { sprite: cemetery, priority: global.priority.cemetery } }
+                show:
+                    filter:
+                        - { leisure: park, $zoom: { min: 14 }, area: { min: 1500px2 } }
+                        - { $zoom: { min: 17 } }
+                        - { area: { min: 2000px2 } }
+                    draw: { points: { visible: true } }
+
+            station:
+                exclusive: true
+                priority: 20
+                filter:
+                    any:
+                        - railway: [station, halt, tram_stop]
+                        - amenity: [ferry_terminal]
+                    $zoom: { min: 13 }
+                # show_transit: stations at 13, station labels at 14; default: stations at 15, station labels at 16
+                # - trying to implement this logic w/o using JS functions was a horrible disaster
+                draw:
+                    points:
+                        visible: 'function() { return $zoom >= (global.show_transit ? 13 : 14); }'
+                        priority: 'function() { return global.show_transit ? global.priority.station_transit : global.priority.station_default; }'
+                        sprite: train
+                        color: global.poi_color.public
+                        size: [[13, 12px], [15, 18px]]
+                        text:
+                            optional: 'function() { return !global.show_transit; }'
+                ferry:
+                    filter: { amenity: [ferry_terminal] }
                     draw:
                         points:
-                            visible: global.show_parking
-                            priority: global.priority.poi_parking
-                    default:
-                        filter: { $zoom: { min: 18 } }
-                        draw: { points: { visible: true } }
-                bike_rental:
-                    exclusive: true
-                    filter: { amenity: bicycle_rental }  #{ class: amenity, subclass: bicycle_rental }
-                    draw: { points: { visible: global.show_bike } }
-                university:
-                    exclusive: true
-                    filter: { amenity: university }
-                    draw: { points: { priority: global.priority.poi_university } }
-                school:
-                    exclusive: true
-                    filter: { amenity: [school, college, kindergarten] }
-                    draw: { points: { visible: false, priority: global.priority.poi_school } }
-                    show:
-                        filter: { $zoom: { min: 16 } }
-                        draw: { points: { visible: true } }
-                restaurant:
-                    exclusive: true
-                    filter: { amenity: [restaurant, fast_food] }
-                    draw: { points: { priority: global.priority.poi_restaurant } }
-                cafe:
-                    exclusive: true
-                    filter:
-                        - amenity: [cafe, ice_cream]
-                        - shop: [beverages, confectionery, bakery, pastry]
-                    draw: { points: { priority: global.priority.poi_cafe } }
-                grocery:
-                    exclusive: true
-                    filter: { shop: supermarket }
-                    draw: { points: { priority: global.priority.poi_grocery } }
-                convenience:
-                    exclusive: true
-                    filter: { shop: [convenience, greengrocer, deli, delicatessen, butcher, farm] }
-                    draw: { points: { priority: global.priority.poi_convenience } }
-                culture:
-                    exclusive: true
-                    filter:
-                        - amenity: [cinema, theatre, concert_hall, arts_centre, library]
-                        - tourism: [museum, attraction, artwork]
-                        - historic: monument
-                    draw: { points: { priority: global.priority.poi_culture } }
-                church:
-                    exclusive: true
-                    filter: { amenity: place_of_worship }
-                    draw: { points: { visible: false, priority: global.priority.poi_religion } }
-                    show:
-                        filter: { $zoom: { min: 16 } }
-                        draw: { points: { visible: true } }
-                toilet:
-                    exclusive: true
-                    filter: { amenity: [drinking_water, water_point, toilets] }
-                    draw: { points: { visible: false, priority: global.priority.poi_toilet } }
-                    show:
-                        filter: { $zoom: { min: 18 } }
-                        draw: { points: { visible: true } }
+                            # ferry route lines indicate ferry terminals, so we can wait to show poi
+                            visible: 'function() { return $zoom >= (global.show_transit ? 14 : 15); }'
+                            sprite: ferry
+                # some stations have railway=station, station=light_rail, so we need this sublayer to override parent
+                tram:
+                    filter: [ { railway: tram_stop }, { station: light_rail } ]
+                    draw:
+                        points:
+                            sprite: tram
+                            priority: |
+                                function() {
+                                    return 1 + (global.show_transit ? global.priority.station_transit : global.priority.station_default);
+                                }
+                            size: [[13, 10px], [15, 16px]]
+                            visible: 'function() { return $zoom >= (global.show_transit ? 15 : 17); }'
+                            text:
+                                visible: 'function() { return $zoom >= (global.show_transit ? 17 : 19); }'
+
+            bus_stop:
+                exclusive: true
+                priority: 40
+                filter: { highway: bus_stop, $zoom: { min: 16 } }
+                draw:
+                    points:
+                        sprite: bus
+                        color: global.poi_color.public
+                        size: [[16, 12px], [18, 16px]]
+                        visible: global.show_transit
+                        priority: global.priority.bus_stop
+                        text: { visible: false }
+                default:
+                    filter: { $zoom: { min: 19 } }
+                    draw: { points: { visible: true } }
+
+            # these POIs will be hidden by search results (while those above will not)
+            not_landuse:
+                exclusive: true
+                priority: 50
+                filter:
+                    $zoom: { min: 14 }
+                    any:
+                        - name: true
+                        - tourism: [viewpoint, camp_site, information]
+                        - highway: [trailhead]
+                        - amenity: [parking, bicycle_rental, drinking_water, water_point, toilets]
+                    not:
+                        - { railway: subway_entrance }
+                draw:
+                    points:
+                        sprite: global.poi_sprite_fn
+                        color: global.poi_color_fn
+                        priority: global.priority.poi_default
+                        # transition.selected < 0 to indicate label should be hidden when search results shown
+                        transition: { selected: { time: -1s } }
+                # make label optional at higher zoom to show more POI icons
+                labels:
+                    filter: { $zoom: { min: 17 } }
+                    draw: { points: { text: { optional: true } } }
+                # add generic icon at high zoom
+                generic:
+                    filter: { $zoom: { min: 18 }, name: true }
+                    draw: { points: { sprite_default: generic } }
+                special:
+                    hike_camp_view:
+                        exclusive: true
+                        priority: 1
+                        filter: [ { tourism: [viewpoint, camp_site] }, { highway: [trailhead] } ]
+                        draw:
+                            points:
+                                visible: global.show_trails
+                                priority: global.priority.poi_viewpoint
+                        default:
+                            filter: { $zoom: { min: 17 } }
+                            draw: { points: { visible: true } }
+                    information:
+                        exclusive: true
+                        priority: 2
+                        filter: { tourism: information }
+                        draw: { points: { visible: false } }
+                        show:
+                            filter: { $zoom: { min: 17 } }
+                            draw: { points: { visible: true } }
+                    parking:
+                        exclusive: true
+                        filter: { amenity: parking }
+                        draw:
+                            points:
+                                visible: global.show_parking
+                                priority: global.priority.poi_parking
+                        default:
+                            filter: { $zoom: { min: 18 } }
+                            draw: { points: { visible: true } }
+                    bike_rental:
+                        exclusive: true
+                        filter: { amenity: bicycle_rental }  #{ class: amenity, subclass: bicycle_rental }
+                        draw: { points: { visible: global.show_bike } }
+                    university:
+                        exclusive: true
+                        filter: { amenity: university }
+                        draw: { points: { priority: global.priority.poi_university } }
+                    school:
+                        exclusive: true
+                        filter: { amenity: [school, college, kindergarten] }
+                        draw: { points: { visible: false, priority: global.priority.poi_school } }
+                        show:
+                            filter: { $zoom: { min: 16 } }
+                            draw: { points: { visible: true } }
+                    restaurant:
+                        exclusive: true
+                        filter: { amenity: [restaurant, fast_food] }
+                        draw: { points: { priority: global.priority.poi_restaurant } }
+                    cafe:
+                        exclusive: true
+                        filter:
+                            - amenity: [cafe, ice_cream]
+                            - shop: [beverages, confectionery, bakery, pastry]
+                        draw: { points: { priority: global.priority.poi_cafe } }
+                    grocery:
+                        exclusive: true
+                        filter: { shop: supermarket }
+                        draw: { points: { priority: global.priority.poi_grocery } }
+                    convenience:
+                        exclusive: true
+                        filter: { shop: [convenience, greengrocer, deli, delicatessen, butcher, farm] }
+                        draw: { points: { priority: global.priority.poi_convenience } }
+                    culture:
+                        exclusive: true
+                        filter:
+                            - amenity: [cinema, theatre, concert_hall, arts_centre, library]
+                            - tourism: [museum, attraction, artwork]
+                            - historic: monument
+                        draw: { points: { priority: global.priority.poi_culture } }
+                    church:
+                        exclusive: true
+                        filter: { amenity: place_of_worship }
+                        draw: { points: { visible: false, priority: global.priority.poi_religion } }
+                        show:
+                            filter: { $zoom: { min: 16 } }
+                            draw: { points: { visible: true } }
+                    toilet:
+                        exclusive: true
+                        filter: { amenity: [drinking_water, water_point, toilets] }
+                        draw: { points: { visible: false, priority: global.priority.poi_toilet } }
+                        show:
+                            filter: { $zoom: { min: 18 } }
+                            draw: { points: { visible: true } }
 
     boundaries:
         data: { source: osm, layer: boundary }

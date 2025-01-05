@@ -204,7 +204,7 @@ void MapsSources::sourceModified()
 void MapsSources::promptDownload(const std::vector<std::string>& keys)
 {
   for(auto& key : keys) {
-    const auto& src = mapSources[key];
+    const auto& src = mapSources.at(key);
     if(src["download_url"]) {
       int hit = 0;
       SQLiteStmt(app->bkmkDB, "SELECT COUNT(1) FROM offlinemaps WHERE source = ?;").bind(key).onerow(hit);
@@ -238,7 +238,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
         currLayers.push_back({src, 1.0f});  //builder.addLayer(src);
     }
     else {
-      const auto& src = mapSources[srcname];
+      const auto& src = mapSources.at(srcname);
       if(!src) return;
       if(src["layers"] && !src["layer"].as<bool>(false)) {
         for(const auto& layer : src["layers"])
@@ -297,7 +297,7 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   if(savekey.empty()) {
     // find available name
     int ii = mapSources.size();
-    while(ii < INT_MAX && mapSources[fstring("custom-%d", ii)]) ++ii;
+    while(ii < INT_MAX && mapSources.has(fstring("custom-%d", ii))) { ++ii; }
     savekey = fstring("custom-%d", ii);
   }
 
@@ -398,7 +398,7 @@ void MapsSources::populateSources()
           // insert before first layer that is not an opaque raster
           auto it = currLayers.begin();
           for(; it != currLayers.end(); ++it) {
-            const auto& itsrc = mapSources[it->source];
+            const auto& itsrc = mapSources.at(it->source);
             if(!itsrc["url"] || itsrc["layer"].as<bool>(false)) break;
           }
           currLayers.insert(it, {key, 1.0f});
@@ -975,11 +975,16 @@ Button* MapsSources::createPanel()
       int ii = 0;
       auto sources = sourcesContent->getOrder();
       for(const std::string& key : sources) {
-        const auto& src = mapSources[key];
+        const auto& src = mapSources.at(key);
         if(!src || src["layer"].as<bool>(false)) continue;
         auto onClicked = [this, key](){
-          if(sourceEditPanel->isVisible() || key == currSource)
+          if(sourceEditPanel->isVisible())
             populateSourceEdit(key);
+          else if(key == currSource) {
+            if(!sourcesPanel->isVisible())
+              app->showPanel(sourceEditPanel);  // clear history
+            populateSourceEdit(key);
+          }
           else
             rebuildSource(key);
         };

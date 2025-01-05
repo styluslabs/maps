@@ -16,14 +16,14 @@ TrackPlot::TrackPlot()  // : CustomWidget()
       }
       SDL_Finger& pt1 = points->front();
       SDL_Finger& pt2 = points->back();
-      real pinchcenter = (pt1.x - pt2.x)/2;
+      real pinchcenter = (pt1.x + pt2.x)/2;
       real pinchdist = std::abs(pt1.x - pt2.x);
       SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
       if(prevPinchDist > 0 && fevent->tfinger.type == SDL_FINGERMOTION) {
         real dx = pinchcenter - (node->bounds().left + LEFT_MARGIN);
-        real s = pinchdist/prevPinchDist;
-        zoomScale = std::min(std::max(1.0, zoomScale*s), maxZoom);
-        updateZoomOffset(dx*(1-s) + (pinchcenter - prevCOM));
+        real s0 = zoomScale;
+        zoomScale = std::min(std::max(1.0, zoomScale*pinchdist/prevPinchDist), maxZoom);
+        updateZoomOffset(dx*(1-zoomScale/s0) + (pinchcenter - prevCOM));
         redraw();
       }
       prevCOM = pinchcenter;
@@ -50,10 +50,10 @@ TrackPlot::TrackPlot()  // : CustomWidget()
       }
     }
     else if(event->type == SDL_MOUSEWHEEL) {
-      real s = std::exp(0.25*event->wheel.y/120.0);
+      real s0 = zoomScale;
       real dx = gui->prevFingerPos.x - (node->bounds().left + LEFT_MARGIN);
-      zoomScale = std::min(std::max(1.0, zoomScale*s), maxZoom);
-      updateZoomOffset(dx*(1-s));
+      zoomScale = std::min(std::max(1.0, zoomScale*std::exp(0.25*event->wheel.y/120.0)), maxZoom);
+      updateZoomOffset(dx*(1-zoomScale/s0));
       redraw();
     }
     else if(onHovered && event->type == SDL_FINGERMOTION && !gui->pressedWidget)

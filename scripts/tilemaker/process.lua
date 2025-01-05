@@ -171,7 +171,7 @@ tourismAreas = Set { "zoo", "theme_park", "aquarium" }
 poiMinZoom = 14
 poiTags = { aerialway = Set { "station" },
           -- all amenity values with count > 1000 (as of Jan 2024) we wish to exclude
-          amenity = { [12] = Set { "bus_station", "ferry_terminal" }, [poiMinZoom] = Set { "__EXCLUDE", "bus_station", "parking_space", "bench", "shelter", "waste_basket", "bicycle_parking", "recycling", "hunting_stand", "vending_machine", "post_box", "parking_entrance", "telephone", "bbq", "motorcycle_parking", "grit_bin", "clock", "letter_box", "watering_place", "loading_dock", "payment_terminal", "mobile_money_agent", "trolley_bay", "ticket_validator", "lounger", "feeding_place", "vacuum_cleaner", "game_feeding", "smoking_area", "photo_booth", "kneipp_water_cure", "table", "fixme", "office", "chair" } },
+          amenity = { [12] = Set { "bus_station", "ferry_terminal" }, [poiMinZoom] = Set { "__EXCLUDE", "bus_station", "ferry_terminal", "parking_space", "bench", "shelter", "waste_basket", "bicycle_parking", "recycling", "hunting_stand", "vending_machine", "post_box", "parking_entrance", "telephone", "bbq", "motorcycle_parking", "grit_bin", "clock", "letter_box", "watering_place", "loading_dock", "payment_terminal", "mobile_money_agent", "trolley_bay", "ticket_validator", "lounger", "feeding_place", "vacuum_cleaner", "game_feeding", "smoking_area", "photo_booth", "kneipp_water_cure", "table", "fixme", "office", "chair" } },
           barrier = Set { "bollard", "border_control", "cycle_barrier", "gate", "lift_gate", "sally_port", "stile", "toll_booth" },
           building = Set { "dormitory" },
           highway = { [12] = Set { "bus_stop", "trailhead" }, [poiMinZoom] = Set { "traffic_signals" } },

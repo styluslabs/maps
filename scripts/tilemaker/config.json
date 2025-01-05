@@ -4,7 +4,7 @@
 
     "boundary":         { "minzoom":  0, "maxzoom": 14, "simplify_below": 12, "simplify_level": 0.0003, "simplify_ratio": 2 },
 
-    "poi":              { "minzoom": 12, "maxzoom": 14 },
+    "poi":              { "minzoom": 8, "maxzoom": 14 },
     "poi_detail":       { "minzoom": 14, "maxzoom": 14, "write_to": "poi" },
     "mountain_peak":    { "minzoom": 11, "maxzoom": 14, "write_to": "poi" },
 
