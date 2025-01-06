@@ -186,9 +186,8 @@ bool MapsSearch::initSearch()
   if(sqlite3_create_function(searchDB.db, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
     LOGE("sqlite3_create_function: error creating osmSearchRank for search DB");
 
-  int npois = 0;
-  searchDB.stmt("SELECT COUNT(1) FROM pois;").onerow(npois);
-  hasSearchData = npois > 0;
+  //searchDB.stmt("SELECT COUNT(1) FROM pois;").onerow(npois);  -- counting rows is slow!
+  searchDB.stmt("SELECT rowid FROM pois LIMIT 1;").exec([](int64_t){ hasSearchData = true; });
 
   return true;
 }
@@ -524,12 +523,12 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
   }
 
+  resultCountText->setText("Searching...");
   if(providerIdx == 0)
     offlineListSearch(searchStr, lngLat00, lngLat11, phase == RETURN ? FLY_TO : 0);
   else {
     bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
-    resultCountText->setText("Searching...");
     if(unifiedSearch)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
     else

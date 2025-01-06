@@ -17,6 +17,7 @@ global:
     marker_font: Open Sans
     # Open Sans looks very good, especially the italic style
     primary_font: Open Sans
+    bold_weight: 600  # use instead of "bold" to avoid checking for OS font if we only have semibold
 
     # HSL: 0 (== 360) is red, 120 is green, 240 is blue
     color:
@@ -1622,7 +1623,6 @@ layers:
                     fill: global.color.place_name
                     stroke: { color: global.color.place_halo, width: 4 }
                     transform: uppercase
-                    weight: bold
 
         region:
             filter: { admin_level: [3, 4] }
@@ -1634,6 +1634,7 @@ layers:
                 lines:
                     color: global.color.border_country
                     width: 1px
+                text: { font: { weight: global.bold_weight } }
             disputed:
                 filter: { disputed: true }
                 draw: { lines: { style: dashed-border } }
@@ -1691,7 +1692,7 @@ layers:
                             fill: global.color.place_name
                             stroke: { color: global.color.place_halo, width: 4 }
                             #transform: uppercase
-                            weight: bold
+                            weight: global.bold_weight
                             size: [[8, 10px], [12, 16px]]
             city-100k:
                 filter: { population: { min: 100000, max: 500000 } }
@@ -1755,7 +1756,7 @@ layers:
                     $zoom: { min: 9 } # show city point labels below z11
                 city:
                     filter: { class: city, $zoom: { min: 9, max: 14 } }
-                    draw: { text: { visible: true, font: { weight: bold, size: [[8, 10px], [12, 16px]] } } }
+                    draw: { text: { visible: true, font: { weight: global.bold_weight, size: [[8, 10px], [12, 16px]] } } }
                     city-100k:
                         filter: { population: { min: 100000, max: 500000 } }
                         draw: { text: { font: { size: [[8, 12px], [12, 18px]] } } }

@@ -47,6 +47,12 @@ styles:
             blocks:
                 position: |
                     #ifdef TANGRAM_TERRAIN_3D
+                    // use larger depth delta near camera to prevent terrain from covering geometry
+                    depth_shift = -0.02*u_proj[2][3];
+                    #ifdef TANGRAM_RASTER_STYLE
+                    // need sufficient offset for proxy levels to prevent terrain poking through level above
+                    proxy *= 48.0;
+                    #endif
                     position.z += max(getElevation(), TANGRAM_MIN_ELEVATION);
                     v_world_position.z = position.z;
                     #endif
