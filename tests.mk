@@ -2,6 +2,7 @@
 
 TARGET ?= tests.out
 DEBUG ?= 1
+BUILDDIR ?= build/Debug
 
 include make/shared.mk
 

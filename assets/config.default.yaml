@@ -16,6 +16,7 @@ sources:
     - custom-slope-shading
     - hillshade
     - hillshade-usgs
+    - strava-all
     - opentopomap
     - arcgis-satellite
     - bing-earth

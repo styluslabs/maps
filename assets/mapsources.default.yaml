@@ -93,6 +93,12 @@ osm-gps-tracks:
     url_subdomains: [a, b, c]
     archived: true
 
+strava-all:
+    title: Strava Heatmap
+    layer: true
+    max_zoom: 15
+    url: 'https://proxy.nakarte.me/https/heatmap-external-a.strava.com/tiles-auth/all/bluered/{z}/{x}/{y}.png'
+
 # Bing uses quadkey tile index - supported in networkDataSource.cpp, but not documented
 bing-earth:
     title: Bing Satellite

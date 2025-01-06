@@ -184,6 +184,7 @@ MODULE_SOURCES += \
   app/src/glfwmain.cpp \
   $(STYLUSLABS_DEPS)/ugui/example/glfwSDL.c
 
+MODULE_INC_PUBLIC = tangram-es/platforms/common/glfw/include
 MODULE_INC_PRIVATE = app/include tangram-es/platforms/common deps/nfd/src/include $(STYLUSLABS_DEPS)
 MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
 
@@ -192,10 +193,11 @@ include $(ADD_MODULE)
 PKGS = dbus-1 x11
 
 DEFS += TANGRAM_LINUX
-LIBS = -pthread -lOpenGL -lfontconfig -lcurl
+LIBS = -pthread -lOpenGL -lfontconfig -lcurl -ldl
 #CFLAGS = -pthread
 
 # distribution package
+TGZ_FOLDER = Ascend
 TGZ = $(TARGET)-$(GITREV).tar.gz
 DISTRES = \
   assets/config.default.yaml \
