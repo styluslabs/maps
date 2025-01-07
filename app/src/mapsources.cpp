@@ -6,7 +6,6 @@
 #include "data/mbtilesDataSource.h"
 #include "data/networkDataSource.h"
 #include "util/yamlUtil.h"
-#include "sqlitepp.h"
 
 #include "usvg/svgpainter.h"
 #include "usvg/svgparser.h"

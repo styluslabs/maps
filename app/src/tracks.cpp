@@ -8,7 +8,6 @@
 #include "trackwidgets.h"
 
 #include "gaml/src/yaml.h"
-#include "sqlitepp.h"
 #include "util/yamlPath.h"
 #include "util/mapProjection.h"
 #include "isect2d.h"
@@ -246,28 +245,25 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
     });
 
     overflowMenu->addItem("Delete", [=](){
+      setTrackVisible(track, false);
       SQLiteStmt(app->bkmkDB, "DELETE FROM tracks WHERE rowid = ?").bind(track->rowid).exec();
-      for(auto it = tracks.begin(); it != tracks.end(); ++it) {
-        if(it->rowid == track->rowid) {
-          // move GPX file to trash and add undelete item
-          FSPath fileinfo(track->filename);
-          FSPath trashinfo(MapsApp::baseDir, ".trash/" + fileinfo.fileName());
-          moveFile(fileinfo, trashinfo);
-          app->addUndeleteItem(track->title, MapsApp::uiIcon("track"), [=](){
-            GpxFile restored("", "", trashinfo.path);
-            loadGPX(&restored);
-            restored.filename.clear();
-            tracks.push_back(std::move(restored));
-            updateDB(&tracks.back());
-            saveTrack(&tracks.back());
-            populateTrackList();
-          });
-          yamlRemove(app->config["tracks"]["visible"], track->rowid);
-          tracks.erase(it);
-          app->gui->deleteWidget(item);
-          break;
-        }
-      }
+      // move GPX file to trash and add undelete item
+      FSPath fileinfo(track->filename);
+      FSPath trashinfo(MapsApp::baseDir, ".trash/" + fileinfo.fileName());
+      moveFile(fileinfo, trashinfo);
+      app->addUndeleteItem(track->title, MapsApp::uiIcon("track"), [=](){
+        GpxFile restored("", "", trashinfo.path);
+        loadGPX(&restored);
+        restored.filename.clear();
+        tracks.push_back(std::move(restored));
+        updateDB(&tracks.back());
+        saveTrack(&tracks.back());
+        populateTrackList();
+      });
+      int rowid = track->rowid;
+      // must not access track after this point
+      tracks.remove_if([rowid](const GpxFile& t){ return t.rowid == rowid; });
+      app->gui->deleteWidget(item);
     });
   }
   overflowBtn->setMenu(overflowMenu);
@@ -1179,13 +1175,15 @@ void MapsTracks::newRoute(bool measure)
   navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
   navRoute.title = measure ? "Measurement" : "Navigation";
   navRoute.routeMode = measure ? "direct" : (km < 10 ? "walk" : km < 100 ? "bike" : "drive");
+  // in some cases, we might want back btn to return to place info panel from measure/navigate; this would,
+  //  not work currently if user opened place info from measure/navigate; also could make history too deep!
   app->showPanel(tracksPanel);
   app->panelToSkip = tracksPanel;
   populateTrack(&navRoute);
+  toggleRouteEdit(measure);  // should we also show route edit for navigation?
   if(!measure && km > 0.01)
     addWaypoint(wp1);  //"Current location"
   addWaypoint(wp2);
-  toggleRouteEdit(measure);  // should we also show route edit for navigation?
 }
 
 void MapsTracks::addPlaceActions(Toolbar* tb)
@@ -1208,7 +1206,7 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     tb->addWidget(routeBtn);
 
     Button* measureBtn = createActionbutton(MapsApp::uiIcon("measure"), "Measure", true);
-    measureBtn->onClicked = [this](){ newRoute(true);  };
+    measureBtn->onClicked = [this](){ newRoute(true); };
     tb->addWidget(measureBtn);
   }
 }
@@ -2073,18 +2071,6 @@ Button* MapsTracks::createPanel()
     }
   }
 
-  if(const auto& rectrack = app->cfg()["tracks"]["recording"]) {
-    int recid = rectrack.as<int>(-1);
-    auto it = std::find_if(tracks.begin(), tracks.end(), [&](const GpxFile& t){ return t.rowid == recid; });
-    if(it != tracks.end()) {
-      recordedTrack = std::move(*it);
-      tracks.erase(it);
-      recordTrackBtn->setChecked(true);
-      pauseRecordBtn->setChecked(true);
-      tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));
-    }
-  }
-
   // main toolbar button ... quick menu - visibility toggle for recent tracks for now
   Menu* tracksMenu = createMenu(Menu::VERT);
   tracksMenu->addHandler([=](SvgGui* gui, SDL_Event* event){
@@ -2117,5 +2103,19 @@ Button* MapsTracks::createPanel()
 
   tracksBtn = app->createPanelButton(MapsApp::uiIcon("track"), "Tracks", tracksPanel);
   tracksBtn->setMenu(tracksMenu);
+
+  if(const auto& rectrack = app->cfg()["tracks"]["recording"]) {
+    int recid = rectrack.as<int>(-1);
+    auto it = std::find_if(tracks.begin(), tracks.end(), [&](const GpxFile& t){ return t.rowid == recid; });
+    if(it != tracks.end()) {
+      recordedTrack = std::move(*it);
+      tracks.erase(it);
+      setTrackVisible(&recordedTrack, true);  // load GPX and show
+      recordTrackBtn->setChecked(true);
+      pauseRecordBtn->setChecked(true);
+      tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));
+    }
+  }
+
   return tracksBtn;
 }

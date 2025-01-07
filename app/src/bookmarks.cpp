@@ -3,7 +3,6 @@
 #include "util.h"
 #include "resources.h"
 
-#include "sqlitepp.h"
 #include "util/yamlPath.h"
 #include "exif.h"
 

@@ -27,6 +27,7 @@ ifneq ($(DEBUG),0)
   DEFS += LOG_LEVEL=3
 else
   DEFS += LOG_LEVEL=2
+  #DEFS += GLM_FORCE_INTRINSICS
 endif
 
 # if deferred eval, make sure to only use for source that needs GITREV
@@ -195,6 +196,11 @@ PKGS = dbus-1 x11
 DEFS += TANGRAM_LINUX
 LIBS = -pthread -lOpenGL -lfontconfig -lcurl -ldl
 #CFLAGS = -pthread
+
+PROFILE ?= 0
+ifneq ($(PROFILE),0)
+  DEFS += TANGRAM_JS_TRACING=1
+endif
 
 # distribution package
 TGZ_FOLDER = Ascend

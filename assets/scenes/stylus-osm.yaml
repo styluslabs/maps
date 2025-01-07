@@ -359,29 +359,23 @@ styles:
     ocean-polygons:
         base: polygons
         lighting: false
+        # need to match depth_shift in raster style or ocean will be placed under terrain
+        shaders:
+            blocks:
+                position: |
+                    #ifdef TANGRAM_TERRAIN_3D
+                    depth_shift = -0.02*u_proj[2][3];
+                    #endif
 
     # dash only supported for styles, not draw block because each dash pattern requires separate shader
-    dashed-border:
-        mix: unlit-lines
-        dash: [2.0, 0.5]
-    dashed-path:
-        mix: unlit-lines
-        dash: [3.0, 0.5]
-    dashed-track:
-        mix: unlit-lines
-        dash: [2.5, 1.0]
-    dashed-steps:
-        mix: unlit-lines
-        dash: [0.5, 0.5]
-    dashed-bike:
-        mix: unlit-lines
-        dash: [1.0, 1.0]
-    rail-sleepers:
-        mix: unlit-lines
-        dash: [0.15, 7.0]
-    dashed-rail:
-        mix: unlit-lines
-        dash: [4, 4]
+    dashed-border: { mix: unlit-lines, dash: [2.0, 0.5] }
+    dashed-path:   { mix: unlit-lines, dash: [3.0, 0.5] }
+    dashed-track:  { mix: unlit-lines, dash: [2.5, 1.0] }
+    dashed-steps:  { mix: unlit-lines, dash: [0.5, 0.5] }
+    dashed-bike:   { mix: unlit-lines, dash: [1.0, 1.0] }
+    dashed-rail:   { mix: unlit-lines, dash: [4.0, 4.0] }
+    #rail-sleepers: { mix: unlit-lines, dash: [0.15, 7.0] }
+
     aerialway:
         mix: unlit-lines
         # both approaches have issue w/ circles being stretched due to change of line width w/ zoom
@@ -392,12 +386,14 @@ styles:
             data:image/svg+xml;utf8,<svg width="10pt" height="40pt" viewBox="-5 -20 10 40">
               <g fill="#fff"> <circle cx="0" cy="0" r="4"/> </g>
             </svg>
+
     piste-direction:
         mix: unlit-lines
         texture: |
             data:image/svg+xml;utf8,<svg width="10pt" height="80pt" viewBox="-5 -40 10 80">
               <g fill="#fff"> <path d="M-5 -40 L-5 0 L0 -4 L5 0 L5 -40Z M-5 40 L-5 6 L0 2 L5 6 L5 40Z"/> </g>
             </svg>
+
     inner-lines:
         mix: unlit-lines
         blend: nonopaque
@@ -516,6 +512,7 @@ layers:
             pier: { filter: { man_made: pier }, draw: { polygons: { color: global.color.pier } } }
             draw:
                 polygons:
+                    style: unlit-polygons
                     order: global.order.pier
                     color: global.color.breakwater
         pier_lines:

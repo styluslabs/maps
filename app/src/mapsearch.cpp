@@ -17,7 +17,6 @@
 #include "scene/scene.h"
 #include "scene/sceneLoader.h"
 #include "scene/styleContext.h"
-#include "sqlitepp.h"
 
 #include "usvg/svgpainter.h"
 #include "ugui/svggui.h"

@@ -6,7 +6,6 @@
 #include "pugixml.hpp"
 #include <sys/stat.h>
 #include <fstream>
-#include "sqlitepp.h"
 // for elevation
 #include "util/imageLoader.h"
 #include "util/elevationManager.h"
@@ -267,6 +266,13 @@ Rect MapsApp::getMapViewport()
   return mapsWidget->node->bounds().toSize()*gui->paintScale;
 }
 
+Point MapsApp::lngLatToScreenPoint(LngLat lngLat)
+{
+  Point p;
+  map->lngLatToScreenPosition(lngLat.longitude, lngLat.latitude, &p.x, &p.y);
+  return p;  //* (1/gui->paintScale);
+}
+
 LngLat MapsApp::getMapCenter()
 {
   LngLat res;
@@ -409,6 +415,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     SvgUse* icon = static_cast<SvgUse*>(diricon->node);
     if(icon)
       icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
+    diricon->setVisible(dist < MapProjection::EARTH_CIRCUMFERENCE_METERS/1000/4);
     distwdgt->setText(distKmToStr(dist, 2, 4).c_str());
   }
 
@@ -768,8 +775,11 @@ void MapsApp::mapUpdate(double time)
 {
   static double lastFrameTime = 0;
 
-  if(locMarkerAngle != orientation + map->getRotation()*180/float(M_PI))
+  if(locMarkerNeedsUpdate || locMarkerAngle != orientation + map->getRotation()*180/float(M_PI)) {
     updateLocMarker();
+    platform->notifyRender();  // clear requestRender() from marker update
+    locMarkerNeedsUpdate = false;
+  }
 
   if(map->getScene()->isPendingCompletion()) {
     tracksDataSource->rasterSources().clear();
@@ -942,6 +952,14 @@ void MapsApp::updateLocation(const Location& _loc)
     return;
   }
 
+  locMarkerNeedsUpdate = true;
+  Point prevpt = lngLatToScreenPoint(currLocation.lngLat());
+  Point currpt = lngLatToScreenPoint(_loc.lngLat());
+  Rect viewport = getMapViewport().pad(20);
+  if(viewport.contains(prevpt) || viewport.contains(currpt)) {
+    platform->requestRender();
+  }
+
   currLocation = _loc;
   if(currLocation.time <= 0)
     currLocation.time = mSecSinceEpoch()/1000.0;
@@ -952,8 +970,7 @@ void MapsApp::updateLocation(const Location& _loc)
 #if PLATFORM_IOS
   hasLocation = _loc.poserr > 0 && _loc.poserr < 30;  // no GPS status on iOS
 #endif
-  //hasLocation = gpsSatsUsed > 0 || (_loc.poserr > 0 && _loc.poserr < 10);
-  updateLocMarker();
+  //updateLocMarker();
 
   if(followState == FOLLOW_ACTIVE) {
     map->setCameraPosition(map->getCameraPosition().setLngLat(_loc.lngLat()));  //, 0.1f);
@@ -999,7 +1016,11 @@ void MapsApp::updateOrientation(double time, float azimuth, float pitch, float r
     map->setCameraPosition(campos); //, 0.1f);
   }
   //LOGW("orientation: %.1f deg", orientation);
-  updateLocMarker();
+  //updateLocMarker();
+  locMarkerNeedsUpdate = true;
+  if(getMapViewport().pad(20).contains(lngLatToScreenPoint(currLocation.lngLat()))) {
+    platform->requestRender();
+  }
 }
 
 void MapsApp::toggleFollow()
@@ -1662,7 +1683,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       map->setCameraPositionEased(campos, 0.35f);
     }
     else if(!locvisible && !std::isnan(pickResultCoord.latitude) &&
-        map->lngLatToScreenPosition(pickResultCoord.longitude, pickResultCoord.latitude, NULL, NULL)) {
+        map->lngLatToScreenPosition(pickResultCoord.longitude, pickResultCoord.latitude)) {
       auto viewboth = map->getEnclosingCameraPosition(pickResultCoord, currLocation.lngLat());
       // -1 since currLocation is placed at center not edge; -0.25 or -0.5 for padding
       campos.zoom = viewboth.zoom - (terrain3D ? 1.5f : 1.25f);

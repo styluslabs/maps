@@ -31,6 +31,7 @@ class ManageColorsDialog;
 class SvgNode;
 class Color;
 class Painter;
+class Point;
 struct Rect;
 struct sqlite3;
 struct SDL_Window;
@@ -79,6 +80,7 @@ public:
   bool needsRender() const { return map->getPlatform().isContinuousRendering(); }
   void getMapBounds(LngLat& lngLatMin, LngLat& lngLatMax);
   Rect getMapViewport();
+  Point lngLatToScreenPoint(LngLat lngLat);
   LngLat getMapCenter();
   double getElevation(LngLat pos, std::function<void(double)> callback = {});
   void setPickResult(LngLat pos, std::string namestr, const std::string& propstr);
@@ -244,6 +246,7 @@ private:
   bool sensorsEnabled = true;
   bool panelMaximized = false;
   bool panelMinimized = false;
+  bool locMarkerNeedsUpdate = true;
   int shuffleSeed = 0;
 
   int nvglFBFlags = 0;

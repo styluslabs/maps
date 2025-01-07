@@ -7,6 +7,10 @@
 #include "tangram.h"
 #include "glm/vec2.hpp"
 
+#define SQLITEPP_LOGW LOGW
+#define SQLITEPP_LOGE LOGE
+#include "sqlitepp.h"
+
 // for MarkerGroup
 #include "mapscomponent.h"
 

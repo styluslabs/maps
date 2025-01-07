@@ -99,6 +99,27 @@ strava-all:
     max_zoom: 15
     url: 'https://proxy.nakarte.me/https/heatmap-external-a.strava.com/tiles-auth/all/bluered/{z}/{x}/{y}.png'
 
+strava-run:
+    title: Strava Heatmap (Run)
+    layer: true
+    max_zoom: 15
+    url: 'https://proxy.nakarte.me/https/heatmap-external-a.strava.com/tiles-auth/run/bluered/{z}/{x}/{y}.png'
+    archived: true
+
+strava-bike:
+    title: Strava Heatmap (Bike)
+    layer: true
+    max_zoom: 15
+    url: 'https://proxy.nakarte.me/https/heatmap-external-a.strava.com/tiles-auth/ride/bluered/{z}/{x}/{y}.png'
+    archived: true
+
+strava-ski:
+    title: Strava Heatmap (Ski)
+    layer: true
+    max_zoom: 15
+    url: 'https://proxy.nakarte.me/https/heatmap-external-a.strava.com/tiles-auth/winter/bluered/{z}/{x}/{y}.png'
+    archived: true
+
 # Bing uses quadkey tile index - supported in networkDataSource.cpp, but not documented
 bing-earth:
     title: Bing Satellite
@@ -123,6 +144,7 @@ usgs-imagery:
 
 sentinel2-recent:
     title: Sentinel-2 Recent
+    description: Weekly 10m imagery
     url: https://planetarycomputer.microsoft.com/api/data/v1/mosaic/ee3c35fe2906b21590b2153418b89570/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?assets=B04&assets=B03&assets=B02&color_formula=Gamma%20RGB%203.2%20Saturation%200.8%20Sigmoidal%20RGB%2025%200.35&nodata=0&collection=sentinel-2-l2a&format=jpeg
     max_age: 86400
     updates:
@@ -130,6 +152,7 @@ sentinel2-recent:
 
 sentinel2-arcgis:
     title: Sentinel-2 Recent (ArcGIS)
+    description: Weekly 10m imagery
     archived: true
     url: |
         function(x,y,z) {

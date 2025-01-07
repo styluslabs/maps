@@ -1,9 +1,9 @@
 #include "offlinemaps.h"
 #include "mapsapp.h"
 #include "mapsearch.h"
+#include "mapsources.h"
 #include "util.h"
 #include <deque>
-#include "sqlitepp.h"
 // "private" headers
 #include "scene/scene.h"
 #include "data/mbtilesDataSource.h"
@@ -12,8 +12,6 @@
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
-
-#include "mapsources.h"
 #include "mapwidgets.h"
 
 static bool runOfflineWorker = false;

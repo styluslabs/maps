@@ -89,6 +89,7 @@ real TrackPlot::trackPosToPlotPos(real s) const
 
 void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Waypoint>& wpts)
 {
+  double prevTrackDist = maxDist, prevTrackTime = maxTime - minTime;
   minAlt = 0;  maxAlt = 0;  minSpd = 0;  maxSpd = 0;
   minTime = 0;  maxTime = 10;  maxDist = 100;
   altDistPlot.clear();
@@ -100,6 +101,9 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
   minTime = locs.front().loc.time;
   maxTime = std::max(minTime + 10, locs.back().loc.time);
   maxDist = std::max(locs.back().dist, 100.0);
+  // keep slider handle in same position for recorded track; handle hidden when changing track, so no
+  //  harm in updating position
+  sliders->trackSlider->sliderPos *= plotVsDist ? prevTrackDist/maxDist : prevTrackTime/(maxTime - minTime);
   altDistPlot.addPoint(-1E6, -1000);  //locs.front().dist
   altTimePlot.addPoint(-1E6, -1000);  //locs.front().loc.time
   double prevDist = -1;
@@ -142,6 +146,7 @@ void TrackPlot::setTrack(const std::vector<Waypoint>& locs, const std::vector<Wa
       waypoints.push_back(wpts[ii]);
   }
   updateZoomOffset(0);
+  redraw();
 }
 
 // return the number w/ the fewest significant digits between x0 and x1
