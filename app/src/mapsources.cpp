@@ -255,7 +255,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     builder.addLayer(src.source, src.opacity);
   }
   if(MapsApp::terrain3D) {
-    for(const auto& update : MapsApp::config["terrain_3d"]["updates"].pairs())
+    for(const auto& update : MapsApp::cfg()["terrain_3d"]["updates"].pairs())
       builder.updates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
   }
   builder.updates.insert(builder.updates.end(), currUpdates.begin(), currUpdates.end());
@@ -351,7 +351,7 @@ void MapsSources::populateSources()
   layerKeys = {};
 
   std::vector<std::string> allKeys;
-  for(const auto& src : mapSources.pairs())
+  for(const auto& src : mapSources.const_pairs())
     allKeys.push_back(src.first.Scalar());
   std::sort(allKeys.begin(), allKeys.end(), [&](auto& a, auto& b){
       return mapSources[a]["title"].Scalar() < mapSources[b]["title"].Scalar(); });
@@ -448,7 +448,7 @@ void MapsSources::populateSources()
     };
     overflowMenu->addItem("Delete", [=](){
       std::vector<std::string> dependents;
-      for (const auto& ssrc : mapSources.pairs()) {
+      for (auto ssrc : mapSources.const_pairs()) {
         for (const auto& layer : ssrc.second["layers"]) {
           if(getLayerName(layer) == key)
             dependents.push_back(ssrc.second["title"].Scalar());

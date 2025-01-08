@@ -59,21 +59,42 @@ void MapsTracks::updateLocation(const Location& loc)
       if(activeTrack == &recordedTrack || (!activeTrack && tracksPanel->isVisible()))
         updateStats(&recordedTrack);
     }
-    // append point to GPX file in case process is killed - pugixml will ignore the missing closing tags
-    if(!recordGPXStrm) {
-      recordGPXStrm.reset(new FileStream(recordedTrack.filename.c_str(), "rb+"));
-      // file is not created until user taps save button in track panel
-      if(!recordGPXStrm->is_open()) return;
-      // don't bother truncating since single <trkpt> node is over 30 bytes
-      recordGPXStrm->seek(-30, SEEK_END);  // before "</trkseg>\n</trk>\n</gpx>\n"
-    }
-    else if(!recordGPXStrm->is_open()) return;
-    PugiXMLWriter writer(*recordGPXStrm);
-    pugi::xml_document xmldoc;
-    pugi::xml_node trkpt = xmldoc.append_child("trkpt");
-    saveWaypoint(trkpt, locs.back(), recordedTrack.hasSpeed);
-    trkpt.print(writer, "  ", pugi::format_default | pugi::format_no_declaration);
   }
+
+  if(recordedTrack.modified || locs.size() == 1) {
+    recordedTrack.modified = !saveTrack(&recordedTrack);
+    return;
+  }
+  // append point to GPX file in case process is killed - pugixml will ignore the missing closing tags
+  if(!recordGPXStrm) {
+    recordGPXStrm = std::make_unique<FileStream>(recordedTrack.filename.c_str(), "rb+");
+    // don't bother truncating since single <trkpt> node is over 30 bytes
+    if(!recordGPXStrm->is_open()) {
+      LOGE("Error opening stream for %s", recordedTrack.filename.c_str());
+      assert(0);  // file not created yet?
+    }
+    else {
+      // this is intended to prevent future changes from silently breaking track recording
+      // expected tail is "</trkseg>\n</trk>\n</gpx>\n"
+      std::string tail(60, ' ');
+      recordGPXStrm->seek(-60, SEEK_END);
+      tail.resize(recordGPXStrm->read(&tail[0], 60));
+      size_t tailpos = tail.rfind("</trkseg>");
+      if(tailpos == std::string::npos) {
+        recordGPXStrm->close();
+        LOGE("Unexpected GPX file ending: %s", tail.c_str());
+        assert(0);
+      }
+      else
+        recordGPXStrm->seek(-int(tail.size() - tailpos), SEEK_END);
+    }
+  }
+  if(!recordGPXStrm->is_open()) return;
+  PugiXMLWriter writer(*recordGPXStrm);
+  pugi::xml_document xmldoc;
+  pugi::xml_node trkpt = xmldoc.append_child("trkpt");
+  saveWaypoint(trkpt, locs.back(), recordedTrack.hasSpeed);
+  trkpt.print(writer, "  ", pugi::format_default | pugi::format_no_declaration);
 }
 
 bool MapsTracks::saveTrack(GpxFile* track)
@@ -1285,6 +1306,7 @@ void MapsTracks::startRecording()
   FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
   recordedTrack = GpxFile(timestr, "Recording", gpxPath.path);
   recordedTrack.loaded = true;
+  recordedTrack.modified = true;  // ensure save after adding first point
   recordedTrack.tracks.emplace_back();
   //if(app->hasLocation)
   //  recordedTrack.tracks.back().pts.push_back(app->currLocation);
@@ -1295,7 +1317,7 @@ void MapsTracks::startRecording()
   lastTrackPtTime = mSecSinceEpoch();
   // create GPX file (so track data is safely saved w/o additional user input after tapping record btn)
   updateDB(&recordedTrack);
-  saveTrack(&recordedTrack);
+  //saveTrack(&recordedTrack);
   setTrackVisible(&recordedTrack, true);
   populateTrack(&recordedTrack);
   setTrackWidgets(TRACK_STATS);  // plot isn't very useful until there are enough points
@@ -1363,7 +1385,7 @@ void MapsTracks::createEditDialog()
           activeTrack->title.append(" Copy");
       }
       updateDB(activeTrack);
-      saveTrack(activeTrack);
+      activeTrack->modified = !saveTrack(activeTrack);
       origLocs.clear();
     }
     setTrackEdit(false);
@@ -1862,9 +1884,10 @@ void MapsTracks::createTrackPanel()
     recordedTrack.desc = (recordTrack ? "Recording | " : "Paused | ") + trackSummary;
     tracksDirty = true;
     pauseRecordBtn->setChecked(!recordTrack);  // should actually toggle between play and pause icons
-    // show/hide track editing controls
+    if(!recordTrack && recordGPXStrm && recordGPXStrm->is_open())
+      recordGPXStrm->flush();
     if(recordTrack && editTrackTb->isVisible())
-      setTrackEdit(false);
+      setTrackEdit(false);  // show/hide track editing controls
     app->setServiceState(recordTrack, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
   };
 
@@ -1873,7 +1896,7 @@ void MapsTracks::createTrackPanel()
     recordTimer = NULL;
     recordedTrack.desc = ftimestr("%F") + " | " + trackSummary;
     recordedTrack.marker->setProperties({{{"recording", 0}}});
-    saveTrack(&recordedTrack);
+    recordedTrack.modified = !saveTrack(&recordedTrack);
     if(recordTrack)
       app->setServiceState(0);
     //updateDB(&recordedTrack);
@@ -2107,10 +2130,19 @@ Button* MapsTracks::createPanel()
   if(const auto& rectrack = app->cfg()["tracks"]["recording"]) {
     int recid = rectrack.as<int>(-1);
     auto it = std::find_if(tracks.begin(), tracks.end(), [&](const GpxFile& t){ return t.rowid == recid; });
-    if(it != tracks.end()) {
+    if(it == tracks.end())
+      app->config["tracks"].remove("recording");
+    else if(it->tracks.empty() || it->tracks.front().pts.empty()) {
+      app->config["tracks"].remove("recording");
+      // have to wait until window created
+      MapsApp::taskQueue.push_back([file=it->filename](){ MapsApp::messageBox("Restore track",
+          fstring("Error restoring recorded track; please check %s", file.c_str()), {"OK"}); });
+    }
+    else {
       recordedTrack = std::move(*it);
       tracks.erase(it);
       setTrackVisible(&recordedTrack, true);  // load GPX and show
+      recordedTrack.modified = true;  // ensure save if recording resumed
       recordTrackBtn->setChecked(true);
       pauseRecordBtn->setChecked(true);
       tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));

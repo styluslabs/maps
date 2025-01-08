@@ -622,6 +622,18 @@ void MapsApp::longPressEvent(float x, float y)
   double lng, lat;
   if(!map->screenPositionToLngLat(x, y, &lng, &lat))
     return;
+
+  // print tile bounds (e.g., for aligned OSM extracts)
+  if(getDebugFlag(Tangram::tile_bounds)) {
+    auto meters = MapProjection::lngLatToProjectedMeters({lng, lat});
+    TileID tile = MapProjection::projectedMetersTile(meters, int(map->getZoom()));
+    auto bounds = MapProjection::tileBounds(tile);
+    auto llmin = MapProjection::projectedMetersToLngLat(bounds.min);
+    auto llmax = MapProjection::projectedMetersToLngLat(bounds.max);
+    LOG("%s: [%.9f,%.9f,%.9f,%.9f]", tile.toString().c_str(),
+        llmin.longitude, llmin.latitude, llmax.longitude, llmax.latitude);
+  }
+
   // clear panel history unless editing track/route
   if(!mapsTracks->activeTrack)
     showPanel(infoPanel);
@@ -781,19 +793,7 @@ void MapsApp::mapUpdate(double time)
     locMarkerNeedsUpdate = false;
   }
 
-  if(map->getScene()->isPendingCompletion()) {
-    tracksDataSource->rasterSources().clear();
-    if(terrain3D) {
-      //map->getScene()->elevationManager()->m_elevationSource
-      auto elevsrc = getElevationSource();
-      if(elevsrc)
-        tracksDataSource->addRasterSource(elevsrc);
-    }
-    map->getScene()->tileManager()->addClientTileSource(tracksDataSource);
-    //map->addTileSource(tracksDataSource);  -- Map will cache source and add to scenes automatically, which
-    // we don't want until we've added elevation source
-  }
-
+  bool wasReady = map->getScene()->isReady();
   mapState = map->update(time - lastFrameTime);
   lastFrameTime = time;
   //LOG("MapState: %X", mapState.flags);
@@ -803,6 +803,21 @@ void MapsApp::mapUpdate(double time)
     flyingToCurrLoc = false;
     if(followState == FOLLOW_PENDING)
       followState = FOLLOW_ACTIVE;
+  }
+
+  // it is possible to miss the pending_completion state due to async scene load
+  if(!wasReady && map->getScene()->isReady()) {  //use_count() < 2
+    tracksDataSource->rasterSources().clear();
+    if(terrain3D) {
+      //map->getScene()->elevationManager()->m_elevationSource
+      auto elevsrc = getElevationSource();
+      if(elevsrc)
+        tracksDataSource->addRasterSource(elevsrc);
+    }
+    map->getScene()->tileManager()->addClientTileSource(tracksDataSource);
+    platform->requestRender();
+    //map->addTileSource(tracksDataSource);  -- Map will cache source and add to scenes automatically, which
+    // we don't want until we've added elevation source
   }
 
   // update map center
@@ -2094,7 +2109,7 @@ bool MapsApp::loadConfig(const char* assetPath)
   config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
   if(!config) {
     LOGE("Unable to load config file %s", configPath.c_str());
-    runOnMainThread([](){ messageBox("Error",
+    taskQueue.push_back([](){ messageBox("Error",
         "Error loading config!  Restore config.yaml or reinstall the application.", {"OK"}); });
     //*(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
     return false;  // do not set configFile so we don't write to it!

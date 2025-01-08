@@ -470,7 +470,7 @@ void MapsOffline::openForImport(std::unique_ptr<PlatformFile> srcfile)
   else {
     std::vector<std::string> layerKeys;
     std::vector<std::string> layerTitles;
-    for(const auto& src : app->mapsSources->mapSources.pairs()) {
+    for(auto src : app->mapsSources->mapSources.const_pairs()) {
       if(srcFmt == "pbf" ? src.second["scene"] : src.second["url"]) {
         layerKeys.push_back(src.first.Scalar());
         layerTitles.push_back(src.second["title"].Scalar());

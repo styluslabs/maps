@@ -26,7 +26,7 @@ Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](ht
 
 ### Building ###
 
-On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, install build dependencies (`apt install cmake libgtk-3-dev libcurl4-openssl-dev libfontconfig-dev libxinerama-dev` on Debian/Ubuntu), then run `cd maps && make linux` to generate `Release/ascend`.  To build and install for Android (on Linux w/ Android SDK and NDK installed), `cd maps/app/android && ./gww installRelease`.  The `gww` (gradle wrapper wrapper) script will download and run `gradlew`.  To install the Android SDK and NDK, run `gww --install-sdk`.
+On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, install build dependencies (`apt install cmake libgtk-3-dev libcurl4-openssl-dev libfontconfig-dev libxinerama-dev` on Debian/Ubuntu), then run `cd maps && make` to generate `build/Release/ascend`.  To build and install for Android (on Linux w/ Android SDK and NDK installed), `cd maps/app/android && ./gww installRelease`.  The `gww` (gradle wrapper wrapper) script will download and run `gradlew`.  To install the Android SDK and NDK, run `gww --install-sdk`.
 
 
 ### Generating tiles ###
@@ -52,6 +52,8 @@ ascend --import <output>.mbtiles --storage.export_pois true
 ### Adding map sources ###
 
 New map sources can be added by combining existing sources (the "+" button on the toolbar), editing mapsources.yaml (with the application closed), editing mapsources.default.yaml and choosing Restore default sources from the overflow menu, or via "Import source" on the overflow menu, where a YAML fragment or map tile URL (e.g. `https://some.tile.server/tiles/{z}/{x}/{y}.png`) can be entered, or a YAML scene file chosen, for custom vector map styles.
+
+To add an overlay source (raster tiles with transparency), import a YAML fragment with the URL and the layer property set: `{url:"https://...", layer: true}`
 
 To save online tiles for offline use, pan and zoom the view to show the desired region, tap the download button on the Offline maps toolbar, enter the maximum zoom level to include, then tap Download.  Tiles for all layers of the current map source will be downloaded.
 
