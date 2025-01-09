@@ -1586,7 +1586,7 @@ layers:
                         exclusive: true
                         filter:
                             - amenity: [cinema, theatre, concert_hall, arts_centre, library]
-                            - tourism: [museum, attraction, artwork]
+                            - tourism: [museum, attraction, artwork, theme_park]
                             - historic: monument
                         draw: { points: { priority: global.priority.poi_culture } }
                     church:

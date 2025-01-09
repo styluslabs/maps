@@ -711,7 +711,7 @@ void MapsSources::populateSourceEdit(std::string key)
       Widget* container = item->selectFirst(".child-container");
 
       // if raster layer, show opacity control
-      if(mapSources[layername]["url"] && !std::isnan(layer.opacity)) {
+      if(mapSources[layername].has("url") && !std::isnan(layer.opacity)) {
         Button* opacityBtn = createToolbutton(
             MapsApp::uiIcon("opacity"), fstring("%d%%", int(layer.opacity*100 + 0.5f)).c_str(), true);
 

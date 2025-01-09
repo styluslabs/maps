@@ -286,7 +286,7 @@ static std::unique_ptr<SvgPainter> boundsSvgPainter;
 
 void initResources(const char* baseDir)
 {
-  bool uigpu = MapsApp::config["ui"]["gpu_render"].as<bool>(true);
+  bool uigpu = MapsApp::cfg()["ui"]["gpu_render"].as<bool>(true);
   Painter::initFontStash(FONS_DELAY_LOAD | (uigpu ? FONS_SUMMED : FONS_SDF));
 #if PLATFORM_IOS || PLATFORM_OSX
   const char* dfltFont = "shared/fonts/SanFranciscoDisplay-Regular.otf";
@@ -295,7 +295,7 @@ void initResources(const char* baseDir)
   const char* dfltFont = "shared/fonts/Roboto-Regular.ttf";
   const char* boldFont = "shared/fonts/Roboto-Bold.ttf";
 #endif
-  std::string uiFont = MapsApp::config["ui"]["font"].as<std::string>(dfltFont);
+  std::string uiFont = MapsApp::cfg()["ui"]["font"].as<std::string>(dfltFont);
   Painter::loadFont("sans", FSPath(baseDir, uiFont).c_str());
   if(Painter::loadFont("fallback", FSPath(baseDir, "shared/fonts/DroidSansFallback.ttf").c_str()))
     Painter::addFallbackFont(NULL, "fallback");  // base font = NULL to set as global fallback

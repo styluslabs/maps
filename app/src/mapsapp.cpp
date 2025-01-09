@@ -177,7 +177,7 @@ void ScaleBarWidget::directDraw(Painter* p) const
     p->translate(bbox.origin());
   p->translate(2, 0);
 
-  real y = bbox.center().y;
+  real y = bbox.center().y * MapsApp::gui->paintScale;
   LngLat r0, r1;
   map->screenPositionToLngLat(bbox.left*MapsApp::gui->paintScale, y, &r0.longitude, &r0.latitude);
   map->screenPositionToLngLat(bbox.right*MapsApp::gui->paintScale, y, &r1.longitude, &r1.latitude);
@@ -326,7 +326,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   if(!placeInfoProto)
     placeInfoProto.reset(loadSVGFragment(placeInfoProtoSVG));
 
-  YAML::Node json = strToJson(propstr.c_str());
+  const YAML::Node json = strToJson(propstr.c_str());
   Properties props = jsonToProps(json);
 
   std::string placetype = !propstr.empty() ? pluginManager->jsCallFn("getPlaceType", propstr) : "";
@@ -754,23 +754,23 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.updates.push_back(SceneUpdate{"global.shuffle_seed", std::to_string(shuffleSeed)});
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
-  options.diskTileCacheMaxAge = config["storage"]["max_age"].as<int64_t>(options.diskTileCacheMaxAge);
+  options.diskTileCacheMaxAge = cfg()["storage"]["max_age"].as<int64_t>(options.diskTileCacheMaxAge);
   options.preserveMarkers = true;
   options.debugStyles = Tangram::getDebugFlag(Tangram::DebugFlags::tile_bounds);
   options.metricUnits = metricUnits;
   options.terrain3d = terrain3D;
-  options.elevationSource = config["sources"]["elevation"][0].as<std::string>("");
+  options.elevationSource = cfg()["sources"]["elevation"][0].as<std::string>("");
   // fallback fonts
   FSPath basePath(baseDir);
-  for(const auto& font : config["fallback_fonts"])
+  for(const auto& font : cfg()["fallback_fonts"])
     options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(basePath.child(font.Scalar()).path)));
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
-  options.numTileWorkers = config["num_tile_workers"].as<int>(2);
+  options.numTileWorkers = cfg()["num_tile_workers"].as<int>(2);
   dumpJSStats(NULL);  // reset stats
   map->loadScene(std::move(options), async);
 
   // max tile cache size
-  map->getScene()->tileManager()->setCacheSize(config["tile_cache_limit"].as<size_t>(512*1024*1024));
+  map->getScene()->tileManager()->setCacheSize(cfg()["tile_cache_limit"].as<size_t>(512*1024*1024));
 }
 
 void MapsApp::sendMapEvent(MapEvent_t event)
@@ -852,7 +852,7 @@ void MapsApp::mapUpdate(double time)
   }
 
   // prompt for 3D terrain if first time tilting
-  if(cpos.tilt != 0 && !terrain3D && !config["terrain_3d"]["enabled"].IsDefined()) {
+  if(cpos.tilt != 0 && !terrain3D && !cfg()["terrain_3d"]["enabled"].IsDefined()) {
     config["terrain_3d"]["enabled"] = false;
     MapsApp::messageBox("3D Terrain",
         fstring("3D terrain can be controlled from the overflow menu.  Enable now?"), {"OK", "Cancel"},
@@ -1061,7 +1061,7 @@ const YAML::Node& MapsApp::sceneConfig()
 std::shared_ptr<TileSource> MapsApp::getElevationSource()
 {
   auto& tileSources = map->getScene()->tileSources();
-  for(const auto& srcname : config["sources"]["elevation"]) {
+  for(const auto& srcname : cfg()["sources"]["elevation"]) {
     for(auto& src : tileSources) {
       if(src->isRaster() && src->name() == srcname.Scalar())
         return src;
@@ -1425,7 +1425,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsContent = new Widget(loadSVGFragment("<g id='maps-content' box-anchor='fill' layout='box'></g>"));
   panelSplitter = new Splitter(winnode->selectFirst(".panel-splitter"),
           winnode->selectFirst(".results-split-sizer"), Splitter::BOTTOM, 200);
-  panelSplitter->setSplitSize(config["ui"]["split_size"].as<int>(350));
+  panelSplitter->setSplitSize(cfg()["ui"]["split_size"].as<int>(350));
   panelSplitter->onSplitChanged = [this](real size){
     if(size == panelSplitter->minSize) {
       if(panelHistory.back()->node->hasClass("can-minimize"))
@@ -1534,7 +1534,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   undeleteMenu->parent()->setVisible(false);  // hidden when empty
 
 #ifdef NDEBUG
-  if(config["ui"]["show_debug"].as<bool>(false))
+  if(cfg()["ui"]["show_debug"].as<bool>(false))
 #endif
   {
     Menu* debugMenu = createMenu(Menu::HORZ);
@@ -1578,7 +1578,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       config["force_offline"] = offline;
     };
     appDebugMenu->addItem(offlineCb);
-    if(config["force_offline"].as<bool>(false))
+    if(cfg()["force_offline"].as<bool>(false))
       offlineCb->onClicked();
 
     Timer* fakeLocTimer = NULL;
@@ -1732,7 +1732,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   progressWidget->setMargins(0, 0, 6, 0);
   progressWidget->setVisible(false);
 
-  bool revbtns = config["ui"]["reverse_map_btns"].as<bool>(false);
+  bool revbtns = cfg()["ui"]["reverse_map_btns"].as<bool>(false);
   Widget* floatToolbar = createColumn({progressWidget, gpsStatusBtn, reorientBtn, recenterBtn});
   floatToolbar->node->setAttribute("box-anchor", revbtns ? "bottom left" : "bottom right");
   floatToolbar->setMargins(10, 10);
@@ -1758,7 +1758,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();
   // set window stylesheet
-  themeCb->setChecked(config["ui"]["theme"].as<std::string>("") != "light");
+  themeCb->setChecked(cfg()["ui"]["theme"].as<std::string>("") != "light");
   themeCb->onClicked();
 
   // need to update map sources from old version ... there will probably be changes to default sources
@@ -1795,7 +1795,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // on desktop, command line options could override startup behavior
 #if PLATFORM_MOBILE
   mapsOffline->resumeDownloads();
-  mapsSources->rebuildSource(config["sources"]["last_source"].Scalar());
+  mapsSources->rebuildSource(cfg()["sources"]["last_source"].Scalar());
 #endif
 }
 
@@ -1881,7 +1881,7 @@ void MapsApp::maximizePanel(bool maximize)
   //currLayout->selectFirst(".top-inset")->setVisible(PLATFORM_MOBILE && maximize);
   panelContainer->node->setAttribute("box-anchor", maximize ? "fill" : "hfill");
   panelSplitter->setEnabled(!maximize);
-  bool isLight = config["ui"]["theme"].as<std::string>("") == "light";
+  bool isLight = cfg()["ui"]["theme"].as<std::string>("") == "light";
   // top-inset uses panel header color, which is inverted from theme
   notifyStatusBarBG(maximize ? !isLight : !sceneConfig()["application"]["dark_base_map"].as<bool>(false));
 
@@ -2115,7 +2115,7 @@ bool MapsApp::loadConfig(const char* assetPath)
     return false;  // do not set configFile so we don't write to it!
   }
 
-  std::string newdir = config["base_directory"].as<std::string>("");
+  std::string newdir = cfg()["base_directory"].as<std::string>("");
   // make sure we can still write the external directory
   if(!newdir.empty() && FSPath(newdir, ".nomedia").exists("wb")) {
     baseDir = FSPath(newdir, "").path;
@@ -2123,7 +2123,7 @@ bool MapsApp::loadConfig(const char* assetPath)
   }
 
   configFile = configPath.c_str();
-  prevVersion = config["prev_version"].as<int>(0);
+  prevVersion = cfg()["prev_version"].as<int>(0);
   // set prev_version < 0 to update assets every run
   if(prevVersion < versionCode && prevVersion >= 0)
     config["prev_version"] = versionCode;
@@ -2169,13 +2169,13 @@ void MapsApp::saveConfig()
 
 void MapsApp::setDpi(float dpi)
 {
-  float ui_scale = config["ui"]["ui_scale"].as<float>(1.0f);
+  float ui_scale = cfg()["ui"]["ui_scale"].as<float>(1.0f);
   gui->paintScale = ui_scale*dpi/150.0;
   gui->inputScale = 1/gui->paintScale;
   SvgLength::defaultDpi = ui_scale*dpi;
   // Map takes coords in raw pixels (i.e. pixelScale doesn't apply to input coords)
   touchHandler->xyScale = float(gui->paintScale);
-  map->setPixelScale(config["ui"]["map_scale"].as<float>(1.0f) * dpi/150.0f);
+  map->setPixelScale(cfg()["ui"]["map_scale"].as<float>(1.0f) * dpi/150.0f);
 }
 
 MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
@@ -2184,17 +2184,17 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   inst = this;
   platform = _platform;
   mainThreadId = std::this_thread::get_id();
-  metricUnits = config["metric_units"].as<bool>(true);
-  terrain3D = config["terrain_3d"]["enabled"].as<bool>(false);
+  metricUnits = cfg()["metric_units"].as<bool>(true);
+  terrain3D = cfg()["terrain_3d"]["enabled"].as<bool>(false);
   // Google Maps and Apple Maps use opposite scaling for this gesture, so definitely needs to be configurable
-  touchHandler->dblTapDragScale = config["gestures"]["dbl_tap_drag_scale"].as<float>(1.0f);
-  shuffleSeed = config["random_shuffle_seed"].as<bool>(true) ? std::rand() : 0;
+  touchHandler->dblTapDragScale = cfg()["gestures"]["dbl_tap_drag_scale"].as<float>(1.0f);
+  shuffleSeed = cfg()["random_shuffle_seed"].as<bool>(true) ? std::rand() : 0;
 
   initResources(baseDir.c_str());
 
   gui = new SvgGui();
   // preset colors for tracks and bookmarks
-  for(const auto& colorstr : config["colors"])
+  for(const auto& colorstr : cfg()["colors"])
     markerColors.push_back(parseColor(colorstr.Scalar()));
 
   // DB setup
@@ -2220,10 +2220,10 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   removeDir(FSPath(baseDir, ".trash"), false);  // empty trash
 
   // cache management
-  storageTotal = config["storage"]["total"].as<int64_t>(0);
-  storageOffline = config["storage"]["offline"].as<int64_t>(0);
-  int64_t storageShrinkMax = config["storage"]["shrink_at"].as<int64_t>(500) * 1024*1024;
-  int64_t storageShrinkMin = config["storage"]["shrink_to"].as<int64_t>(250) * 1024*1024;
+  storageTotal = cfg()["storage"]["total"].as<int64_t>(0);
+  storageOffline = cfg()["storage"]["offline"].as<int64_t>(0);
+  int64_t storageShrinkMax = cfg()["storage"]["shrink_at"].as<int64_t>(500) * 1024*1024;
+  int64_t storageShrinkMin = cfg()["storage"]["shrink_to"].as<int64_t>(250) * 1024*1024;
   // easier to track total storage and offline map storage instead cached storage directly, since offline
   //   map download/deletion can convert some tiles between cached and offline
   platform->onNotifyStorage = [=](int64_t dtotal, int64_t doffline){
@@ -2261,15 +2261,17 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   mapsSearch = std::make_unique<MapsSearch>(this);
   mapsBookmarks = std::make_unique<MapsBookmarks>(this);
 
-  // default position: Alamo Square, SF - overriden by scene camera position if async load
+  // default position: Alamo Square, SF - overridden by scene camera position if async load
   CameraPosition pos;
-  pos.longitude = config["view"]["lng"].as<double>(-122.434668);
-  pos.latitude = config["view"]["lat"].as<double>(37.776444);
-  pos.zoom = config["view"]["zoom"].as<float>(15);
-  pos.rotation = config["view"]["rotation"].as<float>(0);
-  pos.tilt = config["view"]["tilt"].as<float>(0);
-  if(!config["view"]["lng"]) initToCurrLoc = true;
+  const auto& view = cfg()["view"];
+  pos.longitude = view["lng"].as<double>(-122.434668);
+  pos.latitude = view["lat"].as<double>(37.776444);
+  pos.zoom = view["zoom"].as<float>(15);
+  pos.rotation = view["rotation"].as<float>(0);
+  pos.tilt = view["tilt"].as<float>(0);
+  if(!view["lng"]) initToCurrLoc = true;
   map->setCameraPosition(pos);
+  prevCamPos = pos;  // avoid 0,0
 }
 
 MapsApp::~MapsApp()
@@ -2303,7 +2305,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
     map->setupGL();
     // Painter created here since GL context required to build shaders
     // ALIGN_SCISSOR needed only due to rotated direction-icon inside scroll area
-    if(config["ui"]["gpu_render"].as<bool>(true)) {
+    if(cfg()["ui"]["gpu_render"].as<bool>(true)) {
       nvglFB = nvgluCreateFramebuffer(NULL, 0, 0, NVGLU_NO_NVG_IMAGE | nvglFBFlags);
       nvglBlit = nvgswuCreateBlitter();
       painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));

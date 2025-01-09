@@ -8,7 +8,7 @@ global:
         tourism: { "viewpoint": "viewpoint", "camp_site": "campground", "information": "information",
           "museum": "museum", "hotel": "hotel", "motel": "hotel", "hostel": "hotel", "guest_house": "hotel",
           "bed_and_breakfast": "hotel", "chalet": "hotel", "alpine_hut": "hotel", "attraction": "attraction",
-          "artwork": "artwork", "gallery": "shop", "wikipedia": wikipedia }
+          "theme_park": "attraction", "artwork": "artwork", "gallery": "shop", "wikipedia": wikipedia }
         historic: { "monument": "artwork" }
         leisure: { "fitness_centre": "gym", "sports_centre": "gym", "park": "tree", "golf_course": "golf" }
         amenity: { "parking": "parking", "bicycle_rental": "bike_shop", "university": "school",
