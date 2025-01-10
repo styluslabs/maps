@@ -1730,7 +1730,7 @@ layers:
                 draw:
                     text:
                         visible: true
-                        text_source: global.names_one_line_fn
+                        text_source: global.names_one_line
                         font: { weight: 600, size: [[6, 14px], [8, 20px]] }
 
             regions:
@@ -1741,8 +1741,9 @@ layers:
                 draw:
                     text:
                         visible: true
+                        text_source: global.names_one_line
                         font:
-                            size: [[6, 12px], [8, 16px]]
+                            size: [[6, 8px], [8, 12px]]
                             transform: uppercase
                 # use short name when available at low-zooms
                 short:
