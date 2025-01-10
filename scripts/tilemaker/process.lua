@@ -1,5 +1,8 @@
 -- Tilemaker processing script for Stylus Labs / Ascend Maps OSM schema
 
+-- we cannot update to Tilemaker 3.0 yet because the 3.0 release creates mbtiles w/ UTF-16 encoding, which
+--  cannot be attached to Ascend's UTF-8 mbtiles; this was later fixed on master, so next release should be OK
+
 -- extracting OSM data w/ Overpass
 -- 1. get all country labels: [out:xml][timeout:25]; node["place"="country"]({{bbox}}); out geom;
 -- 1. cut and paste xml
@@ -14,6 +17,9 @@
 -- 1. expand to zoom = 6 tile bounds: ascend --bbox minlng minlat maxlng maxlat zoom
 -- 1. use expanded bounds for tilemaker bbox:
 -- .\build\tilemaker.exe .\Sydney.osm.pbf --output sydney2.mbtiles --bbox 146.2500008983152497,-36.5978884118672738,151.8749989941716194,-31.9521630914605268 --process .\process.lua --config .\config.json
+
+-- Dumping a mbtiles layer to GeoJSON (for debugging):
+-- e.g.: ogr2ogr -oo CLIP=NO shasta.geojson shasta2.mbtiles poi
 
 --------
 -- Alter these lines to control which languages are written for place/streetnames

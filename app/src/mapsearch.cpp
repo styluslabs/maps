@@ -46,7 +46,12 @@ static void processTileData(TileTask* task, sqlite3_stmt* stmt, const std::vecto
           if(feature.points.empty() || !searchdata.filter.eval(feature, dummyStyleContext))
             continue;
           std::string featname = feature.props.getString("name");
-          auto lnglat = tileCoordToLngLat(task->tileId(), feature.points.front());
+          auto pt = feature.points.front();
+          if(pt.x < 0 || pt.y < 0 || pt.x > 1 || pt.y > 1) {
+            LOGD("Rejecting POI outside tile: %s", featname.c_str());
+            continue;
+          }
+          auto lnglat = tileCoordToLngLat(task->tileId(), pt);
           std::string tags;
           for(const std::string& field : searchdata.fields) {
             const std::string& s = feature.props.getString(field);

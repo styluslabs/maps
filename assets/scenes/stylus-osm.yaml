@@ -1328,6 +1328,7 @@ layers:
                 points: { visible: false }
                 text:
                     visible: false
+                    interactive: true
                     text_source: global.names_one_line
                     transition: { show: { time: 0s }, hide: { time: 1s } }
                     priority: global.priority.forest

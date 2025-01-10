@@ -32,8 +32,9 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
     }
     else if(event->type == SDL_FINGERDOWN) {
       uint32_t mods = SDL_GetModState();
-      altDragMode = event->tfinger.touchId == SDL_TOUCH_MOUSEID && event->tfinger.fingerId != SDL_BUTTON_LMASK;
-      tapState = (gui->fingerClicks == 2 || (mods & KMOD_CTRL)) ? DBL_TAP_DRAG_PENDING : TAP_NONE;
+      bool ismouse = event->tfinger.touchId == SDL_TOUCH_MOUSEID;
+      altDragMode = ismouse && event->tfinger.fingerId != SDL_BUTTON_LMASK;
+      tapState = ((!ismouse && gui->fingerClicks == 2) || (mods & KMOD_CTRL)) ? DBL_TAP_DRAG_PENDING : TAP_NONE;
       if(altDragMode)
         rotOrigin = (mods & KMOD_SHIFT) ? TOUCHPT_NAN : initCOM;  //app->map->getTilt() > tiltThresholdRad
     }
