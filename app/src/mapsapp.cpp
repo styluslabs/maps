@@ -1197,17 +1197,31 @@ void MapsApp::dumpTileContents(float x, float y)
     std::lock_guard<std::mutex> lock(logMutex);
     auto tileData = task->source()->parse(*task);  //task->source() ? : Mvt::parseTile(*task, 0);
     std::vector<std::string> layerstr;
+    size_t totpts = 0, totfeats = 0;
     for(const Layer& layer : tileData->layers) {
       std::vector<std::string> featstr;
       for(const Feature& feature : layer.features) {
         size_t ng = feature.polygons.size(), np = feature.points.size(), nl = feature.lines.size();
+        size_t featpts = np;
+        for(auto& line : feature.lines) {
+          featpts += line.size();
+        }
+        for(auto& poly : feature.polygons) {
+          for(auto& line : poly) {
+            featpts += line.size();
+          }
+        }
         std::string geom = ng ? std::to_string(ng) + " polygons" : nl ? std::to_string(nl) + " lines" : std::to_string(np) + " points";
+        geom += " - " + std::to_string(featpts) + " total points";
         featstr.push_back("{ \"properties\": " + feature.props.toJson() + ", \"geometry\": \"" + geom + "\" }");
+        ++totfeats;
+        totpts += featpts;
       }
       layerstr.push_back("\"" + layer.name + "\": [\n  " + joinStr(featstr, ",\n  ") + "\n]");
     }
     fout << "{" << joinStr(layerstr, ",\n\n") << "}";
-    LOGW("Tile dumped to %s", filename.c_str());
+    size_t nbytes = static_cast<const BinaryTileTask&>(*task).rawTileData->size();
+    LOGW("Tile dumped to %s (%llu bytes unzipped, %llu features, %llu points)", filename.c_str(), nbytes, totfeats, totpts);
   }};
 
   auto& tileSources = map->getScene()->tileSources();

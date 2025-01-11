@@ -588,8 +588,22 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public void openUrl(String url)
   {
-    Intent viewUrlIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-    startActivity(viewUrlIntent);
+    try {
+      if("/".equals(url.substring(0,1))) {
+        String authority = getApplicationContext().getPackageName() + ".fileprovider";
+        File file = new File(url);
+        Uri uri = FileProvider.getUriForFile(this, authority, file);
+        Intent viewUrlIntent = new Intent(Intent.ACTION_VIEW, uri);
+        viewUrlIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivity(viewUrlIntent);
+      }
+      else {
+        Intent viewUrlIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        startActivity(viewUrlIntent);
+      }
+    } catch(Exception e) {
+      Log.v("Tangram", "Error opening " + url + ": ", e);
+    }
   }
 
   private static final int ID_OPEN_DOCUMENT = 2;

@@ -1,7 +1,7 @@
 -- Tilemaker processing script for Stylus Labs / Ascend Maps OSM schema
 
--- we cannot update to Tilemaker 3.0 yet because the 3.0 release creates mbtiles w/ UTF-16 encoding, which
---  cannot be attached to Ascend's UTF-8 mbtiles; this was later fixed on master, so next release should be OK
+-- Do not use Tilemaker 3.0 release - it creates mbtiles w/ UTF-16 encoding, which cannot be attached to
+--  Ascend's UTF-8 mbtiles; Tilemaker built from master is OK, as is 2.4 release
 
 -- extracting OSM data w/ Overpass
 -- 1. get all country labels: [out:xml][timeout:25]; node["place"="country"]({{bbox}}); out geom;
@@ -20,6 +20,28 @@
 
 -- Dumping a mbtiles layer to GeoJSON (for debugging):
 -- e.g.: ogr2ogr -oo CLIP=NO shasta.geojson shasta2.mbtiles poi
+
+-- support both Tilemaker 2.4 and 3.0
+currObj = nil
+if not Attribute then
+  --print("Detected Tilemaker 2.4 - creating thunks") -- printed many times
+  Attribute = function(...) currObj:Attribute(...); end
+  AttributeNumeric = function(...) currObj:AttributeNumeric(...); end
+  MinZoom = function(...) currObj:MinZoom(...); end
+  ZOrder = function(...) currObj:ZOrder(...); end
+  Layer = function(...) currObj:Layer(...); end
+  LayerAsCentroid = function(...) currObj:LayerAsCentroid(...); end
+  NextRelation = function(...) currObj:NextRelation(...); end
+  Accept = function(...) currObj:Accept(...); end
+
+  Find = function(...) return currObj:Find(...); end
+  FindInRelation = function(...) return currObj:FindInRelation(...); end
+  Id = function(...) return currObj:Id(...); end
+  Holds = function(...) return currObj:Holds(...); end
+  IsClosed = function(...) return currObj:IsClosed(...); end
+  Area = function(...) return currObj:Area(...); end
+  AreaIntersecting = function(...) return currObj:AreaIntersecting(...); end
+end
 
 --------
 -- Alter these lines to control which languages are written for place/streetnames
@@ -68,6 +90,7 @@ aerodromeValues = Set { "international", "public", "regional", "military", "priv
 
 node_keys = { "addr:housenumber","aerialway","aeroway","amenity","barrier","highway","historic","leisure","natural","office","place","railway","shop","sport","tourism","waterway" }
 function node_function(node)
+  currObj = node
   -- many smaller airports only have aerodrome node instead of way
   local aeroway = Find("aeroway")
   if aeroway=="aerodrome" then
@@ -207,6 +230,7 @@ otherRoutes = { road = 8, ferry = 9, bicycle = 10, hiking = 10, foot = 12, mtb =
 -- Scan relations for use in ways
 
 function relation_scan_function(rel)
+  currObj = rel
   local reltype = Find("type");
   if reltype == "boundary" then
     local bndtype = Find("boundary")
@@ -221,6 +245,7 @@ end
 -- process relations for public transport routes
 
 function relation_function(rel)
+  currObj = rel
   local reltype = Find("type");
   if reltype=="route" then
     local route = Find("route")
@@ -278,6 +303,7 @@ end
 -- Process way tags
 
 function way_function(way)
+  currObj = way
   local route    = Find("route")
   local highway  = Find("highway")
   local waterway = Find("waterway")
