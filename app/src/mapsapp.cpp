@@ -550,9 +550,13 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
       // this will be revisited when we have multiple images for display
       auto* imgnode = static_cast<SvgImage*>(node);
 #if PLATFORM_IOS
-      std::string imgkey = randomStr(16);
+      std::string imgkey = "img-" + randomStr(16);
       imgnode->setXmlId(imgkey.c_str());
       iosPlatform_getPhotoData(imgnode->m_linkStr.c_str(), [=](const void* data, size_t len, float angle){
+        if(!data || !len) {
+          LOGW("iOS returned no image data for %s", imgnode->m_linkStr.c_str());
+          return;
+        }
         Image image = Image::decodeBuffer(data, len);
         Image* pimg = new Image(std::move(image));  // std::function must be copyable
         MapsApp::runOnMainThread([=]() mutable {

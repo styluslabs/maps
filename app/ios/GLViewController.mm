@@ -494,7 +494,10 @@ static float angleFromOrientation(UIImageOrientation imageOrientation)
 void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback)
 {
   PHFetchResult<PHAsset*>* result = [PHAsset fetchAssetsWithLocalIdentifiers:@[@(localId)] options:nil];
-  if(result.count == 0) return;
+  if(result.count == 0) {
+    NSLog(@"No photo asset found for id %s", localId);
+    return;
+  }
 
   [[PHImageManager defaultManager] requestImageDataForAsset:result.firstObject options:nil
       resultHandler:^(NSData* imageData, NSString* dataUTI, UIImageOrientation orientation, NSDictionary* info) {
