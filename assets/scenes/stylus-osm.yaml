@@ -789,7 +789,10 @@ layers:
                     width: [[14, 1px], [18, 2px]]
 
         aerialway:
-            filter: { class: aerialway, $zoom: { min: 10 } }
+            filter:
+                aerialway: true
+                not: { aerialway: [explosive, proposed, razed, no] }
+                $zoom: { min: 10 }
             draw:
                 lines:
                     order: global.order.aerialway  # aerialway would more often be over bridge vs under
@@ -803,15 +806,6 @@ layers:
                     width: [[14, 50], [16, 25], [18, 10], [20, 4]]
                     #width: [[14, 6px], [15, 8px], [16, 10px]]
                     #width: [[14, 50m], [15, 30m], [16, 20m]]
-                # maybe use dashed line instead?
-                #points:
-                #    visible: false
-                #    color: global.color.aerialway
-                #    size: [[14, 1.25px], [15, 3px], [16, 3px]]
-                #    collide: false
-                #    placement: spaced
-                #    placement_spacing: 10px
-                #    placement_min_length_ratio: 0
             show_points:
                 filter: { $zoom: { min: 13 }, aerialway: [gondola, cable_car, mixed_lift, chair_lift] }
                 draw: { points: { visible: true } }
