@@ -2029,6 +2029,10 @@ Widget* MapsApp::createMapPanel(Toolbar* header, Widget* content, Widget* fixedC
 void MapsApp::messageBox(std::string title, std::string message,
     std::vector<std::string> buttons, std::function<void(std::string)> callback)
 {
+  if(!gui || gui->windows.empty()) {
+    taskQueue.push_back([=](){ messageBox(title, message, buttons, callback); });
+    return;
+  }
   // copied from syncscribble
   Dialog* dialog = createDialog(title.c_str());
   Widget* dialogBody = dialog->selectFirst(".body-container");
@@ -2109,8 +2113,7 @@ bool MapsApp::loadConfig(const char* assetPath)
   config = YAML::LoadFile(configPath.exists() ? configPath.path : configDfltPath.path);
   if(!config) {
     LOGE("Unable to load config file %s", configPath.c_str());
-    taskQueue.push_back([](){ messageBox("Error",
-        "Error loading config!  Restore config.yaml or reinstall the application.", {"OK"}); });
+    messageBox("Error", "Error loading config!  Restore config.yaml or reinstall the application.", {"OK"});
     //*(volatile int*)0 = 0;  //exit(1) -- Android repeatedly restarts app
     return false;  // do not set configFile so we don't write to it!
   }

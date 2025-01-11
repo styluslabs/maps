@@ -2135,8 +2135,8 @@ Button* MapsTracks::createPanel()
     else if(it->tracks.empty() || it->tracks.front().pts.empty()) {
       app->config["tracks"].remove("recording");
       // have to wait until window created
-      MapsApp::taskQueue.push_back([file=it->filename](){ MapsApp::messageBox("Restore track",
-          fstring("Error restoring recorded track; please check %s", file.c_str()), {"OK"}); });
+      MapsApp::messageBox("Restore track",
+          fstring("Error restoring recorded track; please check %s", it->filename.c_str()), {"OK"});
     }
     else {
       recordedTrack = std::move(*it);
