@@ -8,6 +8,12 @@ else
   OBJDIR=$(BUILDDIR)
 endif
 
+ifneq ($(wildcard styluslabs/.),)
+  STYLUSLABS_DEPS=styluslabs
+else
+  STYLUSLABS_DEPS=deps
+endif
+
 # define as immediately evaluated so appending for modules works
 SOURCES :=
 INC :=

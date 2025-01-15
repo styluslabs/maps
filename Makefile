@@ -17,12 +17,6 @@ endif
 
 include make/shared.mk
 
-ifneq ($(wildcard styluslabs/.),)
-  STYLUSLABS_DEPS=styluslabs
-else
-  STYLUSLABS_DEPS=deps
-endif
-
 ifneq ($(DEBUG),0)
   DEFS += LOG_LEVEL=3
 else
