@@ -39,6 +39,7 @@ if not Attribute then
   Id = function(...) return currObj:Id(...); end
   Holds = function(...) return currObj:Holds(...); end
   IsClosed = function(...) return currObj:IsClosed(...); end
+  Length = function(...) return currObj:Length(...); end
   Area = function(...) return currObj:Area(...); end
   AreaIntersecting = function(...) return currObj:AreaIntersecting(...); end
 end

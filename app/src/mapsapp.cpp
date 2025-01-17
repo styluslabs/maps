@@ -1212,7 +1212,7 @@ void MapsApp::dumpTileContents(float x, float y)
           }
         }
         std::string geom = ng ? std::to_string(ng) + " polygons" : nl ? std::to_string(nl) + " lines" : std::to_string(np) + " points";
-        geom += " - " + std::to_string(featpts) + " total points";
+        geom += "; " + std::to_string(featpts) + " total points";
         featstr.push_back("{ \"properties\": " + feature.props.toJson() + ", \"geometry\": \"" + geom + "\" }");
         ++totfeats;
         totpts += featpts;
