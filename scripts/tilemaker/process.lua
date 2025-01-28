@@ -663,7 +663,7 @@ function way_function(way)
     if amenity~="" then Attribute("amenity", amenity) end
     if tourism~="" then Attribute("tourism", tourism) end
     if natural=="wetland" then Attribute("wetland", Find("wetland")) end
-    landuse_poi = true
+    landuse_poi = Find("name")~=""
   end
 
   -- Parks
@@ -746,7 +746,7 @@ function NewWritePOI(obj, area, osm_type)
       if type(next(lists)) ~= "number" then lists = { [poiMinZoom] = lists } end
       for minzoom, list in pairs(lists) do
         local exclude = list["__EXCLUDE"] == true
-        if next(list) == nil or (exclude and not list[val] or list[val]) then
+        if next(list) == nil or (not list[val]) == exclude then
           LayerAsCentroid("poi")
           MinZoom(area > 0 and 12 or minzoom)
           SetNameAttributes(obj, 0, osm_type)
@@ -781,7 +781,7 @@ function SetNameAttributes(obj, minzoom, osm_type)
     if iname~=name and default_language_attribute then
       Attribute(default_language_attribute, name)
     else main_written = iname end
-  else
+  elseif name ~= "" then
     Attribute(preferred_language_attribute, name)
   end
   -- then set any additional languages

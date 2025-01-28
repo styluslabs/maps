@@ -4,26 +4,14 @@ sources:
     elevation:
         type: Raster
         filtering: nearest
-        url: https://elevation-tiles-prod.s3.amazonaws.com/geotiff/{z}/{x}/{y}.tif
-        max_zoom: 14
-        zoom_offset: 1
-        cache: terrarium-tiff
-        # 2 years - don't think this source will see any updates
+        url: https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer/tile/{z}/{y}/{x}
+        max_zoom: 16
+        cache: elevation
+        # 2 years
         max_age: 63072000
-        # https://github.com/tilezen/joerd/blob/master/docs/attribution.md
         attribution: |
-            * ArcticDEM terrain data DEM(s) were created from DigitalGlobe, Inc., imagery and funded under National Science Foundation awards 1043681, 1559691, and 1542736;
-            * Australia terrain data © Commonwealth of Australia (Geoscience Australia) 2017;
-            * Austria terrain data © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich;
-            * Canada terrain data contains information licensed under the Open Government Licence – Canada;
-            * Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers;
-            * Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration
-            * Mexico terrain data source: INEGI, Continental relief, 2016;
-            * New Zealand terrain data Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government (All rights reserved);
-            * Norway terrain data © Kartverket;
-            * United Kingdom terrain data © Environment Agency copyright and/or database right 2015. All rights reserved;
-            * United States 3DEP (formerly NED) and global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey.
-        #{ "url: https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png", max_zoom: 15, zoom_offset: -1, cache: terrarium }
+            Maxar, Airbus DS, USGS, NGA, NASA, CGIAR, GEBCO, N Robinson, NCEAS, NLS, OS, NMA, Geodatastyrelsen and the GIS User Community
+        #{ url: 'https://elevation-tiles-prod.s3.amazonaws.com/geotiff/{z}/{x}/{y}.tif', max_zoom: 14, zoom_offset: 1, cache: terrarium-tiff }
 
 
 styles:
