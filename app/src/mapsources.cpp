@@ -239,7 +239,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     else {
       const auto& src = mapSources.at(srcname);
       if(!src) return;
-      if(src["layers"] && !src["layer"].as<bool>(false)) {
+      if(src["layers"]) {  //&& !src["layer"].as<bool>(false)) {
         for(const auto& layer : src["layers"])
           currLayers.push_back({getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f});
         for(const auto& update : src["updates"].pairs())
@@ -307,7 +307,7 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
   }
   else {
     YAML::Node& node = mapSources[savekey];
-    bool newsrc = !mapSources[savekey];
+    bool newsrc = !node;
     node["title"] = trimStr(titleEdit->text());
     if(newsrc || node.has("layers")) {
       YAML::Node& layers = node["layers"] = YAML::Array();
@@ -318,6 +318,8 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     }
     else if(node.has("url"))
       node["url"] = trimStr(urlEdit->text());
+    else if(node.has("scene"))
+      node["scene"] = trimStr(urlEdit->text());
 
     YAML::Node& updates = node["updates"] = YAML::Map();  // default to undefined node (not written to output)
     // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
@@ -771,8 +773,12 @@ void MapsSources::populateSourceEdit(std::string key)
     urlEdit->setVisible(true);
     urlEdit->setText(src["url"].Scalar().c_str());
   }
-  else  // vector scene
+  else if(src["scene"]) {  // vector scene
     urlEdit->setVisible(true);
+    urlEdit->setText(src["scene"].Scalar().c_str());
+  }
+  else  // update only source
+    urlEdit->setVisible(false);
 
   if(app->map->getScene()->isReady())
     populateSceneVars();
