@@ -358,6 +358,32 @@ static int addRoutePolyline(duk_context* ctx)
 {
   const char* str = duk_require_string(ctx, 0);
   auto route = decodePolylineStr(str);
+
+  // set elevation if available
+  std::vector<float> elev;
+  if(duk_is_array(ctx, 1)) {
+    duk_size_t len = duk_get_length(ctx, 1);
+    elev.reserve(len);
+    for(duk_size_t ii = 0; ii < len; ++ii) {
+      duk_get_prop_index(ctx, 1, ii);
+      if(duk_is_number(ctx, -1))
+        elev.push_back(duk_get_number(ctx, -1));
+      duk_pop(ctx);
+    }
+  }
+  if(elev.size() > 1) {
+    for(size_t ii = 1; ii < route.size(); ++ii) {
+      route[ii].dist = route[ii-1].dist + 1000*lngLatDist(route[ii].lngLat(), route[ii-1].lngLat());
+    }
+    double interval = route.back().dist/(elev.size() - 1);
+    for(auto& wpt : route) {
+      double f0 = wpt.dist/interval;
+      size_t idx = std::min(size_t(f0), elev.size()-2);
+      double f = f0 - idx*interval;
+      wpt.loc.alt = elev[idx]*(1-f) + elev[idx+1]*f;
+    }
+  }
+
   MapsApp::inst->mapsTracks->addRoute(std::move(route));
   return 0;
 }
