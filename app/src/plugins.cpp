@@ -376,10 +376,11 @@ static int addRoutePolyline(duk_context* ctx)
       route[ii].dist = route[ii-1].dist + 1000*lngLatDist(route[ii].lngLat(), route[ii-1].lngLat());
     }
     double interval = route.back().dist/(elev.size() - 1);
+    LOGD("Calculated elevation interval for valhalla route: %f", interval);
     for(auto& wpt : route) {
       double f0 = wpt.dist/interval;
       size_t idx = std::min(size_t(f0), elev.size()-2);
-      double f = f0 - idx*interval;
+      double f = f0 - idx;
       wpt.loc.alt = elev[idx]*(1-f) + elev[idx+1]*f;
     }
   }
@@ -471,7 +472,7 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addPlaceInfo");
   duk_push_c_function(ctx, addRouteGPX, 1);
   duk_put_global_string(ctx, "addRouteGPX");
-  duk_push_c_function(ctx, addRoutePolyline, 1);
+  duk_push_c_function(ctx, addRoutePolyline, 2);
   duk_put_global_string(ctx, "addRoutePolyline");
   duk_push_c_function(ctx, addRouteStep, 2);
   duk_put_global_string(ctx, "addRouteStep");

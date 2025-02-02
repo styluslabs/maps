@@ -859,7 +859,8 @@ void MapsApp::mapUpdate(double time)
   if(cpos.tilt != 0 && !terrain3D && !cfg()["terrain_3d"]["enabled"].IsDefined()) {
     config["terrain_3d"]["enabled"] = false;
     MapsApp::messageBox("3D Terrain",
-        fstring("3D terrain can be controlled from the overflow menu.  Enable now?"), {"OK", "Cancel"},
+        fstring("Enable 3D terrain?\n\n3D terrain can be controlled from the overflow menu and is best used "
+            "with the Ascend OSM + Worldcover or Ascend OSM + Satellite maps."), {"OK", "Cancel"},
         [=](std::string res){ if(res == "OK") { terrain3dCb->onClicked(); } });
   }
 
