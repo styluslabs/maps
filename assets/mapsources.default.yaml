@@ -214,6 +214,13 @@ custom-slope-shading:
     updates:
         styles.hillshade.mix#-1: custom-slope-shading
 
+terrain-exaggeration:
+    title: Terrain Exaggeration
+    archived: true
+    layer: true
+    updates:
+        application.gui_variables.terrain_3d_scale: { label: 3D Terrain Scale, min: 0, max: 100 }
+
 mix-base-raster:
     title: Mix Hillshade Base Raster
     archived: true

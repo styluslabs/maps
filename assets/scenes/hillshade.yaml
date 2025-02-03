@@ -80,7 +80,7 @@ styles:
                 SHOW_CONTOURS: global.show_contours
             uniforms:
                 u_exaggerate: 4.5
-                CONTOUR_COLOR: global.contour_color
+                u_contour_color: global.contour_color
                 u_min_contour_elev: 0.0
                 # https://github.com/der-stefan/OpenTopoMap/blob/master/mapnik/relief_color_text_file.txt
                 # - stop offset in meters/10000
@@ -216,7 +216,7 @@ styles:
                         dup = fract(hc/coarse)*coarse * px_per_elev;
                         ddn = abs(1. - fract(hc/coarse))*coarse * px_per_elev;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
-                        base_color = mix(base_color, vec4(CONTOUR_COLOR.rgb, 0.0), min(cov, 1.));
+                        base_color = mix(base_color, vec4(u_contour_color.rgb, 0.0), u_contour_color.a*min(cov, 1.));
                     }
                     #endif
                     // apply lighting to get final color

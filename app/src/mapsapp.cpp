@@ -791,13 +791,32 @@ void MapsApp::mapUpdate(double time)
 {
   static double lastFrameTime = 0;
 
+  // handle scene completion ourselves to perform necessary setup before first update
+  // - this breaks syncClientTileSources() but we want to handle client sources ourselves anyway
+  if(map->getScene()->isReady()) {}
+  else if(map->getScene()->completeScene(map->getView())) {
+    tracksDataSource->rasterSources().clear();
+    if(terrain3D) {
+      auto* elevMgr = map->getScene()->elevationManager();
+      if(elevMgr)
+        elevMgr->m_terrainScale = sceneConfig()["global"]["terrain_3d_scale"].as<float>(1.0f);
+      auto elevsrc = getElevationSource();
+      if(elevsrc)
+        tracksDataSource->addRasterSource(elevsrc);
+    }
+    map->getScene()->tileManager()->addClientTileSource(tracksDataSource);
+    //map->addTileSource(tracksDataSource);  -- Map will cache source and add to scenes automatically, which
+    // we don't want until we've added elevation source
+  }
+  else
+    return;
+
   if(locMarkerNeedsUpdate || locMarkerAngle != orientation + map->getRotation()*180/float(M_PI)) {
     updateLocMarker();
     platform->notifyRender();  // clear requestRender() from marker update
     locMarkerNeedsUpdate = false;
   }
 
-  bool wasReady = map->getScene()->isReady();
   mapState = map->update(time - lastFrameTime);
   lastFrameTime = time;
   //LOG("MapState: %X", mapState.flags);
@@ -809,21 +828,6 @@ void MapsApp::mapUpdate(double time)
       followState = FOLLOW_ACTIVE;
   }
 
-  // it is possible to miss the pending_completion state due to async scene load
-  if(!wasReady && map->getScene()->isReady()) {  //use_count() < 2
-    tracksDataSource->rasterSources().clear();
-    if(terrain3D) {
-      //map->getScene()->elevationManager()->m_elevationSource
-      auto elevsrc = getElevationSource();
-      if(elevsrc)
-        tracksDataSource->addRasterSource(elevsrc);
-    }
-    map->getScene()->tileManager()->addClientTileSource(tracksDataSource);
-    platform->requestRender();
-    //map->addTileSource(tracksDataSource);  -- Map will cache source and add to scenes automatically, which
-    // we don't want until we've added elevation source
-  }
-
   // update map center
   auto cpos = map->getCameraPosition();
   reorientBtn->setVisible(cpos.tilt != 0 || cpos.rotation != 0);
@@ -833,7 +837,7 @@ void MapsApp::mapUpdate(double time)
     iconNode->setTransform(tf);
 
   // update progress indicator (shown if still loading tiles after 1 sec)
-  const auto& tileMgr = map->getScene()->tileManager();
+  const auto* tileMgr = map->getScene()->tileManager();
   currProgress = 1 - tileMgr->numLoadingTiles()/float(std::max(1, tileMgr->numTotalTiles()));
   if(currProgress >= 0 && currProgress < 1) {  // < 0 should not be possible ...
     if(progressWidget->isVisible())
