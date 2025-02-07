@@ -1,5 +1,6 @@
 #include "touchhandler.h"
 #include "mapsapp.h"
+#include "gaml/src/yaml.h"
 #include "ugui/svggui.h"
 
 
@@ -53,12 +54,16 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
               app->tapEvent(initCOM.x, initCOM.y);
           }
           else {
-            // note delay is less than max double tap delay (400ms)
-            tapTimer = app->gui->setTimer(250, app->win.get(), tapTimer, [this]() {
+            int delay = MapsApp::cfg()["ui"]["tap_delay"].as<int>(150);
+            if(delay > 0) {
+              tapTimer = app->gui->setTimer(delay, app->win.get(), tapTimer, [this]() {
+                app->tapEvent(initCOM.x, initCOM.y);
+                tapTimer = NULL;
+                return 0;
+              });
+            }
+            else
               app->tapEvent(initCOM.x, initCOM.y);
-              tapTimer = NULL;
-              return 0;
-            });
           }
         }
         else if(gui->fingerClicks == 2) { //%2 == 0)

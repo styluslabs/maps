@@ -1,4 +1,4 @@
-# Stylus Labs Maps config
+c# Stylus Labs Maps config
 sources:
   file: mapsources.yaml
   last_source: opentopomap
@@ -87,6 +87,9 @@ ui:
   ui_scale: 0.95
   map_scale: 0.95
   #gpu_render: true
+  #tap_delay: 150  # ms to wait for second tap
+  #pick_radius: 3
+  #enable_back_key: true
 
 #tile_cache_limit: 536870912
 

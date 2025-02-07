@@ -1583,7 +1583,7 @@ layers:
                         filter:
                             - amenity: [cinema, theatre, concert_hall, arts_centre, library]
                             - tourism: [museum, attraction, artwork, theme_park]
-                            - historic: monument
+                            - historic: [monument, castle, fort, archaeological_site]
                         draw: { points: { priority: global.priority.poi_culture } }
                     church:
                         exclusive: true
@@ -1602,7 +1602,11 @@ layers:
 
     boundaries:
         data: { source: osm, layer: boundary }
-        filter: { admin_level: [2, 3, 4] }
+        filter:
+            admin_level: [2, 3, 4]
+            not:
+                - maritime: true
+                - natural: coastline
         draw:
             lines:
                 style: unlit-lines

@@ -990,8 +990,13 @@ Button* MapsSources::createPanel()
               app->showPanel(sourceEditPanel);  // clear history
             populateSourceEdit(key);
           }
-          else
+          else {
+            // handle minimized source edit panel
+            if(!app->panelHistory.empty() && app->panelHistory.back() == sourceEditPanel) {
+              while(!app->panelHistory.empty()) app->popPanel();
+            }
             rebuildSource(key);
+          }
         };
         std::string title = mapSources[key]["title"].Scalar();
         Button* item = sourcesMenu->addItem(title.c_str(), MapsApp::uiIcon("layers"), onClicked);

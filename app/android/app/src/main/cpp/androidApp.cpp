@@ -336,6 +336,7 @@ static jmethodID notifyStatusBarBGMID = nullptr;
 static jmethodID setSensorsEnabledMID = nullptr;
 static jmethodID setServiceStateMID = nullptr;
 static jmethodID extractAssetsMID = nullptr;
+static jmethodID sendToBackMID = nullptr;
 
 #define TANGRAM_JNI_VERSION JNI_VERSION_1_6
 
@@ -362,6 +363,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
   setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceState", "(IFF)V");
   extractAssetsMID = jniEnv->GetMethodID(cls, "extractAssets", "(Ljava/lang/String;)V");
+  sendToBackMID = jniEnv->GetMethodID(cls, "sendToBack", "()V");
   return TANGRAM_JNI_VERSION;
 }
 
@@ -532,6 +534,12 @@ void MapsApp::extractAssets(const char* assetPath)
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jstring jassetPath = jniEnv->NewStringUTF(assetPath);
   jniEnv->CallVoidMethod(mapsActivityRef, extractAssetsMID, jassetPath);
+}
+
+void android_sendToBack()
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jniEnv->CallVoidMethod(mapsActivityRef, sendToBackMID);
 }
 
 // EGL setup and main loop

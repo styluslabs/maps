@@ -246,8 +246,6 @@ int main(int argc, char* argv[])
     if(event->type == SDL_KEYDOWN) {
       if(event->key.keysym.sym == SDLK_q && event->key.keysym.mod & KMOD_CTRL)
         MapsApp::runApplication = false;
-      else if(IS_DEBUG && event->key.keysym.sym == SDLK_ESCAPE)
-        MapsApp::runApplication = false;
       else if(event->key.keysym.sym == SDLK_F5) {
         app->mapsSources->reload();
         app->pluginManager->reload();

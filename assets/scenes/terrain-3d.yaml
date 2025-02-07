@@ -55,8 +55,7 @@ styles:
                     // need sufficient offset for proxy levels to prevent terrain poking through level above
                     proxy *= 48.0;
                     #endif
-                    float scale3d = float(TANGRAM_TERRAIN_SCALE);  // int to float
                     float elev3d = max(getElevation(), TANGRAM_MIN_ELEVATION);
-                    position.z += scale3d * elev3d;
+                    position.z += float(TANGRAM_TERRAIN_SCALE) * elev3d;
                     v_world_position.z += elev3d;
                     #endif

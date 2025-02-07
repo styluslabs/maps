@@ -205,8 +205,8 @@ poiTags = { aerialway = Set { "station" },
           barrier = Set { "bollard", "border_control", "cycle_barrier", "gate", "lift_gate", "sally_port", "stile", "toll_booth" },
           building = Set { "dormitory" },
           highway = { [12] = Set { "bus_stop", "trailhead" }, [poiMinZoom] = Set { "traffic_signals" } },
-          historic = Set { "monument", "castle", "ruins", "fort", "mine" },
-          archaeological_site = Set { "__EXCLUDE", "tumulus", "fortification", "megalith", "mineral_extraction", "petroglyph", "cairn" },
+          historic = Set { "monument", "castle", "ruins", "fort", "mine", "archaeological_site" },
+          --archaeological_site = Set { "__EXCLUDE", "tumulus", "fortification", "megalith", "mineral_extraction", "petroglyph", "cairn" },
           landuse = Set { "basin", "brownfield", "cemetery", "reservoir", "winter_sports" },
           leisure = Set { "__EXCLUDE", "fitness_station", "picnic_table", "slipway", "outdoor_seating", "firepit", "bleachers", "common", "yes" },
           natural = { [13] = Set { "spring", "hot_spring", "fumarole", "geyser", "sinkhole", "arch", "cave_entrance", "saddle" } },
@@ -738,7 +738,7 @@ end
 -- ==========================================================
 -- Common functions
 
-extraPoiTags = Set { "cuisine", "station", "religion", "operator" }  -- atm:operator
+extraPoiTags = Set { "cuisine", "station", "religion", "operator", "archaeological_site" }  -- atm:operator
 function NewWritePOI(obj, area, osm_type)
   for k,lists in pairs(poiTags) do
     local val = Find(k)
@@ -919,12 +919,15 @@ function WriteBoundary(boundary, way, relation)
   else
     SetNameAttributes(way)
   end
+  -- to allow hiding coastal boundaries (natural=coastline)
+  local natural = Find("natural")
+  if natural~="" then Attribute("natural", natural) end
   -- flags
   if Find("maritime")=="yes" or (relation and FindInRelation("maritime")=="yes") then
-    AttributeNumeric("maritime", 1)
+    Attribute("maritime", "yes")
   end
   if boundary=="disputed" or Find("disputed")=="yes" or (relation and FindInRelation("disputed")=="yes") then
-    AttributeNumeric("disputed", 1)
+    Attribute("disputed", "yes")
   end
 end
 

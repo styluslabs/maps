@@ -769,6 +769,11 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         window.getDecorView().setSystemUiVisibility(flags ^ View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
     } });
   }
+
+  public void sendToBack()
+  {
+    runOnUiThread(new Runnable() { @Override public void run() { moveTaskToBack(true); } });
+  }
 }
 
 // Some keyboards (e.g. SwiftKey) edit entire string via InputConnection, while others (e.g. Samsung) only edit
@@ -925,6 +930,10 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
   {
     if(event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
       clearFocus();  //MapsLib.keyEvent(-1, -1);  // keyboard hidden
+    }
+    if(keyCode == KeyEvent.KEYCODE_BACK) {
+      MapsLib.keyEvent(keyCode, event.getAction() == KeyEvent.ACTION_UP ? -1 : 1);
+      return true;  // swallow key
     }
     return super.onKeyPreIme(keyCode, event);
   }

@@ -32,6 +32,7 @@
 #include "../ios/iosApp.h"
 #elif PLATFORM_ANDROID
 #include "../android/tangram/src/main/cpp/sqlite_fdvfs.h"
+extern void android_sendToBack();  // we'll add androidApp.h if there are any more of these
 #endif
 
 //#define UTRACE_ENABLE
@@ -1425,6 +1426,24 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
         static_cast<SvgRect*>(bottomPadding->node)->setRect(Rect::wh(20, bottomInset));
       return true;
     }
+    if(event->type == SDL_KEYDOWN) {
+      if(event->key.keysym.sym == SDLK_ESCAPE || event->key.keysym.sym == SDLK_AC_BACK) {
+        // Android won't let us disable back gesture, but we can just swallow events making it a no-op!
+        if(!cfg()["ui"]["enable_back_key"].as<bool>(true)) {}
+        else if(!popPanel()) {
+#if PLATFORM_ANDROID
+          android_sendToBack();
+#elif IS_DEBUG
+          MapsApp::runApplication = false;
+#endif
+        }
+        else if(!panelContainer->isVisible()) {
+          // clear all history if minimized
+          while(!panelHistory.empty()) popPanel();
+        }
+        return true;
+      }
+    }
     return false;
   });
 
@@ -2273,7 +2292,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // Scene::onReady() remains false until after first call to Map::update()!
   //map->setSceneReadyListener([this](Tangram::SceneID id, const Tangram::SceneError*) {});
   //map->setCameraAnimationListener([this](bool finished){ sendMapEvent(CAMERA_EASE_DONE); });
-  map->setPickRadius(2.0f);
+  map->setPickRadius(cfg()["ui"]["pick_radius"].as<float>(3.0f));
 
   tracksDataSource = std::make_shared<ClientDataSource>(
       *platform, "tracks", "", false, TileSource::ZoomOptions(-1, -1, 14, 0));
