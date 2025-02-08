@@ -23,7 +23,7 @@ static int actionFromSDLFinger(unsigned int sdltype)
 
 bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
 {
-  if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL ||
+  if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP ||
       (event->type == SDL_FINGERMOTION && (event->tfinger.fingerId == SDL_BUTTON_LMASK || altDragMode))) {
     if(app->drawOnMap) {
       int action = actionFromSDLFinger(event->type);
@@ -43,7 +43,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
       if(tapState == DBL_TAP_DRAG_PENDING && gui->fingerClicks == 0)
         tapState = DBL_TAP_DRAG_ACTIVE;
     }
-    else if(event->type == SDL_FINGERUP || event->type == SVGGUI_FINGERCANCEL) {
+    else if(event->type == SDL_FINGERUP) {
       if(gui->fingerClicks > 0) {
         app->map->handlePanGesture(prevCOM.x, prevCOM.y, initCOM.x, initCOM.y);  // undo any panning
         if(gui->fingerClicks == 1) {
@@ -91,6 +91,8 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
   }
   else if(event->type == SvgGui::MULTITOUCH) {
     SDL_Event* fevent = static_cast<SDL_Event*>(event->user.data1);
+    if(event->type == SVGGUI_FINGERCANCEL)
+      app->map->handlePanGesture(prevCOM.x, prevCOM.y, initCOM.x, initCOM.y);  // undo any panning
     touchEvent(fevent->tfinger.fingerId, actionFromSDLFinger(fevent->type), fevent->tfinger.timestamp/1000.0,
         fevent->tfinger.x*xyScale, fevent->tfinger.y*xyScale, 1.0f);
   }

@@ -509,7 +509,8 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     return false;
   });
 
-  Widget* toolRow = createRow({chooseListBtn, removeBtn, addNoteBtn});
+  Widget* sep = new Widget(widgetNode("#toolbar-separator"));
+  Widget* toolRow = createRow({chooseListBtn, removeBtn, sep, addNoteBtn});
   section->addWidget(toolRow);
   section->addWidget(noteText);
   return section;

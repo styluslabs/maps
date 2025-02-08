@@ -1,4 +1,4 @@
-c# Stylus Labs Maps config
+# Stylus Labs Maps config
 sources:
   file: mapsources.yaml
   last_source: opentopomap

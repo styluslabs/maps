@@ -748,6 +748,11 @@ function NewWritePOI(obj, area, osm_type)
         local exclude = list["__EXCLUDE"] == true
         if next(list) == nil or (not list[val]) == exclude then
           LayerAsCentroid("poi")
+          -- make important POIs available at lower zoom
+          if minzoom > 12 and Holds("wikipedia") then
+            print("Setting minzoom 12 for wikipedia POI "..Find("wikipedia"))
+            minzoom = 12
+          end
           MinZoom(area > 0 and 12 or minzoom)
           SetNameAttributes(obj, 0, osm_type)
           if area > 0 then AttributeNumeric("area", area) end

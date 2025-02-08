@@ -770,6 +770,16 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     } });
   }
 
+  @Override
+  public boolean onKeyDown(int keyCode, KeyEvent event)
+  {
+    if(keyCode == KeyEvent.KEYCODE_BACK) {
+      MapsLib.keyEvent(keyCode, 1);
+      return true;  // swallow key
+    }
+    return super.onKeyDown(keyCode, event);
+  }
+
   public void sendToBack()
   {
     runOnUiThread(new Runnable() { @Override public void run() { moveTaskToBack(true); } });
@@ -930,10 +940,6 @@ class DummyEdit extends View //implements View.OnFocusChangeListener  //, View.O
   {
     if(event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
       clearFocus();  //MapsLib.keyEvent(-1, -1);  // keyboard hidden
-    }
-    if(keyCode == KeyEvent.KEYCODE_BACK) {
-      MapsLib.keyEvent(keyCode, event.getAction() == KeyEvent.ACTION_UP ? -1 : 1);
-      return true;  // swallow key
     }
     return super.onKeyPreIme(keyCode, event);
   }
