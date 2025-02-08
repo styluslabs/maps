@@ -132,7 +132,7 @@ void SelectDialog::addItems(const std::vector<std::string>& _items, bool replace
     content->addWidget(btn);
   }
 }
-
+/*
 SelectBox::SelectBox(SvgNode* boxnode, SelectDialog* _dialog, const std::vector<std::string>& _items)
     : Widget(boxnode), dialog(_dialog), currIndex(0)
 {
@@ -178,7 +178,7 @@ void SelectBox::setIndex(int idx)
     currIndex = idx;
   }
 }
-
+*/
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items)
 {
   static const char* dialogProtoSVG = R"#(
@@ -225,7 +225,7 @@ SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, con
   static_cast<SvgUse*>(dialog->selectFirst(".listitem-icon"))->setTarget(itemicon);
   return new SelectDialog(dialog, items);
 }
-
+/*
 SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items)
 {
   static const char* boxProtoSVG = R"#(
@@ -253,7 +253,7 @@ SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std
   //widget->isFocusable = true;
   return widget;
 }
-
+*/
 SharedMenu::SharedMenu(SvgNode* n, int align) : Menu(n, align)
 {
   addHandler([=](SvgGui* gui, SDL_Event* event){

@@ -287,7 +287,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int fla
   int limit = std::max(20, int(app->win->winBounds().height()/42 + 1));
   int offset = listResults.size();
   // if '*' not appended to string, we assume categorical search - no info for ranking besides dist
-  bool sortByDist = queryStr.back() != '*' || app->config["search"]["sort"].as<std::string>("rank") == "dist";
+  bool sortByDist = queryStr.back() != '*' || app->cfg()["search"]["sort"].as<std::string>("rank") == "dist";
   int64_t gen = ++listSearchGen;
 
   searchWorker.enqueue([=](){
@@ -362,7 +362,7 @@ void MapsSearch::onMapEvent(MapEvent_t event)
     retryBtn->setVisible(true);
 
   // make sure extra labels still hidden if scene reloaded or source changed
-  map->getScene()->hideExtraLabels = zoom < app->config["search"]["min_poi_zoom"].as<float>(19);
+  map->getScene()->hideExtraLabels = zoom < app->cfg()["search"]["min_poi_zoom"].as<float>(19);
 }
 
 void MapsSearch::updateMapResultBounds(LngLat lngLat00, LngLat lngLat11)
@@ -531,7 +531,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   if(providerIdx == 0)
     offlineListSearch(searchStr, lngLat00, lngLat11, phase == RETURN ? FLY_TO : 0);
   else {
-    bool sortByDist = app->config["search"]["sort"].as<std::string>("rank") == "dist";
+    bool sortByDist = app->cfg()["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
     if(unifiedSearch)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
@@ -546,8 +546,8 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   if(!app->searchActive && phase == RETURN) {
     //map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
-    map->getScene()->hideExtraLabels = map->getZoom() < app->config["search"]["min_poi_zoom"].as<float>(19);
-    if(app->config["search"]["hide_bookmarks"].as<bool>(false))
+    map->getScene()->hideExtraLabels = map->getZoom() < app->cfg()["search"]["min_poi_zoom"].as<float>(19);
+    if(app->cfg()["search"]["hide_bookmarks"].as<bool>(false))
       app->mapsBookmarks->hideBookmarks();  // also hide tracks?
     app->searchActive = true;
   }
@@ -616,16 +616,19 @@ Button* MapsSearch::createPanel()
 {
   static const char* searchHeaderSVG = R"#(
     <g box-anchor="hfill" layout="flex" flex-direction="column">
-      <g class="searchbox inputbox toolbar" box-anchor="hfill" layout="box">
+      <g class="searchbox inputbox toolbar" box-anchor="hfill" layout="box" margin="2 2 0 2">
         <rect class="toolbar-bg background" box-anchor="vfill" width="250" height="20"/>
         <rect class="inputbox-bg" box-anchor="fill" width="150" height="36"/>
         <g class="searchbox_content child-container" box-anchor="hfill" layout="flex" flex-direction="row">
           <g class="toolbutton search-btn" layout="box">
             <rect class="background" box-anchor="hfill" width="36" height="34"/>
-            <use class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#search"/>
+            <use margin="0 2" class="icon" width="30" height="30" xlink:href=":/ui-icons.svg#search-menu"/>
           </g>
-          <g class="textbox searchbox_text" box-anchor="hfill" layout="box">
-            <rect class="min-width-rect" fill="none" width="150" height="36"/>
+          <g class="textbox_wrapper" box-anchor="hfill" layout="box">
+            <g class="textbox searchbox_text" box-anchor="fill" layout="box">
+              <rect class="min-width-rect" fill="none" width="150" height="36"/>
+            </g>
+            <rect class="noquery-overlay" display='none' fill='none' box-anchor='fill' width='20' height='20'/>
           </g>
           <g class="toolbutton retry-btn" display="none" layout="box">
             <rect class="background" box-anchor="hfill" width="36" height="34"/>
@@ -636,7 +639,6 @@ Button* MapsSearch::createPanel()
             <use class="icon" width="26" height="26" xlink:href=":/ui-icons.svg#circle-x"/>
           </g>
         </g>
-        <rect class="noquery-overlay" display='none' fill='none' box-anchor='fill' width='20' height='20'/>
       </g>
       <g box-anchor="hfill" layout="flex" flex-direction="column">
         <text class="result-count-text" box-anchor="right" margin="0 5" font-size="12"></text>
@@ -648,10 +650,14 @@ Button* MapsSearch::createPanel()
   SvgG* searchHeaderNode = static_cast<SvgG*>(loadSVGFragment(searchHeaderSVG));
   SvgG* searchBoxNode = static_cast<SvgG*>(searchHeaderNode->selectFirst(".searchbox"));
   SvgG* textEditNode = static_cast<SvgG*>(searchBoxNode->selectFirst(".textbox"));
+  SvgNode* overlayNode = searchBoxNode->selectFirst(".noquery-overlay");
   Widget* searchHeader = new Widget(searchHeaderNode);
   textEditNode->addChild(textEditInnerNode());
   queryText = new TextEdit(textEditNode);
   setMinWidth(queryText, 100);
+
+  Button* searchPluginBtn = new Button(searchBoxNode->selectFirst(".search-btn"));
+  searchPluginBtn->isFocusable = true;
 
   Widget* searchBox = new Widget(searchBoxNode);
   setupFocusable(searchBox);  //queryText->isFocusable = false; searchBox->isFocusable = true;
@@ -666,12 +672,11 @@ Button* MapsSearch::createPanel()
 
   SvgText* msgnode = createTextNode("No offline search data. Tap here to download or select a different search plugin.");
   Button* noDataMsg = new Button(msgnode);
-  noDataMsg->onClicked = [](){ MapsApp::openURL(MapsApp::config["search"]["download_url"].as<std::string>("").c_str()); };
+  noDataMsg->onClicked = [](){ MapsApp::openURL(MapsApp::cfg()["search"]["download_url"].as<std::string>("").c_str()); };
   searchHeader->addWidget(noDataMsg);
   msgnode->setText(SvgPainter::breakText(msgnode, 250).c_str());  //app->getPanelWidth() - 70
   noDataMsg->setVisible(false);
 
-  SvgNode* overlayNode = searchBoxNode->selectFirst(".noquery-overlay");
   Button* textEditOverlay = new Button(overlayNode);
   textEditOverlay->onClicked = [=](){ searchText("", RETURN); };
 
@@ -731,12 +736,14 @@ Button* MapsSearch::createPanel()
   retryBtn = new Button(searchBoxNode->selectFirst(".retry-btn"));
   retryBtn->isFocusable = true;
   retryBtn->onClicked = [this](){
-    if(!queryText->text().empty())
+    if(!queryText->text().empty() || !queryText->isEnabled())
       searchText(queryText->text(), RETURN);
   };
 
   auto onSetProvider = [=](int idx) {
-    noDataMsg->setVisible(idx == 0 && !hasSearchData);
+    providerIdx = idx;
+    std::string title = idx > 0 ? app->pluginManager->searchFns[idx-1].title : "Offline Search";
+    static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
     std::string typestr = idx > 0 ? app->pluginManager->searchFns[idx-1].type : "";
     StringRef type(typestr);
     searchOnMapMove = !type.contains("-slow");
@@ -747,26 +754,25 @@ Button* MapsSearch::createPanel()
     queryText->setEmptyText(noquery ? "Tap to update" : "");
     queryText->setEnabled(!noquery);
     textEditOverlay->setVisible(noquery);  //&& slow?
+    noDataMsg->setVisible(idx == 0 && !hasSearchData);
   };
 
   std::vector<std::string> cproviders = {"Offline Search"};
   for(auto& fn : app->pluginManager->searchFns)
     cproviders.push_back(fn.title.c_str());
 
-  providerIdx = std::min(int(cproviders.size())-1, app->config["search"]["plugin"].as<int>(0));
+  providerIdx = std::min(int(cproviders.size())-1, app->cfg()["search"]["plugin"].as<int>(0));
   auto searchTb = app->createPanelHeader(MapsApp::uiIcon("search"), cproviders[providerIdx].c_str());
-  bool hasPlugins = !app->pluginManager->searchFns.empty();
-  Button* searchPluginBtn = createToolbutton(MapsApp::uiIcon(hasPlugins ? "plugin" : "no-plugin"), "Plugin");
-  searchPluginBtn->setEnabled(hasPlugins);
   Menu* searchPluginMenu = createMenu(Menu::VERT_LEFT, false);
   for(size_t ii = 0; ii < cproviders.size(); ++ii) {
     std::string title = cproviders[ii];
     searchPluginMenu->addItem(title.c_str(), [=](){
-      static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
-      app->config["search"]["plugin"] = providerIdx = ii;
       onSetProvider(ii);
-      app->gui->setFocused(queryText->isEnabled() ? (Widget*)searchBox : (Widget*)textEditOverlay);
-      if(queryText->isEnabled() && queryText->text().empty()) {
+      bool hasquery = queryText->isEnabled();
+      if(hasquery)
+        app->config["search"]["plugin"] = providerIdx;
+      app->gui->setFocused(hasquery ? (Widget*)searchBox : (Widget*)textEditOverlay);
+      if(hasquery && queryText->text().empty()) {
         clearSearch();
         searchText("", EDITING);  // show history
       }
@@ -775,12 +781,10 @@ Button* MapsSearch::createPanel()
     });
   }
   searchPluginBtn->setMenu(searchPluginMenu);
-  searchTb->addWidget(searchPluginBtn);
-  onSetProvider(providerIdx);
 
   // result sort order
   static const char* resultSortKeys[] = {"rank", "dist"};
-  std::string initSort = app->config["search"]["sort"].as<std::string>("rank");
+  std::string initSort = app->cfg()["search"]["sort"].as<std::string>("rank");
   size_t initSortIdx = 0;
   while(initSortIdx < 2 && initSort != resultSortKeys[initSortIdx]) ++initSortIdx;
   Menu* sortMenu = createRadioMenu({"Relevence", "Distance"}, [this](size_t ii){
@@ -808,16 +812,20 @@ Button* MapsSearch::createPanel()
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_OPENED) {
+      onSetProvider(providerIdx);
       if(queryText->isEnabled()) {
         noDataMsg->setVisible(providerIdx == 0 && !hasSearchData);
         app->gui->setFocused(searchBox);
         searchText("", EDITING);  // show history
       }
-      else if(providerIdx > 0 && !queryText->isEnabled())
+      else if(providerIdx > 0)  // && !queryText->isEnabled())
         searchText("", RETURN);
     }
-    else if(event->type == MapsApp::PANEL_CLOSED)
+    else if(event->type == MapsApp::PANEL_CLOSED) {
       clearSearch();
+      // clear no-query provider
+      providerIdx = app->cfg()["search"]["plugin"].as<int>(0);
+    }
     else if(event->type == SvgGui::INVISIBLE)
       app->maximizePanel(false);
     return false;
@@ -835,26 +843,35 @@ Button* MapsSearch::createPanel()
 
   // main toolbar button
   Menu* searchMenu = createMenu(Menu::VERT);
-  //searchMenu->autoClose = true;
   searchMenu->addHandler([this, searchMenu](SvgGui* gui, SDL_Event* event){
     if(event->type == SvgGui::VISIBLE) {
       gui->deleteContents(searchMenu->selectFirst(".child-container"));
-      if(providerIdx > 0 && !queryText->isEnabled()) {  // noquery plugin
-        const char* title = app->pluginManager->searchFns[providerIdx-1].title.c_str();
-        searchMenu->addItem(title, MapsApp::uiIcon("search"), [=](){ app->showPanel(searchPanel); });
-      }
-      else {
-        // TODO: pinned searches - timestamp column = INF?
-        int uiWidth = app->getPanelWidth();
-        const char* sql = "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;";
-        searchDB.stmt(sql).exec([&](std::string s){
-          Button* item = searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
-            app->showPanel(searchPanel);
-            queryText->setText(s.c_str());
-            searchText(s, RETURN);
-          });
-          SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
+      // TODO: pinned searches - timestamp column = INF?
+      int uiWidth = app->getPanelWidth();
+      const char* sql = "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;";
+      searchDB.stmt(sql).exec([&](std::string s){
+        Button* item = searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
+          // clear existing search
+          while(!app->panelHistory.empty()) { app->popPanel(); }
+          app->showPanel(searchPanel);
+          queryText->setText(s.c_str());
+          searchText(s, RETURN);
         });
+        SvgPainter::elideText(static_cast<SvgText*>(item->selectFirst(".title")->node), uiWidth - 100);
+      });
+
+      int nplugins = 0;
+      for(size_t ii = 0; ii < app->pluginManager->searchFns.size(); ++ii) {
+        auto& fn = app->pluginManager->searchFns[ii];
+        if(!StringRef(fn.type).contains("-noquery")) { continue; }
+        const char* title = fn.title.c_str();
+        searchMenu->addItem(title, MapsApp::uiIcon("search"), [=](){
+          // clear existing search
+          while(!app->panelHistory.empty()) { app->popPanel(); }
+          providerIdx = ii+1;
+          app->showPanel(searchPanel);
+        });
+        if(++nplugins > 3) break;
       }
     }
     return false;

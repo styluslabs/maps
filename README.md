@@ -78,6 +78,7 @@ Currently uses Duktape, so support for features from ES2015 and later is limited
 The included plugins give a sample of what's possible:
 * [google-import.js](assets/plugins/google-import.js) - import list of places from GeoJSON exported by Google Maps; run from the plugin console
 * [nominatim-search.js](assets/plugins/nominatim-search.js) - search with nominatim service
+* [overpass.js](assets/plugins/overpass.js) - search with overpass-turbo; supports overpass query language expressions or plain keyword search (matches values of all tags)
 * [openroute.js](assets/plugins/openroute.js) - routing with OpenRouteService
 * [osm-place-info.js](assets/plugins/osm-place-info.js) - gather place information (website, opening hours, etc.) from OSM API and Wikipedia
 * [sentinel2.js](assets/plugins/sentinel2.js) - weekly worldwide 10m satellite imagery from ESA Sentinel-2, with date picker in GUI.

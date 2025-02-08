@@ -13,7 +13,7 @@ public:
 private:
   Widget* content;
 };
-
+/*
 class SelectBox : public Widget
 {
 public:
@@ -33,7 +33,7 @@ private:
 
   std::vector<std::string> items;
 };
-
+*/
 class DragDropList : public Widget
 {
 public:
@@ -155,7 +155,7 @@ public:
 
 SvgNode* uiIcon(const char* id);
 SelectDialog* createSelectDialog(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items = {});
-SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
+//SelectBox* createSelectBox(const char* title, const SvgNode* itemicon, const std::vector<std::string>& items);
 Menu* createRadioMenu(std::vector<std::string> titles, std::function<void(size_t)> onChanged, size_t initial = 0);
 Menubar* createMenubar();
 Button* createActionbutton(const SvgNode* icon, const char* title, bool showTitle = false);

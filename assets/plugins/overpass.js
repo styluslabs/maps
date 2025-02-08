@@ -6,10 +6,13 @@ function escapeRegex(s)
 function overpassSearch(query, bounds, flags)
 {
   const url = "https://overpass-api.de/api/interpreter";
+  if(query.substring(0,1) !== '(')
+    query = '( node[~".+"~"' + escapeRegex(query).replace(/[ ]+/g, ".+") + '",i]; );'
+  else if(query.slice(-1) !== ';')
+    query = query + ';';
   // bounds provided as left,bottom,right,top
-  const q = escapeRegex(query).replace(/[ ]+/g, ".+");
   const body = '[out:json][timeout:5][bbox:' + [bounds[1],bounds[0],bounds[3],bounds[2]].join(",") +
-      ']; ( node[~".+"~"' + q + '"]; ); out body 100;'
+      ']; ' + query + ' out body 100;'
 
   console.log(body);
   httpRequest(url, "", body, function(_content, _error) {
