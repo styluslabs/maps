@@ -273,7 +273,7 @@ application:
     # specify fields indexed for search and filter to select indexed features
     search_data:
         - layer: poi
-          fields: [name, name_en, amenity, leisure, shop, sport, tourism, cuisine]
+          fields: [name, name_en, amenity, leisure, shop, sport, tourism, cuisine, historic]
           filter:
               - name: true
                 not:
