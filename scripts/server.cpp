@@ -9,6 +9,7 @@ using namespace geodesk;
 
 #include <map>
 //#define CPPHTTPLIB_OPENSSL_SUPPORT
+//#define CPPHTTPLIB_ZLIB_SUPPORT
 #include "httplib.h"
 #include "sqlitepp.h"
 #include "ulib/threadutil.h"
@@ -16,6 +17,9 @@ using namespace geodesk;
 
 #define STRINGUTIL_IMPLEMENTATION
 #include "ulib/stringutil.h"
+
+#define MINIZ_GZ_IMPLEMENTATION
+#include "ulib/miniz_gzip.h"
 
 
 using Tangram::LngLat;
@@ -232,37 +236,128 @@ if not Attribute then
 end
 */
 
-struct TileFeature
+//MinZoom(z) -> if(!MinZoom(z)) { return; }
+
+struct TileBuilder
 {
-  Feature m_feat;
+  Feature* m_feat = nullptr;  //std::reference_wrapper<Feature> m_feat;
   std::unique_ptr<vtzero::feature_builder> m_build;
+  double m_area = NAN;
 
-  // reading geodesk feature
-  std::string Find(const std::string& key) { return m_feat[key]; }
-  std::string Id() { return std::to_string(m_feat.id()); }
-  bool Holds(const std::string& key) { return !Find(key).empty(); }
-  bool IsClosed() { return m_feat.isArea(); }
-  double Length() { return m_feat.length(); }
-  double Area() { return m_feat.area(); }
-  double AreaIntersecting();
+  TileID m_id;
+  vtzero::tile_builder m_tile;
+  std::map<std::string, vtzero::layer_builder> m_layers;
 
-  // writing tile feature
-  void Attribute(const std::string& key, const std::string& val) { m_build->add_property(key, val); }
-  void AttributeNumeric(const std::string& key, double val) { m_build->add_property(key, val); }
-  void Layer(const std::string& layer, bool isClosed = false) {
+  TileBuilder(TileID _id, const std::vector<std::string>& layers) : m_id(_id) {
+    for(auto& l : layers)
+      m_layers.emplace(l, m_tile, l);
+  }
+
+  virtual void processFeature() = 0;
+
+  std::string build(const Features& world) {
+    double eps = 0.01/MapProjection::metersPerTileAtZoom(m_id.z);
+    Box bbox = tileBox(m_id, eps);
+    Features tileFeats = world(bbox);
+
+    //int nfeats = 0;
+    for(Feature f : tileFeats) {  //for(auto it = tileFeats.begin(); it != tileFeats.end(); ++it) {
+      //m_feat = *it;  //new(&m_feat) Feature(*it); ... m_feat.~Feature();
+      m_feat = &f;
+      processFeature();
+      m_area = NAN;
+      //++nfeats;
+    }
+    m_feat = nullptr;
+    return serialize();
+  }
+
+  Feature& feature() { return *m_feat; }
+
+  std::string serialize(bool compress = true) {
     if(m_build)
       m_build->commit();
-    if(m_feat.isNode()) {
-      auto build = std::make_unique<vtzero::point_feature_builder>(findLayer(layer));
-      auto xy = m_feat.xy();
+    m_build.reset();
+    std::string mvt = m_tile.serialize();
+    if (!compress) { return mvt; }
+    std::stringstream in_strm(mvt);
+    std::stringstream out_strm;
+    gzip(in_strm, out_strm);
+    return out_strm.str();
+  }
+
+  // reading geodesk feature
+  std::string Find(const std::string& key) { return feature()[key]; }
+  std::string Id() { return std::to_string(feature().id()); }
+  bool Holds(const std::string& key) { return !Find(key).empty(); }
+  bool IsClosed() { return feature().isArea(); }
+  double Length() { return feature().length(); }
+  double Area() { if(std::isnan(m_area)) { m_area = feature().area(); }  return m_area; }
+  double AreaIntersecting();
+  //std::string FindInRelation(Relation rel, const std::string& key) { return rel[key]; }
+
+  // writing tile feature
+  bool MinZoom(int z) { return m_id.z >= z; }
+  void Attribute(const std::string& key, const std::string& val, int z = 0) {
+    if(!val.empty() && m_id.z >= z) { m_build->add_property(key, val); }
+  }
+  void Attribute(const std::string& key, int z = 0) { Attribute(key, Find(key), z); }
+  void AttributeNumeric(const std::string& key, double val) { m_build->add_property(key, val); }
+  void ZOrder(float order) { /* Not supported - not needed since Tangram handles ordering */ }
+
+  void Layer(const std::string& layer, bool isClosed = false, bool _centroid = false) {
+    if(m_build)
+      m_build->commit();
+
+    auto it = m_layers.find(layer);
+    if(it == m_layers.end()) {
+      LOG("Layer not found: %s", layer.c_str());
+      return;
+    }
+    vtzero::layer_builder& layerBuild = it->second;
+
+    if(feature().isNode() || _centroid) {
+      auto build = std::make_unique<vtzero::point_feature_builder>(layerBuild);
+      //build->set_id(++serial);
+      auto xy = _centroid ? feature().centroid() : feature().xy();
       build->add_point(xy.x, xy.y);
       m_build = std::move(build);
     }
-    else if(m_feat.isArea())
-      auto build = std::make_unique<vtzero::polygon_feature_builder>(findLayer(layer));
-    else if(m_feat.isWay()) {
-      auto build = std::make_unique<vtzero::linestring_feature_builder>(findLayer(layer));
-      WayCoordinateIterator iter(WayPtr(m_feat.ptr()));
+    else if(feature().isArea()) {
+      if(!isClosed) { LOG("isArea() but not isClosed!"); }
+      auto build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
+
+      if(feature().isWay()) {
+        WayCoordinateIterator iter(WayPtr(feature().ptr()));
+        int n = iter.coordinatesRemaining();
+        build->add_ring(n);
+        while(n-- > 0) {
+          auto p = iter.next();
+          build->set_point(p.x, p.y);
+        }
+        //feature.close_ring(); ???
+      }
+      else {
+        for(Feature child : feature().members()) {
+          // OSM multipolygons cannot be nested, so this should be OK
+          if(!child.isWay()) { continue; }
+          WayCoordinateIterator iter(WayPtr(feature().ptr()));
+          int n = iter.coordinatesRemaining();
+          build->add_ring(n);
+          while(n-- > 0) {
+            auto p = iter.next();
+            build->set_point(p.x, p.y);
+          }
+          //feature.close_ring(); ???
+        }
+      }
+
+      m_build = std::move(build);
+    }
+    else if(feature().isWay()) {
+      if(isClosed) { LOG("isClosed but not isArea()!"); }
+      auto build = std::make_unique<vtzero::linestring_feature_builder>(layerBuild);
+      WayCoordinateIterator iter(WayPtr(feature().ptr()));
       int n = iter.coordinatesRemaining();
       build->add_linestring(n);
       while(n-- > 0) {
@@ -271,110 +366,25 @@ struct TileFeature
       }
       m_build = std::move(build);
     }
+    else if(feature().isRelation()) {
+      // multi-linestring(?)
+      auto build = std::make_unique<vtzero::linestring_feature_builder>(layerBuild);
+      for(Feature child : feature().members()) {
+        if(!child.isWay()) { continue; }
+        WayCoordinateIterator iter(WayPtr(feature().ptr()));
+        int n = iter.coordinatesRemaining();
+         build->add_linestring(n);
+        while(n-- > 0) {
+          auto p = iter.next();
+          build->set_point(p.x, p.y);
+        }
+      }
+    }
   }
 
-  void LayerAsCentroid(const std::string& layer) {
-    if(m_build)
-      m_build->commit();
-    auto build = std::make_unique<vtzero::point_feature_builder>(findLayer(layer));
-    auto xy = m_feat.centroid();
-    build->add_point(xy.x, xy.y);
-    m_build = std::move(build);
-  }
+  void LayerAsCentroid(const std::string& layer) { Layer(layer, false, true); }
 
 };
-
-static void buildTile()
-{
-        vtzero::tile_builder tile;
-        vtzero::layer_builder layer_points{tile, "points"};
-        vtzero::layer_builder layer_lines{tile, "lines"};
-        const vtzero::layer_builder layer_polygons{tile, "polygons"};
-
-        vtzero::key_index<std::unordered_map> idx{layer_points};
-
-        {
-            vtzero::point_feature_builder feature{layer_points};
-            feature.set_id(1);
-            feature.add_points(1);
-            feature.set_point(10, 10);
-            feature.add_property("foo", "bar");
-            feature.add_property("x", "y");
-            feature.rollback();
-        }
-
-        const auto some = idx("some");
-
-        {
-            vtzero::point_feature_builder feature{layer_points};
-            feature.set_id(2);
-            feature.add_point(20, 20);
-            feature.add_property(some, "attr");
-            feature.commit();
-        }
-        {
-            vtzero::point_feature_builder feature{layer_points};
-            feature.set_id(3);
-            feature.add_point(20, 20);
-            feature.add_property(idx("some"), "attr");
-            feature.commit();
-        }
-
-        {
-            vtzero::point_feature_builder feature{layer_points};
-            feature.set_id(4);
-            feature.add_point(20, 20);
-            feature.add_property(idx("some"), "otherattr");
-            feature.commit();
-        }
-
-
-        vtzero::point_feature_builder feature1{layer_points};
-        feature1.set_id(5);
-        feature1.add_point(vtzero::point{20, 20});
-        feature1.add_property("otherkey", "attr");
-        feature1.commit();
-
-        vtzero::value_index<vtzero::sint_value_type, int32_t, std::unordered_map> maxspeed_index{layer_lines};
-        {
-            vtzero::linestring_feature_builder feature{layer_lines};
-            feature.set_id(6);
-            feature.add_linestring(3);
-            feature.set_point(10, 10);
-            feature.set_point(10, 20);
-            feature.set_point(vtzero::point{20, 20});
-            const std::vector<vtzero::point> points = {{11, 11}, {12, 13}};
-            feature.add_linestring_from_container(points);
-            feature.add_property("highway", "primary");
-            feature.add_property(std::string{"maxspeed"}, maxspeed_index(50));
-            feature.commit();
-        }
-
-        {
-            vtzero::polygon_feature_builder feature{layer_polygons};
-            feature.set_id(7);
-            feature.add_ring(5);
-            feature.set_point(0, 0);
-            feature.set_point(10, 0);
-            feature.set_point(10, 10);
-            feature.set_point(0, 10);
-            feature.set_point(0, 0);
-            feature.add_ring(4);
-            feature.set_point(3, 3);
-            feature.set_point(3, 5);
-            feature.set_point(5, 5);
-            feature.close_ring();
-            feature.add_property("natural", "wood");
-            feature.add_property("number_of_trees", vtzero::sint_value_type{23402752});
-            feature.commit();
-        }
-
-        const auto data = tile.serialize();
-        write_data_to_file(data, "test.mvt");
-
-
-    return 0;
-}
 
 int main(int argc, char* argv[])
 {
@@ -388,6 +398,9 @@ int main(int argc, char* argv[])
   LOG("Loaded %s", argv[1]);
 
   TileID id(2619, 6332, 14);  // Alamo square!
+
+  // pass id and world to builder and let it get features? ... in the future it could limit query based on zoom level
+  AscendTileBuilder tileBuilder(id);
 
   auto time0 = std::chrono::steady_clock::now();
 
