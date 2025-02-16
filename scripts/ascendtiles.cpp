@@ -1,38 +1,78 @@
 // Converted from Lua Tilemaker processing script for Ascend Maps OSM schema
 
+#include "tilebuilder.h"
+
 #include <string>
 #include <set>
 #include <map>
 #include <vector>
 
-// tilebuilder.cpp/.h + ascendtiles.cpp/.h ?
-struct AscendTileBuilder : public TileBuilder {
+using geodesk::Relation;
 
+// tilebuilder.cpp/.h + ascendtiles.cpp/.h ?
+class AscendTileBuilder : public TileBuilder {
+public:
+  AscendTileBuilder(TileID _id);
+  void processFeature() override;
+
+  void ProcessNode();
+  void ProcessWay();
+  void ProcessRelation();
+
+  void WriteBoundary(Feature& feat);
+  void SetBuildingHeightAttributes();
+  bool SetMinZoomByArea(double area = 0);
+  void SetBrunnelAttributes();
+  void SetEleAttributes();
+  void SetNameAttributes(Feature& feat, int minz = 0);
+  void SetNameAttributes(int minz = 0) { SetNameAttributes(feature(), minz); }
+  bool NewWritePOI(double area = 0, bool force = false);
 };
 
+int main(int argc, char* argv[])
+{
+  if(argc < 2) {
+    LOG("No gol file specified!");
+    return -1;
+  }
+
+  Features world(argv[1]);
+  LOG("Loaded %s", argv[1]);
+
+  TileID id(2619, 6332, 14);  // Alamo square!
+
+  // pass id and world to builder and let it get features? ... in the future it could limit query based on zoom level
+  AscendTileBuilder tileBuilder(id);
+  std::string mvt = tileBuilder.build(world);
+
+  return 0;
+}
+
+// AscendTileBuilder impl
 
 struct Set {
   std::set<std::string> m_items;
   Set(std::initializer_list<std::string> items) : m_items(items) {}
 
-  bool operator[](const std::string& key) { return !key.empty() && m_items.find(key) != m_items.end(); }
+  bool operator[](const std::string& key) const { return !key.empty() && m_items.find(key) != m_items.end(); }
 };
 
 struct ZMap {
+  using map_t = std::map<std::string, int>;
   std::string m_tag;
-  std::map<std::string, int> m_items;
+  map_t m_items;
   const int m_dflt = 100;
   ZMap(std::string _tag, int _dflt=100) : m_tag(_tag), m_dflt(_dflt) {}
-  ZMap(std::initializer_list<std::pair<std::string, int>> items) : m_items(items) {}
+  ZMap(std::initializer_list<map_t::value_type> items) : m_items(items) {}
   ZMap& add(int z, std::initializer_list<std::string> items) {
     for(auto& s : items)
       m_items.emplace(s, z);
     return *this;
   }
 
-  const std::string& tag() { return m_tag; }
+  const std::string& tag() const { return m_tag; }
 
-  int operator[](const std::string& key) {
+  int operator[](const std::string& key) const {
     if (key.empty()) { return m_dflt; }
     auto it = m_items.find(key);
     return it != m_items.end() ? it->second : m_dflt;
@@ -45,7 +85,7 @@ static const std::vector<std::string> ascendLayers =
 
 AscendTileBuilder::AscendTileBuilder(TileID _id) : TileBuilder(_id, ascendLayers) {}
 
-void AscendTileBuilder::ProcessFeature()
+void AscendTileBuilder::processFeature()
 {
   if (feature().isWay()) { ProcessWay(); }
   else if (feature().isNode()) { ProcessNode(); }
@@ -66,7 +106,7 @@ void AscendTileBuilder::ProcessNode()
   auto place = Find("place");
   if (place != "") {
     int mz = 13, rank = 0;
-    double pop = Find("population");
+    double pop = atof(Find("population").c_str());
 
     if (place == "continent"   ) { mz = 0; }
     else if (place == "country") { rank = mz = 3 - (pop > 50E6) - (pop > 20E6); }
@@ -87,7 +127,7 @@ void AscendTileBuilder::ProcessNode()
     Attribute("place", place);
     if (rank > 0) { AttributeNumeric("rank", rank); }
     if (pop > 0) { AttributeNumeric("population", pop); }
-    double sqkm = Find("sqkm");
+    double sqkm = atof(Find("sqkm").c_str());
     if (sqkm > 0) { AttributeNumeric("sqkm", sqkm); }
     if (place == "country") { Attribute("iso_a2", Find("ISO3166-1:alpha2")); }
     Attribute("place_CN");  //, Find("place:CN"));
@@ -112,11 +152,11 @@ void AscendTileBuilder::ProcessNode()
   }
 
   // Write 'poi'
-  NewWritePOI(node);
+  NewWritePOI();
 
   // Write 'mountain_peak' and 'water_name'
   auto natural = Find("natural");
-  if (natural == "peak" or natural == "volcano") {
+  if (natural == "peak" || natural == "volcano") {
     if (!MinZoom(11)) { return; }
     Layer("poi", false);
     SetNameAttributes();
@@ -132,7 +172,6 @@ void AscendTileBuilder::ProcessNode()
     return;
   }
 }
-
 
 //static const auto majorRoadValues = Set { "motorway", "trunk", "primary" };
 //static const auto mainRoadValues  = Set { "secondary", "motorway_link", "trunk_link", "primary_link", "secondary_link" };
@@ -167,7 +206,6 @@ static const ZMap transitRoutes =
 static const ZMap otherRoutes =
     { {"road", 8}, {"ferry", 9}, {"bicycle", 10}, {"hiking", 10}, {"foot", 12}, {"mtb", 10}, {"ski", 12} };  //piste = 12;,
 //ignoredRoutes = Set { "power", "railway", "detour", "tracks", "horse", "emergency_access", "snowmobile", "historic", "running", "fitness_trail" }
-
 
 void AscendTileBuilder::ProcessRelation()
 {
@@ -224,24 +262,33 @@ void AscendTileBuilder::ProcessRelation()
   }
 }
 
-
 void AscendTileBuilder::ProcessWay()
 {
   //auto tags = feature().tags();  if(tags.begin() == tags.end()) { return; }  // skip if no tags
-  auto building = Find("building");
-  bool isClosed = IsClosed();
+  auto building = Find("building");  // over 50% of ways are buildings, so process first
+  if (building != "") {
+    if (!MinZoom(13) || !SetMinZoomByArea()) { return; }
+    Layer("building", true);
+    SetBuildingHeightAttributes();
+    if (MinZoom(14)) {
+      // housenumber is also commonly set on poi nodes, but not very useful w/o at least street name too
+      Attribute("housenumber", Find("addr:housenumber"));  //, 14);
+      NewWritePOI(0, true);
+    }
+    return;
+  }
 
   if (Find("disused") == "yes") { return; }
 
-  // Roads/paths/trails
+  // Roads/paths/trails - 2nd most common way type
   auto highway = Find("highway");
   if (highway != "") {
-    if (highway == "proposed") { return; }
+    if (highway == "proposed" || highway == "construction") { return; }
     auto access = Find("access");
     if (access == "private" || access == "no") { return; }
     // most footways are sidewalks or crossings, which are mapped inconsistently so just add clutter and
     //  confusion the map; we could consider keeping footway == "alley"
-    if (highway == "footway" and Find("footway") != "") { return; }
+    if (highway == "footway" && Find("footway") != "") { return; }
 
     // Construction -- not used currently
     //auto construction = Find("construction");
@@ -250,7 +297,7 @@ void AscendTileBuilder::ProcessWay()
     //  construction = "yes";
     //}
 
-    int minzoom = 99;
+    int minzoom = 99, lblzoom = 99;
     bool ramp = false;
     //if (majorRoadValues[highway]) { minzoom = 4; }
     if (highway == "motorway"        ) { minzoom = 4;  lblzoom = 8; }
@@ -272,7 +319,7 @@ void AscendTileBuilder::ProcessWay()
     Layer("transportation", false);
     //Attribute("class", h);
     Attribute("highway", highway);
-    SetBrunnelAttributes(way);
+    SetBrunnelAttributes();
     if (ramp) { AttributeNumeric("ramp", 1); }
 
     // Service
@@ -289,22 +336,22 @@ void AscendTileBuilder::ProcessWay()
     if (cycleway == "") {
       cycleway = Find("cycleway:both");
     }
-    if (cycleway != "" and cycleway != "no") {
+    if (cycleway != "" && cycleway != "no") {
       Attribute("cycleway", cycleway);
     }
 
     auto cycleway_left = Find("cycleway:left");
-    if (cycleway_left != "" and cycleway_left != "no") {
+    if (cycleway_left != "" && cycleway_left != "no") {
       Attribute("cycleway_left", cycleway_left);
     }
 
     auto cycleway_right = Find("cycleway:right");
-    if (cycleway_right != "" and cycleway_right != "no") {
+    if (cycleway_right != "" && cycleway_right != "no") {
       Attribute("cycleway_right", cycleway_right);
     }
 
     auto bicycle = Find("bicycle");
-    if (bicycle != "" and bicycle != "no") {
+    if (bicycle != "" && bicycle != "no") {
       Attribute("bicycle", bicycle);
     }
 
@@ -316,21 +363,17 @@ void AscendTileBuilder::ProcessWay()
       Attribute("surface", "unpaved");
     }
 
+    // trail/path info
     auto trailvis = Find("trail_visibility");
-    if (trailvis != "" and trailvis != "good" and trailvis != "excellent") {
+    if (trailvis != "" && trailvis != "good" && trailvis != "excellent") {
       Attribute("trail_visibility", trailvis);
     }
-
     Attribute("mtb_scale", Find("mtb:scale"));  // mountain biking difficulty rating
+    if (highway == "path") { Attribute("golf"); }  //, Find("golf"));
 
-    if (highway == "path") {
-      Attribute("golf");  //, Find("golf"));
-    }
-
-    // Write names
+    // name, roadway info
     SetNameAttributes(lblzoom);
     //Attribute("network","road"); // **** could also be us-interstate, us-highway, us-state
-
     Attribute("maxspeed");  //, Find("maxspeed"));
     Attribute("lanes");  //, Find("lanes"));
     Attribute("ref");  //, Find("ref"));  //AttributeNumeric("ref_length",ref:len());
@@ -345,12 +388,13 @@ void AscendTileBuilder::ProcessWay()
     Layer("transportation", false);
     Attribute("class", "rail");
     Attribute("railway", railway);
-    SetZOrder(way);
-    SetBrunnelAttributes(way);
+    SetBrunnelAttributes();
     SetNameAttributes(14);
     Attribute("service", service);
     return;
   }
+
+  bool isClosed = IsClosed();
 
   // Pier, breakwater, etc.
   auto man_made = Find("man_made");
@@ -367,12 +411,12 @@ void AscendTileBuilder::ProcessWay()
   auto route = Find("route");
   if (route == "ferry") {
     if (!MinZoom(9)) { return; }
-    for (Relation rel : feature().parents()) {
-      if (rel["route"] == "ferry") { return; }  // avoid duplication
-    }
+    // parents() not implemented! ... we'll assume a parent has route=ferry if any parents
+    if (feature().belongsToRelation()) { return; }  // avoid duplication
+    //for (Relation rel : feature().parents()) { if (rel["route"] == "ferry") { return; }  }
     Layer("transportation", false);
     Attribute("route", route);
-    SetBrunnelAttributes(way);
+    SetBrunnelAttributes();
     SetNameAttributes(12);
     return;
   }
@@ -402,7 +446,13 @@ void AscendTileBuilder::ProcessWay()
 
   // 'Aeroway'
   auto aeroway = Find("aeroway");
-  if (aerowayBuildings[aeroway]) { building = "yes"; aeroway = ""; }
+  if (aerowayBuildings[aeroway]) {
+    Layer("building", true);
+    Attribute("aeroway", aeroway);
+    SetBuildingHeightAttributes();
+    if (MinZoom(14)) { NewWritePOI(0, true); }
+    return;
+  }
   if (aerowayClasses[aeroway]) {
     if (!MinZoom(10)) { return; }
     Layer("transportation", isClosed);  //"aeroway"
@@ -422,38 +472,34 @@ void AscendTileBuilder::ProcessWay()
     return;
   }
 
-  auto waterway = Find("waterway");
-  auto water = Find("water");
-
-  // waterway is single way indicating course of a waterway - wide rivers, etc. have additional polygons to map area
-  if (waterwayClasses[waterway] && !isClosed) {
-    bool namedriver = waterway == "river" and Holds("name");
-    if (!MinZoom(namedriver ? 8 : 12)) { return; }
-    Layer("water", false);  //waterway , waterway_detail
-    if (Find("intermittent") == "yes") { AttributeNumeric("intermittent", 1); }
-    Attribute("class", waterway);
-    Attribute("waterway", waterway);
-    SetNameAttributes();
-    SetBrunnelAttributes(way);
-  } else if (waterway == "boatyard") {
-    if (!MinZoom(12)) { return; }
-    Layer("landuse", isClosed);
-    Attribute("class", "industrial");
-  } else if (waterway == "dam") {
-    if (!MinZoom(12)) { return; }  // was 13
-    Layer("building", isClosed);
-  } else if (waterway == "fuel") {
-    if (!MinZoom(14)) { return; }
-    Layer("landuse", isClosed);
-    Attribute("class", "industrial");
-  }
-
   // Water areas (closed ways)
   auto natural  = Find("natural");
   auto landuse  = Find("landuse");
   auto leisure  = Find("leisure");
   auto amenity  = Find("amenity");
   auto tourism  = Find("tourism");
+  auto waterway = Find("waterway");
+  auto water = Find("water");
+
+  // waterway is single way indicating course of a waterway - wide rivers, etc. have additional polygons to map area
+  if (waterwayClasses[waterway] && !isClosed) {
+    bool namedriver = waterway == "river" && Holds("name");
+    if (!MinZoom(namedriver ? 8 : 12)) { return; }
+    Layer("water", false);  //waterway , waterway_detail
+    if (Find("intermittent") == "yes") { AttributeNumeric("intermittent", 1); }
+    Attribute("class", waterway);
+    Attribute("waterway", waterway);
+    SetNameAttributes();
+    SetBrunnelAttributes();
+    return;
+  } else if (waterway == "dam") {
+    if (!MinZoom(12)) { return; }  // was 13
+    Layer("building", isClosed);
+    Attribute("waterway", waterway);
+    return;
+  } else if (waterway == "boatyard" || waterway == "fuel") {
+    landuse = "industrial";
+  }
 
   std::string waterbody = "";
   if (waterLanduse[landuse]) { waterbody = landuse; }
@@ -463,15 +509,15 @@ void AscendTileBuilder::ProcessWay()
 
   if (waterbody != "") {
     if (!isClosed || !SetMinZoomByArea() || Find("covered") == "yes") { return; }
-    std::string class="lake";
-    if (natural == "bay") { class="ocean"; } else if (waterway != "") { class="river"; }
+    std::string cls = "lake";
+    if (natural == "bay") { cls = "ocean"; } else if (waterway != "") { cls = "river"; }
     //if (class == "lake" and Find("wikidata") == "Q192770") { return; }  // crazy lake in Finland
-    if (class == "ocean" && isClosed && (AreaIntersecting("ocean")/Area() > 0.98)) { return; }
+    //if (cls == "ocean" && isClosed && (AreaIntersecting("ocean")/Area() > 0.98)) { return; }
     Layer("water", true);
-    Attribute("class", class);
-    Attribute("water", water != "" ? water : waterbody);
+    Attribute("class", cls);
+    Attribute("water", water != "" ? std::string(water) : waterbody);
 
-    if (Find("intermittent") == "yes") { Attribute("intermittent", 1); }
+    if (Find("intermittent") == "yes") { AttributeNumeric("intermittent", 1); }
     // don't include names for minor man-made basins (e.g. way 25958687) or rivers, which have name on waterway way
     if (Holds("name") && natural == "water" && !noNameWater[water]) {
       //LayerAsCentroid("water_name_detail");
@@ -485,45 +531,17 @@ void AscendTileBuilder::ProcessWay()
 
   // special case since valleys are mapped as ways
   if (natural == "valley") {
-    auto len = Length()
+    auto len = Length();
     Layer("landuse", false);
-    SetMinZoomByArea(way, len*len);
+    SetMinZoomByArea(len*len);
     Attribute("natural", natural);
     SetNameAttributes();
     return;
   }
 
-  // Boundaries
-  auto boundary = Find("boundary");
-  if (boundary != "" && Find("protection_title") == "National Forest" && Find("operator") == "United States Forest Service") { return; }  // too many
-
-  for (Relation rel : feature().parents()) {
-    auto bndry = rel["boundary"];
-    if (bndry == "administrative" or bndry == "disputed") {
-      WriteBoundary(rel);
-      return;
-    }
-  }
-
-  if (boundary == "administrative" || boundary == "disputed") {
-    WriteBoundary(feature());
-    return;
-  }
-
-  // Set 'building' and associated
-  if (building != "") {
-    if (!MinZoom(13) || !SetMinZoomByArea()) { return; }
-    Layer("building", true);
-    SetBuildingHeightAttributes(way);
-    // housenumber is also commonly set on poi nodes, but not very useful w/o at least street name too
-    Attribute("housenumber", Find("addr:housenumber"), 14);
-    //return; -- for possible POI
-  }
-
   // landuse/landcover
-  bool landuse_poi = false
   if (landuse == "field") { landuse = "farmland"; }
-  if (landuse == "meadow" && Find("meadow") == "agricultural") { landuse="farmland"; }
+  else if (landuse == "meadow" && Find("meadow") == "agricultural") { landuse = "farmland"; }
 
   if (landuseAreas[landuse] || naturalAreas[natural] || leisureAreas[leisure] || amenityAreas[amenity] || tourismAreas[tourism]) {
     if (!SetMinZoomByArea()) { return; }
@@ -535,12 +553,16 @@ void AscendTileBuilder::ProcessWay()
     Attribute("leisure", leisure);
     Attribute("amenity", amenity);
     Attribute("tourism", tourism);
-    if (natural == "wetland") { Attribute("wetland", Find("wetland")); }
-    landuse_poi = Find("name") != "";
+    if (natural == "wetland") { Attribute("wetland"); }  //, Find("wetland")
+    NewWritePOI(Area(), MinZoom(14));
   }
 
-  // Parks
-  auto park_boundary = parkValues[boundary]
+  auto boundary = Find("boundary");
+  if (boundary != "" && Find("protection_title") == "National Forest"
+      && Find("operator") == "United States Forest Service") { return; }  // too many
+
+  // Parks ... possible for way to be both park boundary and landuse?
+  bool park_boundary = parkValues[boundary];
   if (park_boundary || leisure == "nature_reserve") {
     if (!SetMinZoomByArea()) { return; }
     Layer("landuse", true);
@@ -549,15 +571,22 @@ void AscendTileBuilder::ProcessWay()
     Attribute("leisure", leisure);
     Attribute("protect_class");  //, Find("protect_class"));
     SetNameAttributes();
-    landuse_poi = true;
+    NewWritePOI(Area(), MinZoom(14));
   }
 
-  // POIs ('poi' and 'poi_detail');
-  if (NewWritePOI(way, landuse_poi ? Area() : 0)) {  // empty
-  } else if (MinZoom(14) && (building != "" || landuse_poi) && Holds("name")) {
-    LayerAsCentroid("poi");
-    SetNameAttributes();
-    if (landuse_poi) { AttributeNumeric("area", Area()); }
+  // Boundaries ... possible for way to be shared with park boundary or landuse?
+  // parents() not implemented
+  /*for (Feature rel : feature().parents()) {
+    auto bndry = rel["boundary"];
+    if (bndry == "administrative" || bndry == "disputed") {
+      WriteBoundary(rel);
+      return;
+    }
+  }*/
+
+  if (boundary == "administrative" || boundary == "disputed") {
+    WriteBoundary(feature());
+    return;
   }
 }
 
@@ -565,10 +594,16 @@ void AscendTileBuilder::ProcessWay()
 
 static constexpr int EXCLUDE = 100;
 static const std::vector<ZMap> poiTags = {
-  // all amenity values with count > 1000 (as of Jan 2024); we wish to exclude
-  ZMap("amenity", 14).add(12, { "bus_station", "ferry_terminal" }).add(EXCLUDE, { "parking_space", "bench", "shelter", "waste_basket", "bicycle_parking", "recycling", "hunting_stand", "vending_machine", "post_box", "parking_entrance", "telephone", "bbq", "motorcycle_parking", "grit_bin", "clock", "letter_box", "watering_place", "loading_dock", "payment_terminal", "mobile_money_agent", "trolley_bay", "ticket_validator", "lounger", "feeding_place", "vacuum_cleaner", "game_feeding", "smoking_area", "photo_booth", "kneipp_water_cure", "table", "fixme", "office", "chair" }),
+  // all amenity values with count > 1000 (as of Jan 2024) that we wish to exclude
+  ZMap("amenity", 14).add(12, { "bus_station", "ferry_terminal" }).add(EXCLUDE, { "parking_space", "bench",
+      "shelter", "waste_basket", "bicycle_parking", "recycling", "hunting_stand", "vending_machine",
+      "post_box", "parking_entrance", "telephone", "bbq", "motorcycle_parking", "grit_bin", "clock",
+      "letter_box", "watering_place", "loading_dock", "payment_terminal", "mobile_money_agent", "trolley_bay",
+      "ticket_validator", "lounger", "feeding_place", "vacuum_cleaner", "game_feeding", "smoking_area",
+      "photo_booth", "kneipp_water_cure", "table", "fixme", "office", "chair" }),
   ZMap("tourism", 14).add(12, { "attraction", "viewpoint", "museum" }).add(EXCLUDE, { "yes" }),
-  ZMap("leisure", 14).add(EXCLUDE, { "fitness_station", "picnic_table", "slipway", "outdoor_seating", "firepit", "bleachers", "common", "yes" }),
+  ZMap("leisure", 14).add(EXCLUDE, { "fitness_station", "picnic_table",
+      "slipway", "outdoor_seating", "firepit", "bleachers", "common", "yes" }),
   ZMap("shop", 14),
   ZMap("sport", 14),
   ZMap("landuse").add(14, { "basin", "brownfield", "cemetery", "reservoir", "winter_sports" }),
@@ -577,7 +612,8 @@ static const std::vector<ZMap> poiTags = {
   ZMap("highway").add(12, { "bus_stop", "trailhead" }).add(14, { "traffic_signals" }),
   ZMap("railway").add(12, { "halt", "station", "tram_stop" }).add(14, { "subway_entrance", "train_station_entrance" }),
   ZMap("natural").add(13, { "spring", "hot_spring", "fumarole", "geyser", "sinkhole", "arch", "cave_entrance", "saddle" }),
-  ZMap("barrier").add(14, { "bollard", "border_control", "cycle_barrier", "gate", "lift_gate", "sally_port", "stile", "toll_booth" }),
+  ZMap("barrier").add(14, { "bollard", "border_control",
+      "cycle_barrier", "gate", "lift_gate", "sally_port", "stile", "toll_booth" }),
   ZMap("building").add(14, { "dormitory" }),
   ZMap("aerialway").add(14, { "station" }),
   ZMap("waterway").add(14, { "dock" })
@@ -586,30 +622,32 @@ static const std::vector<ZMap> poiTags = {
 static const std::vector<std::string> extraPoiTags =
     { "cuisine", "station", "religion", "operator", "archaeological_site" };  // atm:operator
 
-bool AscendTileBuilder::NewWritePOI(double area)
+bool AscendTileBuilder::NewWritePOI(double area, bool force)
 {
-  if(!MinZoom(12)) { return; }  // no POIs below z12
+  if(!MinZoom(12)) { return false; }  // no POIs below z12
 
   bool force12 = area > 0 || Holds("wikipedia");
-  for(ZMap& z : poiTags) {
+  for (const ZMap& z : poiTags) {
     auto val = Find(z.tag());
     if (val != "" && (force12 || MinZoom(z[val]))) {
       LayerAsCentroid("poi");
       SetNameAttributes();
       if (area > 0) { AttributeNumeric("area", area); }
       // write value for all tags in poiTags (if present)
-      for(ZMap& y : poiTags) { Attribute(y.tag()); }
+      for(const ZMap& y : poiTags) { Attribute(y.tag()); }
       for(auto& s : extraPoiTags) { Attribute(s); }
       return true;
     }
+  }
+  if (force && Holds("name")) {
+    LayerAsCentroid("poi");
+    SetNameAttributes();
+    if (area > 0) { AttributeNumeric("area", area); }
   }
   return false;
 }
 
 // Common functions
-
-// Set name attributes on any object
-void AscendTileBuilder::SetNameAttributes(int minz) { SetNameAttributes(feature(), minz); }
 
 void AscendTileBuilder::SetNameAttributes(Feature& feat, int minz)
 {
@@ -622,20 +660,20 @@ void AscendTileBuilder::SetNameAttributes(Feature& feat, int minz)
   }
   // add OSM id
   std::string osm_type = feat.isWay() ? "way" : feat.isNode() ? "node" : "relation";
-  Attribute("osm_id", feat.id());
+  Attribute("osm_id", std::to_string(feat.id()));
   Attribute("osm_type", osm_type);
 }
 
 void AscendTileBuilder::SetEleAttributes()
 {
-  double ele = Find("ele");
+  double ele = atof(Find("ele").c_str());
   if (ele != 0) {
     AttributeNumeric("ele", ele);
     //AttributeNumeric("ele_ft", ele * 3.2808399);
   }
 }
 
-void AscendTileBuilder::SetBrunnelAttributes(obj)
+void AscendTileBuilder::SetBrunnelAttributes()
 {
   if (Find("bridge") == "yes") { Attribute("brunnel", "bridge"); }
   else if (Find("tunnel") == "yes") { Attribute("brunnel", "tunnel"); }
@@ -655,7 +693,7 @@ static constexpr double ZRES12 = SQ(38.2);
 static constexpr double ZRES13 = SQ(19.1);
 
 // Set minimum zoom level by area
-bool AscendTileBuilder::SetMinZoomByArea(double area = 0)
+bool AscendTileBuilder::SetMinZoomByArea(double area)
 {
   if (area <= 0) { area = Area(); }
   if      (area > ZRES5 ) { return MinZoom(6);  }
@@ -674,17 +712,17 @@ void AscendTileBuilder::SetBuildingHeightAttributes()
   // The height of one floor, in meters
   static constexpr double BUILDING_FLOOR_HEIGHT = 3.66;
 
-  double height = Find("height");
-  double minHeight = Find("min_height");
-  double levels = Find("building:levels");
-  double minLevel = Find("building:min_level");
+  double height = atof(Find("height").c_str());
+  double minHeight = atof(Find("min_height").c_str());
+  double levels = atof(Find("building:levels").c_str());
+  double minLevel = atof(Find("building:min_level").c_str());
 
   double renderHeight = height > 0 ? height : (levels > 0 ? levels : 1) * BUILDING_FLOOR_HEIGHT;
   double renderMinHeight = minHeight > 0 ? minHeight : (minLevel > 0 ? minLevel : 0) * BUILDING_FLOOR_HEIGHT;
 
   // Fix upside-down buildings
   if (renderHeight < renderMinHeight) {
-    renderHeight = renderHeight + renderMinHeight
+    renderHeight = renderHeight + renderMinHeight;
   }
 
   AttributeNumeric("height", renderHeight);

@@ -42,10 +42,19 @@ include $(ADD_MODULE)
 MODULE_BASE := .
 
 MODULE_SOURCES = \
-  scripts/server.cpp \
-	tangram-es/core/src/util/mapProjection.cpp
+	tangram-es/core/src/util/mapProjection.cpp \
+	scripts/tilebuilder.cpp \
+	scripts/ascendtiles.cpp
 
-MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) tangram-es/core/include/tangram tangram-es/core/src
+#  scripts/server.cpp
+
+MODULE_INC_PRIVATE = \
+  $(STYLUSLABS_DEPS) \
+  tangram-es/core/include/tangram \
+	tangram-es/core/src \
+	deps/vtzero/include \
+	deps/protozero/include
+
 #MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
 
 MODULE_CXXFLAGS = --std=c++20
