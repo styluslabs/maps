@@ -322,15 +322,59 @@ vt_point TileBuilder::toTileCoord(Coordinate r) {
 // - clear m_build (so check before writing attributes)
 // - has geom flag (call rollback instead of commit if false)?
 
+static real dist2(vt_point p) { return p.x*p.x + p.y*p.y; }
+
+// distance from point `pt` to line segment `start`-`end` to `pt`
+static real distToSegment2(vt_point start, vt_point end, vt_point pt)
+{
+  const real l2 = dist2(end - start);
+  if(l2 == 0.0) // zero length segment
+    return dist2(start - pt);
+  // Consider the line extending the segment, parameterized as start + t*(end - start).
+  // We find projection of pt onto this line and clamp t to [0,1] to limit to segment
+  const real t = std::max(real(0), std::min(real(1), dot(pt - start, end - start)/l2));
+  const vt_point proj = start + t * (end - start);  // Projection falls on the segment
+  return dist2(proj - pt);
+}
+
+static void simplifyRDP(std::vector<vt_point>& pts, std::vector<int>& keep, int start, int end, real thresh)
+{
+  real maxdist2 = 0;
+  int argmax = 0;
+  auto& p0 = pts[start];
+  auto& p1 = pts[end];
+  for(int ii = start + 1; ii < end; ++ii) {
+    real d2 = distToSegment2(p0, p1, pts[ii]);
+    if(d2 > maxdist2) {
+      maxdist2 = d2;
+      argmax = ii;
+    }
+  }
+  if(maxdist2 < thresh*thresh) { return; }
+  keep[argmax] = 1;
+  simplifyRDP(pts, keep, start, argmax, thresh);
+  simplifyRDP(pts, keep, argmax, end, thresh);
+}
+
+static void simplify(std::vector<vt_point>& pts, real thresh)
+{
+  if(pts.size() < 3) { return; }
+  std::vector<int> keep(pts.size(), 0);
+  keep.front() = 1;  keep.back() = 1;
+  simplifyRDP(pts, keep, 0, pts.size() - 1, thresh);
+  for(size_t dst = 0, src = 0; src < pts.size(); ++src) {
+    if(keep[src]) { pts[dst++] = pts[src]; }
+  }
+}
+
+
 void TileBuilder::buildLine(Feature& way)
 {
-  clipper<0> xclip{0,1};
-  clipper<1> yclip{0,1};
-
   vt_line_string tempPts;
 
   WayCoordinateIterator iter(WayPtr(way.ptr()));
   int n = iter.coordinatesRemaining();
+  tempPts.reserve(n);
   vt_point pmin(FLT_MAX, FLT_MAX), pmax(-FLT_MAX, -FLT_MAX);
   while(n-- > 0) {
     vt_point p = toTileCoord(iter.next());
@@ -343,12 +387,18 @@ void TileBuilder::buildLine(Feature& way)
   vt_multi_line_string clipPts;
   bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
   if(noclip) { clipPts.push_back(std::move(tempPts)); }
-  else { clipPts = yclip(xclip(tempPts)); }
+  else {
+    clipper<0> xclip{0,1};
+    clipper<1> yclip{0,1};
+    clipPts = yclip(xclip(tempPts));
+  }
 
   auto build = static_cast<vtzero::linestring_feature_builder*>(m_build.get());
   for(auto& line : clipPts) {
-    if(line.empty()) { continue; }  // should never happen
+    if(line.size() < 2) { continue; }  // should never happen
+    simplify(line, simplifyThresh);
     m_hasGeom = true;
+    m_totalPts += line.size();
     build->add_linestring(line.size());
     for(auto& p : line) {
       auto ip = glm::i32vec2(p*tileExtent + 0.5f);
@@ -357,9 +407,54 @@ void TileBuilder::buildLine(Feature& way)
   }
 }
 
+
+void TileBuilder::buildRing(Feature& way)
+{
+  vt_polygon tempPts;
+  tempPts.emplace_back();
+
+  WayCoordinateIterator iter(WayPtr(way.ptr()));
+  int n = iter.coordinatesRemaining();
+  tempPts[0].reserve(n);
+  vt_point pmin(FLT_MAX, FLT_MAX), pmax(-FLT_MAX, -FLT_MAX);
+  while(n-- > 0) {
+    vt_point p = toTileCoord(iter.next());
+    tempPts[0].push_back(p);
+    pmin = min(p, pmin);
+    pmax = max(p, pmax);
+  }
+
+  // see if we can skip clipping
+  vt_polygon clipPts;
+  bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
+  if(noclip) { clipPts = std::move(tempPts); }
+  else {
+    clipper<0> xclip{0,1};
+    clipper<1> yclip{0,1};
+    clipPts = yclip(xclip(tempPts));
+  }
+
+  auto build = static_cast<vtzero::polygon_feature_builder*>(m_build.get());
+  for(auto& ring : clipPts) {
+    if(ring.size() < 4) { continue; }  // should never happen
+    simplify(ring, simplifyThresh);
+    if(ring.size() < 4) { continue; }  // vtzero requirement
+    m_hasGeom = true;
+    m_totalPts += ring.size();
+    build->add_ring(ring.size());
+    for(auto& p : ring) {
+      auto ip = glm::i32vec2(p*tileExtent + 0.5f);
+      build->set_point(ip.x, ip.y);
+    }
+    //build->close_ring() ???
+  }
+}
+
+
 void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid) {
-  if(m_build)
+  if(m_build && m_hasGeom)
     m_build->commit();
+  m_hasGeom = false;
 
   auto it = m_layers.find(layer);
   if(it == m_layers.end()) {
@@ -372,39 +467,24 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
     auto build = std::make_unique<vtzero::point_feature_builder>(layerBuild);
     //build->set_id(++serial);
     auto p = toTileCoord(_centroid ? feature().centroid() : feature().xy());
-    build->add_point(p.x, p.y);
+    auto ip = glm::i32vec2(p*tileExtent + 0.5f);
+    m_hasGeom = p.x >= 0 && p.y >= 0 && p.x <= 1 && p.y <= 1;
+    if(m_hasGeom)
+      build->add_point(ip.x, ip.y);
     m_build = std::move(build);
   }
   else if(feature().isArea()) {
     if(!isClosed) { LOG("isArea() but not isClosed!"); }
-    auto build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
-
+    m_build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
     if(feature().isWay()) {
-      WayCoordinateIterator iter(WayPtr(feature().ptr()));
-      int n = iter.coordinatesRemaining();
-      build->add_ring(n);
-      while(n-- > 0) {
-        auto p = toTileCoord(iter.next());
-        build->set_point(p.x, p.y);
-      }
-      //feature.close_ring(); ???
+      buildRing(feature());
     }
     else {
       for(Feature child : feature().members()) {
         // OSM multipolygons cannot be nested, so this should be OK
-        if(!child.isWay()) { continue; }
-        WayCoordinateIterator iter(WayPtr(feature().ptr()));
-        int n = iter.coordinatesRemaining();
-        build->add_ring(n);
-        while(n-- > 0) {
-          auto p = toTileCoord(iter.next());
-          build->set_point(p.x, p.y);
-        }
-        //feature.close_ring(); ???
+        if(child.isWay()) { buildRing(child); }
       }
     }
-
-    m_build = std::move(build);
   }
   else if(feature().isWay()) {
     if(isClosed) { LOG("isClosed but not isArea()!"); }

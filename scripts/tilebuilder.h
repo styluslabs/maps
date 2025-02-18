@@ -33,7 +33,8 @@ public:
   // coord mapping
   glm::dvec2 m_origin;
   double m_scale = 0;
-  const int tileExtent = 4096;  // default vtzero extent
+  const float tileExtent = 4096;  // default vtzero extent
+  const float simplifyThresh = 1/512.0f;
 
   TileID m_id;
   vtzero::tile_builder m_tile;
@@ -41,7 +42,7 @@ public:
 
   TileBuilder(TileID _id, const std::vector<std::string>& layers);
   Feature& feature() { return *m_feat; }
-  glm::i32vec2 toTileCoord(Coordinate r);
+  glm::vec2 toTileCoord(Coordinate r);
   virtual void processFeature() = 0;
   std::string build(const Features& world, bool compress = true);
 
