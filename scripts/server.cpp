@@ -57,13 +57,15 @@ public:
   SQLiteStmt getTile = {NULL};
 };
 
-int old_main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
   struct Stats_t { size_t reqs = 0, reqsok = 0, bytesout = 0; } stats;
   const char* worldDBPath = argc > 1 ? argv[1] : "planet.mbtiles";
   static const int BLKZ = 8;
   static const char* getTileSQL =
       "SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?;";
+  static const char* putTileSQL =
+      "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?);";
 
   TileDB worldDB;
   std::map<std::string, TileDB> openDBs;
@@ -101,23 +103,61 @@ int old_main(int argc, char* argv[])
       return httplib::StatusCode::BadRequest_400;
     }
 
-    int ydb = (1 << z) - 1 - y;
+    if(z > 14) { return httplib::StatusCode::NotFound_404; }
 
-    if(z > 14)
-      return httplib::StatusCode::NotFound_404;
-
-    //if(z <= 12) {
-      worldDB.stmt(getTileSQL).bind(z, x, ydb).exec([&](sqlite3_stmt* stmt){
-        const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
-        const int length = sqlite3_column_bytes(stmt, 0);
-        res.set_content(blob, length, "application/vnd.mapbox-vector-tile");
-      });
-
-      if(res.body.empty()) {
-        return httplib::StatusCode::NotFound_404;
+    std::shared_future<void> fut;
+    {
+      std::lock_guard<std::mutex> lock(buildMutex);
+      TileID id(x, y, z);
+      // build queue should be map of TileID -> shared_future, which we will wait_for
+      auto it = buildQueue.find(id);
+      if(it != buildQueue.end()) {
+        fut = it->second;
       }
+      else {
+        fut = std::shared_future<void>(threadPool.enqueue([id, &worldGOL, &worldDB](){
+          //buildTile(id);
+          AscendTileBuilder tileBuilder(id);
+          std::string mvt = tileBuilder.build(worldGOL);
+          auto stmt = worldDB.stmt(putTileSQL);
+          stmt.bind(id.z, id.x, (1 << id.z) - 1 - id.y);
+          sqlite3_bind_blob(stmt.stmt, 4, mvt.data(), mvt.size(), SQLITE_STATIC);
+          if(!stmt.exec())
+            LOG("Error adding tile %s to DB: %s", id.toString().c_str(), worldDB.errMsg());
+        }));
+        buildQueue.insert(id, fut);
+      }
+    }
 
-    /*}
+    if(fut.valid() && fut.wait_for(std::chrono::seconds(30)) != std::future_status::ready) {
+      return httplib::StatusCode::RequestTimeout_408;  // 504 would be more correct
+    }
+
+    int ydb = (1 << z) - 1 - y;
+    worldDB.stmt(getTileSQL).bind(z, x, ydb).exec([&](sqlite3_stmt* stmt){
+      const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
+      const int length = sqlite3_column_bytes(stmt, 0);
+      res.set_content(blob, length, "application/vnd.mapbox-vector-tile");
+    });
+
+    if(res.body.empty()) {
+      return httplib::StatusCode::NotFound_404;
+    }
+
+    LOGD("Serving %s\n", req.path.c_str());
+    ++stats.reqsok;
+    stats.bytesout += res.body.size();
+    res.set_header("Content-Encoding", "gzip");
+    return httplib::StatusCode::OK_200;
+  });
+
+  LOG("Server listening on 8080");
+  svr.listen("0.0.0.0", 8080);
+  return 0;
+}
+
+
+  /*}
     else {
       // states:
       // - not requested: no entry in openDBs
@@ -181,15 +221,3 @@ int old_main(int argc, char* argv[])
         res.set_content(blob, length, "application/vnd.mapbox-vector-tile");
       });
     } */
-
-    LOGD("Serving %s\n", req.path.c_str());
-    ++stats.reqsok;
-    stats.bytesout += res.body.size();
-    res.set_header("Content-Encoding", "gzip");
-    return httplib::StatusCode::OK_200;
-  });
-
-  LOG("Server listening on 8080");
-  svr.listen("0.0.0.0", 8080);
-  return 0;
-}

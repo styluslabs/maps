@@ -34,7 +34,11 @@ public:
   glm::dvec2 m_origin;
   double m_scale = 0;
   const float tileExtent = 4096;  // default vtzero extent
-  const float simplifyThresh = 1/512.0f;
+  float simplifyThresh = 1/512.0f;
+
+  // stats
+  int m_totalPts = 0;
+  bool m_hasGeom = false;  // doesn't seem we can get this from vtzero
 
   TileID m_id;
   vtzero::tile_builder m_tile;
@@ -66,4 +70,8 @@ public:
   //void ZOrder(float order) { /* Not supported - not needed since Tangram handles ordering */ }
   void Layer(const std::string& layer, bool isClosed = false, bool _centroid = false);
   void LayerAsCentroid(const std::string& layer) { Layer(layer, false, true); }
+
+//private:
+  void buildLine(Feature& way);
+  void buildRing(Feature& way);
 };

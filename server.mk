@@ -42,6 +42,7 @@ include $(ADD_MODULE)
 MODULE_BASE := .
 
 MODULE_SOURCES = \
+  tangram-es/core/deps/miniz/miniz.c \
 	tangram-es/core/src/util/mapProjection.cpp \
 	scripts/tilebuilder.cpp \
 	scripts/ascendtiles.cpp

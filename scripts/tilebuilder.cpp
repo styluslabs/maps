@@ -252,6 +252,8 @@ TileBuilder::TileBuilder(TileID _id, const std::vector<std::string>& layers) : m
   double units = Mercator::MAP_WIDTH/MapProjection::EARTH_CIRCUMFERENCE_METERS;
   m_origin = units*MapProjection::tileCoordinatesToProjectedMeters({double(m_id.x), double(m_id.y), m_id.z});
   m_scale = 1/(units*MapProjection::metersPerTileAtZoom(m_id.z));
+
+  simplifyThresh = _id.z < 14 ? 1/512.0f : 0;  // no simplification for highest zoom (which can be overzoomed)
 }
 
 static LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord)
@@ -306,8 +308,8 @@ std::string TileBuilder::build(const Features& world, bool compress)
   double dt12 = std::chrono::duration<double>(time2 - time1).count();
   double dt23 = std::chrono::duration<double>(time3 - time2).count();
   double dt03 = std::chrono::duration<double>(time3 - time0).count();
-  LOG("Tile %s built in %.3f ms (%.3f ms process %d features, %.3f ms serialize, %.3f gzip)",
-      m_id.toString().c_str(), dt03, dt01, nfeats, dt12, dt23);
+  LOG("Tile %s built in %.3f ms (%.3f ms process %d features w/ %d points, %.3f ms serialize, %.3f gzip)",
+      m_id.toString().c_str(), dt03, dt01, nfeats, m_totalPts, dt12, dt23);
 
   return mvt;
 }
@@ -358,7 +360,7 @@ static void simplifyRDP(std::vector<vt_point>& pts, std::vector<int>& keep, int 
 
 static void simplify(std::vector<vt_point>& pts, real thresh)
 {
-  if(pts.size() < 3) { return; }
+  if(thresh <= 0 || pts.size() < 3) { return; }
   std::vector<int> keep(pts.size(), 0);
   keep.front() = 1;  keep.back() = 1;
   simplifyRDP(pts, keep, 0, pts.size() - 1, thresh);
@@ -367,7 +369,6 @@ static void simplify(std::vector<vt_point>& pts, real thresh)
   }
 }
 
-
 void TileBuilder::buildLine(Feature& way)
 {
   vt_line_string tempPts;
@@ -375,7 +376,8 @@ void TileBuilder::buildLine(Feature& way)
   WayCoordinateIterator iter(WayPtr(way.ptr()));
   int n = iter.coordinatesRemaining();
   tempPts.reserve(n);
-  vt_point pmin(FLT_MAX, FLT_MAX), pmax(-FLT_MAX, -FLT_MAX);
+  auto realmax = std::numeric_limits<real>::max();
+  vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
   while(n-- > 0) {
     vt_point p = toTileCoord(iter.next());
     tempPts.push_back(p);
@@ -407,7 +409,6 @@ void TileBuilder::buildLine(Feature& way)
   }
 }
 
-
 void TileBuilder::buildRing(Feature& way)
 {
   vt_polygon tempPts;
@@ -416,7 +417,8 @@ void TileBuilder::buildRing(Feature& way)
   WayCoordinateIterator iter(WayPtr(way.ptr()));
   int n = iter.coordinatesRemaining();
   tempPts[0].reserve(n);
-  vt_point pmin(FLT_MAX, FLT_MAX), pmax(-FLT_MAX, -FLT_MAX);
+  auto realmax = std::numeric_limits<real>::max();
+  vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
   while(n-- > 0) {
     vt_point p = toTileCoord(iter.next());
     tempPts[0].push_back(p);
@@ -449,7 +451,6 @@ void TileBuilder::buildRing(Feature& way)
     //build->close_ring() ???
   }
 }
-
 
 void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid) {
   if(m_build && m_hasGeom)
