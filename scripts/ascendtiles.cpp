@@ -29,6 +29,12 @@ public:
   bool NewWritePOI(double area = 0, bool force = false);
 };
 
+std::string buildTile(Features& world, TileID id)
+{
+  AscendTileBuilder tileBuilder(id);
+  return tileBuilder.build(world);
+}
+
 int main(int argc, char* argv[])
 {
   if(argc < 2) {
@@ -41,9 +47,7 @@ int main(int argc, char* argv[])
 
   TileID id(2619, 6332, 14);  // Alamo square!
 
-  // pass id and world to builder and let it get features? ... in the future it could limit query based on zoom level
-  AscendTileBuilder tileBuilder(id);
-  std::string mvt = tileBuilder.build(world);
+  std::string mvt = buildTile(world, id);
 
   return 0;
 }

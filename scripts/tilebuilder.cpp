@@ -289,7 +289,7 @@ std::string TileBuilder::build(const Features& world, bool compress)
     ++nfeats;
   }
   m_feat = nullptr;
-  if(m_build)
+  if(m_build && m_hasGeom)
     m_build->commit();
   m_build.reset();
 
@@ -386,6 +386,7 @@ void TileBuilder::buildLine(Feature& way)
   }
 
   // see if we can skip clipping
+  if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0) { return; }
   vt_multi_line_string clipPts;
   bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
   if(noclip) { clipPts.push_back(std::move(tempPts)); }
@@ -427,6 +428,7 @@ void TileBuilder::buildRing(Feature& way)
   }
 
   // see if we can skip clipping
+  if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0) { return; }
   vt_polygon clipPts;
   bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
   if(noclip) { clipPts = std::move(tempPts); }
@@ -455,6 +457,7 @@ void TileBuilder::buildRing(Feature& way)
 void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid) {
   if(m_build && m_hasGeom)
     m_build->commit();
+  m_build.reset();  // have to commit/rollback before creating next builder
   m_hasGeom = false;
 
   auto it = m_layers.find(layer);
@@ -499,4 +502,6 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
       if(child.isWay()) { buildLine(child); }
     }
   }
+  else
+    assert(false && "Unknown feature type");
 }
