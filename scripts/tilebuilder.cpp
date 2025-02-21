@@ -289,8 +289,10 @@ std::string TileBuilder::build(const Features& world, bool compress)
     ++nfeats;
   }
   m_feat = nullptr;
-  if(m_build && m_hasGeom)
+  if(m_build && m_hasGeom) {
+    ++m_totalFeats;
     m_build->commit();
+  }
   m_build.reset();
 
   auto time1 = std::chrono::steady_clock::now();
@@ -304,12 +306,12 @@ std::string TileBuilder::build(const Features& world, bool compress)
   }
   auto time3 = std::chrono::steady_clock::now();
 
-  double dt01 = std::chrono::duration<double>(time1 - time0).count();
-  double dt12 = std::chrono::duration<double>(time2 - time1).count();
-  double dt23 = std::chrono::duration<double>(time3 - time2).count();
-  double dt03 = std::chrono::duration<double>(time3 - time0).count();
-  LOG("Tile %s built in %.3f ms (%.3f ms process %d features w/ %d points, %.3f ms serialize, %.3f gzip)",
-      m_id.toString().c_str(), dt03, dt01, nfeats, m_totalPts, dt12, dt23);
+  double dt01 = std::chrono::duration<double>(time1 - time0).count()*1000;
+  double dt12 = std::chrono::duration<double>(time2 - time1).count()*1000;
+  double dt23 = std::chrono::duration<double>(time3 - time2).count()*1000;
+  double dt03 = std::chrono::duration<double>(time3 - time0).count()*1000;
+  LOG("Tile %s (%d bytes) built in %.3f ms (%.3f ms process %d/%d features w/ %d points, %.3f ms serialize, %.3f ms gzip)",
+      m_id.toString().c_str(), int(mvt.size()), dt03, dt01, m_totalFeats, nfeats, m_totalPts, dt12, dt23);
 
   return mvt;
 }
@@ -398,15 +400,19 @@ void TileBuilder::buildLine(Feature& way)
 
   auto build = static_cast<vtzero::linestring_feature_builder*>(m_build.get());
   for(auto& line : clipPts) {
-    if(line.size() < 2) { continue; }  // should never happen
     simplify(line, simplifyThresh);
-    m_hasGeom = true;
-    m_totalPts += line.size();
-    build->add_linestring(line.size());
+    // vtzero throws error on duplicate points
+    tilePts.reserve(line.size());
     for(auto& p : line) {
       auto ip = glm::i32vec2(p*tileExtent + 0.5f);
-      build->set_point(ip.x, ip.y);
+      if(tilePts.empty() || ip != tilePts.back())
+        tilePts.push_back(ip);
     }
+    if(tilePts.size() < 2) { continue; }  // should never happen
+    m_hasGeom = true;
+    m_totalPts += tilePts.size();
+    build->add_linestring_from_container(tilePts);
+    tilePts.clear();
   }
 }
 
@@ -440,23 +446,27 @@ void TileBuilder::buildRing(Feature& way)
 
   auto build = static_cast<vtzero::polygon_feature_builder*>(m_build.get());
   for(auto& ring : clipPts) {
-    if(ring.size() < 4) { continue; }  // should never happen
     simplify(ring, simplifyThresh);
-    if(ring.size() < 4) { continue; }  // vtzero requirement
-    m_hasGeom = true;
-    m_totalPts += ring.size();
-    build->add_ring(ring.size());
+    tilePts.reserve(ring.size());
     for(auto& p : ring) {
       auto ip = glm::i32vec2(p*tileExtent + 0.5f);
-      build->set_point(ip.x, ip.y);
+      if(tilePts.empty() || ip != tilePts.back())
+        tilePts.push_back(ip);
     }
+    if(tilePts.size() < 4) { continue; }  // vtzero requirement
+    m_hasGeom = true;
+    m_totalPts += tilePts.size();
+    build->add_ring_from_container(tilePts);
+    tilePts.clear();
     //build->close_ring() ???
   }
 }
 
 void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid) {
-  if(m_build && m_hasGeom)
+  if(m_build && m_hasGeom) {
+    ++m_totalFeats;
     m_build->commit();
+  }
   m_build.reset();  // have to commit/rollback before creating next builder
   m_hasGeom = false;
 
@@ -473,12 +483,16 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
     auto p = toTileCoord(_centroid ? feature().centroid() : feature().xy());
     auto ip = glm::i32vec2(p*tileExtent + 0.5f);
     m_hasGeom = p.x >= 0 && p.y >= 0 && p.x <= 1 && p.y <= 1;
-    if(m_hasGeom)
+    if(m_hasGeom) {
+      ++m_totalPts;
       build->add_point(ip.x, ip.y);
+    }
     m_build = std::move(build);
   }
   else if(feature().isArea()) {
-    if(!isClosed) { LOG("isArea() but not isClosed!"); }
+    if(!isClosed) {
+      LOG("isArea() but not isClosed!");
+    }
     m_build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
     if(feature().isWay()) {
       buildRing(feature());

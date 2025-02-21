@@ -31,11 +31,13 @@ public:
 
 std::string buildTile(Features& world, TileID id)
 {
+  //try {
   AscendTileBuilder tileBuilder(id);
   return tileBuilder.build(world);
+  //} catch() { return ""; }
 }
 
-int main(int argc, char* argv[])
+/*int main(int argc, char* argv[])
 {
   if(argc < 2) {
     LOG("No gol file specified!");
@@ -50,7 +52,7 @@ int main(int argc, char* argv[])
   std::string mvt = buildTile(world, id);
 
   return 0;
-}
+}*/
 
 // AscendTileBuilder impl
 

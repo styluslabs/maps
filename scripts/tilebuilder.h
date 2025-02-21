@@ -38,7 +38,11 @@ public:
 
   // stats
   int m_totalPts = 0;
+  int m_totalFeats = 0;
   bool m_hasGeom = false;  // doesn't seem we can get this from vtzero
+
+  // temp containers
+  std::vector<glm::i32vec2> tilePts;
 
   TileID m_id;
   vtzero::tile_builder m_tile;

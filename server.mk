@@ -45,9 +45,8 @@ MODULE_SOURCES = \
   tangram-es/core/deps/miniz/miniz.c \
 	tangram-es/core/src/util/mapProjection.cpp \
 	scripts/tilebuilder.cpp \
-	scripts/ascendtiles.cpp
-
-#  scripts/server.cpp
+	scripts/ascendtiles.cpp \
+  scripts/server.cpp
 
 MODULE_INC_PRIVATE = \
   $(STYLUSLABS_DEPS) \
@@ -58,7 +57,7 @@ MODULE_INC_PRIVATE = \
 
 #MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
 
-MODULE_CXXFLAGS = --std=c++20
+MODULE_CXXFLAGS = --std=c++20 -Wno-unknown-pragmas -Wno-reorder
 
 include $(ADD_MODULE)
 

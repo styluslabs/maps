@@ -1,29 +1,29 @@
 // Serve tiles from multiple mbtiles files, generating missing tiles on demand
 
 #include <map>
-//#define CPPHTTPLIB_OPENSSL_SUPPORT
-//#define CPPHTTPLIB_ZLIB_SUPPORT
-#include "httplib.h"
+#include "tilebuilder.h"
 #include "sqlitepp.h"
 #include "ulib/threadutil.h"
 //#include "util/mapProjection.h"
 
-#include "tilebuilder.h"
-
 #define STRINGUTIL_IMPLEMENTATION
 #include "ulib/stringutil.h"
 
+// httplib should be last include because it pulls in, e.g., fcntl.h with #defines that break geodesk headers
+//#define CPPHTTPLIB_OPENSSL_SUPPORT
+//#define CPPHTTPLIB_ZLIB_SUPPORT
+#include "httplib.h"
 
 // using Tangram::LngLat;
 // using Tangram::TileID;
 // using Tangram::MapProjection;
 
-#define LOG(...) fprintf(stderr, __VA_ARGS__)
-#ifdef NDEBUG
-#define LOGD(...)
-#else
-#define LOGD LOG
-#endif
+// #define LOG(...) fprintf(stderr, __VA_ARGS__)
+// #ifdef NDEBUG
+// #define LOGD(...)
+// #else
+// #define LOGD LOG
+// #endif
 
 /*static LngLat tileCoordToLngLat(const TileID& tileId, const glm::vec2& tileCoord)
 {
@@ -67,12 +67,21 @@ int main(int argc, char* argv[])
   struct Stats_t { size_t reqs = 0, reqsok = 0, bytesout = 0; } stats;
   const char* worldDBPath = argc > 2 ? argv[2] : "planet.mbtiles";
   //static const int BLKZ = 8;
+  static const char* schemaSQL = R"(BEGIN;
+    CREATE TABLE IF NOT EXISTS tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob);
+    CREATE UNIQUE INDEX IF NOT EXISTS tile_index on tiles (zoom_level, tile_column, tile_row);
+  COMMIT;)";
   static const char* getTileSQL =
       "SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?;";
   static const char* putTileSQL =
       "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?,?,?,?);";
 
+  if(argc < 2) {
+    LOG("No gol file specified!");
+    return -1;
+  }
   Features worldGOL(argv[1]);
+  LOG("Loaded %s", argv[1]);
 
   TileDB worldDB;
   //std::map<std::string, TileDB> openDBs;
@@ -87,6 +96,7 @@ int main(int argc, char* argv[])
     LOG("Error opening world mbtiles %s\n", worldDBPath);
     return -1;
   }
+  worldDB.exec(schemaSQL);
   worldDB.getTile = worldDB.stmt(getTileSQL);
   worldDB.putTile = worldDB.stmt(putTileSQL);
 
@@ -119,56 +129,43 @@ int main(int argc, char* argv[])
     TileID id(x, y, z);
     int ydb = (1 << z) - 1 - y;
 
-    std::shared_future<std::string> fut;
-    {
-      std::lock_guard<std::mutex> lock(buildMutex);
-      auto it = buildQueue.find(id);
-      if(it != buildQueue.end()) {
-        fut = it->second;
+    worldDB.getTile.bind(z, x, ydb).exec([&](sqlite3_stmt* stmt){
+      const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
+      const int length = sqlite3_column_bytes(stmt, 0);
+      res.set_content(blob, length, "application/vnd.mapbox-vector-tile");
+    });
+    // small chance that we could repeat tile build, but don't want to keep mutex locked during DB query
+    if(res.body.empty()) {
+      std::shared_future<std::string> fut;
+      {
+        std::lock_guard<std::mutex> lock(buildMutex);
+        // check for pending build
+        auto it = buildQueue.find(id);
+        if(it != buildQueue.end()) {
+          fut = it->second;
+        }
+        else {
+          fut = std::shared_future<std::string>(buildWorkers.enqueue([&, id](){
+            std::string mvt = buildTile(worldGOL, id);
+            worldDB.putTile.bind(id.z, id.x, (1 << id.z) - 1 - id.y);
+            sqlite3_bind_blob(worldDB.putTile.stmt, 4, mvt.data(), mvt.size(), SQLITE_STATIC);
+            if(!worldDB.putTile.exec())
+              LOG("Error adding tile %s to DB: %s", id.toString().c_str(), worldDB.errMsg());
+            {
+              std::lock_guard<std::mutex> lock(buildMutex);
+              buildQueue.erase(id);
+            }
+            return mvt;
+          }));
+          buildQueue.emplace(id, fut);
+        }
       }
-    }
-
-    if(fut.valid()) {
-      if(fut.wait_for(std::chrono::seconds(30)) != std::future_status::ready) {  //fut.valid() &&
+      if(fut.wait_for(std::chrono::seconds(30)) != std::future_status::ready) {
         return httplib::StatusCode::RequestTimeout_408;  // 504 would be more correct
       }
       std::string mvt = fut.get();
+      if(mvt.empty()) { return httplib::StatusCode::NotFound_404; }
       res.set_content(mvt.data(), mvt.size(), "application/vnd.mapbox-vector-tile");
-    }
-    else {
-      bool dbok = worldDB.getTile.bind(z, x, ydb).exec([&](sqlite3_stmt* stmt){
-        const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
-        const int length = sqlite3_column_bytes(stmt, 0);
-        res.set_content(blob, length, "application/vnd.mapbox-vector-tile");
-      });
-
-      if(!dbok) {  // && !fut.isvalid()
-        auto fut = std::shared_future<std::string>(buildWorkers.enqueue([&, id](){
-          std::string mvt = buildTile(worldGOL, id);
-          worldDB.putTile.bind(id.z, id.x, (1 << id.z) - 1 - id.y);
-          sqlite3_bind_blob(worldDB.putTile.stmt, 4, mvt.data(), mvt.size(), SQLITE_STATIC);
-          if(!worldDB.putTile.exec())
-            LOG("Error adding tile %s to DB: %s", id.toString().c_str(), worldDB.errMsg());
-          {
-            std::lock_guard<std::mutex> lock(buildMutex);
-            buildQueue.erase(id);
-          }
-          return mvt;
-        }));
-        {
-          std::lock_guard<std::mutex> lock(buildMutex);
-          buildQueue.emplace(id, fut);
-        }
-        if(fut.wait_for(std::chrono::seconds(30)) != std::future_status::ready) {
-          return httplib::StatusCode::RequestTimeout_408;  // 504 would be more correct
-        }
-        std::string mvt = fut.get();
-        res.set_content(mvt.data(), mvt.size(), "application/vnd.mapbox-vector-tile");
-      }
-    }
-
-    if(res.body.empty()) {
-      return httplib::StatusCode::NotFound_404;
     }
 
     LOGD("Serving %s\n", req.path.c_str());
