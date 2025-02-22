@@ -287,8 +287,9 @@ application:
 sources:
     osm:
         type: MVT
-        #url: http://127.0.0.1:8080/tiles/{z}/{x}/{y}
-        cache: stylus-osm
+        url: http://127.0.0.1:8080/tiles/{z}/{x}/{y}
+        cache: false
+        #cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14

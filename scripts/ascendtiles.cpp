@@ -31,10 +31,14 @@ public:
 
 std::string buildTile(Features& world, TileID id)
 {
-  //try {
   AscendTileBuilder tileBuilder(id);
-  return tileBuilder.build(world);
-  //} catch() { return ""; }
+  try {
+    return tileBuilder.build(world);
+  }
+  catch(std::exception &e) {
+    LOG("Exception building tile %s (feature id %lld): %s", id.toString().c_str(), tileBuilder.feature().id(), e.what());
+    return "";
+  }
 }
 
 /*int main(int argc, char* argv[])
@@ -47,9 +51,18 @@ std::string buildTile(Features& world, TileID id)
   Features world(argv[1]);
   LOG("Loaded %s", argv[1]);
 
-  TileID id(2619, 6332, 14);  // Alamo square!
+  for(int x = 2616; x <= 2621; ++x) {
+    for(int y = 6331; y <= 6336; ++y) {
+      TileID id(x, y, 14);
+      std::string mvt = buildTile(world, id);
+    }
+  }
 
-  std::string mvt = buildTile(world, id);
+  TileID id(2617, 6332, 14);  // Alamo square!
+  while(id.z > 10) {
+    id = id.getParent();
+    std::string mvt = buildTile(world, id);
+  }
 
   return 0;
 }*/
@@ -245,6 +258,7 @@ void AscendTileBuilder::ProcessRelation()
   if (reltype == "boundary") {
     auto boundary = Find("boundary");
     if (!parkValues[boundary] || !MinZoom(8)) { return; }   //SetMinZoomByArea(rel, area);
+    if (Find("maritime") == "yes") { return; }  // marine sanctuaries not really useful for typical use
     auto leisure = Find("leisure");
     auto protect_class = Find("protect_class");
     // tilemaker doesn't calculate area for relations
@@ -658,9 +672,9 @@ bool AscendTileBuilder::NewWritePOI(double area, bool force)
 void AscendTileBuilder::SetNameAttributes(Feature& feat, int minz)
 {
   if (!MinZoom(minz)) { return; }
-  auto name = feat["name"];
+  std::string name = feat["name"];
   Attribute("name", name);
-  auto name_en = feat["name:en"];
+  std::string name_en = feat["name:en"];  // force std::string because == not impl yet for TagValue
   if(name_en != "" && name_en != name) {
     Attribute("name_en", name_en);
   }

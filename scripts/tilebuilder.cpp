@@ -1,4 +1,5 @@
 #include "tilebuilder.h"
+#include <geom/polygon/RingCoordinateIterator.h>
 
 #define MINIZ_GZ_IMPLEMENTATION
 #include "ulib/miniz_gzip.h"
@@ -250,7 +251,7 @@ TileBuilder::TileBuilder(TileID _id, const std::vector<std::string>& layers) : m
     m_layers.emplace(l, vtzero::layer_builder{m_tile, l, 2, tileExtent});  // MVT v2
 
   double units = Mercator::MAP_WIDTH/MapProjection::EARTH_CIRCUMFERENCE_METERS;
-  m_origin = units*MapProjection::tileCoordinatesToProjectedMeters({double(m_id.x), double(m_id.y), m_id.z});
+  m_origin = units*MapProjection::tileSouthWestCorner(m_id);
   m_scale = 1/(units*MapProjection::metersPerTileAtZoom(m_id.z));
 
   simplifyThresh = _id.z < 14 ? 1/512.0f : 0;  // no simplification for highest zoom (which can be overzoomed)
@@ -295,23 +296,26 @@ std::string TileBuilder::build(const Features& world, bool compress)
   }
   m_build.reset();
 
+  std::string mvt = m_tile.serialize();  // very fast, not worth separate timing
+  if(mvt.size() == 0) {
+    LOG("No features for tile %s", m_id.toString().c_str());
+    return "";
+  }
   auto time1 = std::chrono::steady_clock::now();
-  std::string mvt = m_tile.serialize();
-  auto time2 = std::chrono::steady_clock::now();
+  int origsize = mvt.size();
   if(compress) {
     std::stringstream in_strm(mvt);
     std::stringstream out_strm;
     gzip(in_strm, out_strm);
     mvt = std::move(out_strm).str();  // C++20
   }
-  auto time3 = std::chrono::steady_clock::now();
+  auto time2 = std::chrono::steady_clock::now();
 
   double dt01 = std::chrono::duration<double>(time1 - time0).count()*1000;
   double dt12 = std::chrono::duration<double>(time2 - time1).count()*1000;
-  double dt23 = std::chrono::duration<double>(time3 - time2).count()*1000;
-  double dt03 = std::chrono::duration<double>(time3 - time0).count()*1000;
-  LOG("Tile %s (%d bytes) built in %.3f ms (%.3f ms process %d/%d features w/ %d points, %.3f ms serialize, %.3f ms gzip)",
-      m_id.toString().c_str(), int(mvt.size()), dt03, dt01, m_totalFeats, nfeats, m_totalPts, dt12, dt23);
+  double dt02 = std::chrono::duration<double>(time2 - time0).count()*1000;
+  LOG("Tile %s (%d bytes) built in %.1f ms (%.1f ms process %d/%d features w/ %d points, %.1f ms gzip %d bytes)",
+      m_id.toString().c_str(), int(mvt.size()), dt02, dt01, m_totalFeats, nfeats, m_totalPts, dt12, origsize);
 
   return mvt;
 }
@@ -366,9 +370,11 @@ static void simplify(std::vector<vt_point>& pts, real thresh)
   std::vector<int> keep(pts.size(), 0);
   keep.front() = 1;  keep.back() = 1;
   simplifyRDP(pts, keep, 0, pts.size() - 1, thresh);
-  for(size_t dst = 0, src = 0; src < pts.size(); ++src) {
+  size_t dst = 0;
+  for(size_t src = 0; src < pts.size(); ++src) {
     if(keep[src]) { pts[dst++] = pts[src]; }
   }
+  pts.resize(dst);
 }
 
 void TileBuilder::buildLine(Feature& way)
@@ -404,39 +410,71 @@ void TileBuilder::buildLine(Feature& way)
     // vtzero throws error on duplicate points
     tilePts.reserve(line.size());
     for(auto& p : line) {
-      auto ip = glm::i32vec2(p*tileExtent + 0.5f);
+      // MVT origin is upper left (NW), whereas geodesk/mercator origin is lower left (SW)
+      auto ip = glm::i32vec2(p.x*tileExtent + 0.5f, (1 - p.y)*tileExtent + 0.5f);
       if(tilePts.empty() || ip != tilePts.back())
         tilePts.push_back(ip);
     }
-    if(tilePts.size() < 2) { continue; }  // should never happen
-    m_hasGeom = true;
-    m_totalPts += tilePts.size();
-    build->add_linestring_from_container(tilePts);
+    if(tilePts.size() > 1) {
+      m_hasGeom = true;
+      m_totalPts += tilePts.size();
+      build->add_linestring_from_container(tilePts);
+    }  //else LOG("Why?");
     tilePts.clear();
   }
 }
 
-void TileBuilder::buildRing(Feature& way)
+void TileBuilder::buildRing(Feature& feat)
 {
   vt_polygon tempPts;
-  tempPts.emplace_back();
-
-  WayCoordinateIterator iter(WayPtr(way.ptr()));
-  int n = iter.coordinatesRemaining();
-  tempPts[0].reserve(n);
   auto realmax = std::numeric_limits<real>::max();
-  vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
-  while(n-- > 0) {
-    vt_point p = toTileCoord(iter.next());
-    tempPts[0].push_back(p);
-    pmin = min(p, pmin);
-    pmax = max(p, pmax);
+  bool noclip = false;
+
+  if(feat.isWay()) {
+    WayCoordinateIterator iter(WayPtr(feat.ptr()));
+    int n = iter.coordinatesRemaining();
+    tempPts.emplace_back();
+    tempPts[0].reserve(n);
+    vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
+    while(n-- > 0) {
+      vt_point p = toTileCoord(iter.next());
+      tempPts[0].push_back(p);
+      pmin = min(p, pmin);
+      pmax = max(p, pmax);
+    }
+    if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0) { return; }
+    noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
+  }
+  else {
+    // also done for computing area - should eliminate this repetition
+    Polygonizer polygonizer;
+    polygonizer.createRings(feat.store(), RelationPtr(feature().ptr()));
+    const Polygonizer::Ring* ring = polygonizer.outerRings();
+    bool inner = false;
+    while(ring) {
+      RingCoordinateIterator iter(ring);
+      int n = iter.coordinatesRemaining();
+      auto& tempRing = tempPts.emplace_back();
+      tempRing.reserve(n);
+      vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
+      while(n-- > 0) {
+        vt_point p = toTileCoord(iter.next());
+        tempRing.push_back(p);
+        pmin = min(p, pmin);
+        pmax = max(p, pmax);
+      }
+      if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0)
+        tempPts.pop_back();
+      else
+        noclip = noclip && pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
+      ring = ring->next();
+      if(!ring && !inner) { ring = polygonizer.innerRings(); inner = true; }
+    }
+    if(tempPts.empty()) { return; }
   }
 
   // see if we can skip clipping
-  if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0) { return; }
   vt_polygon clipPts;
-  bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
   if(noclip) { clipPts = std::move(tempPts); }
   else {
     clipper<0> xclip{0,1};
@@ -449,14 +487,18 @@ void TileBuilder::buildRing(Feature& way)
     simplify(ring, simplifyThresh);
     tilePts.reserve(ring.size());
     for(auto& p : ring) {
-      auto ip = glm::i32vec2(p*tileExtent + 0.5f);
+      auto ip = glm::i32vec2(p.x*tileExtent + 0.5f, (1 - p.y)*tileExtent + 0.5f);
       if(tilePts.empty() || ip != tilePts.back())
         tilePts.push_back(ip);
     }
-    if(tilePts.size() < 4) { continue; }  // vtzero requirement
-    m_hasGeom = true;
-    m_totalPts += tilePts.size();
-    build->add_ring_from_container(tilePts);
+    if(tilePts.size() < 4) {}  // vtzero requirement
+    else if(tilePts.back() != tilePts.front())
+      LOGD("Invalid polygon for feature %lld", feat.id());
+    else {
+      m_hasGeom = true;
+      m_totalPts += tilePts.size();
+      build->add_ring_from_container(tilePts);
+    }
     tilePts.clear();
     //build->close_ring() ???
   }
@@ -481,7 +523,7 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
     auto build = std::make_unique<vtzero::point_feature_builder>(layerBuild);
     //build->set_id(++serial);
     auto p = toTileCoord(_centroid ? feature().centroid() : feature().xy());
-    auto ip = glm::i32vec2(p*tileExtent + 0.5f);
+    auto ip = glm::i32vec2(p.x*tileExtent + 0.5f, (1 - p.y)*tileExtent + 0.5f);
     m_hasGeom = p.x >= 0 && p.y >= 0 && p.x <= 1 && p.y <= 1;
     if(m_hasGeom) {
       ++m_totalPts;
@@ -490,32 +532,20 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
     m_build = std::move(build);
   }
   else if(feature().isArea()) {
-    if(!isClosed) {
-      LOG("isArea() but not isClosed!");
-    }
+    //if(!isClosed) { LOG("isArea() but not isClosed!"); }
     m_build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
-    if(feature().isWay()) {
-      buildRing(feature());
-    }
-    else {
+    buildRing(feature());
+  }
+  else {
+    //if(isClosed) { LOG("isClosed but not isArea()!"); }
+    m_build = std::make_unique<vtzero::linestring_feature_builder>(layerBuild);
+    if(feature().isWay())
+      buildLine(feature());
+    else {  //if(feature().isRelation()) {
+    // multi-linestring(?)
       for(Feature child : feature().members()) {
-        // OSM multipolygons cannot be nested, so this should be OK
-        if(child.isWay()) { buildRing(child); }
+        if(child.isWay()) { buildLine(child); }
       }
     }
   }
-  else if(feature().isWay()) {
-    if(isClosed) { LOG("isClosed but not isArea()!"); }
-    m_build = std::make_unique<vtzero::linestring_feature_builder>(layerBuild);
-    buildLine(feature());
-  }
-  else if(feature().isRelation()) {
-    // multi-linestring(?)
-    m_build = std::make_unique<vtzero::linestring_feature_builder>(layerBuild);
-    for(Feature child : feature().members()) {
-      if(child.isWay()) { buildLine(child); }
-    }
-  }
-  else
-    assert(false && "Unknown feature type");
 }
