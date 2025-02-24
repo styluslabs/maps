@@ -33,7 +33,7 @@ thread_local TileDB worldDB;
 
 int main(int argc, char* argv[])
 {
-  struct Stats_t { size_t reqs = 0, reqsok = 0, bytesout = 0; } stats;
+  struct Stats_t { std::atomic_uint_fast64_t reqs = 0, reqsok = 0, bytesout = 0, tilesbuilt = 0; } stats;
   const char* worldDBPath = argc > 2 ? argv[2] : "planet.mbtiles";
   //static const int BLKZ = 8;
   static const char* schemaSQL = R"(BEGIN;
@@ -135,6 +135,7 @@ int main(int argc, char* argv[])
             return mvt;
           }));
           buildQueue.emplace(id, fut);
+          ++stats.tilesbuilt;
         }
       }
       if(fut.wait_for(std::chrono::seconds(30)) != std::future_status::ready) {

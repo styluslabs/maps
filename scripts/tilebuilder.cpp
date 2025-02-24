@@ -1,5 +1,7 @@
 #include "tilebuilder.h"
 #include <geom/polygon/RingCoordinateIterator.h>
+#include <geom/polygon/RingBuilder.h>
+#include <geom/polygon/Segment.h>
 
 #define MINIZ_GZ_IMPLEMENTATION
 #include "ulib/miniz_gzip.h"
@@ -8,6 +10,7 @@
 
 using real = float;
 using vt_point = glm::vec2;
+constexpr real REAL_MAX = std::numeric_limits<real>::max();
 
 template <uint8_t I, typename T>
 inline real get(const T&);
@@ -286,6 +289,7 @@ std::string TileBuilder::build(const Features& world, bool compress)
     //m_feat = *it;  //new(&m_feat) Feature(*it); ... m_feat.~Feature();
     m_feat = &f;
     processFeature();
+    if(f.isWay() && f["natural"] == "coastline") { addCoastline(f); }
     m_area = NAN;
     ++nfeats;
   }
@@ -295,6 +299,8 @@ std::string TileBuilder::build(const Features& world, bool compress)
     m_build->commit();
   }
   m_build.reset();
+  // ocean polygons
+  buildCoastline();
 
   std::string mvt = m_tile.serialize();  // very fast, not worth separate timing
   if(mvt.size() == 0) {
@@ -318,6 +324,141 @@ std::string TileBuilder::build(const Features& world, bool compress)
       m_id.toString().c_str(), int(mvt.size()), dt02, dt01, m_totalFeats, nfeats, m_totalPts, dt12, origsize);
 
   return mvt;
+}
+
+// clockwise distance along tile perimeter from 0,0 to point p
+static real perimDistCW(vt_point p)
+{
+  if(p.x == 0) return p.y;
+  if(p.y == 1) return 1 + p.x;
+  if(p.x == 1) return 2 + (1 - p.y);
+  if(p.y == 0) return 3 + (1 - p.x);
+  assert(false && "Point not on perimeter!"); return 0;
+}
+
+void TileBuilder::buildCoastline()
+{
+  if(m_coastline.empty()) { return; }
+  auto layit = m_layers.find(m_oceanLayer);  //"water");
+  if(layit == m_layers.end()) { return; }
+  vtzero::layer_builder& layerBuild = layit->second;
+
+  vt_polygon ocean;
+
+  struct vt_point_order {
+    bool operator()(const vt_point& lhs, const vt_point& rhs) const {
+      return lhs.x < rhs.x || (lhs.x == rhs.x && lhs.y < rhs.y);
+    }
+  };
+  std::map<vt_point, vt_linear_ring, vt_point_order> segments;
+
+  for(auto& way : m_coastline) {
+    if(way.back() == way.front())
+      ocean.emplace_back(std::move(way));
+    else
+      segments.emplace(way.front(), std::move(way));
+  }
+
+  for(auto ii = segments.begin(); ii != segments.end();) {
+    vt_linear_ring& ring = ii->second;
+    auto jj = segments.find(ring.back());
+    if(jj == segments.end()) { ++ii; }
+    else if(jj == ii) {
+      ocean.push_back(std::move(ring));
+      ii = segments.erase(ii);
+    }
+    else {
+      ring.insert(ring.end(), jj->second.begin(), jj->second.end());
+      segments.erase(jj);
+      // don't advance ii to repeat w/ new ring.back()
+    }
+  }
+
+  // for remaining segments, we must add path from exit (end) clockwise along tile edge to entry
+  //  (beginning) of next segment
+
+  std::map<real, vt_linear_ring> edgesegs;
+  for(auto& seg : segments)
+    edgesegs.emplace(perimDistCW(seg.second.front()), std::move(seg.second));
+
+  static vt_point corners[] = {{0,0}, {0,1}, {1,1}, {1,0}};
+  for(auto ii = edgesegs.begin(); ii != edgesegs.end();) {
+    vt_linear_ring& ring = ii->second;
+    real dback = perimDistCW(ring.back());
+    auto next = edgesegs.lower_bound(dback);
+    if(next == edgesegs.end()) { next = edgesegs.begin(); }
+
+    vt_point& dest = next->second.front();
+    real dfront = next->first;  //perimDistCW(dest);
+    if(dfront < dback) { dfront += 4; }
+    int c = std::ceil(dback);
+    while(c < dfront) {
+      ring.push_back(corners[(c++)%4]);
+    }
+    if(ii == next) {
+      ring.push_back(dest);
+      ocean.push_back(std::move(ring));
+      ii = edgesegs.erase(ii);
+    }
+    else {
+      ring.insert(ring.end(), next->second.begin(), next->second.end());
+      edgesegs.erase(next);
+      // don't advance ii to repeat w/ new ring.back()
+    }
+  }
+  assert(edgesegs.empty());
+
+  auto build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
+  for(auto& ring : ocean) {
+    simplify(ring, simplifyThresh);
+    tilePts.reserve(ring.size());
+    for(auto& p : ring) {
+      auto ip = glm::i32vec2(p.x*tileExtent + 0.5f, (1 - p.y)*tileExtent + 0.5f);
+      if(tilePts.empty() || ip != tilePts.back())
+        tilePts.push_back(ip);
+    }
+    if(tilePts.size() < 4 || tilePts.back() != tilePts.front()) {
+      LOGD("Invalid polygon for %s coastline", m_id.toString().c_str());
+    }
+    else {
+      m_hasGeom = true;
+      m_totalPts += tilePts.size();
+      build->add_ring_from_container(tilePts);
+    }
+    tilePts.clear();
+  }
+  ++m_totalFeats;
+  build->commit();
+}
+
+void TileBuilder::addCoastline(Feature& way)
+{
+  vt_multi_line_string m_coastline;
+
+  WayCoordinateIterator iter(WayPtr(way.ptr()));
+  int n = iter.coordinatesRemaining();
+  vt_line_string tempPts;
+  tempPts.reserve(n);
+  vt_point pmin(REAL_MAX, REAL_MAX), pmax(-REAL_MAX, -REAL_MAX);
+  while(n-- > 0) {
+    vt_point p = toTileCoord(iter.next());
+    tempPts.push_back(p);
+    pmin = min(p, pmin);
+    pmax = max(p, pmax);
+  }
+
+  if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0) { return; }
+  vt_multi_line_string clipPts;
+  bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
+  if(noclip) { clipPts.push_back(std::move(tempPts)); }
+  else {
+    clipper<0> xclip{0,1};
+    clipper<1> yclip{0,1};
+    clipPts = yclip(xclip(tempPts));
+  }
+
+  m_coastline.insert(m_coastline.end(),
+      std::make_move_iterator(clipPts.begin()), std::make_move_iterator(clipPts.end()));
 }
 
 // convert to relative tile coord (float 0..1)
@@ -384,8 +525,7 @@ void TileBuilder::buildLine(Feature& way)
   WayCoordinateIterator iter(WayPtr(way.ptr()));
   int n = iter.coordinatesRemaining();
   tempPts.reserve(n);
-  auto realmax = std::numeric_limits<real>::max();
-  vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
+  vt_point pmin(REAL_MAX, REAL_MAX), pmax(-REAL_MAX, -REAL_MAX);
   while(n-- > 0) {
     vt_point p = toTileCoord(iter.next());
     tempPts.push_back(p);
@@ -427,7 +567,6 @@ void TileBuilder::buildLine(Feature& way)
 void TileBuilder::buildRing(Feature& feat)
 {
   vt_polygon tempPts;
-  auto realmax = std::numeric_limits<real>::max();
   bool noclip = false;
 
   if(feat.isWay()) {
@@ -435,7 +574,7 @@ void TileBuilder::buildRing(Feature& feat)
     int n = iter.coordinatesRemaining();
     tempPts.emplace_back();
     tempPts[0].reserve(n);
-    vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
+    vt_point pmin(REAL_MAX, REAL_MAX), pmax(-REAL_MAX, -REAL_MAX);
     while(n-- > 0) {
       vt_point p = toTileCoord(iter.next());
       tempPts[0].push_back(p);
@@ -456,7 +595,7 @@ void TileBuilder::buildRing(Feature& feat)
       int n = iter.coordinatesRemaining();
       auto& tempRing = tempPts.emplace_back();
       tempRing.reserve(n);
-      vt_point pmin(realmax, realmax), pmax(-realmax, -realmax);
+      vt_point pmin(REAL_MAX, REAL_MAX), pmax(-REAL_MAX, -REAL_MAX);
       while(n-- > 0) {
         vt_point p = toTileCoord(iter.next());
         tempRing.push_back(p);
@@ -492,8 +631,9 @@ void TileBuilder::buildRing(Feature& feat)
         tilePts.push_back(ip);
     }
     if(tilePts.size() < 4) {}  // vtzero requirement
-    else if(tilePts.back() != tilePts.front())
+    else if(tilePts.back() != tilePts.front()) {
       LOGD("Invalid polygon for feature %lld", feat.id());
+    }
     else {
       m_hasGeom = true;
       m_totalPts += tilePts.size();

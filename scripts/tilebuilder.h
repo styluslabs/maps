@@ -18,7 +18,7 @@ using Tangram::MapProjection;
 
 #define LOG(fmt, ...) fprintf(stderr, fmt "\n", ## __VA_ARGS__)
 #ifdef NDEBUG
-#define LOGD(...)
+#define LOGD(...) do {} while(0)
 #else
 #define LOGD LOG
 #endif
@@ -43,6 +43,10 @@ public:
 
   // temp containers
   std::vector<glm::i32vec2> tilePts;
+
+  // coastline
+  vt_multi_line_string m_coastline;
+  std::string m_oceanLayer = "water";
 
   TileID m_id;
   vtzero::tile_builder m_tile;
@@ -78,4 +82,7 @@ public:
 //private:
   void buildLine(Feature& way);
   void buildRing(Feature& way);
+
+  void addCoastline(Feature& way);
+  void buildCoastline();
 };
