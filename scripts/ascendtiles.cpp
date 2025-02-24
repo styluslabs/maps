@@ -41,7 +41,8 @@ std::string buildTile(Features& world, TileID id)
   }
 }
 
-/*int main(int argc, char* argv[])
+#ifndef NDEBUG
+int main(int argc, char* argv[])
 {
   if(argc < 2) {
     LOG("No gol file specified!");
@@ -51,12 +52,12 @@ std::string buildTile(Features& world, TileID id)
   Features world(argv[1]);
   LOG("Loaded %s", argv[1]);
 
-  for(int x = 2616; x <= 2621; ++x) {
-    for(int y = 6331; y <= 6336; ++y) {
-      TileID id(x, y, 14);
-      std::string mvt = buildTile(world, id);
-    }
-  }
+  // for(int x = 2616; x <= 2621; ++x) {
+  //   for(int y = 6331; y <= 6336; ++y) {
+  //     TileID id(x, y, 14);
+  //     std::string mvt = buildTile(world, id);
+  //   }
+  // }
 
   TileID id(2617, 6332, 14);  // Alamo square!
   while(id.z > 10) {
@@ -65,7 +66,8 @@ std::string buildTile(Features& world, TileID id)
   }
 
   return 0;
-}*/
+}
+#endif
 
 // AscendTileBuilder impl
 

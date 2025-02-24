@@ -1,11 +1,9 @@
 #pragma once
 
 #include <geodesk/geodesk.h>
-
 #include <vtzero/builder.hpp>
-//#include <vtzero/index.hpp>
-
 #include "util/mapProjection.h"
+#include "clipper.h"
 
 using geodesk::Feature;
 using geodesk::Features;

@@ -45,8 +45,11 @@ MODULE_SOURCES = \
   tangram-es/core/deps/miniz/miniz.c \
 	tangram-es/core/src/util/mapProjection.cpp \
 	scripts/tilebuilder.cpp \
-	scripts/ascendtiles.cpp \
-  scripts/server.cpp
+	scripts/ascendtiles.cpp
+
+ifeq ($(DEBUG), 0)
+  MODULE_SOURCES += scripts/server.cpp
+endif
 
 MODULE_INC_PRIVATE = \
   $(STYLUSLABS_DEPS) \

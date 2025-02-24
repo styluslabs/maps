@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
     auto t1 = std::chrono::steady_clock::now();
     double dt = std::chrono::duration<double>(t1 - time0).count();
     auto statstr = fstring("Uptime: %.0f s\nReqs: %llu\n200 Reqs: %llu\nBytes out: %llu\n",
-        dt, stats.reqs, stats.reqsok, stats.bytesout);
+        dt, stats.reqs.load(), stats.reqsok.load(), stats.bytesout.load());
     res.set_content(statstr, "text/plain");
     return httplib::StatusCode::OK_200;
   });

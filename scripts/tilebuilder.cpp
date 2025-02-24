@@ -6,244 +6,6 @@
 #define MINIZ_GZ_IMPLEMENTATION
 #include "ulib/miniz_gzip.h"
 
-// clipper from geojson-vt-cpp
-
-using real = float;
-using vt_point = glm::vec2;
-constexpr real REAL_MAX = std::numeric_limits<real>::max();
-
-template <uint8_t I, typename T>
-inline real get(const T&);
-
-template <>
-inline real get<0>(const vt_point& p) {
-    return p.x;
-}
-template <>
-inline real get<1>(const vt_point& p) {
-    return p.y;
-}
-
-template <uint8_t I>
-inline vt_point intersect(const vt_point&, const vt_point&, const real);
-
-template <>
-inline vt_point intersect<0>(const vt_point& a, const vt_point& b, const real x) {
-    const real y = (x - a.x) * (b.y - a.y) / (b.x - a.x) + a.y;
-    return { x, y };  //, 1.0 };
-}
-template <>
-inline vt_point intersect<1>(const vt_point& a, const vt_point& b, const real y) {
-    const real x = (y - a.y) * (b.x - a.x) / (b.y - a.y) + a.x;
-    return { x, y };  //, 1.0 };
-}
-
-using vt_multi_point = std::vector<vt_point>;
-
-struct vt_line_string : std::vector<vt_point> {
-    using container_type = std::vector<vt_point>;
-    using container_type::container_type;
-    real dist = 0.0; // line length
-};
-
-struct vt_linear_ring : std::vector<vt_point> {
-    using container_type = std::vector<vt_point>;
-    using container_type::container_type;
-    real area = 0.0; // polygon ring area
-};
-
-using vt_multi_line_string = std::vector<vt_line_string>;
-using vt_polygon = std::vector<vt_linear_ring>;
-using vt_multi_polygon = std::vector<vt_polygon>;
-
-/* clip features between two axis-parallel lines:
- *     |        |
- *  ___|___     |     /
- * /   |   \____|____/
- *     |        |
- */
-
-template <uint8_t I>
-class clipper {
-public:
-    const real k1;
-    const real k2;
-
-    /*vt_geometry operator()(const vt_point& point) const {
-        return point;
-    }
-
-    vt_geometry operator()(const vt_multi_point& points) const {
-        vt_multi_point part;
-        for (const auto& p : points) {
-            const real ak = get<I>(p);
-            if (ak >= k1 && ak <= k2)
-                part.push_back(p);
-        }
-        return part;
-    }*/
-
-    vt_multi_line_string operator()(const vt_line_string& line) const {
-        vt_multi_line_string parts;
-        clipLine(line, parts);
-        return parts;
-    }
-
-    vt_multi_line_string operator()(const vt_multi_line_string& lines) const {
-        vt_multi_line_string parts;
-        for (const auto& line : lines) {
-            clipLine(line, parts);
-        }
-        return parts;
-    }
-
-    vt_polygon operator()(const vt_polygon& polygon) const {
-        vt_polygon result;
-        for (const auto& ring : polygon) {
-            const auto new_ring = clipRing(ring);
-            if (!new_ring.empty())
-                result.push_back(new_ring);
-        }
-        return result;
-    }
-
-    vt_multi_polygon operator()(const vt_multi_polygon& polygons) const {
-        vt_multi_polygon result;
-        for (const auto& polygon : polygons) {
-            vt_polygon p;
-            for (const auto& ring : polygon) {
-                const auto new_ring = clipRing(ring);
-                if (!new_ring.empty())
-                    p.push_back(new_ring);
-            }
-            if (!p.empty())
-                result.push_back(p);
-        }
-        return result;
-    }
-
-private:
-    vt_line_string newSlice(vt_multi_line_string& parts, vt_line_string& slice, real dist) const {
-        if (!slice.empty()) {
-            slice.dist = dist;
-            parts.push_back(std::move(slice));
-        }
-        return {};
-    }
-
-    void clipLine(const vt_line_string& line, vt_multi_line_string& slices) const {
-
-        const real dist = line.dist;
-        const size_t len = line.size();
-
-        if (len < 2)
-            return;
-
-        vt_line_string slice;
-
-        for (size_t i = 0; i < (len - 1); ++i) {
-            const auto& a = line[i];
-            const auto& b = line[i + 1];
-            const real ak = get<I>(a);
-            const real bk = get<I>(b);
-
-            if (ak < k1) {
-                if (bk > k2) { // ---|-----|-->
-                    slice.push_back(intersect<I>(a, b, k1));
-                    slice.push_back(intersect<I>(a, b, k2));
-                    slice = newSlice(slices, slice, dist);
-
-                } else if (bk >= k1) { // ---|-->  |
-                    slice.push_back(intersect<I>(a, b, k1));
-                    if (i == len - 2)
-                        slice.push_back(b); // last point
-                }
-            } else if (ak > k2) {
-                if (bk < k1) { // <--|-----|---
-                    slice.push_back(intersect<I>(a, b, k2));
-                    slice.push_back(intersect<I>(a, b, k1));
-                    slice = newSlice(slices, slice, dist);
-
-                } else if (bk <= k2) { // |  <--|---
-                    slice.push_back(intersect<I>(a, b, k2));
-                    if (i == len - 2)
-                        slice.push_back(b); // last point
-                }
-            } else {
-                slice.push_back(a);
-
-                if (bk < k1) { // <--|---  |
-                    slice.push_back(intersect<I>(a, b, k1));
-                    slice = newSlice(slices, slice, dist);
-
-                } else if (bk > k2) { // |  ---|-->
-                    slice.push_back(intersect<I>(a, b, k2));
-                    slice = newSlice(slices, slice, dist);
-
-                } else if (i == len - 2) { // | --> |
-                    slice.push_back(b);
-                }
-            }
-        }
-
-        // add the final slice
-        newSlice(slices, slice, dist);
-    }
-
-    vt_linear_ring clipRing(const vt_linear_ring& ring) const {
-        const size_t len = ring.size();
-
-        vt_linear_ring slice;
-        slice.area = ring.area;
-
-        if (len < 2)
-            return slice;
-
-        for (size_t i = 0; i < (len - 1); ++i) {
-            const auto& a = ring[i];
-            const auto& b = ring[i + 1];
-            const real ak = get<I>(a);
-            const real bk = get<I>(b);
-
-            if (ak < k1) {
-                if (bk >= k1) {
-                    slice.push_back(intersect<I>(a, b, k1)); // ---|-->  |
-                    if (bk > k2)                             // ---|-----|-->
-                        slice.push_back(intersect<I>(a, b, k2));
-                    else if (i == len - 2)
-                        slice.push_back(b); // last point
-                }
-            } else if (ak > k2) {
-                if (bk <= k2) { // |  <--|---
-                    slice.push_back(intersect<I>(a, b, k2));
-                    if (bk < k1) // <--|-----|---
-                        slice.push_back(intersect<I>(a, b, k1));
-                    else if (i == len - 2)
-                        slice.push_back(b); // last point
-                }
-            } else {
-                slice.push_back(a);
-                if (bk < k1) // <--|---  |
-                    slice.push_back(intersect<I>(a, b, k1));
-                else if (bk > k2) // |  ---|-->
-                    slice.push_back(intersect<I>(a, b, k2));
-                // | --> |
-            }
-        }
-
-        // close the polygon if its endpoints are not the same after clipping
-        if (!slice.empty()) {
-            const auto& first = slice.front();
-            const auto& last = slice.back();
-            if (first != last) {
-                slice.push_back(first);
-            }
-        }
-
-        return slice;
-    }
-};
-
 // TileBuilder
 
 using namespace geodesk;
@@ -326,150 +88,7 @@ std::string TileBuilder::build(const Features& world, bool compress)
   return mvt;
 }
 
-// clockwise distance along tile perimeter from 0,0 to point p
-static real perimDistCW(vt_point p)
-{
-  if(p.x == 0) return p.y;
-  if(p.y == 1) return 1 + p.x;
-  if(p.x == 1) return 2 + (1 - p.y);
-  if(p.y == 0) return 3 + (1 - p.x);
-  assert(false && "Point not on perimeter!"); return 0;
-}
-
-void TileBuilder::buildCoastline()
-{
-  if(m_coastline.empty()) { return; }
-  auto layit = m_layers.find(m_oceanLayer);  //"water");
-  if(layit == m_layers.end()) { return; }
-  vtzero::layer_builder& layerBuild = layit->second;
-
-  vt_polygon ocean;
-
-  struct vt_point_order {
-    bool operator()(const vt_point& lhs, const vt_point& rhs) const {
-      return lhs.x < rhs.x || (lhs.x == rhs.x && lhs.y < rhs.y);
-    }
-  };
-  std::map<vt_point, vt_linear_ring, vt_point_order> segments;
-
-  for(auto& way : m_coastline) {
-    if(way.back() == way.front())
-      ocean.emplace_back(std::move(way));
-    else
-      segments.emplace(way.front(), std::move(way));
-  }
-
-  for(auto ii = segments.begin(); ii != segments.end();) {
-    vt_linear_ring& ring = ii->second;
-    auto jj = segments.find(ring.back());
-    if(jj == segments.end()) { ++ii; }
-    else if(jj == ii) {
-      ocean.push_back(std::move(ring));
-      ii = segments.erase(ii);
-    }
-    else {
-      ring.insert(ring.end(), jj->second.begin(), jj->second.end());
-      segments.erase(jj);
-      // don't advance ii to repeat w/ new ring.back()
-    }
-  }
-
-  // for remaining segments, we must add path from exit (end) clockwise along tile edge to entry
-  //  (beginning) of next segment
-
-  std::map<real, vt_linear_ring> edgesegs;
-  for(auto& seg : segments)
-    edgesegs.emplace(perimDistCW(seg.second.front()), std::move(seg.second));
-
-  static vt_point corners[] = {{0,0}, {0,1}, {1,1}, {1,0}};
-  for(auto ii = edgesegs.begin(); ii != edgesegs.end();) {
-    vt_linear_ring& ring = ii->second;
-    real dback = perimDistCW(ring.back());
-    auto next = edgesegs.lower_bound(dback);
-    if(next == edgesegs.end()) { next = edgesegs.begin(); }
-
-    vt_point& dest = next->second.front();
-    real dfront = next->first;  //perimDistCW(dest);
-    if(dfront < dback) { dfront += 4; }
-    int c = std::ceil(dback);
-    while(c < dfront) {
-      ring.push_back(corners[(c++)%4]);
-    }
-    if(ii == next) {
-      ring.push_back(dest);
-      ocean.push_back(std::move(ring));
-      ii = edgesegs.erase(ii);
-    }
-    else {
-      ring.insert(ring.end(), next->second.begin(), next->second.end());
-      edgesegs.erase(next);
-      // don't advance ii to repeat w/ new ring.back()
-    }
-  }
-  assert(edgesegs.empty());
-
-  auto build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
-  for(auto& ring : ocean) {
-    simplify(ring, simplifyThresh);
-    tilePts.reserve(ring.size());
-    for(auto& p : ring) {
-      auto ip = glm::i32vec2(p.x*tileExtent + 0.5f, (1 - p.y)*tileExtent + 0.5f);
-      if(tilePts.empty() || ip != tilePts.back())
-        tilePts.push_back(ip);
-    }
-    if(tilePts.size() < 4 || tilePts.back() != tilePts.front()) {
-      LOGD("Invalid polygon for %s coastline", m_id.toString().c_str());
-    }
-    else {
-      m_hasGeom = true;
-      m_totalPts += tilePts.size();
-      build->add_ring_from_container(tilePts);
-    }
-    tilePts.clear();
-  }
-  ++m_totalFeats;
-  build->commit();
-}
-
-void TileBuilder::addCoastline(Feature& way)
-{
-  vt_multi_line_string m_coastline;
-
-  WayCoordinateIterator iter(WayPtr(way.ptr()));
-  int n = iter.coordinatesRemaining();
-  vt_line_string tempPts;
-  tempPts.reserve(n);
-  vt_point pmin(REAL_MAX, REAL_MAX), pmax(-REAL_MAX, -REAL_MAX);
-  while(n-- > 0) {
-    vt_point p = toTileCoord(iter.next());
-    tempPts.push_back(p);
-    pmin = min(p, pmin);
-    pmax = max(p, pmax);
-  }
-
-  if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0) { return; }
-  vt_multi_line_string clipPts;
-  bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
-  if(noclip) { clipPts.push_back(std::move(tempPts)); }
-  else {
-    clipper<0> xclip{0,1};
-    clipper<1> yclip{0,1};
-    clipPts = yclip(xclip(tempPts));
-  }
-
-  m_coastline.insert(m_coastline.end(),
-      std::make_move_iterator(clipPts.begin()), std::make_move_iterator(clipPts.end()));
-}
-
-// convert to relative tile coord (float 0..1)
-vt_point TileBuilder::toTileCoord(Coordinate r) {
-  return vt_point(m_scale*(glm::dvec2(r.x, r.y) - m_origin));  // + 0.5);
-}
-
-// what if geometry is completely outside tile after clipping?
-// - return bool from Layer()?
-// - clear m_build (so check before writing attributes)
-// - has geom flag (call rollback instead of commit if false)?
+// simplification
 
 static real dist2(vt_point p) { return p.x*p.x + p.y*p.y; }
 
@@ -516,6 +135,157 @@ static void simplify(std::vector<vt_point>& pts, real thresh)
     if(keep[src]) { pts[dst++] = pts[src]; }
   }
   pts.resize(dst);
+}
+
+// clockwise distance along tile perimeter from 0,0 to point p
+static real perimDistCW(vt_point p)
+{
+  if(p.x == 0) return p.y;
+  if(p.y == 1) return 1 + p.x;
+  if(p.x == 1) return 2 + (1 - p.y);
+  if(p.y == 0) return 3 + (1 - p.x);
+  assert(false && "Point not on perimeter!"); return -1;
+}
+
+void TileBuilder::buildCoastline()
+{
+  if(m_coastline.empty()) { return; }
+  LOGD("Processing %d coastline segments for tile %s", int(m_coastline.size()), m_id.toString().c_str());
+  auto layit = m_layers.find(m_oceanLayer);  //"water");
+  if(layit == m_layers.end()) { return; }
+  vtzero::layer_builder& layerBuild = layit->second;
+
+  vt_polygon ocean;
+
+  struct vt_point_order {
+    bool operator()(const vt_point& lhs, const vt_point& rhs) const {
+      return lhs.x < rhs.x || (lhs.x == rhs.x && lhs.y < rhs.y);
+    }
+  };
+  std::map<vt_point, vt_linear_ring, vt_point_order> segments;
+
+  for(auto& way : m_coastline) {
+    if(way.back() == way.front())
+      ocean.emplace_back(std::move(way));
+    else
+      segments.emplace(way.front(), std::move(way));
+  }
+
+  for(auto ii = segments.begin(); ii != segments.end();) {
+    vt_linear_ring& ring = ii->second;
+    auto jj = segments.find(ring.back());
+    if(jj == segments.end()) { ++ii; }
+    else if(jj == ii) {
+      ocean.push_back(std::move(ring));
+      ii = segments.erase(ii);
+    }
+    else {
+      ring.insert(ring.end(), jj->second.begin(), jj->second.end());
+      segments.erase(jj);
+      // don't advance ii to repeat w/ new ring.back()
+    }
+  }
+
+  // for remaining segments, we must add path from exit (end) clockwise along tile edge to entry
+  //  (beginning) of next segment
+  std::map<real, vt_linear_ring> edgesegs;
+  for(auto& seg : segments) {
+    real d = perimDistCW(seg.second.front());
+    if(d < 0) {
+      LOG("Invalid coastline segment for %s", m_id.toString().c_str());
+      return;
+    }
+    edgesegs.emplace(d, std::move(seg.second));
+  }
+
+  static vt_point corners[] = {{0,0}, {0,1}, {1,1}, {1,0}};
+  for(auto ii = edgesegs.begin(); ii != edgesegs.end();) {
+    vt_linear_ring& ring = ii->second;
+    real dback = perimDistCW(ring.back());
+    if(dback < 0) {
+      LOG("Invalid coastline segment for %s", m_id.toString().c_str());
+      return;
+    }
+    auto next = edgesegs.lower_bound(dback);
+    if(next == edgesegs.end()) { next = edgesegs.begin(); }
+
+    vt_point dest = next->second.front();
+    real dfront = next->first;  //perimDistCW(dest);
+    if(dfront < dback) { dfront += 4; }
+    int c = std::ceil(dback);
+    while(c < dfront) {
+      ring.push_back(corners[(c++)%4]);
+    }
+    if(ii == next) {
+      ring.push_back(dest);
+      ocean.push_back(std::move(ring));
+      ii = edgesegs.erase(ii);
+    }
+    else {
+      ring.insert(ring.end(), next->second.begin(), next->second.end());
+      edgesegs.erase(next);
+      // don't advance ii to repeat w/ new ring.back()
+    }
+  }
+  assert(edgesegs.empty());
+
+  auto build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
+  for(auto& ring : ocean) {
+    simplify(ring, simplifyThresh);
+    tilePts.reserve(ring.size());
+    for(auto& p : ring) {
+      auto ip = glm::i32vec2(p.x*tileExtent + 0.5f, (1 - p.y)*tileExtent + 0.5f);
+      if(tilePts.empty() || ip != tilePts.back())
+        tilePts.push_back(ip);
+    }
+    if(tilePts.size() < 4) {}
+    else if(tilePts.back() != tilePts.front()) {
+      LOGD("Invalid polygon for %s coastline", m_id.toString().c_str());
+    }
+    else {
+      m_hasGeom = true;
+      m_totalPts += tilePts.size();
+      build->add_ring_from_container(tilePts);
+    }
+    tilePts.clear();
+  }
+  // change to virtual void TileBuilder::processOcean() = 0;
+  build->add_property("class", "ocean");
+  ++m_totalFeats;
+  build->commit();
+}
+
+void TileBuilder::addCoastline(Feature& way)
+{
+  WayCoordinateIterator iter(WayPtr(way.ptr()));
+  int n = iter.coordinatesRemaining();
+  vt_line_string tempPts;
+  tempPts.reserve(n);
+  vt_point pmin(REAL_MAX, REAL_MAX), pmax(-REAL_MAX, -REAL_MAX);
+  while(n-- > 0) {
+    vt_point p = toTileCoord(iter.next());
+    tempPts.push_back(p);
+    pmin = min(p, pmin);
+    pmax = max(p, pmax);
+  }
+
+  if(pmin.x > 1 || pmin.y > 1 || pmax.x < 0 || pmax.y < 0) { return; }
+  vt_multi_line_string clipPts;
+  bool noclip = pmin.x >= 0 && pmin.y >= 0 && pmax.x <= 1 && pmax.y <= 1;
+  if(noclip) { clipPts.push_back(std::move(tempPts)); }
+  else {
+    clipper<0> xclip{0,1};
+    clipper<1> yclip{0,1};
+    clipPts = yclip(xclip(tempPts));
+  }
+
+  m_coastline.insert(m_coastline.end(),
+      std::make_move_iterator(clipPts.begin()), std::make_move_iterator(clipPts.end()));
+}
+
+// convert to relative tile coord (float 0..1)
+vt_point TileBuilder::toTileCoord(Coordinate r) {
+  return vt_point(m_scale*(glm::dvec2(r.x, r.y) - m_origin));  // + 0.5);
 }
 
 void TileBuilder::buildLine(Feature& way)
@@ -630,7 +400,7 @@ void TileBuilder::buildRing(Feature& feat)
       if(tilePts.empty() || ip != tilePts.back())
         tilePts.push_back(ip);
     }
-    if(tilePts.size() < 4) {}  // vtzero requirement
+    if(tilePts.size() < 4) {}  // tiny polygons get simplified to two points and discarded ... calculate area instead?
     else if(tilePts.back() != tilePts.front()) {
       LOGD("Invalid polygon for feature %lld", feat.id());
     }
@@ -640,7 +410,6 @@ void TileBuilder::buildRing(Feature& feat)
       build->add_ring_from_container(tilePts);
     }
     tilePts.clear();
-    //build->close_ring() ???
   }
 }
 
