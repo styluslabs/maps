@@ -24,6 +24,7 @@ using Tangram::MapProjection;
 class TileBuilder
 {
 public:
+  Features* m_tileFeats = nullptr;
   Feature* m_feat = nullptr;  //std::reference_wrapper<Feature> m_feat;
   std::unique_ptr<vtzero::feature_builder> m_build;
   double m_area = NAN;
@@ -44,7 +45,6 @@ public:
 
   // coastline
   vt_multi_line_string m_coastline;
-  std::string m_oceanLayer = "water";
 
   TileID m_id;
   vtzero::tile_builder m_tile;
@@ -54,7 +54,7 @@ public:
   Feature& feature() { return *m_feat; }
   glm::vec2 toTileCoord(Coordinate r);
   virtual void processFeature() = 0;
-  std::string build(const Features& world, bool compress = true);
+  std::string build(const Features& world, const Features& ocean, bool compress = true);
 
   // reading geodesk feature
   std::string Find(const std::string& key) { return feature()[key]; }
@@ -64,6 +64,7 @@ public:
   double Length() { return feature().length(); }
   double Area() { if(std::isnan(m_area)) { m_area = feature().area(); }  return m_area; }
   //double AreaIntersecting();
+  Relations GetParents();
 
   // writing tile feature
   bool MinZoom(int z) { return m_id.z >= z; }

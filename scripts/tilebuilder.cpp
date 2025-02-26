@@ -38,13 +38,14 @@ static Box tileBox(const TileID& id, double eps)
   return Box::ofWSEN(minBBox.longitude, minBBox.latitude, maxBBox.longitude, maxBBox.latitude);
 }
 
-std::string TileBuilder::build(const Features& world, bool compress)
+std::string TileBuilder::build(const Features& world, const Features& ocean, bool compress)
 {
   auto time0 = std::chrono::steady_clock::now();
 
   double eps = 0.01/MapProjection::metersPerTileAtZoom(m_id.z);
   Box bbox = tileBox(m_id, eps);
   Features tileFeats = world(bbox);
+  m_tileFeats = &tileFeats;
 
   int nfeats = 0;
   for(Feature f : tileFeats) {  //for(auto it = tileFeats.begin(); it != tileFeats.end(); ++it) {
@@ -56,13 +57,17 @@ std::string TileBuilder::build(const Features& world, bool compress)
     ++nfeats;
   }
   m_feat = nullptr;
-  if(m_build && m_hasGeom) {
-    ++m_totalFeats;
-    m_build->commit();
-  }
-  m_build.reset();
+
   // ocean polygons
-  buildCoastline();
+  if(!m_coastline.empty())
+    processFeature();
+  else {
+    LngLat center = MapProjection::projectedMetersToLngLat(MapProjection::tileCenter(m_id));
+    // create all ocean tile if center is inside an ocean polygon
+    if(ocean.containingLonLat(center.longitude, center.latitude)) { processFeature(); }
+  }
+  Layer("");  // flush final feature
+  m_tileFeats = nullptr;
 
   std::string mvt = m_tile.serialize();  // very fast, not worth separate timing
   if(mvt.size() == 0) {
@@ -176,11 +181,8 @@ static real perimDistCW(vt_point p)
 
 void TileBuilder::buildCoastline()
 {
-  if(m_coastline.empty()) { return; }
+  // if m_coastline is empty, we will just create all ocean tile
   LOGD("Processing %d coastline segments for tile %s", int(m_coastline.size()), m_id.toString().c_str());
-  auto layit = m_layers.find(m_oceanLayer);  //"water");
-  if(layit == m_layers.end()) { return; }
-  vtzero::layer_builder& layerBuild = layit->second;
 
   vt_multi_polygon outers;
   vt_polygon inners;
@@ -288,8 +290,7 @@ void TileBuilder::buildCoastline()
   }
 
   // MVT polygon is single CCW outer ring followed by 0 or more CW inner rings; multipolygon repeats this
-  vtzero::polygon_feature_builder build(layerBuild);
-  m_hasGeom = false;
+  auto build = static_cast<vtzero::polygon_feature_builder*>(m_build.get());
   for(vt_polygon& outer : outers) {
     for(vt_linear_ring& ring : outer) {
       simplify(ring, simplifyThresh);
@@ -307,16 +308,10 @@ void TileBuilder::buildCoastline()
       else {
         m_hasGeom = true;
         m_totalPts += tilePts.size();
-        build.add_ring_from_container(tilePts);
+        build->add_ring_from_container(tilePts);
       }
       tilePts.clear();
     }
-  }
-  if(m_hasGeom) {
-    // change to virtual void TileBuilder::processOcean() = 0;
-    build.add_property("class", "ocean");
-    ++m_totalFeats;
-    build.commit();
   }
 }
 
@@ -483,7 +478,13 @@ void TileBuilder::buildPolygon(Feature& feat)
   }
 }
 
-void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid) {
+Relations TileBuilder::GetParents()
+{
+  return m_tileFeats->relations().parentsOf(feature());
+}
+
+void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
+{
   if(m_build && m_hasGeom) {
     ++m_totalFeats;
     m_build->commit();
@@ -491,6 +492,7 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
   m_build.reset();  // have to commit/rollback before creating next builder
   m_hasGeom = false;
 
+  if(layer.empty()) { return; }  // layer == "" to flush last feature
   auto it = m_layers.find(layer);
   if(it == m_layers.end()) {
     LOG("Layer not found: %s", layer.c_str());
@@ -498,7 +500,12 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
   }
   vtzero::layer_builder& layerBuild = it->second;
 
-  if(feature().isNode() || _centroid) {
+  // ocean
+  if(!m_feat) {
+    m_build = std::make_unique<vtzero::polygon_feature_builder>(layerBuild);
+    buildCoastline();
+  }
+  else if(feature().isNode() || _centroid) {
     auto build = std::make_unique<vtzero::point_feature_builder>(layerBuild);
     //build->set_id(++serial);
     auto p = toTileCoord(_centroid ? feature().centroid() : feature().xy());

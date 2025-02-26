@@ -29,11 +29,11 @@ public:
   bool NewWritePOI(double area = 0, bool force = false);
 };
 
-std::string buildTile(Features& world, TileID id)
+std::string buildTile(const Features& world, const Features& ocean, TileID id)
 {
   AscendTileBuilder tileBuilder(id);
   try {
-    return tileBuilder.build(world);
+    return tileBuilder.build(world, ocean);
   }
   catch(std::exception &e) {
     LOG("Exception building tile %s (feature id %lld): %s", id.toString().c_str(), tileBuilder.feature().id(), e.what());
@@ -44,13 +44,16 @@ std::string buildTile(Features& world, TileID id)
 #ifndef NDEBUG
 int main(int argc, char* argv[])
 {
-  if(argc < 2) {
+  if(argc < 3) {
     LOG("No gol file specified!");
     return -1;
   }
 
   Features world(argv[1]);
   LOG("Loaded %s", argv[1]);
+
+  Features ocean(argv[2]);
+  LOG("Loaded %s", argv[2]);
 
   // for(int x = 2616; x <= 2621; ++x) {
   //   for(int y = 6331; y <= 6336; ++y) {
@@ -63,11 +66,11 @@ int main(int argc, char* argv[])
   {
     TileID id(2615, 6329, 14);
     int ydb = (1 << id.z) - 1 - id.y;
-    std::string mvt = buildTile(world, id);
+    std::string mvt = buildTile(world, ocean, id);
   }
   {
     TileID id(2612, 6327, 14);  // missing islands
-    std::string mvt = buildTile(world, id);
+    std::string mvt = buildTile(world, ocean, id);
   }
   // while(id.z > 9) {
   //   std::string mvt = buildTile(world, id);
@@ -117,7 +120,11 @@ AscendTileBuilder::AscendTileBuilder(TileID _id) : TileBuilder(_id, ascendLayers
 
 void AscendTileBuilder::processFeature()
 {
-  if (feature().isWay()) { ProcessWay(); }
+  if(!m_feat) {
+    Layer("water", true);
+    Attribute("class", "ocean");
+  }
+  else if (feature().isWay()) { ProcessWay(); }
   else if (feature().isNode()) { ProcessNode(); }
   else if (feature()["type"] == "multipolygon") { ProcessWay(); }
   else { ProcessRelation(); }  //if (feature().isRelation())
@@ -606,14 +613,16 @@ void AscendTileBuilder::ProcessWay()
   }
 
   // Boundaries ... possible for way to be shared with park boundary or landuse?
-  // parents() not implemented
-  /*for (Feature rel : feature().parents()) {
-    auto bndry = rel["boundary"];
-    if (bndry == "administrative" || bndry == "disputed") {
-      WriteBoundary(rel);
-      return;
+  // Feature::parents() not implemented
+  if (feature().belongsToRelation()) {
+    for (Feature rel : GetParents()) {
+      auto bndry = rel["boundary"];
+      if (bndry == "administrative" || bndry == "disputed") {
+        WriteBoundary(rel);
+        return;
+      }
     }
-  }*/
+  }
 
   if (boundary == "administrative" || boundary == "disputed") {
     WriteBoundary(feature());
