@@ -59,11 +59,20 @@ int main(int argc, char* argv[])
   //   }
   // }
 
-  TileID id(2617, 6332, 14);  // Alamo square!
-  while(id.z > 10) {
-    id = id.getParent();
+  //TileID id(2617, 6332, 14);  // Alamo square!
+  {
+    TileID id(2615, 6329, 14);
+    int ydb = (1 << id.z) - 1 - id.y;
     std::string mvt = buildTile(world, id);
   }
+  {
+    TileID id(2612, 6327, 14);  // missing islands
+    std::string mvt = buildTile(world, id);
+  }
+  // while(id.z > 9) {
+  //   std::string mvt = buildTile(world, id);
+  //   id = id.getParent();
+  // }
 
   return 0;
 }
@@ -527,12 +536,12 @@ void AscendTileBuilder::ProcessWay()
   if (waterLanduse[landuse]) { waterbody = landuse; }
   else if (waterwayAreas[waterway]) { waterbody = waterway; }
   else if (leisure == "swimming_pool") { waterbody = leisure; }
-  else if (natural == "water" || natural == "bay") { waterbody = natural; }
+  else if (natural == "water") { waterbody = natural; }  // || natural == "bay"  -- bay used for name, not water itself!
 
   if (waterbody != "") {
     if (!isClosed || !SetMinZoomByArea() || Find("covered") == "yes") { return; }
-    std::string cls = "lake";
-    if (natural == "bay") { cls = "ocean"; } else if (waterway != "") { cls = "river"; }
+    std::string cls = waterway != "" ? "river" : "lake";
+    //if (natural == "bay") { cls = "ocean"; } else if (waterway != "") { cls = "river"; }
     //if (class == "lake" and Find("wikidata") == "Q192770") { return; }  // crazy lake in Finland
     //if (cls == "ocean" && isClosed && (AreaIntersecting("ocean")/Area() > 0.98)) { return; }
     Layer("water", true);

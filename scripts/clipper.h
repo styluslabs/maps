@@ -100,6 +100,10 @@ public:
         return parts;
     }
 
+    vt_linear_ring operator()(const vt_linear_ring& ring) const {
+        return clipRing(ring);
+    }
+
     vt_polygon operator()(const vt_polygon& polygon) const {
         vt_polygon result;
         for (const auto& ring : polygon) {

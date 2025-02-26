@@ -6,6 +6,8 @@ ifneq ($(DEBUG), 0)
 	BUILDDIR ?= build/Debug
 else
 	BUILDDIR ?= build/Release
+  CFLAGS += -march=native
+  LDFLAGS += -march=native
 endif
 
 include make/shared.mk

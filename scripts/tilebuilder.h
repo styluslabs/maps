@@ -79,7 +79,8 @@ public:
 
 //private:
   void buildLine(Feature& way);
-  void buildRing(Feature& way);
+  void buildPolygon(Feature& way);
+  template<class T> void addRing(vt_polygon& poly, T&& iter);
 
   void addCoastline(Feature& way);
   void buildCoastline();
