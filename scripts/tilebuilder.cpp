@@ -43,8 +43,8 @@ std::string TileBuilder::build(const Features& world, const Features& ocean, boo
   auto time0 = std::chrono::steady_clock::now();
 
   double eps = 0.01/MapProjection::metersPerTileAtZoom(m_id.z);
-  Box bbox = tileBox(m_id, eps);
-  Features tileFeats = world(bbox);
+  m_tileBox = tileBox(m_id, eps);
+  Features tileFeats = world(m_tileBox);
   m_tileFeats = &tileFeats;
 
   int nfeats = 0;
@@ -64,7 +64,9 @@ std::string TileBuilder::build(const Features& world, const Features& ocean, boo
   else {
     LngLat center = MapProjection::projectedMetersToLngLat(MapProjection::tileCenter(m_id));
     // create all ocean tile if center is inside an ocean polygon
-    if(ocean.containingLonLat(center.longitude, center.latitude)) { processFeature(); }
+    // looks like there might be a bug in FeatureUtils::isEmpty() used by bool(Features), so do this instead
+    Features f = ocean.containingLonLat(center.longitude, center.latitude);
+    if(f.begin() != f.end()) { processFeature(); }
   }
   Layer("");  // flush final feature
   m_tileFeats = nullptr;
@@ -478,9 +480,10 @@ void TileBuilder::buildPolygon(Feature& feat)
   }
 }
 
-Relations TileBuilder::GetParents()
+//GetParents() return m_tileFeats->relations().parentsOf(feature()); -- crashes since parent iteration not implemented
+Features TileBuilder::GetMembers()
 {
-  return m_tileFeats->relations().parentsOf(feature());
+  return m_tileFeats->membersOf(feature());
 }
 
 void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)

@@ -24,6 +24,7 @@ using Tangram::MapProjection;
 class TileBuilder
 {
 public:
+  geodesk::Box m_tileBox;
   Features* m_tileFeats = nullptr;
   Feature* m_feat = nullptr;  //std::reference_wrapper<Feature> m_feat;
   std::unique_ptr<vtzero::feature_builder> m_build;
@@ -64,7 +65,7 @@ public:
   double Length() { return feature().length(); }
   double Area() { if(std::isnan(m_area)) { m_area = feature().area(); }  return m_area; }
   //double AreaIntersecting();
-  Relations GetParents();
+  Features GetMembers();
 
   // writing tile feature
   bool MinZoom(int z) { return m_id.z >= z; }

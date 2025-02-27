@@ -15,7 +15,7 @@
 //#define CPPHTTPLIB_ZLIB_SUPPORT
 #include "httplib.h"
 
-extern std::string buildTile(Features& world, TileID id);
+extern std::string buildTile(const Features& world, const Features& ocean, TileID id);
 
 static const char* getTileSQL =
     "SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?;";
@@ -31,10 +31,18 @@ public:
 
 thread_local TileDB worldDB;
 
+// Building ocean.gol (used to determine if empty tiles are ocean or land):
+// - download simplified water polygons from https://osmdata.openstreetmap.de/data/water-polygons.html
+//  - note: built with https://github.com/osmcode/osmcoastline
+// - unzip and run `PYTHONPATH=$HOME/maps/ogr2osm python3 -m ogr2osm --positive-id --pbf -o ocean.osm.pbf
+//  ... simplified-water-polygons-split-3857/simplified_water_polygons.shp`
+// #`osmium cat -f pbf ocean.osm.pbf -o ocean_fix.osm.pbf` -- seems unnecessary - resulting GOL size identical
+// - run `tool/bin/gol build ocean.gol ocean.osm.pbf`
+
 int main(int argc, char* argv[])
 {
   struct Stats_t { std::atomic_uint_fast64_t reqs = 0, reqsok = 0, bytesout = 0, tilesbuilt = 0; } stats;
-  const char* worldDBPath = argc > 2 ? argv[2] : "planet.mbtiles";
+  const char* worldDBPath = argc > 3 ? argv[3] : "planet.mbtiles";
   // WAL allows simultaneous reading and writing
   static const char* schemaSQL = R"(PRAGMA journal_mode=WAL;
   BEGIN;
@@ -42,12 +50,13 @@ int main(int argc, char* argv[])
     CREATE UNIQUE INDEX IF NOT EXISTS tile_index on tiles (zoom_level, tile_column, tile_row);
   COMMIT;)";
 
-  if(argc < 2) {
-    LOG("No gol file specified!");
+  if(argc < 3) {
+    LOG("Usage: server <OSM gol file> <Ocean gol file> [<MBTiles file>]");
     return -1;
   }
   Features worldGOL(argv[1]);
-  LOG("Loaded %s", argv[1]);
+  Features oceanGOL(argv[2]);
+  LOG("Loaded %s and %s", argv[1], argv[2]);
 
   //std::map<std::string, TileDB> openDBs;
   // ... separate queues for high zoom and low zoom (slower build)?
@@ -125,7 +134,7 @@ int main(int argc, char* argv[])
               }
               worldDB.putTile = worldDB.stmt(putTileSQL);
             }
-            std::string mvt = buildTile(worldGOL, id);
+            std::string mvt = buildTile(worldGOL, oceanGOL, id);
             if(!mvt.empty()) {
               worldDB.putTile.bind(id.z, id.x, (1 << id.z) - 1 - id.y);
               sqlite3_bind_blob(worldDB.putTile.stmt, 4, mvt.data(), mvt.size(), SQLITE_STATIC);

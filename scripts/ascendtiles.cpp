@@ -19,7 +19,7 @@ public:
   void ProcessWay();
   void ProcessRelation();
 
-  void WriteBoundary(Feature& feat);
+  void WriteBoundary();
   void SetBuildingHeightAttributes();
   bool SetMinZoomByArea(double area = 0);
   void SetBrunnelAttributes();
@@ -36,7 +36,8 @@ std::string buildTile(const Features& world, const Features& ocean, TileID id)
     return tileBuilder.build(world, ocean);
   }
   catch(std::exception &e) {
-    LOG("Exception building tile %s (feature id %lld): %s", id.toString().c_str(), tileBuilder.feature().id(), e.what());
+    int64_t fid = tileBuilder.m_feat ? tileBuilder.feature().id() : -1;
+    LOG("Exception building tile %s (feature id %lld): %s", id.toString().c_str(), fid, e.what());
     return "";
   }
 }
@@ -72,6 +73,11 @@ int main(int argc, char* argv[])
     TileID id(2612, 6327, 14);  // missing islands
     std::string mvt = buildTile(world, ocean, id);
   }
+  {
+    TileID id(2609, 6334, 14);  // all ocean
+    std::string mvt = buildTile(world, ocean, id);
+  }
+
   // while(id.z > 9) {
   //   std::string mvt = buildTile(world, id);
   //   id = id.getParent();
@@ -275,6 +281,10 @@ void AscendTileBuilder::ProcessRelation()
   }
   if (reltype == "boundary") {
     auto boundary = Find("boundary");
+    if (boundary == "administrative" || boundary == "disputed") {
+      WriteBoundary();
+      return;
+    }
     if (!parkValues[boundary] || !MinZoom(8)) { return; }   //SetMinZoomByArea(rel, area);
     if (Find("maritime") == "yes") { return; }  // marine sanctuaries not really useful for typical use
     auto leisure = Find("leisure");
@@ -613,19 +623,8 @@ void AscendTileBuilder::ProcessWay()
   }
 
   // Boundaries ... possible for way to be shared with park boundary or landuse?
-  // Feature::parents() not implemented
-  if (feature().belongsToRelation()) {
-    for (Feature rel : GetParents()) {
-      auto bndry = rel["boundary"];
-      if (bndry == "administrative" || bndry == "disputed") {
-        WriteBoundary(rel);
-        return;
-      }
-    }
-  }
-
-  if (boundary == "administrative" || boundary == "disputed") {
-    WriteBoundary(feature());
+  if (!feature().belongsToRelation() && (boundary == "administrative" || boundary == "disputed")) {
+    WriteBoundary();
     return;
   }
 }
@@ -772,10 +771,10 @@ void AscendTileBuilder::SetBuildingHeightAttributes()
   AttributeNumeric("render_min_height", renderMinHeight);
 }
 
-void AscendTileBuilder::WriteBoundary(Feature& feat)
+void AscendTileBuilder::WriteBoundary()
 {
-  double admin_level = feat["admin_level"];
-  if (!(admin_level < 12)) { admin_level = 11; }  // handle NaN
+  double admin_level = atof(Find("admin_level").c_str());
+  if (admin_level < 1) { admin_level = 11; }
   int mz = 0;
   if (admin_level >= 3 && admin_level < 5) { mz=4; }
   else if (admin_level >= 5 && admin_level < 7) { mz=8; }
@@ -783,14 +782,40 @@ void AscendTileBuilder::WriteBoundary(Feature& feat)
   else if (admin_level >= 8) { mz=12; }
 
   if (!MinZoom(mz)) { return; }
-  Layer("boundary", false);
-  AttributeNumeric("admin_level", admin_level);
-  SetNameAttributes(feat);
-  // to allow hiding coastal boundaries (natural=coastline)
-  Attribute("natural", Find("natural"));   // always get from way (not parent relation)
-  if (feat["maritime"] == "yes") { Attribute("maritime", "yes"); }
-  if (feat["boundary"] == "disputed" || feat["disputed"] == "yes") {
-    Attribute("disputed", "yes");
+
+  bool maritime = Find("maritime") == "yes";
+  bool disputed = Find("boundary") == "disputed" || Find("disputed") == "yes";
+  if (feature().isWay()) {
+    Layer("boundary", false);
+    AttributeNumeric("admin_level", admin_level);
+    SetNameAttributes();
+    // to allow hiding coastal boundaries (natural=coastline)
+    Attribute("natural", Find("natural"));
+    if (maritime) { Attribute("maritime", "yes"); }
+    if (disputed) { Attribute("disputed", "yes"); }
+  }
+  else {
+    // get name from relation
+    auto name = Find("name");
+    auto name_en = Find("name:en");
+    if (name_en == name) { name_en = ""; }
+
+    auto members = GetMembers();
+    for (Feature f : members) {
+      if (!f.isWay()) { continue; }
+      // combining members view and bounded view is currently a "TODO" in libgeodesk, so check manually
+      if (!m_tileBox.intersects(f.bounds())) { continue; }
+      m_feat = &f;  //SetFeature(f);  -- temporary (ha!) hack until we verify this works
+      Layer("boundary", false);
+      AttributeNumeric("admin_level", admin_level);
+      Attribute("name", name);
+      Attribute("name_en", name_en);  // not written if empty
+      Attribute("natural", Find("natural"));
+      if (maritime || Find("maritime") == "yes") { Attribute("maritime", "yes"); }
+      if (disputed || Find("boundary") == "disputed" || Find("disputed") == "yes") {
+        Attribute("disputed", "yes");
+      }
+    }
   }
 }
 
