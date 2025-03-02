@@ -42,7 +42,7 @@ std::string buildTile(const Features& world, const Features& ocean, TileID id)
   }
 }
 
-#ifndef NDEBUG
+#ifdef ASCENDTILES_MAIN
 int main(int argc, char* argv[])
 {
   if(argc < 3) {
@@ -51,10 +51,8 @@ int main(int argc, char* argv[])
   }
 
   Features world(argv[1]);
-  LOG("Loaded %s", argv[1]);
-
   Features ocean(argv[2]);
-  LOG("Loaded %s", argv[2]);
+  LOG("Loaded %s and %s", argv[1], argv[2]);
 
   // for(int x = 2616; x <= 2621; ++x) {
   //   for(int y = 6331; y <= 6336; ++y) {
@@ -63,7 +61,15 @@ int main(int argc, char* argv[])
   //   }
   // }
 
-  //TileID id(2617, 6332, 14);  // Alamo square!
+  {
+    TileID id(2617, 6332, 14);  // Alamo square!
+    while(id.z > 9) {
+      std::string mvt = buildTile(world, ocean, id);
+      id = id.getParent();
+    }
+    //std::string mvt = buildTile(world, ocean, id);
+    return 0;
+  }
   {
     TileID id(2615, 6329, 14);
     int ydb = (1 << id.z) - 1 - id.y;
@@ -173,7 +179,7 @@ void AscendTileBuilder::ProcessNode()
     double sqkm = atof(Find("sqkm").c_str());
     if (sqkm > 0) { AttributeNumeric("sqkm", sqkm); }
     if (place == "country") { Attribute("iso_a2", Find("ISO3166-1:alpha2")); }
-    Attribute("place_CN");  //, Find("place:CN"));
+    Attribute("place_CN", Find("place:CN"));
     SetNameAttributes();
     return;
   }
@@ -184,11 +190,11 @@ void AscendTileBuilder::ProcessNode()
     if (!MinZoom(11)) { return; }
     Layer("transportation", false);  //"aeroway"
     Attribute("aeroway", aeroway);
-    Attribute("ref");  //, Find("ref"));
+    Attribute("ref", Find("ref"));
     SetNameAttributes();
     SetEleAttributes();
-    Attribute("iata");  //, Find("iata"));
-    Attribute("icao");  //, Find("icao"));
+    Attribute("iata", Find("iata"));
+    Attribute("icao", Find("icao"));
     auto aerodrome = Find("aerodrome");
     Attribute("aerodrome", aerodromeValues[aerodrome] ? aerodrome : "other");
     return;
@@ -271,9 +277,9 @@ void AscendTileBuilder::ProcessRelation()
     }
     Attribute("class", "route");
     Attribute("route", route);
-    Attribute("name");  //, Find("name"));
-    Attribute("ref");  //, Find("ref"));
-    Attribute("network");  //, Find("network"));
+    Attribute("name", Find("name"));
+    Attribute("ref", Find("ref"));
+    Attribute("network", Find("network"));
     Attribute("color", Find("colour"));  // note spelling
     Attribute("osm_id", Id());
     Attribute("osm_type", "relation");
@@ -326,25 +332,11 @@ void AscendTileBuilder::ProcessWay()
     return;
   }
 
-  if (Find("disused") == "yes") { return; }
+  //if (Find("disused") == "yes") { return; } -- not commonly used
 
   // Roads/paths/trails - 2nd most common way type
   auto highway = Find("highway");
   if (highway != "") {
-    if (highway == "proposed" || highway == "construction") { return; }
-    auto access = Find("access");
-    if (access == "private" || access == "no") { return; }
-    // most footways are sidewalks or crossings, which are mapped inconsistently so just add clutter and
-    //  confusion the map; we could consider keeping footway == "alley"
-    if (highway == "footway" && Find("footway") != "") { return; }
-
-    // Construction -- not used currently
-    //auto construction = Find("construction");
-    //if (highway == "construction" && constructionValues[construction]) {
-    //  highway = construction;
-    //  construction = "yes";
-    //}
-
     int minzoom = 99, lblzoom = 99;
     bool ramp = false;
     //if (majorRoadValues[highway]) { minzoom = 4; }
@@ -361,8 +353,21 @@ void AscendTileBuilder::ProcessWay()
       highway = highway.substr(0, highway.find("_"));
       ramp = true; minzoom = 11; lblzoom = 14;
     }
+    //if (highway == "proposed" || highway == "construction") { return; }  -- will fail MinZoom test anyway
+    // Construction -- not used currently
+    //auto construction = Find("construction");
+    //if (highway == "construction" && constructionValues[construction]) {
+    //  highway = construction;
+    //  construction = "yes";
+    //}
 
     if(!MinZoom(minzoom)) { return; }
+
+    auto access = Find("access");
+    if (access == "private" || access == "no") { return; }
+    // most footways are sidewalks or crossings, which are mapped inconsistently so just add clutter and
+    //  confusion the map; we could consider keeping footway == "alley"
+    if (highway == "footway" && Find("footway") != "") { return; }
 
     Layer("transportation", false);
     //Attribute("class", h);
@@ -371,7 +376,7 @@ void AscendTileBuilder::ProcessWay()
     if (ramp) { AttributeNumeric("ramp", 1); }
 
     // Service
-    if (highway == "service") { Attribute("service"); } //, Find("service")); }
+    if (highway == "service") { Attribute("service", Find("service")); }
 
     auto oneway = Find("oneway");
     if (oneway == "yes" || oneway == "1") {
@@ -417,14 +422,14 @@ void AscendTileBuilder::ProcessWay()
       Attribute("trail_visibility", trailvis);
     }
     Attribute("mtb_scale", Find("mtb:scale"));  // mountain biking difficulty rating
-    if (highway == "path") { Attribute("golf"); }  //, Find("golf"));
+    if (highway == "path") { Attribute("golf", Find("golf")); }
 
     // name, roadway info
     SetNameAttributes(lblzoom);
     //Attribute("network","road"); // **** could also be us-interstate, us-highway, us-state
-    Attribute("maxspeed");  //, Find("maxspeed"));
-    Attribute("lanes");  //, Find("lanes"));
-    Attribute("ref");  //, Find("ref"));  //AttributeNumeric("ref_length",ref:len());
+    Attribute("maxspeed", Find("maxspeed"));
+    Attribute("lanes", Find("lanes"));
+    Attribute("ref", Find("ref"));  //AttributeNumeric("ref_length",ref:len());
     return;
   }
 
@@ -505,14 +510,14 @@ void AscendTileBuilder::ProcessWay()
     if (!MinZoom(10)) { return; }
     Layer("transportation", isClosed);  //"aeroway"
     Attribute("aeroway", aeroway);
-    Attribute("ref");  //, Find("ref"));
+    Attribute("ref", Find("ref"));
     //write_name = true
     if (aeroway == "aerodrome") {
       //LayerAsCentroid("aerodrome_label");
       SetNameAttributes();
       SetEleAttributes();
-      Attribute("iata");  //, Find("iata"));
-      Attribute("icao");  //, Find("icao"));
+      Attribute("iata", Find("iata"));
+      Attribute("icao", Find("icao"));
       auto aerodrome = Find("aerodrome");
       Attribute("aerodrome", aerodromeValues[aerodrome] ? aerodrome : "other");
       AttributeNumeric("area", Area());
@@ -601,7 +606,7 @@ void AscendTileBuilder::ProcessWay()
     Attribute("leisure", leisure);
     Attribute("amenity", amenity);
     Attribute("tourism", tourism);
-    if (natural == "wetland") { Attribute("wetland"); }  //, Find("wetland")
+    if (natural == "wetland") { Attribute("wetland", Find("wetland")); }
     NewWritePOI(Area(), MinZoom(14));
   }
 
@@ -617,7 +622,7 @@ void AscendTileBuilder::ProcessWay()
     Attribute("class", park_boundary ? boundary : leisure);
     if (park_boundary) { Attribute("boundary", boundary); }
     Attribute("leisure", leisure);
-    Attribute("protect_class");  //, Find("protect_class"));
+    Attribute("protect_class", Find("protect_class"));
     SetNameAttributes();
     NewWritePOI(Area(), MinZoom(14));
   }
@@ -673,8 +678,8 @@ bool AscendTileBuilder::NewWritePOI(double area, bool force)
       SetNameAttributes();
       if (area > 0) { AttributeNumeric("area", area); }
       // write value for all tags in poiTags (if present)
-      for(const ZMap& y : poiTags) { Attribute(y.tag()); }
-      for(auto& s : extraPoiTags) { Attribute(s); }
+      for(const ZMap& y : poiTags) { Attribute(y.tag(), Find(y.tag())); }
+      for(auto& s : extraPoiTags) { Attribute(s, Find(s)); }
       return true;
     }
   }

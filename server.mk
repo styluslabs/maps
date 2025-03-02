@@ -1,11 +1,12 @@
 # Linux makefile for Ascend Maps tile server
 
 TARGET ?= server
-DEBUG ?= 1
+DEBUG ?= 0
+SERVER ?= 1
 ifneq ($(DEBUG), 0)
-	BUILDDIR ?= build/Debug
+  BUILDDIR ?= build/Debug
 else
-	BUILDDIR ?= build/Release
+  BUILDDIR ?= build/Release
   CFLAGS += -march=native
   LDFLAGS += -march=native
 endif
@@ -14,7 +15,7 @@ include make/shared.mk
 
 INC += \
   tangram-es/core/deps/glm \
-	tangram-es/core/deps/stb
+  tangram-es/core/deps/stb
 
 DEFS += GLM_FORCE_CTOR_INIT
 
@@ -45,20 +46,22 @@ MODULE_BASE := .
 
 MODULE_SOURCES = \
   tangram-es/core/deps/miniz/miniz.c \
-	tangram-es/core/src/util/mapProjection.cpp \
-	scripts/tilebuilder.cpp \
-	scripts/ascendtiles.cpp
+  tangram-es/core/src/util/mapProjection.cpp \
+  scripts/tilebuilder.cpp \
+  scripts/ascendtiles.cpp
 
-ifeq ($(DEBUG), 0)
+ifneq ($(SERVER), 0)
   MODULE_SOURCES += scripts/server.cpp
+else
+  DEFS += ASCENDTILES_MAIN
 endif
 
 MODULE_INC_PRIVATE = \
   $(STYLUSLABS_DEPS) \
   tangram-es/core/include/tangram \
-	tangram-es/core/src \
-	deps/vtzero/include \
-	deps/protozero/include
+  tangram-es/core/src \
+  deps/vtzero/include \
+  deps/protozero/include
 
 #MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
 

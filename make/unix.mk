@@ -42,10 +42,11 @@ endif
 
 # disable optimizations which make profiling difficult, esp. inlining; frame pointer needed for sampling
 # -fno-inline ... let's try w/o this
+# valgrind doesn't support AVX512 yet
 PROFILE ?= 0
 ifneq ($(PROFILE), 0)
-  CFLAGS += -fno-omit-frame-pointer
-  LDFLAGS += -rdynamic
+  CFLAGS += -fno-omit-frame-pointer -mno-avx512f
+  LDFLAGS += -rdynamic -mno-avx512f
 endif
 
 # gprof: -pg; utrace: -pg or -finstrument-functions

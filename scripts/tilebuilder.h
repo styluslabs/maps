@@ -58,9 +58,9 @@ public:
   std::string build(const Features& world, const Features& ocean, bool compress = true);
 
   // reading geodesk feature
-  std::string Find(const std::string& key) { return feature()[key]; }
+  std::string Find(const std::string& key);  // { return feature()[key]; }
   std::string Id() { return std::to_string(feature().id()); }
-  bool Holds(const std::string& key) { return Find(key).empty(); }
+  bool Holds(const std::string& key) { return Find(key) != ""; }
   bool IsClosed() { return feature().isArea(); }
   double Length() { return feature().length(); }
   double Area() { if(std::isnan(m_area)) { m_area = feature().area(); }  return m_area; }
@@ -73,7 +73,7 @@ public:
     if(!val.empty()) { m_build->add_property(key, val); }  //&& m_id.z >= z
   }
   //void Attribute(const std::string& key, const TagValue& val, int z = 0) { Attribute(key, std::string(val), z); }
-  void Attribute(const std::string& key) { Attribute(key, Find(key)); }
+  //void Attribute(const std::string& key) { Attribute(key, Find(key)); }
   void AttributeNumeric(const std::string& key, double val) { m_build->add_property(key, val); }
   //void ZOrder(float order) { /* Not supported - not needed since Tangram handles ordering */ }
   void Layer(const std::string& layer, bool isClosed = false, bool _centroid = false);

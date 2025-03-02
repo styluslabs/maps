@@ -38,6 +38,18 @@ static Box tileBox(const TileID& id, double eps)
   return Box::ofWSEN(minBBox.longitude, minBBox.latitude, maxBBox.longitude, maxBBox.latitude);
 }
 
+static std::unordered_set<std::string> knownTags = {
+  "access", "addr:housenumber", "admin_level", "aerialway", "aerodrome", "aeroway", "amenity", "archaeological_site", "barrier", "bicycle",
+  "boundary", "bridge", "building", "building:levels", "building:min_level", "colour", "construction",
+  "covered", "cuisine", "cycleway", "cycleway:both", "cycleway:left", "cycleway:right", "disputed", "disused", "ele",
+  "footway", "ford", "golf", "height", "highway", "historic", "iata", "icao", "intermittent", "ISO3166-1:alpha2",
+  "landuse", "lanes", "leisure", "man_made", "maritime", "maxspeed", "meadow", "min_height", "mtb:scale",
+  "name", "name:en", "natural", "network", "oneway", "operator", "piste:difficulty", "piste:grooming",
+  "piste:type", "place", "place:CN", "population", "protect_class", "protection_title", "railway", "ref", "religion",
+  "route", "shop", "service", "sport", "sqkm", "station", "surface", "tourism", "trail_visibility", "tunnel", "type", "water",
+  "waterway", "wetland", "wikidata", "wikipedia"
+};
+
 std::string TileBuilder::build(const Features& world, const Features& ocean, bool compress)
 {
   auto time0 = std::chrono::steady_clock::now();
@@ -51,6 +63,14 @@ std::string TileBuilder::build(const Features& world, const Features& ocean, boo
   for(Feature f : tileFeats) {  //for(auto it = tileFeats.begin(); it != tileFeats.end(); ++it) {
     //m_feat = *it;  //new(&m_feat) Feature(*it); ... m_feat.~Feature();
     m_feat = &f;
+
+    //m_tags = f.tags();
+    //m_tags.clear();
+    //for(Tag tag : f.tags()) {
+    //  //if(knownTags.count(tag.key())) { m_tags[tag.key()] = tag.value(); }
+    //  m_tags.insert({ tag.key(), tag.value() });
+    //}
+
     processFeature();
     if(f.isWay() && f["natural"] == "coastline") { addCoastline(f); }
     m_area = NAN;
@@ -480,6 +500,14 @@ void TileBuilder::buildPolygon(Feature& feat)
   }
 }
 
+std::string TileBuilder::Find(const std::string& key) { return feature()[key]; }
+//std::string TileBuilder::Find(const std::string& key)
+//{
+//  //if(!knownTags.count(key)) { LOG("Unknown tag %s", key.c_str()); }
+//  auto it = m_tags.find(key);
+//  return it != m_tags.end() ? std::string(it->second) : std::string();
+//}
+
 //GetParents() return m_tileFeats->relations().parentsOf(feature()); -- crashes since parent iteration not implemented
 Features TileBuilder::GetMembers()
 {
@@ -533,7 +561,9 @@ void TileBuilder::Layer(const std::string& layer, bool isClosed, bool _centroid)
     else {  //if(feature().isRelation()) {
       // multi-linestring(?)
       for(Feature child : feature().members()) {
-        if(child.isWay()) { buildLine(child); }
+        if(child.isWay() && m_tileBox.intersects(child.bounds())) {
+          buildLine(child);
+        }
       }
     }
   }
