@@ -8,6 +8,181 @@
 
 // TileBuilder
 
+/* ANSI-C code produced by gperf version 3.1 */
+/* Command-line: gperf tags.txt  */
+/* Computed positions: -k'1,4,10' */
+
+#if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
+      && ('%' == 37) && ('&' == 38) && ('\'' == 39) && ('(' == 40) \
+      && (')' == 41) && ('*' == 42) && ('+' == 43) && (',' == 44) \
+      && ('-' == 45) && ('.' == 46) && ('/' == 47) && ('0' == 48) \
+      && ('1' == 49) && ('2' == 50) && ('3' == 51) && ('4' == 52) \
+      && ('5' == 53) && ('6' == 54) && ('7' == 55) && ('8' == 56) \
+      && ('9' == 57) && (':' == 58) && (';' == 59) && ('<' == 60) \
+      && ('=' == 61) && ('>' == 62) && ('?' == 63) && ('A' == 65) \
+      && ('B' == 66) && ('C' == 67) && ('D' == 68) && ('E' == 69) \
+      && ('F' == 70) && ('G' == 71) && ('H' == 72) && ('I' == 73) \
+      && ('J' == 74) && ('K' == 75) && ('L' == 76) && ('M' == 77) \
+      && ('N' == 78) && ('O' == 79) && ('P' == 80) && ('Q' == 81) \
+      && ('R' == 82) && ('S' == 83) && ('T' == 84) && ('U' == 85) \
+      && ('V' == 86) && ('W' == 87) && ('X' == 88) && ('Y' == 89) \
+      && ('Z' == 90) && ('[' == 91) && ('\\' == 92) && (']' == 93) \
+      && ('^' == 94) && ('_' == 95) && ('a' == 97) && ('b' == 98) \
+      && ('c' == 99) && ('d' == 100) && ('e' == 101) && ('f' == 102) \
+      && ('g' == 103) && ('h' == 104) && ('i' == 105) && ('j' == 106) \
+      && ('k' == 107) && ('l' == 108) && ('m' == 109) && ('n' == 110) \
+      && ('o' == 111) && ('p' == 112) && ('q' == 113) && ('r' == 114) \
+      && ('s' == 115) && ('t' == 116) && ('u' == 117) && ('v' == 118) \
+      && ('w' == 119) && ('x' == 120) && ('y' == 121) && ('z' == 122) \
+      && ('{' == 123) && ('|' == 124) && ('}' == 125) && ('~' == 126))
+/* The character set is not based on ISO-646.  */
+#error "gperf generated tables don't work with this execution character set. Please report a bug to <bug-gperf@gnu.org>."
+#endif
+
+
+#define TOTAL_KEYWORDS 78
+#define MIN_WORD_LENGTH 3
+#define MAX_WORD_LENGTH 19
+#define MIN_HASH_VALUE 3
+#define MAX_HASH_VALUE 169
+/* maximum key range = 167, duplicates = 0 */
+
+unsigned int in_word_set (const char *str, size_t len)
+{
+  static const char * wordlist[] =
+    {
+      "", "", "",
+      "ele",
+      "",
+      "lanes",
+      "", "",
+      "ref",
+      "", "",
+      "access",
+      "railway",
+      "", "", "", "",
+      "covered",
+      "cycleway",
+      "type",
+      "", "", "",
+      "cycleway:left",
+      "",
+      "route",
+      "addr:housenumber",
+      "tourism",
+      "",
+      "cycleway:right",
+      "place",
+      "ISO3166-1:alpha2",
+      "leisure",
+      "place:CN",
+      "",
+      "sport",
+      "",
+      "aeroway",
+      "operator",
+      "aerodrome",
+      "piste:type",
+      "colour",
+      "cuisine",
+      "protect_class",
+      "shop",
+      "", "",
+      "station",
+      "", "",
+      "water",
+      "",
+      "wetland",
+      "waterway",
+      "iata",
+      "", "",
+      "intermittent",
+      "religion",
+      "aerialway",
+      "",
+      "admin_level",
+      "service",
+      "",
+      "name",
+      "",
+      "height",
+      "name:en",
+      "historic",
+      "piste:grooming",
+      "", "",
+      "amenity",
+      "building",
+      "icao",
+      "",
+      "oneway",
+      "barrier",
+      "man_made",
+      "mtb:scale",
+      "building:levels",
+      "tunnel",
+      "natural",
+      "",
+      "archaeological_site",
+      "", "",
+      "landuse",
+      "cycleway:both",
+      "sqkm",
+      "", "",
+      "construction",
+      "maxspeed",
+      "",
+      "min_height",
+      "",
+      "highway",
+      "wikidata",
+      "",
+      "population",
+      "",
+      "disused",
+      "disputed",
+      "golf",
+      "wikipedia\"",
+      "protection_title",
+      "footway",
+      "", "", "", "",
+      "network",
+      "maritime",
+      "", "", "",
+      "surface",
+      "", "", "",
+      "trail_visibility",
+      "bicycle",
+      "", "", "", "", "", "", "", "",
+      "piste:difficulty",
+      "",
+      "boundary",
+      "", "", "", "", "", "", "", "", "",
+      "building:min_level",
+      "", "",
+      "meadow",
+      "", "", "", "",
+      "bridge",
+      "", "", "", "", "", "", "", "", "",
+      "", "", "", "", "", "", "", "",
+      "ford"
+    };
+
+  if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)
+    {
+      unsigned int key = hash (str, len);
+
+      if (key <= MAX_HASH_VALUE)
+        {
+          const char *s = wordlist[key];
+
+          if (*str == *s && !strncmp (str + 1, s + 1, len - 1))
+            return key;
+        }
+    }
+  return 0;
+}
+
+
 using namespace geodesk;
 
 TileBuilder::TileBuilder(TileID _id, const std::vector<std::string>& layers) : m_id(_id)
@@ -38,18 +213,6 @@ static Box tileBox(const TileID& id, double eps)
   return Box::ofWSEN(minBBox.longitude, minBBox.latitude, maxBBox.longitude, maxBBox.latitude);
 }
 
-static std::unordered_set<std::string> knownTags = {
-  "access", "addr:housenumber", "admin_level", "aerialway", "aerodrome", "aeroway", "amenity", "archaeological_site", "barrier", "bicycle",
-  "boundary", "bridge", "building", "building:levels", "building:min_level", "colour", "construction",
-  "covered", "cuisine", "cycleway", "cycleway:both", "cycleway:left", "cycleway:right", "disputed", "disused", "ele",
-  "footway", "ford", "golf", "height", "highway", "historic", "iata", "icao", "intermittent", "ISO3166-1:alpha2",
-  "landuse", "lanes", "leisure", "man_made", "maritime", "maxspeed", "meadow", "min_height", "mtb:scale",
-  "name", "name:en", "natural", "network", "oneway", "operator", "piste:difficulty", "piste:grooming",
-  "piste:type", "place", "place:CN", "population", "protect_class", "protection_title", "railway", "ref", "religion",
-  "route", "shop", "service", "sport", "sqkm", "station", "surface", "tourism", "trail_visibility", "tunnel", "type", "water",
-  "waterway", "wetland", "wikidata", "wikipedia"
-};
-
 std::string TileBuilder::build(const Features& world, const Features& ocean, bool compress)
 {
   auto time0 = std::chrono::steady_clock::now();
@@ -71,8 +234,19 @@ std::string TileBuilder::build(const Features& world, const Features& ocean, boo
     //  m_tags.insert({ tag.key(), tag.value() });
     //}
 
+    m_hasTag.reset();
+    for(Tag tag : f.tags()) {
+      //auto opt = mph::find<knownTags>(std::string_view(tag.key()).substr(0,16));
+      std::string_view k = tag.key();
+      unsigned int h = in_word_set(k.data(), k.size());
+      if(h > 0) {  //opt.has_value()) {
+        m_hasTag.set(h);
+        m_tags[h] = tag.value();
+      }
+    }
+
     processFeature();
-    if(f.isWay() && f["natural"] == "coastline") { addCoastline(f); }
+    if(f.isWay() && Find("natural") == "coastline") { addCoastline(f); }
     m_area = NAN;
     ++nfeats;
   }
@@ -500,7 +674,7 @@ void TileBuilder::buildPolygon(Feature& feat)
   }
 }
 
-std::string TileBuilder::Find(const std::string& key) { return feature()[key]; }
+//std::string TileBuilder::Find(const std::string& key) { return feature()[key]; }
 //std::string TileBuilder::Find(const std::string& key)
 //{
 //  //if(!knownTags.count(key)) { LOG("Unknown tag %s", key.c_str()); }

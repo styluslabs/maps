@@ -7,7 +7,6 @@
 #include <map>
 #include <vector>
 
-using geodesk::Relation;
 
 // tilebuilder.cpp/.h + ascendtiles.cpp/.h ?
 class AscendTileBuilder : public TileBuilder {
@@ -105,9 +104,10 @@ struct Set {
 struct ZMap {
   using map_t = std::map<std::string, int>;
   std::string m_tag;
+  unsigned int m_tagCode;
   map_t m_items;
   const int m_dflt = 100;
-  ZMap(std::string _tag, int _dflt=100) : m_tag(_tag), m_dflt(_dflt) {}
+  ZMap(std::string_view _tag, int _dflt=100) : m_tag(_tag), m_tagCode(runtimeTag(_tag)), m_dflt(_dflt) {}
   ZMap(std::initializer_list<map_t::value_type> items) : m_items(items) {}
   ZMap& add(int z, std::initializer_list<std::string> items) {
     for(auto& s : items)
@@ -116,6 +116,7 @@ struct ZMap {
   }
 
   const std::string& tag() const { return m_tag; }
+  unsigned int tagCode() const { return m_tagCode; }
 
   int operator[](const std::string& key) const {
     if (key.empty()) { return m_dflt; }
@@ -663,8 +664,8 @@ static const std::vector<ZMap> poiTags = {
   ZMap("waterway").add(14, { "dock" })
 };
 
-static const std::vector<std::string> extraPoiTags =
-    { "cuisine", "station", "religion", "operator", "archaeological_site" };  // atm:operator
+static const std::vector<ZMap> extraPoiTags =
+    { ZMap("cuisine"), ZMap("station"), ZMap("religion"), ZMap("operator"), ZMap("archaeological_site") };  // atm:operator
 
 bool AscendTileBuilder::NewWritePOI(double area, bool force)
 {
@@ -672,14 +673,14 @@ bool AscendTileBuilder::NewWritePOI(double area, bool force)
 
   bool force12 = area > 0 || Holds("wikipedia");
   for (const ZMap& z : poiTags) {
-    auto val = Find(z.tag());
+    auto val = readTag(z.tagCode());
     if (val != "" && (force12 || MinZoom(z[val]))) {
       LayerAsCentroid("poi");
       SetNameAttributes();
       if (area > 0) { AttributeNumeric("area", area); }
       // write value for all tags in poiTags (if present)
-      for(const ZMap& y : poiTags) { Attribute(y.tag(), Find(y.tag())); }
-      for(auto& s : extraPoiTags) { Attribute(s, Find(s)); }
+      for(const ZMap& y : poiTags) { Attribute(y.tag(), readTag(y.tagCode())); }
+      for(auto& s : extraPoiTags) { Attribute(s.tag(), readTag(s.tagCode())); }
       return true;
     }
   }
