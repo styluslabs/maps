@@ -2,82 +2,14 @@
 
 #include <geodesk/geodesk.h>
 #include <vtzero/builder.hpp>
-#include "util/mapProjection.h"
+#include "tileId.h"
 #include "clipper.h"
-
-#include <bitset>
-//#include "mph"
-
-inline constexpr unsigned int hash (const char *str, size_t len)
-{
-  constexpr unsigned char asso_values[] =
-    {
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170,   5, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170,   5, 170, 170, 170, 170, 170, 170,  10, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170,   0, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170,  10, 170,   5,  65,  10,
-       80,   0,  85,  15,  45,  45, 170, 170,   0,  60,
-       60,  25,  15, 170,   5,  25,  15,  15,  30,  45,
-      170,  50, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
-      170, 170, 170, 170, 170, 170
-    };
-  unsigned int hval = len;
-
-  switch (hval)
-    {
-      default:
-        hval += asso_values[(unsigned char)str[9]];
-      /*FALLTHROUGH*/
-      case 9:
-      case 8:
-      case 7:
-      case 6:
-      case 5:
-      case 4:
-        hval += asso_values[(unsigned char)str[3]];
-      /*FALLTHROUGH*/
-      case 3:
-      case 2:
-      case 1:
-        hval += asso_values[(unsigned char)str[0]];
-        break;
-    }
-  return hval;
-}
-
-consteval unsigned int TAG(std::string_view s) { return hash(s.data(), s.size()); }
-constexpr unsigned int runtimeTag(std::string_view s) { return hash(s.data(), s.size()); }
-
-#define Find(s) readTag(TAG(s))
-#define Holds(s) (readTag(TAG(s)) != "")
-
 
 using geodesk::Feature;
 using geodesk::Features;
 using geodesk::Mercator;
 using geodesk::Coordinate;
-
-using Tangram::LngLat;
-using Tangram::TileID;
-using Tangram::MapProjection;
+using geodesk::TagValue;
 
 #define LOG(fmt, ...) fprintf(stderr, fmt "\n", ## __VA_ARGS__)
 #ifdef NDEBUG
@@ -86,17 +18,25 @@ using Tangram::MapProjection;
 #define LOGD LOG
 #endif
 
+struct CodedString {
+  std::string_view str;
+  int code;
+};
+
+#define Find(s) readTag( []() -> const CodedString& { static CodedString cs = TileBuilder::getCodedString(s); return cs; }() )
+#define Holds(s) bool(Find(s))
+
 class TileBuilder
 {
 public:
+  static Features* worldFeats;
+  static CodedString getCodedString(std::string_view s);
+
   geodesk::Box m_tileBox;
   Features* m_tileFeats = nullptr;
   Feature* m_feat = nullptr;  //std::reference_wrapper<Feature> m_feat;
   std::unique_ptr<vtzero::feature_builder> m_build;
   double m_area = NAN;
-
-  std::bitset<170> m_hasTag;
-  std::array<geodesk::TagValue, 170> m_tags;
 
   // coord mapping
   glm::dvec2 m_origin;
@@ -126,8 +66,8 @@ public:
   std::string build(const Features& world, const Features& ocean, bool compress = true);
 
   // reading geodesk feature
-  //std::string Find(const std::string& key);  // { return feature()[key]; }
-  std::string readTag(unsigned int idx) { return m_hasTag[idx] ? std::string(m_tags[idx]) : std::string(); }
+  //std::string Find(const std::string& key) { return feature()[key]; }
+  TagValue readTag(const CodedString& cs) { return m_feat->getTagWithCode(cs.str, cs.code); }
   std::string Id() { return std::to_string(feature().id()); }
   //bool Holds(const std::string& key) { return Find(key) != ""; }
   bool IsClosed() { return feature().isArea(); }

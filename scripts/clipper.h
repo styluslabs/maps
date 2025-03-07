@@ -1,12 +1,12 @@
 #pragma once
 
 #include <vector>
-#include "glm/vec2.hpp"
+#include "linalg.h"
 
 // clipper from geojson-vt-cpp
 
 using real = float;
-using vt_point = glm::vec2;
+using vt_point = linalg::vec<float,2>;  //glm::vec2;
 constexpr real REAL_MAX = std::numeric_limits<real>::max();
 
 template <uint8_t I, typename T>

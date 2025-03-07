@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
   Features oceanGOL(argv[2]);
   LOG("Loaded %s and %s", argv[1], argv[2]);
 
-  //std::map<std::string, TileDB> openDBs;
+  TileBuilder::worldFeats = &worldGOL;
   // ... separate queues for high zoom and low zoom (slower build)?
   std::mutex buildMutex;
   std::map< TileID, std::shared_future<std::string> > buildQueue;
@@ -100,7 +100,6 @@ int main(int argc, char* argv[])
     if(z > 14) { return httplib::StatusCode::NotFound_404; }
 
     TileID id(x, y, z);
-    int ydb = (1 << z) - 1 - y;
 
     if(!worldDB.db) {
       if(worldDB.open(worldDBPath, SQLITE_OPEN_READONLY) != SQLITE_OK) {
@@ -110,7 +109,7 @@ int main(int argc, char* argv[])
       worldDB.getTile = worldDB.stmt(getTileSQL);
     }
 
-    worldDB.getTile.bind(z, x, ydb).exec([&](sqlite3_stmt* stmt){
+    worldDB.getTile.bind(id.z, id.x, id.yTMS()).exec([&](sqlite3_stmt* stmt){
       const char* blob = (const char*) sqlite3_column_blob(stmt, 0);
       const int length = sqlite3_column_bytes(stmt, 0);
       res.set_content(blob, length, "application/vnd.mapbox-vector-tile");
@@ -136,7 +135,7 @@ int main(int argc, char* argv[])
             }
             std::string mvt = buildTile(worldGOL, oceanGOL, id);
             if(!mvt.empty()) {
-              worldDB.putTile.bind(id.z, id.x, (1 << id.z) - 1 - id.y);
+              worldDB.putTile.bind(id.z, id.x, id.yTMS());
               sqlite3_bind_blob(worldDB.putTile.stmt, 4, mvt.data(), mvt.size(), SQLITE_STATIC);
               if(!worldDB.putTile.exec())
                 LOG("Error adding tile %s to DB: %s", id.toString().c_str(), worldDB.errMsg());
@@ -159,7 +158,7 @@ int main(int argc, char* argv[])
     LOGD("Serving %s\n", req.path.c_str());
     ++stats.reqsok;
     stats.bytesout += res.body.size();
-    res.set_header("Content-Encoding", "gzip");
+    //res.set_header("Content-Encoding", "gzip");  -- compression is part of tile, not for http connection
     return httplib::StatusCode::OK_200;
   });
 

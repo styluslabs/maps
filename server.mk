@@ -13,12 +13,6 @@ endif
 
 include make/shared.mk
 
-INC += \
-  tangram-es/core/deps/glm \
-  tangram-es/core/deps/stb
-
-DEFS += GLM_FORCE_CTOR_INIT
-
 ## sqlite
 MODULE_BASE = tangram-es/core/deps/sqlite3
 
@@ -46,7 +40,6 @@ MODULE_BASE := .
 
 MODULE_SOURCES = \
   tangram-es/core/deps/miniz/miniz.c \
-  tangram-es/core/src/util/mapProjection.cpp \
   scripts/tilebuilder.cpp \
   scripts/ascendtiles.cpp
 
@@ -58,8 +51,6 @@ endif
 
 MODULE_INC_PRIVATE = \
   $(STYLUSLABS_DEPS) \
-  tangram-es/core/include/tangram \
-  tangram-es/core/src \
   deps/vtzero/include \
   deps/protozero/include
 
@@ -68,8 +59,6 @@ MODULE_INC_PRIVATE = \
 MODULE_CXXFLAGS = --std=c++20 -Wno-unknown-pragmas -Wno-reorder
 
 include $(ADD_MODULE)
-
-#LIBS = -pthread
 
 #$(info server: $(SOURCES))
 include make/unix.mk
