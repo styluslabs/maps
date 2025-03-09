@@ -1,0 +1,13 @@
+/build/
+/app/android/gradle
+/app/android/gradlew*
+/app/android/.gradle
+/app/android/bugs
+/app/android/app/build
+/app/android/app/src/main/jniLibs/
+/styluslabs
+/deps/easyexif
+/assets/old-scenes
+/valhalla/
+
+*.apk

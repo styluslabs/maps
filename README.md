@@ -171,12 +171,12 @@ Storage use can be controlled with the `shrink_at` and `shrink_to` values in the
 
 ### Major features ###
 
-Search: offline search for local vector tiles, online search via plugins
-Saved places (bookmarks): import via plugins, export and import GPX, create place list from geotagged photos, choose colors in GUI; further customize styling in [markers.yaml](assets/scenes/markers.yaml]
-Tracks and routes: record and edit tracks, draw direct (straight-line segments) routes or using plugin for routing
-Map sources: create and manage map sources, access GUI controls for current map source, show legends
-Offline maps (via Map sources): create offline map from current source and view, import mbtiles file, manage offline maps
-Plugin console (via overflow menu): reload plugins, execute Javascript in plugin environment.
+* Search: offline search for local vector tiles, online search via plugins
+* Saved places (bookmarks): import via plugins, export and import GPX, create place list from geotagged photos, choose colors in GUI; further customize styling in [markers.yaml](assets/scenes/markers.yaml)
+* Tracks and routes: record and edit tracks, draw direct (straight-line segments) routes or using plugin for routing
+* Map sources: create and manage map sources, access GUI controls for current map source, show legends
+* Offline maps (via Map sources): create offline map from current source and view, import mbtiles file, manage offline maps
+* Plugin console (via overflow menu): reload plugins, execute Javascript in plugin environment
 
 
 ### Major components ###
