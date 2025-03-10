@@ -287,9 +287,10 @@ application:
 sources:
     osm:
         type: MVT
-        url: http://127.0.0.1:8080/tiles/{z}/{x}/{y}
-        cache: false
-        #cache: stylus-osm
+        #url: http://127.0.0.1:8080/tiles/{z}/{x}/{y}
+        #cache: geodesk-test
+        #headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
+        cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
@@ -1222,7 +1223,7 @@ layers:
                 polygons:
                     # JS call much slower than extruding geometry
                     #extrude: function () { return feature.render_height > 20 || $zoom >= 16; }
-                    extrude: ["render_min_height", "render_height"]
+                    extrude: ["min_height", "height"]
                     color: global.color.bldg_3d
                     order: global.order.bldg_3d
                 lines:
@@ -1230,7 +1231,7 @@ layers:
                     width: [[15, 1px], [17, 2px]]
                     color: global.color.bldg_3d_line
                     order: global.order.bldg_3d_line
-                    extrude: ["render_min_height", "render_height"]
+                    extrude: ["min_height", "height"]
 
 
     housenumber:

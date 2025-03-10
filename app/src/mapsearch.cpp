@@ -340,7 +340,7 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   app->getMapBounds(lngLat00, lngLat11);
   if(flyingToResults && !app->mapState.isAnimating()) {  //event == CAMERA_EASE_DONE
     flyingToResults = false;
-    if(unifiedSearch) {  // need to perform map search in new location if not unified!
+    if(providerFlags.unified) {  // need to perform map search in new location if not unified!
       updateMapResultBounds(lngLat00, lngLat11); // update bounds for new camera position
       return;
     }
@@ -351,7 +351,7 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   bool mapmoved = lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude;
   // don't search until animation stops
-  if(searchOnMapMove && !app->mapState.isAnimating() && (mapmoved || (moreMapResultsAvail && zoomedin))) {
+  if(!providerFlags.slow && !app->mapState.isAnimating() && (mapmoved || (moreMapResultsAvail && zoomedin))) {
     updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
     prevZoom = zoom;
   }
@@ -379,7 +379,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
   // should we do clearJsSearch() to prevent duplicate results?
   if(providerIdx > 0) {
     newMapSearch = true;
-    if(unifiedSearch && listResults.empty()) { flags |= LIST_SEARCH; }
+    if(providerFlags.unified && listResults.empty()) { flags |= LIST_SEARCH; }
     app->pluginManager->jsSearch(providerIdx - 1, searchStr, dotBounds00, dotBounds11, flags);
   }
   else
@@ -465,38 +465,34 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   LngLat lngLat00, lngLat11;
   app->getMapBounds(lngLat00, lngLat11);
   query = trimStr(query);
-  if(phase != NEXTPAGE) {
-    // add synonyms to query (e.g., add "fast food" to "restaurant" query)
-    if(providerIdx == 0 && !query.empty()) {
-      // jsCallFn will return empty string in case of error
-      std::string tfquery = phase == RETURN ? app->pluginManager->jsCallFn("transformQuery", query) : "";
-      if(!tfquery.empty())
-        searchStr = tfquery;
-      else {
-        // words containing any special characters need to be quoted, so just quote every word (and make AND
-        //  operation explicit)
-        auto words = splitStr<std::vector>(query, " ", true);
-        searchStr = "\"" + joinStr(words, "\" AND \"") + "\"*";
-      }
-      //std::replace(searchStr.begin(), searchStr.end(), '\'', ' ');
-      LOGD("Search string: %s", searchStr.c_str());
+  // transformQuery plugin fn can, e.g., add synonyms to query (e.g., add "fast food" to "restaurant" query)
+  if(providerIdx == 0 && !query.empty()) {
+    // jsCallFn will return empty string in case of error
+    std::string tfquery = phase != EDITING ? app->pluginManager->jsCallFn("transformQuery", query) : "";
+    if(!tfquery.empty())
+      searchStr = tfquery;
+    else {
+      // words containing any special characters need to be quoted, so just quote every word (and make AND
+      //  operation explicit)
+      auto words = splitStr<std::vector>(query, " ", true);
+      searchStr = "\"" + joinStr(words, "\" AND \"") + "\"*";
     }
-    else
-      searchStr = query;
-    clearSearchResults();
-    map->markerSetVisible(app->pickResultMarker, false);
-    app->showPanel(searchPanel);
-    cancelBtn->setVisible(!searchStr.empty());
+    //std::replace(searchStr.begin(), searchStr.end(), '\'', ' ');
+    LOGD("Search string: %s", searchStr.c_str());
   }
+  else
+    searchStr = query;
+  clearSearchResults();
+  map->markerSetVisible(app->pickResultMarker, false);
+  app->showPanel(searchPanel);
+  cancelBtn->setVisible(!searchStr.empty());
   retryBtn->setVisible(false);
   retryBtn->setIcon(MapsApp::uiIcon("refresh"));  // error cleared
 
   // use map center for origin if current location is offscreen
-  if(phase != NEXTPAGE) {
-    LngLat loc = app->currLocation.lngLat();
-    isCurrLocDistOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude);
-    searchRankOrigin = isCurrLocDistOrigin ? loc : app->getMapCenter();
-  }
+  LngLat loc = app->currLocation.lngLat();
+  isCurrLocDistOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude);
+  searchRankOrigin = isCurrLocDistOrigin ? loc : app->getMapCenter();
 
   if(phase == EDITING) {
     std::vector<std::string> autocomplete;
@@ -523,9 +519,12 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
         return;
       }
     }
-    if(providerIdx == 0 || !unifiedSearch)
-      updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
   }
+
+  if(searchStr.empty()) { return; }
+  // we want to run map search before list search
+  if(providerIdx == 0 || !providerFlags.unified)
+    updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
 
   resultCountText->setText("Searching...");
   if(providerIdx == 0)
@@ -533,18 +532,15 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   else {
     bool sortByDist = app->cfg()["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
-    if(unifiedSearch)
+    if(providerFlags.unified)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
     else
       app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
   }
 
-  if(phase == RETURN) {
-    app->gui->setFocused(resultsContent);
-    app->maximizePanel(false);
-  }
-
-  if(!app->searchActive && phase == RETURN) {
+  app->gui->setFocused(resultsContent);
+  app->maximizePanel(false);
+  if(!app->searchActive) {
     //map->updateGlobals({SceneUpdate{"global.search_active", "true"}});
     map->getScene()->hideExtraLabels = map->getZoom() < app->cfg()["search"]["min_poi_zoom"].as<float>(19);
     if(app->cfg()["search"]["hide_bookmarks"].as<bool>(false))
@@ -737,7 +733,7 @@ Button* MapsSearch::createPanel()
   retryBtn->isFocusable = true;
   retryBtn->onClicked = [this](){
     if(!queryText->text().empty() || !queryText->isEnabled())
-      searchText(queryText->text(), RETURN);
+      searchText(queryText->text(), REFRESH);
   };
 
   auto onSetProvider = [=](int idx) {
@@ -746,8 +742,9 @@ Button* MapsSearch::createPanel()
     static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
     std::string typestr = idx > 0 ? app->pluginManager->searchFns[idx-1].type : "";
     StringRef type(typestr);
-    searchOnMapMove = !type.contains("-slow");
-    unifiedSearch = type.contains("-unified");
+    providerFlags.slow = type.contains("-slow");
+    providerFlags.unified = type.contains("-unified");
+    providerFlags.more = type.contains("-more");
     bool noquery = type.contains("-noquery");
     if(noquery)
       queryText->setText("");
@@ -834,8 +831,21 @@ Button* MapsSearch::createPanel()
   auto scrollWidget = static_cast<ScrollWidget*>(resultsContent->parent());
   scrollWidget->onScroll = [=](){
     // get more list results
-    if(moreListResultsAvail && scrollWidget->scrollY >= scrollWidget->scrollLimits.bottom)
-      searchText("", NEXTPAGE);
+    if(moreListResultsAvail && scrollWidget->scrollY >= scrollWidget->scrollLimits.bottom) {
+      if(providerIdx > 0 && !providerFlags.more) { return; }
+      LngLat lngLat00, lngLat11;
+      app->getMapBounds(lngLat00, lngLat11);
+      resultCountText->setText("Searching...");
+      if(providerIdx == 0)
+        offlineListSearch(searchStr, lngLat00, lngLat11, NEXTPAGE);
+      else {
+        // plugin is responsible for managing data needed to get next page of results, since it may not
+        //  just be an offset (e.g., could be a session-specific token)
+        bool sortByDist = app->cfg()["search"]["sort"].as<std::string>("rank") == "dist";
+        int flags = LIST_SEARCH | NEXTPAGE | (sortByDist ? SORT_BY_DIST : 0);
+        app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
+      }
+    }
   };
 
   markers.reset(new MarkerGroup(app->map.get(),

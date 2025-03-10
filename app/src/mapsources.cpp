@@ -442,6 +442,13 @@ void MapsSources::populateSources()
 
     auto deleteSrcFn = [=](std::string res){
       if(res != "OK") return;
+      auto cache = mapSources[key]["cache"].as<std::string>(key);
+      if(cache != "false") {
+        if(removeFile(FSPath(MapsApp::baseDir, "cache").childPath(cache + ".mbtiles")))
+          LOGW("Removed cache file for deleted source %s", key.c_str());
+        else
+          LOGW("No cache file found for deleted source %s", key.c_str());
+      }
       mapSources.remove(key);
       saveSources();
       if(key == currSource)

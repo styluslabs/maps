@@ -250,7 +250,10 @@ int64_t MapsOffline::shrinkCache(int64_t maxbytes)
   std::vector<SQLiteDB> dbsources;
   std::vector< std::pair<int, int> > tiles;
   int totalTiles = 0;
-  auto insertTile = [&](const char*, int oflid, int t, int size){ ++totalTiles; if(!oflid) tiles.emplace_back(t, size); };
+  auto insertTile = [&](const char*, int oflid, int t, int size){
+    ++totalTiles;
+    if(!oflid) { tiles.emplace_back(t, size); }
+  };
 
   FSPath cachedir(MapsApp::baseDir, "cache");
   for(auto& file : lsDirectory(cachedir)) {

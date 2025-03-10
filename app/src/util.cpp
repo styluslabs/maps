@@ -163,8 +163,10 @@ std::string osmIdFromJson(const YAML::Node& props)
   if(props.IsMap()) {
     const auto& id = props["osm_id"];
     const auto& type = props["osm_type"];
-    if(id && type)
-      return type.getString() + std::string(":") + id.getString();
+    if(id && type) {
+      std::string idstr = id.isNumber() ? std::to_string(int64_t(id.getNumber())) : id.getString();
+      return type.getString() + ":" + idstr;
+    }
     if(const auto& wiki = props["wiki"])
       return "wiki:" + wiki.getString();
   }
