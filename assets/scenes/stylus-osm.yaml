@@ -185,6 +185,20 @@ global:
     names_two_lines: |
         function() { return global.show_name_en && feature.name_en && feature.name ? feature.name_en + "\n" + feature.name : feature.name; }
 
+    # refs: https://pe.usps.com/text/pub28/28apc_002.htm
+    road_name_abbrev: { "Avenue": "Ave.", "Street": "St.", "Road": "Rd.", "Boulevard": "Blvd.", "Drive": "Dr.", "Lane": "Ln.", "Expressway": "Expy.", "Parkway": "Pkwy.", "Highway": "Hwy.", "Freeway": "Fwy.", "Terrace": "Ter.", "Court": "Ct.", "Circle": "Cir.", "North": "N", "South": "S", "East": "E", "West": "W", "Northeast": "NE", "Northwest": "NW", "Southeast": "SE", "Southwest": "SW" }
+    # note the native function tag
+    road_name_abbrev_fn: |
+        function() /*@road_name_abbrev*/ {
+            const name = global.show_name_en && feature.name_en ? feature.name_en : feature.name;  //global.names_one_line_fn();
+            var parts = name.split(" ");
+            for(var ii = 0; ii < parts.length; ii++) {
+                const abbrev = global.road_name_abbrev[parts[ii]];
+                if(abbrev) { parts[ii] = abbrev; }
+            }
+            return parts.join(" ");
+        }
+
     shuffle_seed: 58987
     # priorities for colliding objects (points and text; lower value wins) - fractional part now orders within
     #  group defined by integer part, after ordering by visible state and camera space z coord
@@ -954,11 +968,7 @@ layers:
         draw:
             text:
                 #interactive: true
-                text_source: |
-                    function() {
-                       const name = global.names_one_line_fn();
-                       return name.replace(" Avenue", " Ave.").replace(" Street", " St.").replace(" Boulevard", " Blvd.").replace(" Drive", " Dr.").replace(" Lane", " Ln.").replace(" Road", " Rd.");
-                    }
+                text_source: global.road_name_abbrev_fn
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
                     family: global.primary_font
