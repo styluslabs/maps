@@ -245,6 +245,7 @@ global:
         poi_university:  33  #function() { return  33 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_grocery:     function() { return  34 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_culture:     function() { return  41 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
+        poi_culture2:    function() { return  42 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_restaurant:  function() { return  43 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_cafe:        function() { return  44 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
         poi_convenience: function() { return  51 + ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536; }
@@ -301,10 +302,10 @@ application:
 sources:
     osm:
         type: MVT
-        #url: http://127.0.0.1:8080/tiles/{z}/{x}/{y}
-        #cache: geodesk-test
+        url: http://127.0.0.1:8081/tiles/{z}/{x}/{y}
+        cache: false  #geodesk-test
         #headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
-        cache: stylus-osm
+        #cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
@@ -488,6 +489,9 @@ layers:
         retail:
             filter: { landuse: [retail] }  #industrial, commercial
             draw: { polygons: { visible: true, color: global.color.retail } }
+        commercial:
+            filter: { landuse: [commercial, industrial] }
+            draw: { polygons: { visible: true, color: global.color.industry } }
         civic:
             filter: { amenity: [university, college] }  # class: school
             draw: { polygons: { visible: true, color: global.color.civic } }
@@ -785,14 +789,6 @@ layers:
             service:
                 filter: { service: true }
                 draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 1px], [17, 2px]] } }
-            #sleepers:
-            #    # since dash pattern resets for every line segment it looks very irregular when zoomed out
-            #    filter: { $zoom: { min: 14 } }
-            #    draw:
-            #        rail-sleepers:
-            #            order: global.order.rail_sleepers
-            #            color: global.color.rail
-            #            width: [[12, 4px], [14, 4px], [16, 6px]]
             tunnel:
                 filter: { brunnel: tunnel }
                 draw: { lines: { color: global.color.rail_tunnel } }
@@ -1279,10 +1275,9 @@ layers:
         peak:
             exclusive: true
             filter:
-                all:
-                    - any: [ { natural: [peak, volcano] }, { class: [peak, volcano] } ]
-                    - any: [ { $zoom: { min: 17 } }, global.show_trails ]
+                natural: [peak, volcano]
                 ele: true
+                any: [ { $zoom: { min: 17 } }, global.show_trails ]
             draw:
                 points:
                     sprite: peak
@@ -1322,7 +1317,7 @@ layers:
                         fill: global.color.default_label
                         stroke: { color: global.color.default_halo, width: 3 }
 
-        forest:
+        landuse:
             exclusive: true
             filter:
                  name: true
@@ -1330,7 +1325,10 @@ layers:
                     - { boundary: national_park, $zoom: { min: 8 } }
                     #boundary: protected_area, leisure: nature_reserve
                     - { protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
-                    - { any: [ { landuse: forest }, { natural: wood } ], $zoom: { min: 11 } }
+                    - { natural: wood, $zoom: { min: 11 } }
+                    - { landuse: forest, $zoom: { min: 11 } }
+                    - { landuse: [commercial, retail], area: { min: 1500px2 } }
+                    - { landuse: [commercial, retail], $zoom: { min: 17 } }
             draw:
                 points: { visible: false }
                 text:
@@ -1345,6 +1343,12 @@ layers:
                         style: italic
                         fill: global.color.park_name
                         stroke: { color: global.color.park_halo, width: 3 }
+            commercial:
+                filter: { landuse: [commercial, retail] }
+                draw:
+                    text:
+                        visible: true
+                        font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } }
             show:
                 filter:
                     - $zoom: { max: 11 }
@@ -1569,6 +1573,10 @@ layers:
                         exclusive: true
                         filter: { amenity: [school, college, kindergarten] }
                         draw: { points: { visible: false, priority: global.priority.poi_school } }
+                        # we want to suppress "colleges" like U of Phoenix but not community colleges
+                        college:
+                            filter: { amenity: college, area: { min: 1500px2 } }
+                            draw: { points: { visible: true, priority: global.priority.poi_university } }
                         show:
                             filter: { $zoom: { min: 16 } }
                             draw: { points: { visible: true } }
@@ -1594,9 +1602,15 @@ layers:
                         exclusive: true
                         filter:
                             - amenity: [cinema, theatre, concert_hall, arts_centre, library]
-                            - tourism: [museum, attraction, artwork, theme_park]
-                            - historic: [monument, castle, fort, archaeological_site]
+                            - tourism: [museum, theme_park]
+                            - historic: [castle, fort, archaeological_site]
                         draw: { points: { priority: global.priority.poi_culture } }
+                    culture_small:
+                        exclusive: true
+                        filter:
+                            - tourism: [attraction, artwork]
+                            - historic: [monument]
+                        draw: { points: { priority: global.priority.poi_culture2 } }
                     church:
                         exclusive: true
                         filter: { amenity: place_of_worship }
