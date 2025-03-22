@@ -1,7 +1,58 @@
 #include "scene/scene.h"
+#include "log.h"
 #include "ulib/stringutil.h"
 
 namespace Tangram {
+
+static std::unordered_map<std::string, std::string> yamlToMap(const YAML::Node& yml)
+{
+  std::unordered_map<std::string, std::string> res;
+  for(auto kv : yml.pairs()) {
+    res.emplace(kv.first.Scalar(), kv.second.Scalar());
+  }
+  return res;
+}
+
+struct NativeStyleCtx
+{
+  std::function<std::string(const Feature& feature)> poi_sprite_fn;
+};
+
+static NativeStyleCtx* getContext(Scene& scene)
+{
+  auto* ctx = static_cast<NativeStyleCtx*>(scene.nativeContext().get());
+  if(ctx) { return ctx; }
+
+  auto spctx = std::make_shared<NativeStyleCtx>();
+  scene.nativeContext() = spctx;
+  ctx = spctx.get();
+
+  struct TagIcons { std::string tag; std::unordered_map<std::string, std::string> valToSprite; };
+  std::vector<TagIcons> poi_icons;
+
+  const YAML::Node& poi_icons_yml = scene.config()["global"]["poi_icons"];
+  // we rely on the fact that gaml preserves order of yaml maps
+  for(auto group : poi_icons_yml.pairs()) {
+    poi_icons.push_back({group.first.Scalar(), yamlToMap(group.second)});
+  }
+
+  ctx->poi_sprite_fn = [poi_icons = std::move(poi_icons)](const Feature& feature) {
+    for(const TagIcons& group : poi_icons) {
+      auto prop = feature.props.get(group.tag);
+      if(prop.is<std::string>()) {
+        auto tagval = prop.get<std::string>();
+        auto it = group.valToSprite.find(tagval);
+        if(it != group.valToSprite.end()) {
+          return it->second;
+        }
+      }
+    }
+    auto shopprop = feature.props.get("shop");
+    return shopprop.is<std::string>() ? "shop" : std::string();
+  };
+
+  return ctx;
+}
 
 // Special comments of the form /*@FunctionTag*/ (no spaces!) can be included in scene file Javascript
 //  functions to allow them to be replaced by native functions for performance; of course, JS source should
@@ -17,14 +68,10 @@ NativeStyleFn userGetStyleFunction(Scene& scene, const std::string& jsSource)
 
   // obviously if we have many fns, we can dispatch differently (or maybe compiler will optimize if/else)
   if(tag == "road_name_abbrev") {
-    bool show_name_en = scene.config()["global"]["show_name_en"].as<bool>(true);
-    const YAML::Node& abbrevs = scene.config()["global"]["road_name_abbrev"];
-    std::unordered_map<std::string, std::string> abbrev_map;
-    for(auto kv : abbrevs.pairs()) {
-      abbrev_map.emplace(kv.first.Scalar(), kv.second.Scalar());
-    }
-
-    return [=, abbrev_map = std::move(abbrev_map)](const Feature& feature, StyleParam::Value& val) {
+    return [
+      show_name_en = scene.config()["global"]["show_name_en"].as<bool>(true),
+      abbrev_map = yamlToMap(scene.config()["global"]["road_name_abbrev"])
+    ](const Feature& feature, StyleParam::Value& val) {
       std::string name;
       if(show_name_en) {
         auto prop = feature.props.get("name_en");
@@ -47,7 +94,34 @@ NativeStyleFn userGetStyleFunction(Scene& scene, const std::string& jsSource)
       return true;
     };
   }
+
+  if(tag == "poi_sprite") {
+    return [ctx = getContext(scene)](const Feature& feature, StyleParam::Value& val) {
+      val = ctx->poi_sprite_fn(feature);
+      return true;
+    };
+  }
+
+  if(tag == "poi_color") {
+    return [
+      ctx = getContext(scene),
+      poi_type = yamlToMap(scene.config()["global"]["poi_type"]),
+      poi_color = yamlToMap(scene.config()["global"]["poi_color"])
+    ](const Feature& feature, StyleParam::Value& val) {
+      auto sprite = ctx->poi_sprite_fn(feature);
+      auto typeit = poi_type.find(sprite);
+      auto colorit = typeit != poi_type.end() ? poi_color.find(typeit->second) : poi_color.end();
+      std::string colorstr = colorit != poi_color.end() ? colorit->second : poi_color.at("generic");
+      Color color(0, 0, 0, 255);
+      if(!StyleParam::parseColor(colorstr, color)) {
+        LOGW("Error parsing color %s", colorstr.c_str());
+      }
+      val = color.abgr;
+      return true;
+    };
+  }
+
   return {};
 }
 
-}
+}  // namespace Tangram

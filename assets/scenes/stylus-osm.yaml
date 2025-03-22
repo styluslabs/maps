@@ -302,10 +302,10 @@ application:
 sources:
     osm:
         type: MVT
-        url: http://127.0.0.1:8081/tiles/{z}/{x}/{y}
-        cache: false  #geodesk-test
+        #url: http://127.0.0.1:8081/tiles/{z}/{x}/{y}
+        #cache: false  #geodesk-test
         #headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
-        #cache: stylus-osm
+        cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
@@ -659,42 +659,47 @@ layers:
             filter: { brunnel: tunnel, $zoom: { min: 12 } }
             priority: 1
             draw: { lines: { color: global.color.tunnel, outline: { color: global.color.tunnel_casing } } }
+
         motorway:
             filter: { highway: [motorway, motorway_link] }
             draw:
                 lines:
                     order: global.order.motorway
-                    color: 'function() { return global.show_motorways ? global.color.motorway : global.color.motorway_muted; }'
-                    #[[5, global.color.motorway_5], [7, global.color.motorway_7]]
+                    color: global.color.motorway_muted
                     width: [[4, 0], [5, 1px], [8, 1.5px], [14, 2px], [15, 12]]
-                    outline:
-                        width: [[14, 0], [15, 2]]
+                    outline: { width: [[14, 0], [15, 2]] }
+            unmute:
+                enabled: global.show_motorways
+                draw: { lines: { color: global.color.motorway } }
             tunnel:
                 filter: { brunnel: tunnel, $zoom: { min: 12 } }
                 priority: 1
                 draw: { lines: { color: global.color.motorway_tunnel } }
             link:
-                filter: { highway: motorway_link }
-                draw:
-                    lines:
-                        #color: global.color.motorway_link
-                        width: [[13, 0], [14, 12]]
+                filter: [ { highway: motorway_link }, { ramp: true } ]
+                draw: { lines: { width: [[13, 0], [13, 1.5px], [15, 9]] } }  #color: global.color.motorway_link
+
         trunk:
             filter: { highway: [trunk, trunk_link], $zoom: { min: 8 } }
             draw:
                 lines:
                     order: global.order.major_road
                     width: [[8, 1px], [13, 2px], [14, 2px], [16, 12]]
-                    outline:
-                        width: [[16, 0], [17, 1]]
+                    outline: { width: [[16, 0], [17, 1]] }
+            link:
+                filter: [ { highway: trunk_link }, { ramp: true } ]
+                draw: { lines: { width: [[14, 0], [14, 1.5px], [16, 8]] } }
+
         major_road:
             filter: { highway: [primary, primary_link, secondary, secondary_link] }
             draw:
                 lines:
                     order: global.order.major_road
                     width: [[10, 0], [13, 2px], [14, 2px], [16, 12]]
-                    outline:
-                        width: [[16, 0], [17, 1]]
+                    outline: { width: [[16, 0], [17, 1]] }
+            link:
+                filter: [ { highway: [primary_link, secondary_link] }, { ramp: true } ]
+                draw: { lines: { width: [[14, 0], [14, 1.5px], [16, 8]] } }
             withref:
                 filter: { ref: true }
                 draw: { lines: { width: [[8, 0], [9, 1px], [13, 2px], [14, 2px], [16, 12]] } }
@@ -707,8 +712,7 @@ layers:
                 lines:
                     order: global.order.minor_road
                     width: [[13, 0.75px], [14, 1px], [15, 8]]
-                    outline:
-                        width: [[17, 0], [18, 1]]
+                    outline: { width: [[17, 0], [18, 1]] }
             service:
                 filter: { highway: service }
                 draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 4px], [17, 8]] } }
