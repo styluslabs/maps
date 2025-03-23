@@ -72,7 +72,7 @@ global:
         ferry: hsl(205, 42%, 62%)  #'#8db3ce'
         runway_13: '#C7CADC'  #'#FFE4B5'
         taxiway: '#BCBCCC'
-        airport: '#E8EAEF'  #'#ddd'
+        airport: '#E0E5F3'  #'#E8EAEF'
         airport_name: '#487585'
         shield: '#FFFFFF'
         motorway_shield: '#FFDC36'
@@ -210,6 +210,7 @@ global:
         saddle: 15
         cave: 16
         spring: 17
+        airport: 18
         boundary: 19  # boundaries often follow mountain ridges, so don't let them hide peaks or saddles
         park: 20
         golf: 21
@@ -417,10 +418,9 @@ styles:
 
 
 layers:
-    landcover:
+    landuse:
         data: { source: osm, layer: landuse }
         enabled: global.show_land_polygons
-        #filter: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
         draw:
             polygons:
                 visible: false
@@ -428,72 +428,60 @@ layers:
                 order: global.order.landcover
                 color: global.color.landuse
         forest:
-            filter: [ { class: forest }, { landuse: forest }, { natural: wood } ]
+            filter: [ { landuse: forest }, { natural: wood } ]
             draw: { polygons: { visible: true, color: global.color.forest } }
         scrub:
             filter: { natural: [scrub, fell, heath] }
             draw: { polygons: { visible: true, color: global.color.scrub } }
         grass:
             filter:
-                - class: grass
                 - landuse: [grass, allotments, meadow]
                 - natural: [grassland, grass]
             draw: { polygons: { visible: true, color: global.color.grass } }
         wetland:
-            filter: [ { class: wetland }, { natural: wetland } ]
+            filter: [ { natural: wetland } ]
             draw: { polygons: { visible: true, color: global.color.wetland } }
         beach:
-            filter: [ { class: sand }, { natural: [beach, sand] } ]
+            filter: [ { natural: [beach, sand] } ]
             draw: { polygons: { visible: true, color: global.color.beach } }
         ice:
-            filter: [ { class: ice }, { natural: glacier } ]
+            filter: [ { natural: glacier } ]
             draw: { polygons: { visible: true, color: global.color.ice } }
         rock:
-            filter: [ { class: rock }, { natural: [bare_rock, scree] } ]
+            filter: [ { natural: [bare_rock, scree] } ]
             draw: { polygons: { visible: true, color: global.color.rock } }
         farmland:
             filter:
-                - class: farmland
                 - landuse: [farmland, farmyard, farm, orchard, vineyard, plant_nursery, greenhouse_horticulture]
             draw: { polygons: { visible: true, color: global.color.farmland } }
         # golf course can be inside park, so make sure it is drawn on top
         golf:
-            filter: [ { class: golf_course }, { leisure: [golf_course, pitch] } ]
+            filter: { leisure: [golf_course, pitch] }
             draw: { polygons: { visible: true, order: global.order.golf, color: global.color.golf } }
         park:
             filter:
-                - class: park
                 - landuse: [recreation_ground, village_green]
                 - leisure: [park, garden]
             draw: { polygons: { visible: true, order: global.order.parks, color: global.color.parks } }
-
-    landuse:
-        data: { source: osm, layer: landuse }
-        enabled: global.show_land_polygons
-        #filter: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
-        draw:
-            polygons:
-                visible: false
-                style: global.earth_style
-                order: global.order.landuse
-                color: global.color.landuse
         green:
-            filter: { class: [zoo, playground, pitch, cemetery] }
+            filter: [ { tourism: zoo }, { landuse: cemetery }, { leisure: [playground, pitch] } ]
             draw: { polygons: { visible: true, order: global.order.park_detail, color: global.color.park_detail } }
+        # landuse polygons - default order is global.order.landuse (draws under landcover)
         retail:
             filter: { landuse: [retail] }  #industrial, commercial
-            draw: { polygons: { visible: true, color: global.color.retail } }
+            draw: { polygons: { visible: true, order: global.order.landuse, color: global.color.retail } }
         commercial:
             filter: { landuse: [commercial, industrial] }
-            draw: { polygons: { visible: true, color: global.color.industry } }
+            draw: { polygons: { visible: true, order: global.order.landuse, color: global.color.industry } }
         civic:
-            filter: { amenity: [university, college] }  # class: school
-            draw: { polygons: { visible: true, color: global.color.civic } }
+            filter: { amenity: [university, college] }
+            draw: { polygons: { visible: true, order: global.order.landuse, color: global.color.civic } }
         #urban:
         #    filter: { kind: urban_area }
         #    draw: { polygons: { color: [[7, global.color.urban_7], [9, global.color.urban_9]] } }
 
-    park:
+
+    protected_area:
         data: { source: osm, layer: landuse }
         enabled: global.show_polygons
         filter:
@@ -517,6 +505,7 @@ layers:
                     color: global.color.parks
                     alpha: 0.5
                     width: 8px
+
 
     pier:
         data: { source: osm, layer: landuse }
@@ -542,6 +531,7 @@ layers:
                     color: global.color.breakwater
                     width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
 
+
     water:
         data: { source: osm, layer: water }
         enabled: global.show_polygons
@@ -552,27 +542,21 @@ layers:
                 order: global.order.water
                 color: global.color.water
         ocean:
-            filter: { class: ocean }
+            filter: { water: ocean }
             # ensure that ocean has elevation = 0 (by not writing elevation)
             draw: { polygons: { style: ocean-polygons } }
-        #inter:
-        #    filter: { class: [lake, river] }
+
 
     water_name:
         data: { source: osm, layer: water }
         filter:
             name: true
-            $geometry: [polygon, point]
-            any:
-                - { $zoom: { min: 17 } }
-                - { area: { min: 500px2 } }
-                - all: [ { rank: true }, 'function() { return $zoom - feature.rank > 4; }' ]
+            $geometry: point
+            any: [ { $zoom: { min: 17 } }, { area: { min: 500px2 } } ]
         draw:
             text:
-                #interactive: true
                 text_source: global.names_two_lines
                 transition: { show: { time: 0s }, hide: { time: 1s } }
-                repeat_distance: 500px
                 font:
                     family: global.primary_font
                     fill: global.color.water_name
@@ -580,11 +564,9 @@ layers:
                     style: italic
                     size: [[16, 12px], [17, 14px]]
         oceans:
-            filter: { class: ocean, $zoom: { min: 1, max: 8 } }
+            filter: { water: ocean, $zoom: { min: 1, max: 8 } }
             draw: { text: { font: { size: 14px } } }
-        #seas:
-        #    filter: { class: [lake, sea], $zoom: { min: 7 } }
-        #    draw: { text: { font: { size: [[9, 9px], [17, 10px], [18, 12px]] } } }
+
 
     waterway:
         data: { source: osm, layer: water }
@@ -610,6 +592,7 @@ layers:
                 filter: { waterway: stream }
                 draw: { lines: { width: [[15,0px],[15,0.5px],[16,1.5px],[19,2px]] } }
 
+
     waterway_name:
         data: { source: osm, layer: water }
         filter:
@@ -628,9 +611,10 @@ layers:
                     style: italic
                     size: [[11, 0px], [12, 10px], [14, 11px], [16, 12px], [17, 14px]]
 
+
     transportation:
         data: { source: osm, layer: transportation }
-        filter: { not: { class: [transit, route, aeroway] } }
+        filter: { aeroway: false }
         draw:
             lines:
                 style: unlit-lines
@@ -748,10 +732,7 @@ layers:
                     width: [[13, 0.75px], [14, 1px], [15, 2px], [18, 4px]]
 
         rail:
-            filter:
-                class: rail
-                railway: [rail, narrow_gauge]
-                #$zoom: { min: 10 }
+            filter: { railway: [rail, narrow_gauge] }  #$zoom: { min: 10 }
             draw:
                 lines:
                     style: dashed-rail
@@ -776,7 +757,6 @@ layers:
 
         light_rail:
             filter:
-                class: rail
                 railway: [light_rail, subway, tram, funicular]
                 $zoom: { min: 10 }
             draw:
@@ -792,7 +772,7 @@ layers:
                 draw: { lines: { color: global.color.rail_tunnel } }
 
         ferry:
-            filter: [ { class: ferry }, { route: ferry } ]
+            filter: { route: ferry }
             draw:
                 lines:
                     style: dashed-track
@@ -830,20 +810,10 @@ layers:
                 draw:
                     lines: { width: [[10,0.5px], [11,1px], [12, 1.5px], [13, 1.5px], [14, 2px], [15, 2.5px]] }
                     #points: { size: [[12, 4px], [13, 4px], [14, 5px], [15, 7px], [16, 7px]] }
-            aerialway_label:
-                filter: { $zoom: { min: 14 } }
-                draw:
-                    text:
-                        text_source: name
-                        font:
-                            family: global.primary_font
-                            fill: global.color.aerialway_name
-                            stroke: { color: global.color.aerialway_halo, width: 3 }
-                            size: 12px
 
         piste:
             enabled: global.show_trails
-            filter: { class: piste, $zoom: { min: 10 } }
+            filter: { route: piste, $zoom: { min: 10 } }
             piste_areas:
                 filter: { $geometry: polygon, $zoom: { min: 13 } }
                 enabled: global.show_land_polygons
@@ -871,17 +841,6 @@ layers:
                 direction:
                     filter: { $zoom: { min: 16 } }
                     draw: { lines: { style: piste-direction } }
-            piste_names:
-                #enabled: global.show_trails
-                filter: { $geometry: line, $zoom: { min: 13 } }
-                draw:
-                    text:
-                        text_source: global.piste_name_fn
-                        font:
-                            family: global.primary_font
-                            fill: global.piste_color_fn
-                            stroke: { color: global.color.piste_halo, width: 3 }
-                            size: 12px
 
         road-icons:
             arrows:
@@ -903,6 +862,7 @@ layers:
                         placement_spacing: [[17, 70px], [20, 175px]]
                         angle: auto
 
+
     shields:
         enabled: global.show_motorways
         data: { source: osm, layer: transportation }
@@ -911,7 +871,6 @@ layers:
             ref: true
             aeroway: false
             route: false
-            #not: { class: [transit, route, aeroway] }
             any:
                 - { highway: motorway, $zoom: { min: 6 } }
                 - { highway: [trunk, primary], $zoom: { min: 9 } }
@@ -953,15 +912,12 @@ layers:
                         size: 10px
                         fill: black
 
+
     transportation_name:
         data: { source: osm, layer: transportation }
-        filter:
-            name: true
-            not: { class: [rail, aeroway, route, piste, aerialway] }
-            aeroway: false
+        filter: { name: true }  #railway: false, aeroway: false
         draw:
             text:
-                #interactive: true
                 text_source: global.road_name_abbrev_fn
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
@@ -988,9 +944,8 @@ layers:
         primary:
             exclusive: true
             filter:
-                any:
-                    - {highway: trunk, $zoom: { min: 13 }}
-                    - {highway: primary, $zoom: { min: 14 }}
+                - {highway: trunk, $zoom: { min: 13 }}
+                - {highway: primary, $zoom: { min: 14 }}
             draw:
                 text:
                     repeat_distance: 100px
@@ -1052,17 +1007,45 @@ layers:
                         size: 10px
                         stroke: { width: 4 }
 
-        ferry:
+        aerialway:
             exclusive: true
-            filter: [ { class: ferry }, { route: ferry } ]
+            filter:
+                aerialway: true
+                not: { aerialway: [explosive, proposed, razed, no] }
+                $zoom: { min: 14 }
             draw:
                 text:
-                    text_wrap: 20
+                    text_source: name
                     font:
-                        size: 10px
-                        fill: global.color.ferry_name
-                        stroke: { color: global.color.ferry_halo, width: 4px }
-                        style: italic
+                        fill: global.color.aerialway_name
+                        stroke: { color: global.color.aerialway_halo, width: 3 }
+                        size: 12px
+
+        routes:
+            exclusive: true
+            filter: { route: true }
+            ferry:
+                filter: { route: ferry, $zoom: { min: 12 } }
+                draw:
+                    text:
+                        text_wrap: 20
+                        font:
+                            size: 10px
+                            fill: global.color.ferry_name
+                            stroke: { color: global.color.ferry_halo, width: 4px }
+                            style: italic
+
+            piste:
+                exclusive: true
+                filter: { route: piste, $zoom: { min: 13 } }
+                draw:
+                    text:
+                        text_source: global.piste_name_fn
+                        font:
+                            fill: global.piste_color_fn
+                            stroke: { color: global.color.piste_halo, width: 3 }
+                            size: 12px
+
 
     airports:
         data: { source: osm, layer: transportation }
@@ -1100,6 +1083,7 @@ layers:
                     #    color: global.color.runway_casing
                     #    width: [[11, 0px], [12, 1px], [13, 2px], [15, 12.5]]
 
+
     airport_name:
         data: { source: osm, layer: transportation }
         filter:
@@ -1112,12 +1096,14 @@ layers:
             text:
                 interactive: true
                 text_source: global.names_one_line
+                priority: global.priority.airport
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 font:
                     family: global.primary_font
                     fill: global.color.airport_name
                     stroke: { color: global.color.default_halo, width: 2 }
                     size: [[12, 12px], [13, 14px]]
+
 
     bicycle:
         data: { source: osm, layer: transportation }
@@ -1165,6 +1151,7 @@ layers:
                 - cycleway_left: [shared_lane, shoulder]
                 - cycleway_right: [shared_lane, shoulder]
             draw: { lines: { style: dashed-bike, color: global.color.bike_lane } }
+
 
     transit:
         data: { source: osm, layer: transit }
@@ -1448,10 +1435,8 @@ layers:
                 exclusive: true
                 priority: 20
                 filter:
-                    any:
-                        - railway: [station, halt, tram_stop]
-                        - amenity: [ferry_terminal]
-                    $zoom: { min: 13 }
+                    - railway: [station, halt, tram_stop]
+                    - amenity: [ferry_terminal]
                 # show_transit: stations at 13, station labels at 14; default: stations at 15, station labels at 16
                 # - trying to implement this logic w/o using JS functions was a horrible disaster
                 draw:
@@ -1488,33 +1473,61 @@ layers:
             bus_stop:
                 exclusive: true
                 priority: 40
-                filter: { highway: bus_stop, $zoom: { min: 16 } }
+                filter: { highway: bus_stop }
                 draw:
                     points:
                         sprite: bus
                         color: global.poi_color.public
                         size: [[16, 12px], [18, 16px]]
-                        visible: global.show_transit
+                        visible: false
                         priority: global.priority.bus_stop
                         text: { visible: false }
+                show:
+                    enabled: global.show_transit
+                    filter: { $zoom: { min: 16 } }
+                    draw: { points: { visible: true } }
                 default:
                     filter: { $zoom: { min: 19 } }
+                    draw: { points: { visible: true, text: { visible: true } } }
+
+            subway_entrance:
+                exclusive: true
+                priority: 50
+                filter: { railway: subway_entrance }
+                draw:
+                    points:
+                        sprite: entrance
+                        style: points
+                        size: 22px
+                        visible: false
+                        priority: global.priority.bus_stop
+                        text: { visible: false }
+                hasref:
+                    filter: { ref: true }
+                    draw: { points: { text: { text_source: ref } } }
+                show:
+                    enabled: global.show_transit
+                    filter: { $zoom: { min: 18 } }
                     draw: { points: { visible: true } }
+                default:
+                    filter: { $zoom: { min: 19 } }
+                    draw: { points: { visible: true, text: { visible: true } } }
 
             # these POIs will be hidden by search results (while those above will not)
             not_landuse:
                 exclusive: true
-                priority: 50
+                priority: 60
                 filter:
                     all:
-                        - [ { $zoom: { min: 14 } }, { wikipedia: true, $zoom: { min: 12 } }, { wikidata: true, $zoom: { min: 12 } } ]
+                        - any:
+                            - $zoom: { min: 14 }
+                            - { wikipedia: true, $zoom: { min: 12 } }
+                            - { wikidata: true, $zoom: { min: 12 } }
                         - any:
                             - name: true
                             - tourism: [viewpoint, camp_site, information]
                             - highway: [trailhead]
                             - amenity: [parking, bicycle_rental, drinking_water, water_point, toilets]
-                    not:
-                        - { railway: subway_entrance }
                 draw:
                     points:
                         sprite: global.poi_sprite_fn
@@ -1543,6 +1556,19 @@ layers:
                         priority: 2
                         filter: { tourism: information, $zoom: { max: 17 } }
                         draw: { points: { visible: false } }
+                    # too many churches with wikipedia/wikidata
+                    special_church:
+                        exclusive: true
+                        priority: 3
+                        filter:
+                            amenity: place_of_worship
+                            any: [ {historic: true}, {tourism: true}, {building: cathedral} ]
+                        draw: { points: { priority: global.poi_priority.museum } }
+                    other_church:
+                        exclusive: true
+                        priority: 4
+                        filter: { amenity: place_of_worship, $zoom: { max: 16 } }
+                        draw: { points: { visible: false } }
                     parking:
                         # hide parking below z18 if !show_parking
                         exclusive: true
@@ -1552,32 +1578,28 @@ layers:
                         exclusive: true
                         filter: { amenity: bicycle_rental, $zoom: { max: 18 } }
                         draw: { points: { visible: global.show_bike } }
+                    nowiki:  # hide hospital even w/ wikipedia/wikidata
+                        exclusive: true
+                        filter: { amenity: [cinema, hospital], $zoom: { max: 14 } }
+                        draw: { points: { visible: false } }
                     school:
                         exclusive: true
-                        filter: { amenity: [university, school, college, kindergarten] }
+                        filter: { amenity: [university, school, college, kindergarten, library] }
                         draw: { points: { visible: false } }
-                        # we want to suppress "colleges" like U of Phoenix but not community colleges
-                        college:
+                        # we want to suppress small schools and libraries
+                        campus:
                             filter:
-                                - { amenity: college, area: { min: 1500px2 } }
-                                - { amenity: university }
+                                amenity: [university, college, library]
+                                area: { min: 1500px2 }
                             draw: { points: { visible: true, priority: global.poi_priority.university } }
                         show:
                             filter: { $zoom: { min: 16 } }
                             draw: { points: { visible: true } }
-                    church:
-                        exclusive: true
-                        filter:
-                            $zoom: { max: 16 }
-                            amenity: place_of_worship
-                            historic: false
-                            tourism: false
-                            wikipedia: false
-                        draw: { points: { visible: false } }
                     toilet:
                         exclusive: true
                         filter: { amenity: [drinking_water, water_point, toilets], $zoom: { max: 18 } }
                         draw: { points: { visible: false } }
+
 
     boundaries:
         data: { source: osm, layer: boundary }
@@ -1622,11 +1644,12 @@ layers:
             filter: { admin_level: [3, 4] }
             draw: { lines: { style: dashed-border } }
 
+
     places:
         data: { source: osm, layer: place }
 
         continents:
-            filter: { class: continent, $geometry: point }
+            filter: { place: continent, $geometry: point }
             draw:
                 text:
                     text_source: global.names_two_lines
@@ -1642,7 +1665,7 @@ layers:
         #  tiles with z >= 9 are missing
         city-points:
             filter:
-                class: city
+                place: city
                 $zoom: { max: 9 }
                 any:
                     - rank: false
@@ -1714,7 +1737,7 @@ layers:
             regions:
                 exclusive: true
                 filter:
-                    class: [state, province]
+                    place: [state, province]
                     $zoom: { min: 5, max: 9 }
                 draw:
                     text:
@@ -1731,11 +1754,11 @@ layers:
             cities:
                 exclusive: true
                 filter:
-                    class: [city, town, village, suburb, hamlet]
+                    place: [city, town, village, suburb, hamlet]
                     not: { place_CN: [county, district, banner, subdistrict, neighbourhood] }
                     $zoom: { min: 9 } # show city point labels below z11
                 city:
-                    filter: { class: city, $zoom: { min: 9, max: 14 } }
+                    filter: { place: city, $zoom: { min: 9, max: 14 } }
                     draw: { text: { visible: true, font: { weight: global.bold_weight, size: [[8, 10px], [12, 16px]] } } }
                     city-100k:
                         filter: { population: { min: 100000, max: 500000 } }
@@ -1744,19 +1767,19 @@ layers:
                         filter: { population: { min: 500000 } }
                         draw: { text: { font: { size: [[8, 14px], [12, 20px]] } } }
                 town:
-                    filter: { class: town, $zoom: { min: 9, max: 14 } }
+                    filter: { place: town, $zoom: { min: 9, max: 14 } }
                     draw: { text: { visible: true, font: { size: [[8, 10px], [12, 14px]] } } }
                 village:
-                    filter: { class: village, $zoom: { min: 10, max: 15 } }
+                    filter: { place: village, $zoom: { min: 10, max: 15 } }
                     draw: { text: { visible: true, font: { size: [[8, 9px], [12, 12px]] } } }
                 hamlet:
-                    filter: { class: [suburb, hamlet], $zoom: { min: 13, max: 15 } }
+                    filter: { place: [suburb, hamlet], $zoom: { min: 13, max: 15 } }
                     draw: { text: { visible: true, font: { size: [[8, 8px], [12, 10px]] } } }
 
             neighborhoods:
                 exclusive: true
                 filter:
-                    - { class: [neighbourhood, quarter], $zoom: { min: 13, max: 19 } }
+                    - { place: [neighbourhood, quarter], $zoom: { min: 13, max: 19 } }
                     - { place_CN: [subdistrict, neighbourhood], $zoom: { min: 13, max: 17 } }
                     - { place_CN: [district], $zoom: { min: 11, max: 14 } }  # usually tagged with place=city
                     #- { class: microhood, $zoom: { min: 15 } }

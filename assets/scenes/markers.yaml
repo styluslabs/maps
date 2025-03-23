@@ -13,8 +13,8 @@ global:
         leisure: { "fitness_centre": "gym", "sports_centre": "gym", "park": "tree", "golf_course": "golf" }
         highway: { "trailhead": "trailhead" }
         religion: { "christian": "christian", "muslim": "muslim", "buddhist": "buddhist", "hindu": "hindu", "shinto": "shinto", "jewish": "jewish" }
-        amenity: { "parking": "parking", "bicycle_rental": "bike_shop", "university": "school",
-          "school": "school", "college": "school", "kindergarten": "school", "restaurant": "restaurant",
+        amenity: { "parking": "parking", "bicycle_rental": "bike_shop", "university": "school", "college": "school",
+          "school": "school", "kindergarten": "school", "research_institute": "school", "restaurant": "restaurant",
           "fast_food": "restaurant", "food_court": "restaurant", "ice_cream": "restaurant", "cafe": "cafe",
           "pharmacy": "pharmacy", "bar": "bar", "pub": "bar", "nightclub": "bar", "library": "library",
           "cinema": "theatre", "theatre": "theatre", "concert_hall": "theatre", "arts_centre": "theatre",
