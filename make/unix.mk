@@ -3,7 +3,8 @@
 # - using a precompiled header with gcc (or clang) is not worth the hassle
 
 # common C and C++ flags; always include debug info, use strip for packaging
-CFLAGS += -MMD -g -Wall -Werror=return-type -Wno-strict-aliasing
+# ... don't use -ffast-math, it breaks std::isnan() among other things!
+CFLAGS += -MMD -g -march=x86-64-v2 -fno-trapping-math -Wall -Werror=return-type -Wno-strict-aliasing
 #-Wshadow
 # C++; -Wconditionally-supported catches passing non-POD to varargs fn
 CXX = g++

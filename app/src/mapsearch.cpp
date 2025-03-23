@@ -521,7 +521,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     }
   }
 
-  if(searchStr.empty()) { return; }
+  //if(searchStr.empty()) { return; }  ... NO! This breaks no-query plugins!!!
   // we want to run map search before list search
   if(providerIdx == 0 || !providerFlags.unified)
     updateMapResults(lngLat00, lngLat11, MAP_SEARCH);

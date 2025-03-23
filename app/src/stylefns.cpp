@@ -4,11 +4,12 @@
 
 namespace Tangram {
 
-static std::unordered_map<std::string, std::string> yamlToMap(const YAML::Node& yml)
+template<typename T = std::string>
+std::unordered_map<std::string, T> yamlToMap(const YAML::Node& yml)
 {
-  std::unordered_map<std::string, std::string> res;
+  std::unordered_map<std::string, T> res;
   for(auto kv : yml.pairs()) {
-    res.emplace(kv.first.Scalar(), kv.second.Scalar());
+    res.emplace(kv.first.Scalar(), kv.second.as<T>());
   }
   return res;
 }
@@ -117,6 +118,25 @@ NativeStyleFn userGetStyleFunction(Scene& scene, const std::string& jsSource)
         LOGW("Error parsing color %s", colorstr.c_str());
       }
       val = color.abgr;
+      return true;
+    };
+  }
+
+  if(tag == "poi_priority") {
+    return [
+      ctx = getContext(scene),
+      shuffle_seed = scene.config()["global"]["shuffle_seed"].as<int>(0),
+      poi_priority = yamlToMap<float>(scene.config()["global"]["poi_priority"])
+    ](const Feature& feature, StyleParam::Value& val) {
+      auto sprite = ctx->poi_sprite_fn(feature);
+      auto prioit = poi_priority.find(sprite);
+      float prio = prioit != poi_priority.end() ? prioit->second : poi_priority.at("default");
+      auto prop = feature.props.get("osm_id");
+      if(prop.is<std::string>()) {
+        auto osm_id = std::atoll(prop.get<std::string>().c_str());
+        prio += ((shuffle_seed ^ osm_id) & 65535)/65536.0f;
+      }
+      val = prio;
       return true;
     };
   }
