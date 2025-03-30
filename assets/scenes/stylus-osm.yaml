@@ -297,10 +297,9 @@ application:
 sources:
     osm:
         type: MVT
-        url: http://127.0.0.1:8080/tiles/{z}/{x}/{y}
-        cache: false  #geodesk-test
-        #headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
-        #cache: stylus-osm
+        url: http://tiles.styluslabs.com:8080/tiles/{z}/{x}/{y}
+        headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
+        cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14

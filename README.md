@@ -31,6 +31,11 @@ On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, i
 
 ### Generating tiles ###
 
+[geodesk-tiles](https://github.com/styluslabs/geodesk-tiles) can be used to serve tiles on demand or generate mbtiles files for import.
+
+
+### Generating tiles (old way) ###
+
 The [releases](https://github.com/styluslabs/maps/releases) page includes pre-generated tiles for a few regions.
 
 [scripts/tilemaker](scripts/tilemaker) contains the files necessary to generate tiles for the included vector map style [stylus-osm.yaml](assets/scenes/stylus-osm.yaml) using [Tilemaker](https://github.com/systemed/tilemaker).
@@ -60,7 +65,7 @@ To save online tiles for offline use, pan and zoom the view to show the desired 
 The default configuration includes [markers.yaml](assets/scenes/markers.yaml) for all maps to support the display of search results, saved places, tracks, routes, the location marker, and other markers.
 
 
-### Application data ##
+### Application data ###
 
 Application data is stored in the executable's folder on Linux (will be changed to `~/.config/styluslabs/maps` in the future).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more can be set by editing `config.yaml` (after exiting the app) in the application data folder.  See `config.default.yaml` for documentation.
 
