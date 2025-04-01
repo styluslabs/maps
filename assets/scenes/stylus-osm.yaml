@@ -1211,8 +1211,6 @@ layers:
             filter: { $zoom: { min: 15 } }
             draw:
                 polygons:
-                    # JS call much slower than extruding geometry
-                    #extrude: function () { return feature.render_height > 20 || $zoom >= 16; }
                     extrude: ["min_height", "height"]
                     color: global.color.bldg_3d
                     order: global.order.bldg_3d
@@ -1222,6 +1220,11 @@ layers:
                     color: global.color.bldg_3d_line
                     order: global.order.bldg_3d_line
                     extrude: ["min_height", "height"]
+            default:
+                filter: { height: false }
+                draw:
+                    polygons: { extrude: 3.66 }
+                    lines: { extrude: 3.66 }
 
 
     housenumber:

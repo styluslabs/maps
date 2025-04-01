@@ -50,6 +50,7 @@ storage:
   #import_pois: true  -- default is true
   #export_pois: true  -- default is false
   #max_age: 31104000  -- max cached tile age; default is 180 days = 15552000 seconds
+  #max_offline_dz: 6  -- max difference between min and max zoom for offline download (dz = 6 gives 8191 tiles max)
 
 view:
   #lng: -122.434668
@@ -59,7 +60,7 @@ view:
 search:
   min_poi_zoom: 19
   hide_bookmarks: false
-  download_url: "https://github.com/styluslabs/maps/?tab=readme-ov-file#generating-tiles"
+  offline_source: stylus-osm
 
 tracks:
   # default to valhalla plugin

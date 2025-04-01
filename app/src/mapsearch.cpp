@@ -10,6 +10,8 @@
 #include "resources.h"
 #include "util.h"
 #include "mapwidgets.h"
+#include "offlinemaps.h"
+#include "mapsources.h"
 
 #include <deque>
 #include "data/tileData.h"
@@ -668,7 +670,15 @@ Button* MapsSearch::createPanel()
 
   SvgText* msgnode = createTextNode("No offline search data. Tap here to download or select a different search plugin.");
   Button* noDataMsg = new Button(msgnode);
-  noDataMsg->onClicked = [](){ MapsApp::openURL(MapsApp::cfg()["search"]["download_url"].as<std::string>("").c_str()); };
+  noDataMsg->onClicked = [this](){
+    // ensure zoom is sufficient for downloaded map to include z14 tiles
+    auto campos = app->map->getCameraPosition();
+    if(campos.zoom < 9) { campos.zoom = 9; app->map->setCameraPosition(campos); }  // no easing
+    app->mapsSources->rebuildSource(MapsApp::cfg()["search"]["offline_source"].as<std::string>("stylus-osm"));
+    app->showPanel(app->mapsOffline->offlinePanel);
+    app->mapsOffline->populateOffline();
+    //MapsApp::openURL(MapsApp::cfg()["search"]["download_url"].as<std::string>("").c_str());
+  };
   searchHeader->addWidget(noDataMsg);
   msgnode->setText(SvgPainter::breakText(msgnode, 250).c_str());  //app->getPanelWidth() - 70
   noDataMsg->setVisible(false);
