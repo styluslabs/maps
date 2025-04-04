@@ -98,28 +98,40 @@ strava-all:
     title: Strava Heatmap
     layer: true
     max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/all/bluered/{z}/{x}/{y}.png'
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/all/bluered/{z}/{x}/{y}.png'
+    headers:
+        Referer: 'https://nakarte.me/'
+        User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0'
 
 strava-run:
     title: Strava Heatmap (Run)
     layer: true
-    max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/run/bluered/{z}/{x}/{y}.png'
     archived: true
+    max_zoom: 15
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/run/bluered/{z}/{x}/{y}.png'
+    headers:
+        Referer: 'https://nakarte.me/'
+        User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0'
 
 strava-bike:
     title: Strava Heatmap (Bike)
     layer: true
-    max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/ride/bluered/{z}/{x}/{y}.png'
     archived: true
+    max_zoom: 15
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/ride/bluered/{z}/{x}/{y}.png'
+    headers:
+        Referer: 'https://nakarte.me/'
+        User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0'
 
 strava-ski:
     title: Strava Heatmap (Ski)
     layer: true
-    max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/winter/bluered/{z}/{x}/{y}.png'
     archived: true
+    max_zoom: 15
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/winter/bluered/{z}/{x}/{y}.png'
+    headers:
+        Referer: 'https://nakarte.me/'
+        User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0'
 
 # Bing uses quadkey tile index - supported in networkDataSource.cpp, but not documented
 bing-earth:

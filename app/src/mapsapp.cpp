@@ -7,8 +7,8 @@
 #include <sys/stat.h>
 #include <fstream>
 // for elevation
-#include "util/imageLoader.h"
 #include "util/elevationManager.h"
+#include "data/rasterSource.h"
 #include "debug/frameInfo.h"
 
 #include "touchhandler.h"
@@ -1070,6 +1070,9 @@ const YAML::Node& MapsApp::sceneConfig()
 
 std::shared_ptr<TileSource> MapsApp::getElevationSource()
 {
+  if(map->getScene()->elevationManager())
+    return map->getScene()->elevationManager()->m_elevationSource;
+
   auto& tileSources = map->getScene()->tileSources();
   for(const auto& srcname : cfg()["sources"]["elevation"]) {
     for(auto& src : tileSources) {
@@ -1080,23 +1083,22 @@ std::shared_ptr<TileSource> MapsApp::getElevationSource()
   return nullptr;
 }
 
-struct malloc_deleter { void operator()(void* x) { std::free(x); } };
-struct ElevTex { std::unique_ptr<uint8_t, malloc_deleter> data; int width; int height; GLint fmt; };
-
-static double readElevTex(const ElevTex& tex, int x, int y)
+static double readElevTex(const Tangram::Texture& tex, int x, int y)
 {
   // see getElevation() in hillshade.yaml and https://github.com/tilezen/joerd
-  if(tex.fmt == GL_R32F)
-    return ((float*)tex.data.get())[y*tex.width + x];
-  GLubyte* p = tex.data.get() + y*tex.width*4 + x*4;
+  if(tex.getOptions().pixelFormat == Tangram::PixelFormat::FLOAT)
+    return ((float*)tex.bufferData())[y*tex.width() + x];
+  GLubyte* p = tex.bufferData() + y*tex.width()*4 + x*4;
   //(red * 256 + green + blue / 256) - 32768
   return (p[0]*256 + p[1] + p[2]/256.0) - 32768;
 }
 
-static double elevationLerp(const ElevTex& tex, TileID tileId, LngLat pos)
+static double elevationLerp(const Tangram::Raster& raster, LngLat pos)
 {
   using namespace Tangram;
 
+  TileID tileId = raster.tileID;
+  const Texture& tex = *raster.texture;
   double scale = MapProjection::metersPerTileAtZoom(tileId.z);
   ProjectedMeters tileOrigin = MapProjection::tileSouthWestCorner(tileId);
   ProjectedMeters meters = MapProjection::lngLatToProjectedMeters(pos);  //glm::dvec2(tileCoord) * scale + tileOrigin;
@@ -1105,10 +1107,10 @@ static double elevationLerp(const ElevTex& tex, TileID tileId, LngLat pos)
   if(ox < 0 || ox > 1 || oy < 0 || oy > 1)
     LOGE("Elevation tile position out of range");
   // ... seems this work correctly w/o accounting for vertical flip of texture
-  double x0 = ox*tex.width - 0.5, y0 = oy*tex.height - 0.5;  // -0.5 to adjust for pixel centers
+  double x0 = ox*tex.width() - 0.5, y0 = oy*tex.height() - 0.5;  // -0.5 to adjust for pixel centers
   // we should extrapolate at edges instead of clamping - see shader in raster_contour.yaml
   int ix0 = std::max(0, int(std::floor(x0))), iy0 = std::max(0, int(std::floor(y0)));
-  int ix1 = std::min(int(std::ceil(x0)), tex.width-1), iy1 = std::min(int(std::ceil(y0)), tex.height-1);
+  int ix1 = std::min(int(std::ceil(x0)), tex.width()-1), iy1 = std::min(int(std::ceil(y0)), tex.height()-1);
   double fx = x0 - ix0, fy = y0 - iy0;
   double t00 = readElevTex(tex, ix0, iy0);
   double t01 = readElevTex(tex, ix0, iy1);
@@ -1121,45 +1123,44 @@ static double elevationLerp(const ElevTex& tex, TileID tileId, LngLat pos)
 
 double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
 {
-  static ElevTex prevTex;
-  static TileID prevTileId = {0, 0, 0, 0};
+  using namespace Tangram;
+  static Raster prevTex(NOT_A_TILE, nullptr);
 
-  if(prevTex.data) {
-    TileID tileId = lngLatTile(pos, prevTileId.z);
-    if(tileId == prevTileId) {
-      double elev = elevationLerp(prevTex, tileId, pos);
+  // we should also check if cached tile zoom level is much lower then current zoom level
+  if(prevTex.texture && prevTex.texture->bufferData()) {
+    TileID tileId = lngLatTile(pos, prevTex.tileID.z);
+    if(tileId == prevTex.tileID) {
+      double elev = elevationLerp(prevTex, pos);
       if(callback) { callback(elev); }
       return elev;
     }
   }
 
-  auto* elevMgr = map->getScene()->elevationManager();
-  if(elevMgr) {
-    bool ok = false;
-    double elev = elevMgr->getElevation(MapProjection::lngLatToProjectedMeters(pos), ok);
-    if(ok) {
-      if(callback) { callback(elev); }
-      return elev;
-    }
+  auto elevSrc = std::static_pointer_cast<RasterSource>(getElevationSource());
+  if(!elevSrc) return 0;
+  auto raster = elevSrc->getRaster(MapProjection::lngLatToProjectedMeters(pos));
+  if(raster.texture && raster.texture->bufferData()) {
+    prevTex.texture = raster.texture;
+    prevTex.tileID = raster.tileID;
+    double elev = elevationLerp(prevTex, pos);
+    if(callback) { callback(elev); }
+    return elev;
   }
 
   if(!callback) return 0;
-
-  auto elevSrc = getElevationSource();
-  if(!elevSrc) return 0;
+  // do not use RasterSource::createTask() since we already checked RasterSource cache
   TileID tileId = lngLatTile(pos, elevSrc->maxZoom());
-  // do not use RasterSource::createTask() because we can't use its cached Textures!
   auto task = std::make_shared<BinaryTileTask>(tileId, elevSrc.get());
   task->setScenePrana(map->getScene()->prana());
   elevSrc->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
     runOnMainThread([=](){
-      if(_task->hasData()) {
-        auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
-        prevTex.data.reset(Tangram::loadImage((const uint8_t*)data.data(),
-            data.size(), &prevTex.width, &prevTex.height, &prevTex.fmt, 4));
-        prevTileId = tileId;
-        if(prevTex.data)
-          callback(elevationLerp(prevTex, tileId, pos));
+      if(!_task->hasData()) { return; }
+      auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
+      auto tex = std::make_unique<Texture>(TextureOptions(), false);
+      if(tex->loadImageFromMemory((const uint8_t*)data.data(), data.size())) {
+        prevTex.texture = std::move(tex);
+        prevTex.tileID = tileId;
+        callback(elevationLerp(prevTex, pos));
       }
     });
   }});

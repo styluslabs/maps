@@ -203,7 +203,7 @@ global:
     # priorities for colliding objects (points and text; lower value wins) - fractional part now orders within
     #  group defined by integer part, after ordering by visible state and camera space z coord
     priority:
-        continent: 6
+        continent: 5
         district_CN: 9
         neighborhood: 10
         peak: 14
@@ -215,7 +215,7 @@ global:
         park: 20
         golf: 21
         cemetery: 22
-        forest: 23
+        forest: 8  # only one label for potentially large map feature, and only shown up to zoom 11 or 12
         # road labels
         oneway_arrow: 23
         motorway_ref: 24
@@ -239,7 +239,7 @@ global:
         # housenumbers only shown at high zoom and unlikely to collide
         housenumber: 350
         # cities, states, countries
-        place: { country: 7, state: 8, province: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
+        place: { country: 6, state: 7, province: 7, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
         place_fn: |
             function() {
                 return (global.priority.place[feature.place] || 14) - Math.round(Math.sqrt(feature.population || 1))/65536;

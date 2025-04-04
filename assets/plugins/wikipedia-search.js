@@ -14,7 +14,8 @@ function wikipediaSearch(query, bounds, flags)
   const lng = (bounds[0] + bounds[2])/2;
   const lat = (bounds[1] + bounds[3])/2;
 
-  if(radkm <= 10) {
+  // wikipedia.org geosearch returns incomplete results
+  if(0) { //radkm <= 10) {
     // much faster than sparql query but limited to 10km radius; seems returned dist is sometime a bit off
     const url = "https://en.wikipedia.org/w/api.php?action=query&format=json&list=geosearch&gslimit=500&gsradius="
         + (radkm*1000).toFixed(0) + "&gscoord=" + lat + "%7C" + lng;  // | -> %7C
