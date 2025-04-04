@@ -75,8 +75,11 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     // note that lines and polygons are normally drawn w/ opaque blend mode, which ignores blend_order and is
     //  drawn before all other blend modes; default raster style uses opaque!
     bool isoverlay = order > 0 && src["layer"].as<bool>(false);
+    // raster-<key> naming is used to allow lookup for changing opacity ... we use fixed name raster-0 to
+    //  enable applying other updates to base raster (which can't have any transparency anyway)
+    //  raster
     if(order == 0) {
-      updates.emplace_back("+styles.raster-" + key, "{ mix: raster-common }");
+      updates.emplace_back("+styles.raster-0", "{ mix: [raster-common] }");
       vectorBase = false;
     }
     else {
@@ -85,7 +88,7 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     }
     updates.emplace_back("+layers." + rasterN + ".data.source", rasterN);
     // order is ignored (and may not be required) for raster styles
-    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", "raster-" + key);
+    updates.emplace_back("+layers." + rasterN + ".draw.group-0.style", order ? "raster-" + key : "raster-0");
     // opacity needs to be a uniform so it can be adjusted in real time w/o reloading scene
     //updates.emplace_back("+layers." + rasterN + ".draw.group-0.alpha", std::to_string(opacity));
     // 100 unit gap between rasters to allow sufficient range for proxy layers, which need ~50 unit offset

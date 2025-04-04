@@ -28,6 +28,7 @@ global:
     contour_color: '#C56008'  #vec4(0.773,0.376,0.031,1.)
     base_mix_color: [0.9, 0.9, 0.9, 0.8]
     show_contours: false
+    show_hypsometric: true
 
 
 application:
@@ -64,7 +65,7 @@ styles:
                 u_base_mix_color: global.base_mix_color
             blocks:
                 color: |
-                    base_color.rgb = mix(base_color.rgb, u_base_mix_color.rgb, u_base_mix_color.a);
+                    color.rgb = mix(color.rgb, u_base_mix_color.rgb, u_base_mix_color.a);
 
     hillshade:
         base: raster
@@ -78,6 +79,7 @@ styles:
             defines:
                 METRIC_UNITS: global.metric_units
                 SHOW_CONTOURS: global.show_contours
+                SHOW_HYPSOMETRIC: global.show_hypsometric
             uniforms:
                 u_exaggerate: 4.5
                 u_contour_color: global.contour_color
@@ -174,10 +176,7 @@ styles:
                     float z = u_map_position.z;
                     //float s = u_tile_origin.z; -- looks better to use same contour interval for entire scene
                     if(z < 10.) {
-                    #if ELEVATION_INDEX
-                        // don't show shaded relief over raster
-                        //color = base_color;
-                    #else
+                    #ifdef SHOW_HYPSOMETRIC
                         // terrain colormap (i.e., map height to color) for low zooms
                         vec4 relief = texture2D(u_terrain_color, vec2(elev/5000., 0.5));
                         float reliefmix = u_min_contour_elev > 0.0 && elev < u_min_contour_elev ? 0.0 : 0.5;
@@ -249,7 +248,7 @@ lights:
 
 layers:
     earth:
-        enabled: false  # enabled by update from mapsources.yaml entry (only for vector base map)
+        #enabled: false  # enabled by update from mapsources.yaml entry (only for vector base map)
         data: { source: elevation }
         draw: { hillshade: { color: global.earth_color, order: global.earth_order } }
 
