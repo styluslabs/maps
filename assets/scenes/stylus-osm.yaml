@@ -125,11 +125,11 @@ global:
     # ... now offset by 500 because we need depth range for raster tile proxy levels
     order:
         landuse: 510
-        parks: 512
-        park_detail: 514
-        golf: 516
-        airport: 518
-        landcover: 520
+        parks: 532
+        park_detail: 534
+        golf: 536
+        airport: 538
+        #landcover: 550
         waterway: 622
         water: 624
         pier: 626
@@ -155,6 +155,9 @@ global:
         border: 791
         bldg_3d_line: 799
         bldg_3d: 800
+
+    # OSM carto uses the convention that smaller landcover areas are drawn above larger areas
+    landcover_order_fn: function() { return 590 - Math.log(feature.area || 1); }
 
     piste_color_fn: function() { return global.color.piste[feature.difficulty] || 'white'; }
     piste_symbols: { easy: '●', intermediate: '■', advanced: '◆', expert: '◆◆' }
@@ -297,9 +300,10 @@ application:
 sources:
     osm:
         type: MVT
-        url: http://tiles.styluslabs.com:8080/tiles/{z}/{x}/{y}
-        headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
-        cache: stylus-osm
+        url: http://localhost:8080/v1/{z}/{x}/{y}
+        #url: http://tiles.styluslabs.com:8080/tiles/{z}/{x}/{y}
+        #headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
+        #cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
@@ -424,7 +428,7 @@ layers:
             polygons:
                 visible: false
                 style: global.earth_style
-                order: global.order.landcover
+                order: global.landcover_order_fn
                 color: global.color.landuse
         forest:
             filter: [ { landuse: forest }, { natural: wood } ]
@@ -451,7 +455,7 @@ layers:
             draw: { polygons: { visible: true, color: global.color.rock } }
         farmland:
             filter:
-                - landuse: [farmland, farmyard, farm, orchard, vineyard, plant_nursery, greenhouse_horticulture]
+                landuse: [farmland, farmyard, farm, orchard, vineyard, plant_nursery, greenhouse_horticulture]
             draw: { polygons: { visible: true, color: global.color.farmland } }
         # golf course can be inside park, so make sure it is drawn on top
         golf:
@@ -485,9 +489,8 @@ layers:
         enabled: global.show_polygons
         filter:
             - { boundary: national_park, $zoom: { min: 8 } }
-            - { boundary: protected_area, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
-            - { leisure: nature_reserve, protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
-            #any: [ { $zoom: { min: 16 } }, { area: { min: 500px2 } } ]
+            - { boundary: protected_area, protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
+            - { leisure: nature_reserve, protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
         default:
             filter:
                 name: true
@@ -1108,7 +1111,9 @@ layers:
         data: { source: osm, layer: transportation }
         enabled: global.show_bike
         filter:
-            - bicycle: [designated, yes]
+            - bicycle: designated
+            # higher road types default to bicycle=yes, so bicycle=yes doesn't indicate any special accomodation
+            - { bicycle: yes, highway: [path, track, footway, pedestrian] }
             - highway: cycleway
             - cycleway: true
             - cycleway_right: true
@@ -1131,8 +1136,9 @@ layers:
                 - cycleway_right: [track, opposite_track]
                 - mtb_scale: true
             draw: { lines: { color: global.color.bike_path } }
+            # assume highway=track is unpaved by default
             unpaved:
-                filter: [ { surface: unpaved }, { mtb_scale: true } ]
+                filter: [ { surface: unpaved }, { mtb_scale: true }, { highway: [path, track], surface: false } ]
                 draw: { lines: { style: dashed-bike, color: global.mtb_color_fn } }
         lane:
             exclusive: true
@@ -1308,14 +1314,15 @@ layers:
             exclusive: true
             filter:
                  name: true
+                 # give park POI (w/ icon) priority
+                 not: { leisure: [park, golf_course] }
                  any:
                     - { boundary: national_park, $zoom: { min: 8 } }
                     #boundary: protected_area, leisure: nature_reserve
-                    - { protect_class: [1, 1a, 1b, 2, 3], $zoom: { min: 10 } }
+                    - { protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
                     - { natural: wood, $zoom: { min: 11 } }
                     - { landuse: forest, $zoom: { min: 11 } }
-                    - { landuse: [commercial, retail], area: { min: 1500px2 } }
-                    - { landuse: [commercial, retail], $zoom: { min: 17 } }
+                    - { landuse: [commercial, retail], $zoom: { min: 13 } }
             draw:
                 points: { visible: false }
                 text:
@@ -1332,14 +1339,13 @@ layers:
                         stroke: { color: global.color.park_halo, width: 3 }
             commercial:
                 filter: { landuse: [commercial, retail] }
-                draw:
-                    text:
-                        visible: true
-                        font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } }
+                draw: { text: { font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } } } }
+            # don't show label for tiny area or for huge area (where boundries may be offscreen) beyond z12
             show:
                 filter:
-                    - $zoom: { max: 11 }
-                    - all: [ global.show_land_polygons, { $zoom: { max: 12 } } ]
+                   - { area: { min: 1500px2, max: 350000px2 } }
+                   - { area: { min: 1500px2 }, $zoom: { max: 12 } }
+                #[ global.show_land_polygons, { $zoom: { max: 12 } } ]
                 draw: { text: { visible: true } }
 
         traffic_signal:
@@ -1428,7 +1434,9 @@ layers:
                     draw: { points: { sprite: cemetery, priority: global.priority.cemetery } }
                 show:
                     filter:
-                        - { leisure: park, $zoom: { min: 14 }, area: { min: 1500px2 } }
+                        - leisure: park
+                          $zoom: { min: 14 }
+                          any: [ {historic: true}, {tourism: true}, { area: { min: 1500px2 } } ]
                         - $zoom: { min: 17 }
                         - area: { min: 2000px2 }
                     draw: { points: { visible: true } }

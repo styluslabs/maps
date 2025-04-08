@@ -26,7 +26,6 @@ import:
 
 global:
     contour_color: '#C56008'  #vec4(0.773,0.376,0.031,1.)
-    base_mix_color: [0.9, 0.9, 0.9, 0.8]
     show_contours: false
     show_hypsometric: true
 
@@ -57,15 +56,6 @@ styles:
         lighting: false
         blend: translucent
         draw: { alpha: 0.25 }
-
-    # for mixing fixed color into color from raster, e.g., to lighten and desaturate color from worldcover tiles
-    mix-base-raster:
-        shaders:
-            uniforms:
-                u_base_mix_color: global.base_mix_color
-            blocks:
-                color: |
-                    color.rgb = mix(color.rgb, u_base_mix_color.rgb, u_base_mix_color.a);
 
     hillshade:
         base: raster
@@ -165,8 +155,8 @@ styles:
                     // setup base color - this could be moved to setup block
                     #if ELEVATION_INDEX
                     vec4 base_color = sampleRaster(0);
-                    #elif defined(TANGRAM_TERRAIN_3D)
-                    vec4 base_color = vec4(0.88, 0.88, 0.88, 1.0);
+                    //#elif defined(TANGRAM_TERRAIN_3D)
+                    //vec4 base_color = vec4(0.88, 0.88, 0.88, 1.0);
                     #else
                     #define HILLSHADE_BLEND_OVER
                     vec4 base_color = vec4(0.0, 0.0, 0.0, 1.0);  //v_color;
