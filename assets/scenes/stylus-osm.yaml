@@ -489,8 +489,8 @@ layers:
         enabled: global.show_polygons
         filter:
             - { boundary: national_park, $zoom: { min: 8 } }
-            - { boundary: protected_area, protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
-            - { leisure: nature_reserve, protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
+            - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }  #boundary: protected_area,
+            #- { leisure: nature_reserve, protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
         default:
             filter:
                 name: true
@@ -1270,7 +1270,9 @@ layers:
             filter:
                 natural: [peak, volcano]
                 ele: true
-                any: [ { $zoom: { min: 17 } }, global.show_trails ]
+                all:
+                    - any: [ { $zoom: { min: 17 } }, global.show_trails ]
+                    - any: [ { $zoom: { min: 15 } }, { name: true } ]
             draw:
                 points:
                     sprite: peak
@@ -1319,9 +1321,9 @@ layers:
                  any:
                     - { boundary: national_park, $zoom: { min: 8 } }
                     #boundary: protected_area, leisure: nature_reserve
-                    - { protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
-                    - { natural: wood, $zoom: { min: 11 } }
-                    - { landuse: forest, $zoom: { min: 11 } }
+                    - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }
+                    #- { natural: wood, $zoom: { min: 11 } }
+                    #- { landuse: forest, $zoom: { min: 11 } }
                     - { landuse: [commercial, retail], $zoom: { min: 13 } }
             draw:
                 points: { visible: false }

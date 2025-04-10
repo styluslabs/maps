@@ -236,16 +236,12 @@ terrain-exaggeration:
         global.terrain_3d_scale: 2.0
 
 mix-base-raster:
-    title: Mix Base Raster
+    title: Mix Hillshade Base Raster
     archived: true
     layer: true
+    layers: [hillshade]
     updates:
-        global.base_mix_color: [0.9, 0.9, 0.9, 0.8]
-        styles.mix-base-raster:
-            shaders:
-                uniforms: { u_base_mix_color: global.base_mix_color }
-                blocks: { color: 'color.rgb = mix(color.rgb, u_base_mix_color.rgb, u_base_mix_color.a);' }
-        styles.raster-0.mix#-1: mix-base-raster
+        styles.hillshade.mix#-1: mix-base-raster
         application.gui_variables.base_mix_color: { label: Base Mix Color, type: color }
 
 # other possible sources:
@@ -313,6 +309,10 @@ hillshade:
     title: Hillshading
     layer: true
     scene: scenes/hillshade.yaml
-    #updates_vector: {}
+    updates_vector:
+        layers.earth.enabled: true
     updates_raster:
         global.show_hypsometric: false
+        styles.hillshade.shaders.defines.ELEVATION_INDEX: 1
+        sources.raster-0.rasters: [elevation]
+        layers.raster-0.draw.group-0.style: hillshade
