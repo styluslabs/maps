@@ -1,7 +1,7 @@
 # Stylus Labs Maps config
 sources:
   file: mapsources.yaml
-  last_source: opentopomap
+  last_source: stylus-worldcover
   elevation: ["elevation"]
   common_imports:
     - scenes/markers.yaml

@@ -300,10 +300,9 @@ application:
 sources:
     osm:
         type: MVT
-        url: http://localhost:8080/v1/{z}/{x}/{y}
-        #url: http://tiles.styluslabs.com:8080/tiles/{z}/{x}/{y}
-        #headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
-        #cache: stylus-osm
+        url: http://tiles.styluslabs.com:8080/v1/{z}/{x}/{y}
+        headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
+        cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
@@ -1039,6 +1038,7 @@ layers:
 
             piste:
                 exclusive: true
+                enabled: global.show_trails
                 filter: { route: piste, $zoom: { min: 13 } }
                 draw:
                     text:
