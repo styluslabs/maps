@@ -486,7 +486,7 @@ layers:
 
     protected_area:
         data: { source: osm, layer: landuse }
-        enabled: global.show_polygons
+        enabled: false  #global.show_polygons
         filter:
             - { boundary: national_park, $zoom: { min: 8 } }
             - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }  #boundary: protected_area,
