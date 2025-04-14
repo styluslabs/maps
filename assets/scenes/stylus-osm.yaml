@@ -300,9 +300,10 @@ application:
 sources:
     osm:
         type: MVT
-        url: http://tiles.styluslabs.com:8080/v1/{z}/{x}/{y}
-        headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
-        cache: stylus-osm
+        url: http://localhost:8080/v1/{z}/{x}/{y}
+        #url: http://tiles.styluslabs.com:8080/v1/{z}/{x}/{y}
+        #headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
+        #cache: stylus-osm
         attribution: |
             © OpenStreetMap contributors
         max_zoom: 14
@@ -490,7 +491,17 @@ layers:
             - { boundary: national_park, $zoom: { min: 8 } }
             - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }  #boundary: protected_area,
             #- { leisure: nature_reserve, protect_class: ['1', '1a', '1b', '2', '3'], $zoom: { min: 10 } }
+        selected:
+            draw:
+                lines:
+                    visible: |
+                        function() { return feature.osm_id && feature.osm_id == global.selected_osm_id; }
+                    style: unlit-lines
+                    order: global.order.border
+                    color: red  #global.color.parks_border
+                    width: 1px
         default:
+            enabled: false
             filter:
                 name: true
                 any: [ global.show_land_polygons, { $zoom: { max: 11 } } ]  # more succinct than all: [ {any: []}, {any: []} ]

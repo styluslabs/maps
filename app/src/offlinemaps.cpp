@@ -9,6 +9,7 @@
 #include "data/mbtilesDataSource.h"
 #include "data/networkDataSource.h"
 
+#include "usvg/svgpainter.h"
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
 #include "ugui/textedit.h"
@@ -25,9 +26,7 @@ static Semaphore semOfflineWorker(1);
 struct OfflineSourceInfo
 {
   std::string name;
-  std::string cacheFile;
-  std::string url;
-  Tangram::UrlOptions urlOptions;
+  TileSource::OfflineInfo info;
   int maxZoom;
   YAML::Node searchData;
 };
@@ -148,16 +147,17 @@ static void offlineDLMain()
 OfflineDownloader::OfflineDownloader(const OfflineMapInfo& ofl, const OfflineSourceInfo& src)
 {
   auto mbtiles = std::make_unique<Tangram::MBTilesDataSource>(
-        ofl.srcContext->getPlatform(), src.name, src.cacheFile, "", true);
+        ofl.srcContext->getPlatform(), src.name, src.info.cacheFile, "", true);
   mbTiles = mbtiles.get();
   name = src.name + "-" + std::to_string(ofl.id);
   offlineId = ofl.id;
   searchData = MapsSearch::parseSearchFields(src.searchData);
   srcMaxZoom = std::min(ofl.maxZoom, src.maxZoom);
 
-  mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(*ofl.srcContext, src.url, src.urlOptions);
+  mbtiles->next = std::make_unique<Tangram::NetworkDataSource>(*ofl.srcContext, src.info.url, src.info.urlOptions);
   // TileSource shared_ptr is needed for thread synchronization in DataSources
   tileSource = std::make_shared<TileSource>(name, std::move(mbtiles), TileSource::ZoomOptions());
+  tileSource->setFormat(src.info.format);
   scenePrana = std::make_shared<Tangram::ScenePrana>(nullptr);
   // if zoomed past srcMaxZoom, download tiles at srcMaxZoom
   for(int z = std::min(ofl.zoom, srcMaxZoom); z <= srcMaxZoom; ++z) {
@@ -337,8 +337,7 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
     if(info.cacheFile.empty())
       LOGE("Cannot save offline tiles for source %s - no cache file specified", src->name().c_str());
     else {
-      olinfo->sources.push_back(
-          {src->name(), info.cacheFile, info.url, info.urlOptions, src->maxZoom(), {}});
+      olinfo->sources.push_back({src->name(), info, src->maxZoom(), {}});
       if(!src->isRaster()) {
         // search data must remain accessible even if map source changed
         olinfo->sources.back().searchData = app->sceneConfig()["application"]["search_data"].clone();
@@ -726,6 +725,7 @@ void MapsOffline::updateProgress(int mapid, const std::string& msg)
 
 void MapsOffline::populateOffline()
 {
+  bool hasItems = false;
   app->gui->deleteContents(offlineContent, ".listitem");
   const char* query = "SELECT mapid, lng0,lat0,lng1,lat1, source, title, timestamp, done FROM offlinemaps ORDER BY timestamp DESC;";
   SQLiteStmt(app->bkmkDB, query).exec([&](int mapid, double lng0, double lat0, double lng1, double lat1,
@@ -779,7 +779,9 @@ void MapsOffline::populateOffline()
     container->addWidget(overflowBtn);
 
     offlineContent->addWidget(item);
+    hasItems = true;
   });
+  offlineContent->selectFirst(".empty-list-message")->setVisible(!hasItems);
   // wake up download thread to update progress
   if(!offlinePending.empty()) {
     prevProgressUpdate = 0;
@@ -881,7 +883,11 @@ Widget* MapsOffline::createPanel()
     return false;
   });
 
-  //offlineContent->addWidget(downloadPanel);
+  SvgText* msgnode = createTextNode(
+      "Zoom and pan the map to select a region, then tap the download button above.");
+  msgnode->setText(SvgPainter::breakText(msgnode, 250).c_str());  //app->getPanelWidth() - 70
+  msgnode->addClass("empty-list-message");
+  offlineContent->addWidget(new TextBox(msgnode));
 
   Button* offlineBtn = createToolbutton(MapsApp::uiIcon("offline"), "Offline Maps");
   offlineBtn->onClicked = [this](){

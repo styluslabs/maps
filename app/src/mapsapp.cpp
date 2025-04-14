@@ -465,6 +465,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
       addPlaceInfo(info["icon"].getCStr(), info["title"].getCStr(), info["value"].getCStr());
   }
 
+  //map->updateGlobals({ SceneUpdate{"global.selected_osm_id", json["osm_id"].Scalar()} });
   // must be last (or we must copy props)
   props.set("name", namestr);
   map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
@@ -671,6 +672,7 @@ void MapsApp::clearPickResult()
     currLocPlaceInfo = false;
     updateLocMarker();
   }
+  //map->updateGlobals({ SceneUpdate{"global.selected_osm_id", "~"} });
 }
 
 void MapsApp::tapEvent(float x, float y)
@@ -1291,13 +1293,15 @@ void MapsApp::populateColorPickerMenu()
 
 Button* MapsApp::addUndeleteItem(const std::string& title, const SvgNode* icon, std::function<void()> callback)
 {
-  auto menuitems = undeleteMenu->selectFirst(".child-container")->containerNode();
+  auto* menuitems = undeleteMenu->selectFirst(".child-container")->containerNode();
   if(menuitems->children().size() >= 10)
     gui->deleteWidget(static_cast<Widget*>(menuitems->children().front()->ext()));
   Button* item = undeleteMenu->addItem(title.c_str(), icon, {});
   item->onClicked = [=](){
     callback();
     gui->deleteWidget(item);
+    if(menuitems->children().empty())
+      undeleteMenu->parent()->setVisible(false);
   };
   undeleteMenu->parent()->setVisible(true);
   return item;
