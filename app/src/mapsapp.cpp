@@ -352,6 +352,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   flyToPickResult = true;
   if(wasCurrLoc != currLocPlaceInfo)
     updateLocMarker();
+  const YAML::Node& selid = sceneConfig()["global"]["selected_osm_id"];
+  if(!selid.Scalar().empty() && !selid.IsNull())
+    map->updateGlobals({ SceneUpdate{"global.selected_osm_id", "~"} });  // parsing "" value fails currently
+
   // allow pick result to be used as waypoint
   if(mapsTracks->onPickResult())
     return;
@@ -384,9 +388,20 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   }
   toolbar->addWidget(createStretch());
 
+  if(json["area"]) {
+    Button* showBoundsBtn = createActionbutton(MapsApp::uiIcon("border-dashed"), "Show Border");
+    showBoundsBtn->onClicked = [this, id = json["osm_id"].Scalar()](){
+      if(sceneConfig()["global"]["selected_osm_id"] != id)
+        map->updateGlobals({ SceneUpdate{"global.selected_osm_id", id} });
+    };
+    toolbar->addWidget(showBoundsBtn);
+  }
+
   Button* shareLocBtn = createActionbutton(MapsApp::uiIcon("share"), "Share");
   std::string geoquery = Url::escapeReservedCharacters(namestr);
-  shareLocBtn->onClicked = [=](){ openURL(fstring("geo:%.7f,%.7f?q=%s", pos.latitude, pos.longitude, geoquery.c_str()).c_str()); };
+  shareLocBtn->onClicked = [=](){
+    openURL(fstring("geo:%.7f,%.7f?q=%s", pos.latitude, pos.longitude, geoquery.c_str()).c_str());
+  };
   toolbar->addWidget(shareLocBtn);
   toolbar->node->addClass("action-bar");
 
@@ -465,7 +480,6 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
       addPlaceInfo(info["icon"].getCStr(), info["title"].getCStr(), info["value"].getCStr());
   }
 
-  //map->updateGlobals({ SceneUpdate{"global.selected_osm_id", json["osm_id"].Scalar()} });
   // must be last (or we must copy props)
   props.set("name", namestr);
   map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
@@ -672,7 +686,9 @@ void MapsApp::clearPickResult()
     currLocPlaceInfo = false;
     updateLocMarker();
   }
-  //map->updateGlobals({ SceneUpdate{"global.selected_osm_id", "~"} });
+  const YAML::Node& selid = sceneConfig()["global"]["selected_osm_id"];
+  if(!selid.Scalar().empty() && !selid.IsNull())
+    map->updateGlobals({ SceneUpdate{"global.selected_osm_id", "~"} });  // parsing "" value fails currently
 }
 
 void MapsApp::tapEvent(float x, float y)
