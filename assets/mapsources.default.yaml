@@ -97,10 +97,11 @@ osm-gps-tracks:
 strava-all:
     title: Strava Heatmap
     layer: true
+    archived: true
     max_zoom: 15
-    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/all/hot/{z}/{x}/{y}.png?px=512'
+    url: 'https://strava-heatmap.tiles.freemap.sk/all/bluered/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://nakarte.me/'
+        Referer: 'https://www.freemap.sk/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 strava-run:
@@ -108,9 +109,9 @@ strava-run:
     layer: true
     archived: true
     max_zoom: 15
-    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/run/hot/{z}/{x}/{y}.png?px=512'
+    url: 'https://strava-heatmap.tiles.freemap.sk/run/bluered/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://nakarte.me/'
+        Referer: 'https://www.freemap.sk/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 strava-bike:
@@ -118,9 +119,9 @@ strava-bike:
     layer: true
     archived: true
     max_zoom: 15
-    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/ride/hot/{z}/{x}/{y}.png?px=512'
+    url: 'https://strava-heatmap.tiles.freemap.sk/ride/bluered/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://nakarte.me/'
+        Referer: 'https://www.freemap.sk/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 strava-ski:
@@ -128,9 +129,9 @@ strava-ski:
     layer: true
     archived: true
     max_zoom: 15
-    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/winter/hot/{z}/{x}/{y}.png?px=512'
+    url: 'https://strava-heatmap.tiles.freemap.sk/winter/bluered/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://nakarte.me/'
+        Referer: 'https://www.freemap.sk/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 # Bing uses quadkey tile index - supported in networkDataSource.cpp, but not documented
@@ -243,6 +244,13 @@ mix-base-raster:
     updates:
         styles.hillshade.mix#-1: mix-base-raster
         application.gui_variables.base_mix_color: { label: Base Mix Color, type: color }
+
+refresh-raster-0:
+    title: Refresh Base Raster
+    archived: true
+    layer: true
+    updates:
+      sources.raster-0.max_age: 1E12
 
 # other possible sources:
 # - https://ic.imagery1.arcgis.com/arcgis/rest/services/Sentinel2_10m_LandCover/ImageServer
