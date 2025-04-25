@@ -125,10 +125,14 @@ global:
     # ... now offset by 500 because we need depth range for raster tile proxy levels
     order:
         landuse: 510
+        civic: 512
+        commercial: 514
+        retail: 516
         parks: 532
         park_detail: 534
         golf: 536
         airport: 538
+        piste_area: 540
         #landcover: 550
         waterway: 622
         water: 624
@@ -472,13 +476,13 @@ layers:
         # landuse polygons - default order is global.order.landuse (draws under landcover)
         retail:
             filter: { landuse: [retail] }  #industrial, commercial
-            draw: { polygons: { visible: true, order: global.order.landuse, color: global.color.retail } }
+            draw: { polygons: { visible: true, order: global.order.retail, color: global.color.retail } }
         commercial:
             filter: { landuse: [commercial, industrial] }
-            draw: { polygons: { visible: true, order: global.order.landuse, color: global.color.industry } }
+            draw: { polygons: { visible: true, order: global.order.commercial, color: global.color.industry } }
         civic:
             filter: { amenity: [university, college] }
-            draw: { polygons: { visible: true, order: global.order.landuse, color: global.color.civic } }
+            draw: { polygons: { visible: true, order: global.order.civic, color: global.color.civic } }
         #urban:
         #    filter: { kind: urban_area }
         #    draw: { polygons: { color: [[7, global.color.urban_7], [9, global.color.urban_9]] } }
@@ -833,7 +837,7 @@ layers:
                     polygons:
                         #visible: global.show_trails
                         style: global.earth_style
-                        order: global.order.landuse
+                        order: global.order.piste_area
                         color: global.piste_color_fn
             piste_lines:
                 filter: { $geometry: line }

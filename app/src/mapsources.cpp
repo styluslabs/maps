@@ -846,8 +846,16 @@ bool MapsSources::syncImportFile(const std::string& filename)
     return false;
   }
 
-  for(auto node : yml.pairs())
-    mapSources[node.first.Scalar()] = std::move(node.second);
+  for(auto node : yml.pairs()) {
+    // preserve archived state
+    YAML::Node& dest = mapSources[node.first.Scalar()];
+    bool existed = bool(dest);
+    bool archived = existed && dest.at("archived").as<bool>(false);
+    dest = std::move(node.second);
+    if(!existed) { continue; }
+    if(!archived) { dest.remove("archived"); }
+    else { dest["archived"] = true; }
+  }
   saveSources();
   return true;
 }

@@ -721,12 +721,12 @@ void MapsTracks::updateDistances()
 
 void MapsTracks::createRoute(GpxFile* track)
 {
-  if(track->routes.empty() && !track->tracks.empty()) return;  // don't add route if track already present
+  if(track->routes.empty() && !track->tracks.empty()) { return; } // don't add route if track already present
+  if(track->routeMode == "draw") { return; }  // don't clear drawn route!
   retryBtn->setVisible(false);
   track->routes.clear();
   track->modified = true;
-  if(track->routeMode == "draw") {}
-  else if(track->routeMode == "direct") {
+  if(track->routeMode == "direct") {
     track->routes.emplace_back();
     for(Waypoint& wp : track->waypoints) {
       if(wp.routed)
