@@ -25,7 +25,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
 {
   if(event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP ||
       (event->type == SDL_FINGERMOTION && (event->tfinger.fingerId == SDL_BUTTON_LMASK || altDragMode))) {
-    if(app->drawOnMap) {
+    if(app->drawOnMap && event->tfinger.fingerId == SDL_BUTTON_LMASK) {
       int action = actionFromSDLFinger(event->type);
       app->fingerEvent(action, event->tfinger.x*xyScale, event->tfinger.y*xyScale);
       if(action == 0)  // need to forward finger down so multitouch works properly

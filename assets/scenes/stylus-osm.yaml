@@ -232,6 +232,9 @@ global:
         motorway_name: 45  # shield generally more important than name for motorway
         road_tertiary: 50
         road_minor: 60
+        # rivers have many possible label positions w/ limited conflict, whereas lakes have only one label
+        water: 22
+        waterway: 99
         # transit line labels
         transit_ref: 19
         transit_ref_tram: 24
@@ -573,6 +576,7 @@ layers:
             text:
                 text_source: global.names_two_lines
                 transition: { show: { time: 0s }, hide: { time: 1s } }
+                priority: global.priority.water
                 font:
                     family: global.primary_font
                     fill: global.color.water_name
@@ -619,6 +623,7 @@ layers:
         draw:
             text:
                 text_source: global.names_one_line
+                priority: global.priority.waterway
                 #buffer: 3px
                 font:
                     family: global.primary_font
@@ -1750,11 +1755,12 @@ layers:
                 exclusive: true
                 filter:
                     place: country
+                    $zoom: { max: 8 }
                     any:
                         - { population: { min: 10000000 } }
-                        - { $zoom: { min: 5, max: 8 }, population: 0 }
-                        - { $zoom: { min: 5, max: 8 }, population: { min: 1000000 } }
-                        - { $zoom: { min: 6, max: 8 } }
+                        - { $zoom: { min: 5 }, population: 0 }
+                        - { $zoom: { min: 5 }, population: { min: 1000000 } }
+                        - { $zoom: { min: 6 } }
                 draw:
                     text:
                         visible: true
