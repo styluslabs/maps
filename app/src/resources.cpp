@@ -449,7 +449,7 @@ bool userLoadSvg(const char* svg, size_t len, Texture* texture)
     doc->setHeight(b.height());
   }
 
-  int w = int(doc->width().px() + 0.5), h = int(doc->height().px() + 0.5);
+  int w = std::ceil(doc->width().px()), h = std::ceil(doc->height().px());
   Image img(w, h);
   Painter painter(Painter::PAINT_SW | Painter::NO_TEXT, &img);
   painter.setBackgroundColor(::Color::INVALID_COLOR);  // skip BG since image already inited to zeros

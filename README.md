@@ -18,9 +18,10 @@ Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](ht
 
 
 ## Quick start ##
+* Toggle 3D terrain from the "..." menu.  Swipe up with two fingers to tilt the map.
 * Search: offline search is available for downloaded Ascend OSM map regions.  For worldwide place name search, try the Nominatim search plugin.  For POI search in the current map view, try the Overpass search plugin.  To see notable places in the current map view, try the Wikipedia search plugin.  Tap the icon in the search box to change the current search plugin.
-* Customize map: in the map sources list, tap the eye icon to toggle additional map layers.  Tap the edit icon to edit a map source.  The Ascend OSM maps have options to show hiking, biking, and transit routes.  Tap the plus icon to create a new map source combining existing sources.  See [Add](#adding-map-sources) for more detail.
-* Offline maps: tap the offline icon in the map sources toolbar, then pan and zoom the view to show the desired region, tap the download button on the Offline maps toolbar, enter the maximum zoom level to include, then tap Download.  Tiles for all layers of the current map source will be downloaded.
+* Customize map: in the map sources list, tap the eye icon to toggle additional map layers.  Tap the edit icon to edit a map source.  The Ascend OSM maps have options to show hiking, biking, and transit routes.  Tap the plus icon to create a new map source combining existing sources.  See [Adding map sources](#adding-map-sources) for more detail.
+* Offline maps: tap the offline icon on the map sources toolbar, then pan and zoom the view to show the desired region, tap the download button on the Offline maps toolbar, enter the maximum zoom level to include, then tap Download.  Tiles for all layers of the current map source will be downloaded.
 * Submit [bug reports](https://github.com/styluslabs/maps/issues), [pull requests](https://github.com/styluslabs/maps/pulls), [feature suggestions](https://github.com/styluslabs/maps/discussions), and [plugin ideas](https://github.com/styluslabs/maps/discussions)!
 
 
