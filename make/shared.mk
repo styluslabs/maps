@@ -8,6 +8,12 @@ else
   OBJDIR=$(BUILDDIR)
 endif
 
+ifneq ($(windir),)
+  OBJEXT=obj
+else
+  OBJEXT=o
+endif
+
 ifneq ($(wildcard styluslabs/.),)
   STYLUSLABS_DEPS=styluslabs
 else

@@ -33,6 +33,8 @@
 #elif PLATFORM_ANDROID
 #include "../android/tangram/src/main/cpp/sqlite_fdvfs.h"
 extern void android_sendToBack();  // we'll add androidApp.h if there are any more of these
+#else
+#include "nfd.h"
 #endif
 
 //#define UTRACE_ENABLE
@@ -2136,30 +2138,57 @@ SvgNode* MapsApp::uiIcon(const char* id)
 }
 
 #if PLATFORM_DESKTOP
-bool MapsApp::openURL(const char* url)
+class DesktopFile : public PlatformFile
 {
-#if PLATFORM_WIN
-  HINSTANCE result = ShellExecute(0, 0, PLATFORM_STR(url), 0, 0, SW_SHOWNORMAL);
-  // ShellExecute returns a value greater than 32 if successful
-  return (int)result > 32;
-//#elif PLATFORM_ANDROID
-//  AndroidHelper::openUrl(url);
-//  return true;
-//#elif PLATFORM_IOS
-//  if(!strchr(url, ':'))
-//    iosOpenUrl((std::string("http://") + url).c_str());
-//  else
-//    iosOpenUrl(url);
-//  return true;
-#elif PLATFORM_OSX
-  return strchr(url, ':') ? macosOpenUrl(url) : macosOpenUrl((std::string("http://") + url).c_str());
-#elif IS_DEBUG
-  PLATFORM_LOG("openURL: %s\n", url);
-  return true;
-#else  // Linux
-  system(fstring("xdg-open '%s' || x-www-browser '%s' &", url, url).c_str());
-  return true;
-#endif
+public:
+  std::string mPath;
+  DesktopFile(std::string _path) : mPath(_path) {}
+  std::string fsPath() const override { return mPath; }
+  std::string sqliteURI() const override { return "file://" + mPath + "?mode=ro"; }
+  std::vector<char> readAll() const override {
+    std::vector<char> buff;
+    readFile(&buff, mPath.c_str());
+    return buff;
+  }
+};
+
+void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFileFn_t callback)
+{
+  nfdchar_t* outPath;
+  nfdresult_t result = NFD_OpenDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL);
+  if(result == NFD_OKAY) {
+    callback(std::make_unique<DesktopFile>(outPath));
+    NFD_FreePath(outPath);
+  }
+  else
+    LOGE("NFD_OpenDialog error: %s", NFD_GetError());
+}
+
+void MapsApp::pickFolderDialog(FilePathFn_t callback, bool readonly)
+{
+  nfdchar_t* outPath;
+  nfdresult_t result = NFD_PickFolder(&outPath, NULL);
+  if(result == NFD_OKAY) {
+    callback(outPath);
+    NFD_FreePath(outPath);
+  }
+  else
+    LOGE("NFD_PickFolder error: %s", NFD_GetError());
+}
+
+void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback)
+{
+  ASSERT(!filters.empty() && "saveFileDialog requires filters!");  // filters required for Android, so test here
+  nfdchar_t* outPath;
+  if(!filters.empty())
+    name.append(".").append(filters.back().spec);
+  nfdresult_t result = NFD_SaveDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL, name.c_str());
+  if(result == NFD_OKAY) {
+    callback(outPath);
+    NFD_FreePath(outPath);
+  }
+  else
+    LOGE("NFD_SaveDialog error: %s", NFD_GetError());
 }
 #endif
 

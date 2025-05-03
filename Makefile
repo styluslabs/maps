@@ -25,7 +25,7 @@ else
 endif
 
 # if deferred eval, make sure to only use for source that needs GITREV
-GITREV := $(shell git rev-parse --short HEAD)
+GITREV := $(shell git rev-parse --short HEAD || wsl git rev-parse --short HEAD)
 
 ## common modules
 include module.mk
@@ -34,15 +34,32 @@ include tangram-es/core/module.mk
 
 ifneq ($(windir),)
 # Windows
+MAJORVER := 1
+MINORVER := 0
+GITCOUNT := $(shell git rev-list --count HEAD || wsl git rev-list --count HEAD)
+APPVERSION := $(MAJORVER).$(MINORVER).$(GITCOUNT)
 
-SOURCES += \
-  windows/winhelper.cpp \
-  windows/wintab/Utils.c \
-  ../nanovg-2/glad/glad.c
+MODULE_BASE := .
 
-RESOURCES = windows/resources.rc
-INCSYS += ../SDL/include
-DEFS += _USE_MATH_DEFINES UNICODE NOMINMAX FONS_WPATH
+MODULE_SOURCES += \
+  app/windows/winmain.cpp \
+  tangram-es/platforms/windows/src/windowsPlatform.cpp \
+  tangram-es/platforms/common/platform_gl.cpp \
+  tangram-es/platforms/common/urlClient.cpp \
+  deps/nfd/src/nfd_win.cpp \
+  deps/nanovgXC/glad/glad.c \
+  deps/nanovgXC/glad/glad_wgl.c
+
+MODULE_INC_PUBLIC = $(STYLUSLABS_DEPS)/nanovgXC deps/nfd/src/include
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/common tangram-es/platforms/windows/src $(STYLUSLABS_DEPS) ../curl-8.13.0/include
+MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
+
+include $(ADD_MODULE)
+
+RESOURCES = app/windows/resources.rc
+RCFLAGS = /DVERSIONSTR=\"$(APPVERSION)\" /DVERSIONCSV="$(MAJORVER),$(MINORVER),$(GITCOUNT),0"
+#INCSYS += ../SDL/include
+DEFS += TANGRAM_WINDOWS _USE_MATH_DEFINES UNICODE NOMINMAX FONS_WPATH
 
 # only dependencies under this path will be tracked in .d files; note [\\] must be used for "\"
 # ensure that no paths containing spaces are included
@@ -62,17 +79,21 @@ LIBS = \
   advapi32.lib \
   setupapi.lib \
   imm32.lib \
-  version.lib
+  version.lib \
+  ..\curl-8.13.0\builds\libcurl-vc-x64-release-dll-ipv6-sspi-schannel\lib\libcurl.lib
 
 # distribution package
-ZIPFILE = write$(HGREV).zip
-ZIPDIR = Write
+ZIPFILE = $(TARGET)-$(GITREV).zip
+ZIPDIR = Ascend
 DISTRES = \
-  ../scribbleres/fonts/Roboto-Regular.ttf \
-  ../scribbleres/fonts/DroidSansFallback.ttf \
-  ../scribbleres/Intro.svg
+  assets/config.default.yaml \
+  assets/mapsources.default.yaml \
+  assets/plugins \
+  assets/res \
+  assets/scenes \
+  assets/shared
 # installer
-WXS = windows/InstallWrite.wxs
+#WXS = windows/InstallWrite.wxs
 
 include make/msvc.mk
 

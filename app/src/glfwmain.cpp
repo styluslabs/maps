@@ -6,7 +6,6 @@
 #include "util/yamlPath.h"
 #include "util/elevationManager.h"
 #include "util.h"
-#include "nfd.h"
 
 #include "mapsources.h"
 #include "plugins.h"
@@ -80,57 +79,17 @@ void glfwSDLEvent(SDL_Event* event)
     MapsApp::gui->sdlEvent(event);
 }
 
-class DesktopFile : public PlatformFile
+bool MapsApp::openURL(const char* url)
 {
-public:
-  std::string mPath;
-  DesktopFile(std::string _path) : mPath(_path) {}
-  std::string fsPath() const override { return mPath; }
-  std::string sqliteURI() const override { return "file://" + mPath + "?mode=ro"; }
-  std::vector<char> readAll() const override {
-    std::vector<char> buff;
-    readFile(&buff, mPath.c_str());
-    return buff;
-  }
-};
-
-void MapsApp::openFileDialog(std::vector<FileDialogFilter_t> filters, PlatformFileFn_t callback)
-{
-  nfdchar_t* outPath;
-  nfdresult_t result = NFD_OpenDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL);
-  if(result == NFD_OKAY) {
-    callback(std::make_unique<DesktopFile>(outPath));
-    NFD_FreePath(outPath);
-  }
-  else
-    LOGE("NFD_OpenDialog error: %s", NFD_GetError());
-}
-
-void MapsApp::pickFolderDialog(FilePathFn_t callback, bool readonly)
-{
-  nfdchar_t* outPath;
-  nfdresult_t result = NFD_PickFolder(&outPath, NULL);
-  if(result == NFD_OKAY) {
-    callback(outPath);
-    NFD_FreePath(outPath);
-  }
-  else
-    LOGE("NFD_PickFolder error: %s", NFD_GetError());
-}
-
-void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::string name, FilePathFn_t callback)
-{
-  ASSERT(!filters.empty() && "saveFileDialog requires filters!");  // filters required for Android, so test here
-  nfdchar_t* outPath;
-  if(!filters.empty())
-    name.append(".").append(filters.back().spec);
-  nfdresult_t result = NFD_SaveDialog(&outPath, (nfdfilteritem_t*)filters.data(), filters.size(), NULL, name.c_str());
-  if(result == NFD_OKAY) {
-    callback(outPath);
-    NFD_FreePath(outPath);
-  }
-  else
-    LOGE("NFD_SaveDialog error: %s", NFD_GetError());
+#if PLATFORM_OSX
+  return strchr(url, ':') ? macosOpenUrl(url) : macosOpenUrl((std::string("http://") + url).c_str());
+#elif IS_DEBUG
+  PLATFORM_LOG("openURL: %s\n", url);
+  return true;
+#else  // Linux
+  system(fstring("xdg-open '%s' || x-www-browser '%s' &", url, url).c_str());
+  return true;
+#endif
 }
 
 void MapsApp::notifyStatusBarBG(bool) {}

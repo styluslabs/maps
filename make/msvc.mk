@@ -8,10 +8,11 @@ TARGET:=$(TARGET).exe
 # /MD to use dynamic C runtime (msvcrt DLL); /MT to statically link C runtime (libcmt)
 # if link complains about defaultlib ('LIBCMT' or 'MSVCRT'), try /verbose switch to which .lib is requesting
 #  LIBCMT vs. MSVCRT
-CFLAGS = /MT
+CFLAGS = /MT /Zc:preprocessor
 # C++
 CXX = cl /nologo
-CXXFLAGS = /std:c++14 /GR- /D_HAS_EXCEPTIONS=0
+CXXFLAGS = /std:c++14
+#/GR- /D_HAS_EXCEPTIONS=0
 # C
 CC = cl /nologo
 CCFLAGS =
@@ -27,7 +28,7 @@ WIXLIGHT = "c:\Program Files (x86)\WiX Toolset v3.11\bin\light.exe"
 
 DEBUG ?= 0
 ifneq ($(DEBUG), 0)
-  CFLAGS += /Od /Zi
+  CFLAGS += /Od /Zi /DDEBUG
   LDFLAGS += /DEBUG
 else
   # /GL + /LTCG for dist?
@@ -90,11 +91,15 @@ $(OBJDIR)/$(FORCECPP): CFLAGS += /TP
 #  it will get swallowed - we could add more matches, e.g., /C:"^[^N]" /C:"^N[^o] etc. if this is a problem.
 $(OBJDIR)/%.obj: %.cpp
 	@echo|set /p x="$@: " > $(basename $@).d
-	@($(CXX) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
+	($(CXX) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
+
+$(OBJDIR)/%.obj: %.cc
+	@echo|set /p x="$@: " > $(basename $@).d
+	($(CXX) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
 
 $(OBJDIR)/%.obj: %.c
 	@echo|set /p x="$@: " > $(basename $@).d
-	@($(CC) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CCFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
+	($(CC) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CCFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
 
 $(OBJDIR)/%.res: %.rc
 	$(RC) $(RCFLAGS) /fo $@ $<
@@ -120,6 +125,9 @@ $(MSI): $(TGT) $(DISTRES)
 
 # | (pipe) operator causes make to just check for existence instead of timestamp
 $(OBJ): | $(BUILDDIRSMADE)
+
+# files that need to be generated, downloaded, etc.
+$(OBJ): $(GENERATED)
 
 # use quoted arg so that mkdir doesn't think '/' path separators are option switches
 # || VER>NUL suppresses errors thrown if folders already exist

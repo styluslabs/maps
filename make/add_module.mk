@@ -9,7 +9,7 @@ DEFS += $(MODULE_DEFS_PUBLIC)
 
 # MODULE_OBJS must be immediate to be used after clearing MODULE_FULL_SOURCES (it is immediate anyway in rules)
 MODULE_SRCBASE = $(basename $(MODULE_FULL_SOURCES))
-MODULE_OBJS := $(MODULE_SRCBASE:%=$(OBJDIR)/%.o)
+MODULE_OBJS := $(MODULE_SRCBASE:%=$(OBJDIR)/%.$(OBJEXT))
 
 #$(info add_module: $(MODULE_BASE) MODULE_OBJS: $(MODULE_OBJS) TEMP_INC_PRIVATE: $(TEMP_INC_PRIVATE))
 

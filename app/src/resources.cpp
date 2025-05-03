@@ -7,6 +7,11 @@
 #include "usvg/svgpainter.h"
 #include "ugui/widgets.h"
 
+#if PLATFORM_WIN
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 // put single header library implementations here instead of in mapsapp.cpp which is rebuilt more often
 #define FONTSTASH_IMPLEMENTATION
 #include "fontstash.h"
