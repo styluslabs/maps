@@ -1,5 +1,5 @@
 // since IDI_ICON1, etc. aren't defined in a resource.h, I think they'll just be treated as strings
-IDI_ICON1   ICON    "write.ico"
+IDI_ICON1   ICON    "../../assets/shared/icons/app.ico"
 //IDI_ICON2   ICON    "ruled.ico"
 
 #include <windows.h>

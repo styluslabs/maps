@@ -661,6 +661,7 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
 {
   SetProcessDPIAware();
   winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
+  Tangram::WindowsPlatform::logToConsole = winLogToConsole;
 
   int argc = 0;
   LPWSTR* wargv = CommandLineToArgvW(lpszCmdLine, &argc);
@@ -753,6 +754,8 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
 
   app->mapsOffline->resumeDownloads();
 
+  app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
+
   app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, NAN, 0, NAN, 0});
   app->updateGpsStatus(10, 10);  // turn location maker blue
   app->updateOrientation(0, M_PI/2, 0, 0);
@@ -760,10 +763,13 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   // main loop
   MSG msg;
   while(MapsApp::runApplication) {
-    while(app->needsRender() ? PeekMessage(&msg, NULL, 0, 0, PM_REMOVE) : GetMessage(&msg, NULL, 0, 0)) {
-      TranslateMessage(&msg);
-      DispatchMessage(&msg);
-      if (msg.message == WM_QUIT) { MapsApp::runApplication = false; break; }
+    if(!app->needsRender() || PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE)) {
+      GetMessage(&msg, NULL, 0, 0);  // wait for message (note WaitMessage() can miss messages)
+      do {
+        if(msg.message == WM_QUIT) { MapsApp::runApplication = false; break; }
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+      } while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE));
     }
     RECT rect;
     GetClientRect(mainWnd, &rect);

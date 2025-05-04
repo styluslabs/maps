@@ -10,6 +10,11 @@
 #if PLATFORM_WIN
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#define NANOVG_GL3_IMPLEMENTATION
+#define NVGSWU_GL3
+#else
+#define NANOVG_GLES3_IMPLEMENTATION
+#define NVGSWU_GLES2
 #endif
 
 // put single header library implementations here instead of in mapsapp.cpp which is rebuilt more often
@@ -18,16 +23,12 @@
 
 #if PLATFORM_DESKTOP
 #include "platform_gl.h"
-//#define NANOVG_GL3_IMPLEMENTATION
-#define NANOVG_GLES3_IMPLEMENTATION
 #elif PLATFORM_IOS
 #include <OpenGLES/ES3/gl.h>
 #include <OpenGLES/ES3/glext.h>
-#define NANOVG_GLES3_IMPLEMENTATION
 #elif PLATFORM_ANDROID
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
-#define NANOVG_GLES3_IMPLEMENTATION
 #endif
 
 #define NVG_LOG PLATFORM_LOG
@@ -37,7 +38,6 @@
 #endif
 
 #define NANOVG_SW_IMPLEMENTATION
-#define NVGSWU_GLES2
 #include "nanovgXC/src/nanovg_sw.h"
 #include "nanovgXC/src/nanovg_sw_utils.h"
 
