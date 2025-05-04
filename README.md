@@ -41,7 +41,7 @@ The default configuration includes [markers.yaml](assets/scenes/markers.yaml) fo
 
 ### Application data ###
 
-Application data is stored in the executable's folder on Linux (will be changed to `~/.config/styluslabs/maps` in the future).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more can be set by editing `config.yaml` (after exiting the app) in the application data folder.  See `config.default.yaml` for documentation.
+Application data is stored in the executable's folder on Linux (will be changed to `~/.config/styluslabs/maps` in the future).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more are available in `config.yaml` in the application data folder.  it can be edited directly after exiting the app or via the plugin console within the app, e.g., `readSceneValue("config.storage.shrink_at")`, `writeSceneValue("config.storage.shrink_at", 500000000)`.  See [config.default.yaml](assets/config.default.yaml) for documentation.
 
 On Android, all files created by the application (except `config.yaml` and `mapsources.yaml`) will be replaced when a newer APK is installed, so edits should only be made to copies, not the original files.
 
@@ -146,7 +146,7 @@ Tangram-ES supports RTL text and complex shaping through Harfbuzz and Freetype. 
 * `res/` - various resources for application, e.g. GUI icons
 * `scenes/` - map styles
 * `tracks/*.gpx` - tracks and routes
-* `config.yaml` - settings; exit application before editing
+* `config.yaml` - settings; exit application before editing or use plugin console commands (see above)
 * `fts1.sqlite` - index for offline search
 * `mapsources.yaml` - map sources; exit application before editing
 * `places.sqlite` - saved places, etc.

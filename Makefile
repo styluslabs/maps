@@ -50,8 +50,8 @@ MODULE_SOURCES += \
   deps/nanovgXC/glad/glad.c \
   deps/nanovgXC/glad/glad_wgl.c
 
-MODULE_INC_PUBLIC = $(STYLUSLABS_DEPS)/nanovgXC deps/nfd/src/include
-MODULE_INC_PRIVATE = app/include tangram-es/platforms/common tangram-es/platforms/windows/src $(STYLUSLABS_DEPS) ../curl-8.13.0/include
+MODULE_INC_PUBLIC = $(STYLUSLABS_DEPS)/nanovgXC
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/common tangram-es/platforms/windows/src $(STYLUSLABS_DEPS) ../curl-8.13.0/include deps/nfd/src/include
 MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
 
 include $(ADD_MODULE)

@@ -10,11 +10,14 @@
 #if PLATFORM_WIN
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
+
+#if PLATFORM_WIN  //PLATFORM_DESKTOP
 #define NANOVG_GL3_IMPLEMENTATION
 #define NVGSWU_GL3
 #else
 #define NANOVG_GLES3_IMPLEMENTATION
-#define NVGSWU_GLES2
+#define NVGSWU_GLES3
 #endif
 
 // put single header library implementations here instead of in mapsapp.cpp which is rebuilt more often

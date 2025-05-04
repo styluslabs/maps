@@ -6,6 +6,7 @@
 #include "util/yamlPath.h"
 #include "util/elevationManager.h"
 #include "util.h"
+#include "nfd.h"
 
 #include "mapsources.h"
 #include "plugins.h"
@@ -123,12 +124,12 @@ int main(int argc, char* argv[])
       sceneFile = canonicalPath(argv[argi+1]);
     else if(strcmp(argv[argi], "--import") == 0) {
       importFile = canonicalPath(argv[argi+1]);
-      MapsApp::taskQueue.push_back([=](){
-        MapsApp::inst->setWindowLayout(1000, 1000);  // required to show panel
-        MapsApp::inst->showPanel(MapsApp::inst->mapsOffline->offlinePanel);
-        MapsApp::inst->mapsOffline->populateOffline();
-        MapsApp::inst->mapsOffline->openForImport(std::make_unique<DesktopFile>(importFile));
-      });
+      //MapsApp::taskQueue.push_back([=](){
+      //  MapsApp::inst->setWindowLayout(1000, 1000);  // required to show panel
+      //  MapsApp::inst->showPanel(MapsApp::inst->mapsOffline->offlinePanel);
+      //  MapsApp::inst->mapsOffline->populateOffline();
+      //  MapsApp::inst->mapsOffline->openForImport(std::make_unique<DesktopFile>(importFile));
+      //});
     }
     else if(strcmp(argv[argi], "--bbox") == 0) {
       if(argi + 5 >= argc) {
@@ -152,14 +153,17 @@ int main(int argc, char* argv[])
   }
 
   if(!glfwInit()) { PLATFORM_LOG("glfwInit failed.\n"); return -1; }
-#if USE_NVG_GL
+#if 1  //def USE_GLES
   glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);  //3);
+#else
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);  //3);
+#endif
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   //glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
-#endif
   glfwWindowHint(GLFW_SAMPLES, MapsApp::config["msaa_samples"].as<int>(2));
   glfwWindowHint(GLFW_DEPTH_BITS, 24);
   glfwWindowHint(GLFW_STENCIL_BITS, 8);

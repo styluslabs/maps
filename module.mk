@@ -34,7 +34,7 @@ MODULE_SOURCES = \
   $(STYLUSLABS_DEPS)/pugixml/src/pugixml.cpp \
   deps/easyexif/exif.cpp
 
-MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) $(STYLUSLABS_DEPS)/nanovgXC/src $(STYLUSLABS_DEPS)/pugixml/src deps/easyexif app/src app/include tangram-es/platforms/common
+MODULE_INC_PRIVATE = $(STYLUSLABS_DEPS) $(STYLUSLABS_DEPS)/nanovgXC/src $(STYLUSLABS_DEPS)/pugixml/src deps/easyexif deps/nfd/src/include app/src app/include tangram-es/platforms/common
 MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
 
 include $(ADD_MODULE)
