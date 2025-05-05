@@ -150,7 +150,6 @@ static POINTER_PEN_INFO penPointerInfo[MAX_N_POINTERS];
 static bool winTabProximity = false;
 
 enum TouchPointState { TouchPointPressed = SDL_FINGERDOWN, TouchPointMoved = SDL_FINGERMOTION, TouchPointReleased = SDL_FINGERUP };
-enum PenEventType { TabletPress = SDL_FINGERDOWN, TabletMove = SDL_FINGERMOTION, TabletRelease = SDL_FINGERUP };
 
 typedef double Dim;
 struct TouchPoint
@@ -174,8 +173,8 @@ static void updateClientRect(HWND hwnd)
   clientRect = Rect::ltrb(rect.left, rect.top, rect.right, rect.bottom);
 }
 
-static void notifyTabletEvent(PenEventType eventtype, const Point& globalpos,
-    Dim pressure, Dim tiltX, Dim tiltY, bool eraser, int button, int buttons, int deviceid, uint32_t t)
+static void notifyTabletEvent(TouchPointState eventtype, const Point& globalpos,
+    Dim pressure, Dim tiltX, Dim tiltY, SDL_TouchID touchid, int button, int buttons, int deviceid, uint32_t t)
 {
   // combine all extra buttons into RightButton
   //if (button & ~0x1) button = (button & 0x1) | 0x2;  if (buttons & ~0x1) buttons = (buttons & 0x1) | 0x2;
@@ -183,7 +182,7 @@ static void notifyTabletEvent(PenEventType eventtype, const Point& globalpos,
   SDL_Event event = {0};
   event.type = eventtype;
   event.tfinger.timestamp = t;  // SDL_GetTicks();  // normally done by SDL_PushEvent()
-  event.tfinger.touchId = eraser ? PenPointerEraser : PenPointerPen;
+  event.tfinger.touchId = touchid;
   //event.tfinger.fingerId = 0;  // if SDL sees more than one finger id for a touch id, that's multitouch
   // POINTER_FLAGS >> 4 == SDL_BUTTON_LMASK for pen down w/ no barrel buttons pressed, as desired
   event.tfinger.fingerId = eventtype == SDL_FINGERMOTION ? buttons : button;
@@ -212,7 +211,7 @@ static void notifyTouchEvent(TouchPointState touchstate, const std::vector<Touch
   }
 }
 
-static void processPenInfo(const POINTER_PEN_INFO& ppi, PenEventType eventtype)
+static void processPenInfo(const POINTER_PEN_INFO& ppi, TouchPointState eventtype)
 {
   static UINT32 prevButtons = 0;
 
@@ -234,8 +233,9 @@ static void processPenInfo(const POINTER_PEN_INFO& ppi, PenEventType eventtype)
   // if barrel button pressed when pen down, penFlags changes but pointerFlags doesn't (the first time)
   UINT32 buttons = ((ppi.pointerInfo.pointerFlags >> 4) & 0x1F) | (ppi.penFlags & PEN_FLAG_BARREL ? SDL_BUTTON_RMASK : 0);
   bool isEraser = ppi.penFlags & (PEN_FLAG_ERASER | PEN_FLAG_INVERTED);  // PEN_FLAG_INVERTED means eraser in proximity
-  notifyTabletEvent(eventtype, Point(x, y), ppi.pressure/1024.0, ppi.tiltX/90.0, ppi.tiltY/90.0, isEraser,
-      buttons ^ prevButtons, buttons, int(ppi.pointerInfo.sourceDevice), ppi.pointerInfo.dwTime);
+  notifyTabletEvent(eventtype, Point(x, y), ppi.pressure/1024.0, ppi.tiltX/90.0, ppi.tiltY/90.0,
+      isEraser ? PenPointerEraser : PenPointerPen, buttons ^ prevButtons, buttons,
+      int(ppi.pointerInfo.sourceDevice), ppi.pointerInfo.dwTime);
   prevButtons = buttons;
 }
 
@@ -253,7 +253,7 @@ static void processPenHistory(UINT32 ptrid)
     }
     // process items oldest to newest
     for(int ii = historycount - 1; ii >= 0; ii--)
-      processPenInfo(ppi[ii], TabletMove);
+      processPenInfo(ppi[ii], TouchPointMoved);
     if(ppi != &penPointerInfo[0])
       delete[] ppi;
   }
@@ -261,6 +261,7 @@ static void processPenHistory(UINT32 ptrid)
 
 static bool processPointerFrame(UINT32 ptrid, TouchPointState eventtype)
 {
+  static UINT32 prevButtons = 0;
   UINT32 pointercount = MAX_N_POINTERS;
   std::vector<TouchPoint> pts;
   if(GetPointerFrameInfo(ptrid, &pointercount, &pointerInfo[0])) {
@@ -268,18 +269,27 @@ static bool processPointerFrame(UINT32 ptrid, TouchPointState eventtype)
       if(pointerInfo[ii].pointerType == PT_PEN) {
         // for hovering pen
         if(GetPointerPenInfo(pointerInfo[ii].pointerId, &penPointerInfo[0]))
-          processPenInfo(penPointerInfo[0], TabletMove);
+          processPenInfo(penPointerInfo[0], TouchPointMoved);
         // propagate pen hover events to DefWindowProc so mouse cursor follows pen - see explanation below
         return false;
       }
-      if(pointerInfo[ii].pointerType != PT_TOUCH)
-        continue;
-      TouchPoint pt;
-      pt.id = pointerInfo[ii].pointerId;
-      pt.state = pointerInfo[ii].pointerId == ptrid ? eventtype : TouchPointMoved;
-      pt.screenPos = Point(pointerInfo[ii].ptPixelLocation.x, pointerInfo[ii].ptPixelLocation.y);
-      pt.pressure = 1;
-      pts.push_back(pt);
+      else if (pointerInfo[ii].pointerType == PT_TOUCH) {
+        TouchPoint pt;
+        pt.id = pointerInfo[ii].pointerId;
+        pt.state = pointerInfo[ii].pointerId == ptrid ? eventtype : TouchPointMoved;
+        pt.screenPos = Point(pointerInfo[ii].ptPixelLocation.x, pointerInfo[ii].ptPixelLocation.y);
+        pt.pressure = 1;
+        pts.push_back(pt);
+      }
+      else { // PT_MOUSE or PT_TOUCHPAD
+        UINT32 buttons = (pointerInfo[ii].pointerFlags >> 4) & 0x1F;
+        if((buttons & 0x2) != (buttons & 0x4)) { buttons ^= 0x6; }  // swap middle and right btns for SDL
+        Point pos(pointerInfo[ii].ptPixelLocation.x, pointerInfo[ii].ptPixelLocation.y);
+        notifyTabletEvent(eventtype, pos, 1, 0, 0, SDL_TOUCH_MOUSEID,
+            buttons ^ prevButtons, buttons, int(pointerInfo[ii].sourceDevice), pointerInfo[ii].dwTime);
+        prevButtons = buttons;
+        return true;
+      }
     }
     if(pts.empty())
       return false;
@@ -315,6 +325,7 @@ static void initWMPointer()
     InitializeTouchInjection = (PtrInitializeTouchInjection)(GetProcAddress(user32, "InitializeTouchInjection"));
   }
 #endif
+  EnableMouseInPointer(TRUE);
   // Attempt to get HIMETRIC to pixel conversion factor; on Surface Pro, result is close, but not quite
   // 1 HIMETRIC = 0.01 mm
   //QWidget* screen = QApplication::desktop()->screen(0);
@@ -341,7 +352,7 @@ static bool winInputEvent(MSG* m) //, long* result)
       if(pointerInfo[0].pointerType == PT_PEN) {
         penPointerId = pointerInfo[0].pointerId;
         if(GetPointerPenInfo(penPointerId, &penPointerInfo[0]))
-          processPenInfo(penPointerInfo[0], TabletPress);
+          processPenInfo(penPointerInfo[0], TouchPointPressed);
         return true;
       }
       else
@@ -361,7 +372,7 @@ static bool winInputEvent(MSG* m) //, long* result)
     updateClientRect(m->hwnd);
     if(penPointerId && penPointerId == GET_POINTERID_WPARAM(m->wParam)) {
       if(GetPointerPenInfo(penPointerId, &penPointerInfo[0]))
-        processPenInfo(penPointerInfo[0], TabletRelease);
+        processPenInfo(penPointerInfo[0], TouchPointReleased);
       penPointerId = 0;
       return true;
     }
@@ -690,24 +701,31 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   // Window / OpenGL setup
   WNDCLASS wc;
   memset(&wc, 0, sizeof(wc));
-  wc.style         = CS_OWNDC;
-  wc.lpfnWndProc   = (WNDPROC)WindowProc;
-  wc.hInstance     = hCurrentInst;  //GetModuleHandle(NULL);
-  wc.hIcon         = LoadIcon(NULL, IDI_WINLOGO);
-  wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+  wc.style = CS_OWNDC;
+  wc.lpfnWndProc = (WNDPROC)WindowProc;
+  wc.hInstance = hCurrentInst;  //GetModuleHandle(NULL);
+  wc.hIcon = LoadIcon(hCurrentInst, L"IDI_ICON1");  //MAKEINTRESOURCE(IDI_ICON1));
+  wc.hCursor = LoadCursor(NULL, IDC_ARROW);
   wc.lpszClassName = L"AscendWnd";
   if(!RegisterClass(&wc)) { LOGE("RegisterClass() failed"); return 0; };
 
   if(!initWGL(wc)) { return 0; };
 
+  RECT winRect = { 0, 0, screenw/2, screenh };
+  const YAML::Node& posYaml = MapsApp::cfg()["ui"]["position"];
+  if(posYaml.size() == 4) {
+    winRect.left = posYaml[0].as<int>(0);
+    winRect.top = posYaml[1].as<int>(0);
+    winRect.right = posYaml[2].as<int>(winRect.right);
+    winRect.bottom = posYaml[3].as<int>(winRect.bottom);
+  }
+
   auto winStyle = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
   HWND mainWnd = CreateWindow(
-      wc.lpszClassName, L"Ascend Maps",  // class name, window name
-      winStyle,              // styles
-      0, 0,               // posx, posy. If x is set to CW_USEDEFAULT y is ignored
-      1024, 768,          // width, height
-      NULL, NULL,         // parent window, menu
-      wc.hInstance, NULL);   // instance, param
+      wc.lpszClassName, L"Ascend Maps", winStyle,  // class name, window name, styles
+      winRect.left, winRect.top,  // posx, posy. If x is set to CW_USEDEFAULT y is ignored
+      winRect.right - winRect.left, winRect.bottom - winRect.top,  // width, height
+      NULL, NULL, wc.hInstance, NULL);  // parent window, menu, instance, param
   msgWindowHandle = mainWnd;
   HDC mainDC = GetDC(mainWnd);
   HGLRC mainCtx = createGLContext(mainDC, 0);
@@ -771,10 +789,19 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
         DispatchMessage(&msg);
       } while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE));
     }
+    // calling wglMakeCurrent() for other context on offscreen thread breaks rendering on main thread unless
+    //  we call wglMakeCurrent again at least once, even though wglGetCurrentContext() reports no change.
+    // Happens even if other context is not shared!  Maybe VMware GL issue?
+    wglMakeCurrent(mainDC, mainCtx);
     RECT rect;
     GetClientRect(mainWnd, &rect);
     if(app->drawFrame(rect.right, rect.bottom))
       SwapBuffers(mainDC);
+  }
+
+  // save window size
+  if(GetWindowRect(mainWnd, &winRect)) {
+    app->config["ui"]["position"] = YAML::Array({winRect.left, winRect.top, winRect.right, winRect.bottom});
   }
 
   app->onSuspend();
