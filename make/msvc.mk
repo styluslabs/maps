@@ -63,7 +63,7 @@ QUOTEOBJ=$(SRCBASE:%="$(OBJDIR)/%.obj")
 DEPS=$(SRCBASE:%=$(OBJDIR)/%.d)
 RESBASE=$(basename $(RESOURCES))
 RES=$(RESBASE:%=$(OBJDIR)/%.res)
-TGT=$(BUILDDIR)/$(TARGET)
+TGT=$(BUILDDIR)\$(TARGET)
 # compiler will not create directories, so depend on existence of all directories in output folder
 # sort removes duplicates (which cause make error)
 BUILDDIRS=$(sort $(dir $(OBJ)))
@@ -108,11 +108,14 @@ $(TGT): $(OBJ) $(RES)
 	$(LD) /out:$@ $^ $(LDFLAGS) $(LIBS)
 	@echo Built $@
 
+# unbelievable how difficult it is to get behavior of unix cp in Windows
 $(ZIP): $(TGT) $(DISTRES)
 	mkdir $(BUILDDIR)\$(ZIPDIR)
-	cp $(TGT) $(BUILDDIR)\$(ZIPDIR)
-	cp -R $(DISTRES) $(BUILDDIR)\$(ZIPDIR)
-	(cd $(BUILDDIR) && zip -r -m $(ZIPFILE) $(ZIPDIR))
+	copy $(TGT) $(BUILDDIR)\$(ZIPDIR)
+	cmd /C for %I in ( $(DISTRES) ) do powershell cp -r %I $(BUILDDIR)\$(ZIPDIR)
+	del $(BUILDDIR)\$(ZIPDIR)\shared\.git
+	(cd $(BUILDDIR) && tar.exe -acf $(ZIPFILE) $(ZIPDIR))
+	rmdir /s /q $(BUILDDIR)\$(ZIPDIR)
 
 $(MSI): $(TGT) $(DISTRES)
 	mkdir $(BUILDDIR)\$(ZIPDIR)

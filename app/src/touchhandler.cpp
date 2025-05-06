@@ -33,7 +33,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
     }
     else if(event->type == SDL_FINGERDOWN) {
       uint32_t mods = SDL_GetModState();
-      bool ismouse = event->tfinger.touchId == SDL_TOUCH_MOUSEID;
+      bool ismouse = event->tfinger.touchId == SDL_TOUCH_MOUSEID || event->tfinger.touchId == PenPointerPen;
       altDragMode = ismouse && event->tfinger.fingerId != SDL_BUTTON_LMASK;
       tapState = ((!ismouse && gui->fingerClicks == 2) || (mods & KMOD_CTRL)) ? DBL_TAP_DRAG_PENDING : TAP_NONE;
       if(altDragMode)
@@ -47,7 +47,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
       if(gui->fingerClicks > 0) {
         app->map->handlePanGesture(prevCOM.x, prevCOM.y, initCOM.x, initCOM.y);  // undo any panning
         if(gui->fingerClicks == 1) {
-          if(event->tfinger.touchId == SDL_TOUCH_MOUSEID) {
+          if(event->tfinger.touchId == SDL_TOUCH_MOUSEID || event->tfinger.touchId == PenPointerPen) {
             if(altDragMode)
               app->longPressEvent(initCOM.x, initCOM.y);
             else
@@ -132,7 +132,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
 {
   Map* map = app->map.get();
   size_t prevpoints = touchPoints.size();
-  //LOGW("touchEvent: %d for %d, t: %f, x: %f, y: %f; current npts %d", action, ptrId, t, x, y, prevpoints);
+  //PLATFORM_LOG("touchEvent: %d for %d, t: %.f, x: %.2f, y: %.2f; current npts %d\n", action, ptrId, t, x, y, prevpoints);
   auto tpiter = touchPoints.begin();
   while(tpiter < touchPoints.end() && tpiter->id != ptrId) { ++tpiter; }
   if(tpiter != touchPoints.end()) {

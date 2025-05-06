@@ -11,6 +11,8 @@ endif
 
 ifneq ($(ANDROID),)
   BUILDDIR ?= build/Android$(BUILDTYPE)
+else ifneq ($(windir),)
+  BUILDDIR ?= build\$(BUILDTYPE)
 else
   BUILDDIR ?= build/$(BUILDTYPE)
 endif
@@ -80,18 +82,19 @@ LIBS = \
   setupapi.lib \
   imm32.lib \
   version.lib \
-  ..\curl-8.13.0\builds\libcurl-vc-x64-release-dll-ipv6-sspi-schannel\lib\libcurl.lib
+  ..\curl-8.13.0\builds\libcurl-vc-x64-release-dll-zlib-static-ipv6-sspi-schannel\lib\libcurl.lib
 
 # distribution package
 ZIPFILE = $(TARGET)-$(GITREV).zip
 ZIPDIR = Ascend
 DISTRES = \
-  assets/config.default.yaml \
-  assets/mapsources.default.yaml \
-  assets/plugins \
-  assets/res \
-  assets/scenes \
-  assets/shared
+  assets\config.default.yaml \
+  assets\mapsources.default.yaml \
+  assets\plugins \
+  assets\res \
+  assets\scenes \
+  assets\shared \
+  ..\curl-8.13.0\builds\libcurl-vc-x64-release-dll-zlib-static-ipv6-sspi-schannel\bin\libcurl.dll
 # installer
 #WXS = windows/InstallWrite.wxs
 

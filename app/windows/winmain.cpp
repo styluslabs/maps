@@ -49,7 +49,18 @@ Uint32 SDL_GetTicks()
 
 char* SDL_GetClipboardText()
 {
-  return NULL;  //iosPlatform_getClipboardText();
+  if(!OpenClipboard(msgWindowHandle)) { return NULL; }
+  char* res = NULL;
+  HANDLE object = GetClipboardData(CF_UNICODETEXT);
+  if(object) {
+    LPVOID buffer = GlobalLock(object);
+    if(buffer) {
+      res = strdup(wstr_to_utf8((wchar_t*)buffer).c_str());
+      GlobalUnlock(object);
+    }
+  }
+  CloseClipboard();
+  return res;
 }
 
 SDL_bool SDL_HasClipboardText()
@@ -61,7 +72,19 @@ SDL_bool SDL_HasClipboardText()
 
 int SDL_SetClipboardText(const char* text)
 {
-  //iosPlatform_setClipboardText(text);
+  int nchars = MultiByteToWideChar(CP_UTF8, 0, text, -1, NULL, 0);
+  if (!nchars) { return 0; }
+  HANDLE object = GlobalAlloc(GMEM_MOVEABLE, nchars * sizeof(WCHAR));
+  if (!object) { return 0; }
+  LPVOID buffer = GlobalLock(object);
+  if (!buffer) { GlobalFree(object); return 0; }
+  MultiByteToWideChar(CP_UTF8, 0, text, -1, (WCHAR*)buffer, nchars);
+  GlobalUnlock(object);
+
+  if (!OpenClipboard(msgWindowHandle)) { GlobalFree(object); return 0; }
+  EmptyClipboard();
+  SetClipboardData(CF_UNICODETEXT, object);
+  CloseClipboard();
   return 0;
 }
 
@@ -69,7 +92,11 @@ void SDL_free(void* mem) { free(mem); }
 
 SDL_Keymod SDL_GetModState()
 {
-  return (SDL_Keymod)(0);
+  uint32_t mods = GetKeyState(VK_CONTROL) < 0 ? KMOD_CTRL : 0;  // high order bit set if key is down
+  mods |= GetKeyState(VK_SHIFT) < 0 ? KMOD_SHIFT : 0;
+  mods |= GetKeyState(VK_MENU) < 0 ? KMOD_ALT : 0;
+  mods |= GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0 ? KMOD_GUI : 0;
+  return (SDL_Keymod)mods;
 }
 
 void SDL_SetTextInputRect(SDL_Rect* rect)
@@ -382,15 +409,12 @@ static bool winInputEvent(MSG* m) //, long* result)
   case WM_MOUSEWHEEL:
   case WM_MOUSEHWHEEL:
   {
-    // SDL doesn't update its internal mod state if window doesn't have focus, so get mods from Windows
-    uint32_t mods = GetKeyState(VK_CONTROL) < 0 ? KMOD_CTRL : 0;  // high order bit set if key is down
-    mods |= GetKeyState(VK_SHIFT) < 0 ? KMOD_SHIFT : 0;  // high order bit set if key is down
     SDL_Event event = { 0 };  // we'll leave windowID and which == 0
     event.type = SDL_MOUSEWHEEL;
     //event.wheel.timestamp = SDL_GetTicks();
     event.wheel.x = m->message == WM_MOUSEWHEEL ? 0 : GET_WHEEL_DELTA_WPARAM(m->wParam);
     event.wheel.y = m->message == WM_MOUSEWHEEL ? GET_WHEEL_DELTA_WPARAM(m->wParam) : 0;
-    event.wheel.direction = SDL_MOUSEWHEEL_NORMAL | (mods << 16);
+    event.wheel.direction = SDL_MOUSEWHEEL_NORMAL | (SDL_GetModState() << 16);
     SDL_PushEvent(&event);  //SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);
     break;
   }
@@ -561,20 +585,20 @@ LONG WINAPI WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     event.key.repeat = LOWORD(lParam);  //action == GLFW_REPEAT;
     event.key.keysym.scancode = (SDL_Scancode)LOBYTE(HIWORD(lParam));
     event.key.keysym.sym = key < 0 || key > 255 ? SDLK_UNKNOWN : keyMap[key];
-    //event.key.keysym.mod = (mods & GLFW_MOD_SHIFT ? KMOD_SHIFT : 0) | (mods & GLFW_MOD_CONTROL ? KMOD_CTRL : 0)
-    //    | (mods & GLFW_MOD_ALT ? KMOD_ALT : 0) | (mods & GLFW_MOD_SUPER ? KMOD_GUI : 0)
-    //    | (mods & GLFW_MOD_CAPS_LOCK ? KMOD_CAPS : 0) | (mods & GLFW_MOD_NUM_LOCK ? KMOD_NUM : 0);
+    event.key.keysym.mod = SDL_GetModState();
     event.key.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
     SDL_PushEvent(&event);
     return 0;
   }
 
   case WM_CHAR: {
+    wchar_t utf16Char = static_cast<wchar_t>(wParam);
+    // control characters are handled as key events above
+    if(utf16Char < 32 || (utf16Char > 126 && utf16Char < 160)) { return 0; }
     SDL_Event event = {0};
     event.text.type = SDL_TEXTINPUT;
     event.text.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
     uint8_t* out = (uint8_t*)event.text.text;
-    wchar_t utf16Char = static_cast<wchar_t>(wParam);
     int nbytes = WideCharToMultiByte(CP_UTF8, 0, &utf16Char, 1, (LPSTR)out, 8, nullptr, nullptr);
     out[nbytes] = '\0';
     SDL_PushEvent(&event);
@@ -778,6 +802,11 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   app->updateGpsStatus(10, 10);  // turn location maker blue
   app->updateOrientation(0, M_PI/2, 0, 0);
 
+  // calling wglMakeCurrent() for other context on offscreen thread breaks rendering on main thread unless
+  //  we call wglMakeCurrent again at least once, even though wglGetCurrentContext() reports no change.
+  // Happens even if other context is not shared! ... looks like it could be a VMware GL issue
+  wglMakeCurrent(mainDC, mainCtx);
+
   // main loop
   MSG msg;
   while(MapsApp::runApplication) {
@@ -789,10 +818,6 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
         DispatchMessage(&msg);
       } while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE));
     }
-    // calling wglMakeCurrent() for other context on offscreen thread breaks rendering on main thread unless
-    //  we call wglMakeCurrent again at least once, even though wglGetCurrentContext() reports no change.
-    // Happens even if other context is not shared!  Maybe VMware GL issue?
-    wglMakeCurrent(mainDC, mainCtx);
     RECT rect;
     GetClientRect(mainWnd, &rect);
     if(app->drawFrame(rect.right, rect.bottom))
