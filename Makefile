@@ -9,10 +9,9 @@ else
   BUILDTYPE = Release
 endif
 
+# don't use backslash in Windows BUILDDIR, breaks make dependencies
 ifneq ($(ANDROID),)
   BUILDDIR ?= build/Android$(BUILDTYPE)
-else ifneq ($(windir),)
-  BUILDDIR ?= build\$(BUILDTYPE)
 else
   BUILDDIR ?= build/$(BUILDTYPE)
 endif

@@ -585,34 +585,19 @@ void MapsBookmarks::importGpx(const char* filename, const char* gpxsrc)
   populateLists(false);
 }
 
-void MapsBookmarks::importImages(int64_t list_id, const char* path)
+static int importImageFolder(SQLiteStmt& insbkmk, int64_t list_id, const char* path)
 {
   size_t nimages = 0;
-#if PLATFORM_IOS
-  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
-      "VALUES (?,?,?,?,?,?,?,?);";
-  SQLiteStmt insbkmk(app->bkmkDB, query);
-  auto photoCallback = [&](const char* name, const char* path, double lng, double lat, double alt, double ctime){
-    std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'/>"}]})", alt, path);
-    insbkmk.bind(list_id, 0, name, props, "", lng, lat, ctime).exec();
-    ++nimages;
-  };
-  iosPlatform_getGeoTaggedPhotos(0, photoCallback);
-  std::string errmsg = "No geotagged images found in Photo Library.  Perhaps Camera app does not have location permission?";
-#else
   std::vector<uint8_t> buf(65536);  // GPS data offset is ~20KB for Pixel 3 images
-  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
-      "VALUES (?,?,?,?,?,?,?, CAST(strftime('%s', datetime(?)) AS INTEGER));";
-  SQLiteStmt insbkmk(app->bkmkDB, query);
-  //sqlite3_exec(app->bkmkDB, "BEGIN TRANSACTION", NULL, NULL, NULL);  -- would this lock DB for all threads?
   easyexif::EXIFInfo exif;
   exif.acceptTruncated = true;
   auto files = lsDirectory(path);
   std::sort(files.begin(), files.end());  // not really necessary since bookmarks never sorted by rowid
   for(auto& file : files) {
     FSPath fpath(path, file);
+    if(fpath.isDir()) { nimages += importImageFolder(insbkmk, list_id, fpath.c_str()); continue; }
     auto ext = toLower(fpath.extension());
-    if(ext != "jpg" && ext != "jpeg") continue;
+    if(ext != "jpg" && ext != "jpeg") { continue; }
     FileStream fs(fpath.c_str(), "rb");
     size_t len = fs.read(buf.data(), buf.size());
     int res = exif.parseFrom(buf.data(), len);
@@ -631,6 +616,28 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
     insbkmk.bind(list_id, 0, fpath.baseName(), props, "", exif.GeoLocation.Longitude, exif.GeoLocation.Latitude, date).exec();
     ++nimages;
   }
+  return nimages;
+}
+
+void MapsBookmarks::importImages(int64_t list_id, const char* path)
+{
+  size_t nimages = 0;
+#if PLATFORM_IOS
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
+      "VALUES (?,?,?,?,?,?,?,?);";
+  SQLiteStmt insbkmk(app->bkmkDB, query);
+  auto photoCallback = [&](const char* name, const char* path, double lng, double lat, double alt, double ctime){
+    std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'/>"}]})", alt, path);
+    insbkmk.bind(list_id, 0, name, props, "", lng, lat, ctime).exec();
+    ++nimages;
+  };
+  iosPlatform_getGeoTaggedPhotos(0, photoCallback);
+  std::string errmsg = "No geotagged images found in Photo Library.  Perhaps Camera app does not have location permission?";
+#else
+  const char* query = "INSERT INTO bookmarks (list_id,osm_id,title,props,notes,lng,lat,timestamp) "
+      "VALUES (?,?,?,?,?,?,?, CAST(strftime('%s', datetime(?)) AS INTEGER));";
+  SQLiteStmt insbkmk(app->bkmkDB, query);
+  nimages = importImageFolder(insbkmk, list_id, path);
   std::string errmsg = fstring("No geotagged images found in %s", path);
 #endif
   MapsApp::runOnMainThread([=](){

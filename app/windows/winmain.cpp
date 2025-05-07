@@ -683,7 +683,7 @@ HGLRC createGLContext(HDC DC, HGLRC sharectx)
   const int contextAttribs[] = {
     WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
     WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-    WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+    WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,  // WGL_CONTEXT_ES2_PROFILE_BIT_EXT
     //WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_DEBUG_BIT_ARB,
     0
   };
@@ -735,7 +735,7 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
 
   if(!initWGL(wc)) { return 0; };
 
-  RECT winRect = { 0, 0, screenw/2, screenh };
+  RECT winRect = { 0, 0, screenw/2, int(0.9f*screenh) };
   const YAML::Node& posYaml = MapsApp::cfg()["ui"]["position"];
   if(posYaml.size() == 4) {
     winRect.left = posYaml[0].as<int>(0);
@@ -826,7 +826,7 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
 
   // save window size
   if(GetWindowRect(mainWnd, &winRect)) {
-    app->config["ui"]["position"] = YAML::Array({winRect.left, winRect.top, winRect.right, winRect.bottom});
+    app->config["ui"]["position"] = YAML::Array({winRect.left, winRect.top, winRect.right, winRect.bottom});  // YAML::Tag::YAML_FLOW
   }
 
   app->onSuspend();
