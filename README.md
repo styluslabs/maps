@@ -4,7 +4,7 @@ A cross-platform application for displaying vector and raster maps, built on [Ta
 
 Features include 3D terrain, offline search, track recording and editing, managing saved places, saving map tiles for offline use, and more.
 
-Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](https://github.com/styluslabs/maps/releases), and iOS: [App Store](https://apps.apple.com/us/app/ascend-maps/id6504321706), [Testflight](https://testflight.apple.com/join/3N1AUhj9).
+Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](https://github.com/styluslabs/maps/releases), [Windows](https://github.com/styluslabs/maps/releases), and iOS: [App Store](https://apps.apple.com/us/app/ascend-maps/id6504321706), [Testflight](https://testflight.apple.com/join/3N1AUhj9).
 
 <img alt="Wikipedia search; Shaded relief" src="https://github.com/user-attachments/assets/d00ca2ca-f4d1-4f71-bef8-4dfcbb0b7d36" width="270">
 <img alt="3D Terrain" src="https://github.com/user-attachments/assets/c59d61bb-f09b-41e8-902c-1e7984cbeae4" width="270">
@@ -108,7 +108,7 @@ The hierarchy for vector tiles consists of:
 A vector tile schema specifies how to group features into layers, which features to include at each zoom level, and which attributes to include for each feature.
 
 
-### Stylus Labs OSM schema ###
+### Ascend OSM schema ###
 
 The included vector map style [stylus-osm.yaml](assets/scenes/stylus-osm.yaml) (seen in the above screenshots) uses a custom schema because none of the existing tile schemas satisfied all the requirements for the application.  For example, most other schemas define some mapping from OSM tags to feature attributes, but because of the complex and fluid state of OSM tagging this schema just uses unmodified OSM tags for feature attributes.
 

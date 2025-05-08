@@ -1,8 +1,6 @@
 # Makefile fragment for MSVC x86 (32-bit) - v. 2018-11-28
 # - for use with gnu make built for Windows: http://www.equation.com/servlet/equation.cmd?fa=make
 
-TARGET:=$(TARGET).exe
-
 # should we also define _UNICODE to use for C stdlib fns?
 # common C and C++ flags
 # /MD to use dynamic C runtime (msvcrt DLL); /MT to statically link C runtime (libcmt)
@@ -63,7 +61,7 @@ QUOTEOBJ=$(SRCBASE:%="$(OBJDIR)/%.obj")
 DEPS=$(SRCBASE:%=$(OBJDIR)/%.d)
 RESBASE=$(basename $(RESOURCES))
 RES=$(RESBASE:%=$(OBJDIR)/%.res)
-TGT=$(BUILDDIR)/$(TARGET)
+TGT=$(BUILDDIR)/$(TARGET).exe
 # compiler will not create directories, so depend on existence of all directories in output folder
 # sort removes duplicates (which cause make error)
 BUILDDIRS=$(sort $(dir $(OBJ)))
@@ -139,7 +137,7 @@ $(BUILDDIRSMADE):
 	type nul > $@
 
 clean:
-	cd $(BUILDDIR) && del /S "*.obj" "*.d" "$(TARGET)"
+	cd $(BUILDDIR) && del /S "*.obj" "*.d" "$(TARGET).exe"
 
 distclean:
 	rd /s /q ./Debug ./Release
