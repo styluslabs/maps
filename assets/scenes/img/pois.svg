@@ -451,6 +451,15 @@ document.addEventListener('DOMContentLoaded', function(event) {
   </g>
 </svg>
 
+<!-- Waterfall: https://upload.wikimedia.org/wikipedia/commons/4/48/Map_symbols_US_NPS.svg -->
+<svg id="waterfall" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
+  <g transform="scale(6, -6) translate(-305.3, -612.8)" fill="none" stroke="#FF0000" stroke-width="0.6">
+    <line x1="303.391" y1="612.808" x2="307.103" y2="612.808"/>
+    <line x1="306.016" y1="611.234" x2="304.516" y2="611.234"/>
+    <line x1="308.368" y1="614.382" x2="302.181" y2="614.382"/>
+  </g>
+</svg>
+
 <!-- Cave -->
 <svg id="cave" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
   <g transform="scale(-2, 1.75) translate(-12, -12.5)" fill="#000000">

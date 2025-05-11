@@ -38,6 +38,7 @@ global:
         industry: '#C0CDCD'
         retail: '#FEF0D0'
         civic: '#D9CFC3'
+        military: '#EADCD7'
         water: '#9dc3de'  # == hsl(205, 50%, 74%) (compare ferry color)
         water_name: "#51909c"
         water_halo: "#e2eef0"
@@ -486,6 +487,9 @@ layers:
         civic:
             filter: { amenity: [university, college] }
             draw: { polygons: { visible: true, order: global.order.civic, color: global.color.civic } }
+        military:
+            filter: { landuse: military }
+            draw: { polygons: { visible: true, order: global.order.civic, color: global.color.military } }
         #urban:
         #    filter: { kind: urban_area }
         #    draw: { polygons: { color: [[7, global.color.urban_7], [9, global.color.urban_9]] } }
@@ -564,6 +568,13 @@ layers:
             filter: { water: ocean }
             # ensure that ocean has elevation = 0 (by not writing elevation)
             draw: { polygons: { style: ocean-polygons } }
+        intermittent:
+            filter: { intermittent: true }
+            draw:
+                polygons:
+                    # draw border line instead of polygon (probably should rename draw group)
+                    style: dashed-track
+                    width: [[10,0px],[11,1px],[15,2px]]
 
 
     water_name:
@@ -1344,7 +1355,7 @@ layers:
                     - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }
                     #- { natural: wood, $zoom: { min: 11 } }
                     #- { landuse: forest, $zoom: { min: 11 } }
-                    - { landuse: [commercial, retail], $zoom: { min: 13 } }
+                    - { landuse: [commercial, retail, military], $zoom: { min: 12 } }
             draw:
                 points: { visible: false }
                 text:
@@ -1361,6 +1372,9 @@ layers:
                         stroke: { color: global.color.park_halo, width: 3 }
             commercial:
                 filter: { landuse: [commercial, retail] }
+                draw: { text: { font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } } } }
+            military:
+                filter: { landuse: military }
                 draw: { text: { font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } } } }
             # don't show label for tiny area or for huge area (where boundries may be offscreen) beyond z12
             show:
@@ -1412,6 +1426,26 @@ layers:
             hide_text:
                 filter: { $zoom: { max: 17 } }
                 draw: { points: { text: { visible: false } } }
+
+        waterfall:
+            exclusive: true
+            filter: { $zoom: { min: 14 }, waterway: waterfall }
+            draw:
+                points:
+                    style: poi-points
+                    sprite: waterfall
+                    color: global.color.spring
+                    size: 24px
+                    priority: global.priority.spring
+                    text:
+                        font:
+                            size: 11px
+                            style: italic
+                            fill: global.color.spring
+                            stroke: { color: global.color.default_halo, width: 2 }
+            hide_unnamed:
+                filter: { $zoom: { max: 16 }, name: false }
+                draw: { points: { visible: false } }
 
         icon_pois:
             # not exclusive, so lower priority than above
