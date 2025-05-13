@@ -29,7 +29,13 @@ class MapsView extends SurfaceView implements SurfaceHolder.Callback
     DisplayMetrics dm = getContext().getResources().getDisplayMetrics();
     MapsLib.surfaceCreated(holder.getSurface(), (dm.xdpi + dm.ydpi)/2);
   }
-  public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) { MapsLib.surfaceChanged(w, h); }
+
+  public void surfaceChanged(SurfaceHolder holder, int format, int w, int h)
+  {
+    int b = getRootWindowInsets().getSystemWindowInsetBottom();
+    MapsLib.surfaceChanged(w, h, 0, b);
+  }
+
   public void surfaceDestroyed(SurfaceHolder holder) { MapsLib.surfaceDestroyed(); }
 
   private void sendTouchEvent(MotionEvent event, int action, int i, long tt, float x, float y, float p)

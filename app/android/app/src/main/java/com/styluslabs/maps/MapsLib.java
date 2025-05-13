@@ -11,7 +11,7 @@ public class MapsLib
   }
 
   public static native void init(MapsActivity mapsActivity, AssetManager assetManager, String extFileDir, int versionCode);
-  public static native void surfaceChanged(int width, int height);
+  public static native void surfaceChanged(int width, int height, int topinset, int botinset);
   public static native void surfaceCreated(Surface surface, float dpi);
   public static native void surfaceDestroyed();
   public static native void onPause();

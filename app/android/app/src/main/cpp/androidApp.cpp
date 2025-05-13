@@ -321,6 +321,7 @@ static MapsApp* app = NULL;
 static std::thread mainThread;
 static SDL_Window sdlWin = {0, 0, 0};
 static std::string initialQuery;
+static int insetBottom = 0;
 
 static jobject mapsActivityRef = nullptr;
 static jmethodID showTextInputMID = nullptr;
@@ -527,7 +528,11 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
   jniEnv->CallVoidMethod(mapsActivityRef, setServiceStateMID, state, intervalSec, minDist);
 }
 
-void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 30; *bottom = 16; }
+void MapsApp::getSafeAreaInsets(float *top, float *bottom)
+{
+  if(top) { *top = 30; }
+  if(bottom) { *bottom = std::max(16.0, insetBottom/gui->paintScale); }
+}
 
 void MapsApp::extractAssets(const char* assetPath)
 {
@@ -684,8 +689,9 @@ JNI_FN(surfaceDestroyed)(JNIEnv* env, jclass)
   MapsApp::mainThreadId = std::this_thread::get_id();  // so location updates get processed for track recording
 }
 
-JNI_FN(surfaceChanged)(JNIEnv* env, jclass, jint w, jint h)
+JNI_FN(surfaceChanged)(JNIEnv* env, jclass, jint w, jint h, jint topinset, jint botinset)
 {
+  insetBottom = botinset;
   MapsApp::runOnMainThread([=]() {
     SDL_Event event = {0};
     event.type = SDL_WINDOWEVENT;

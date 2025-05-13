@@ -35,6 +35,7 @@ private:
   void exportGpx(const char* filename, int listid);
   void editBookmark(int rowid, int listid, std::function<void()> callback);
   void deleteList(int rowid, const std::string& title, bool clearOnly);
+  void resultStepper(int list_id, int rowid, int dir);
 
   Widget* bkmkPanel = NULL;
   Widget* bkmkContent = NULL;

@@ -293,7 +293,7 @@ std::string MapsApp::getPlaceTitle(const Properties& props) const
   return name;
 }
 
-void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& propstr)  //, int priority)
+void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& propstr, PickResultStepper stepper)
 {
   static const char* placeInfoProtoSVG = R"#(
     <g layout="flex" flex-direction="column" box-anchor="hfill">
@@ -349,6 +349,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   pickResultName = namestr;
   pickResultProps = propstr;
   pickResultOsmId = osmid;
+  pickResultStepper = stepper;
   bool wasCurrLoc = currLocPlaceInfo;
   currLocPlaceInfo = (locMarker > 0 && pickedMarkerId == locMarker);
   flyToPickResult = true;
@@ -681,6 +682,7 @@ void MapsApp::clearPickResult()
   pickResultProps.clear();
   pickResultOsmId.clear();
   pickResultCoord = LngLat(NAN, NAN);
+  pickResultStepper = {};
   flyToPickResult = false;
   if(pickResultMarker > 0)
     map->markerSetVisible(pickResultMarker, false);
@@ -1442,11 +1444,18 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win->sdlWindow = sdlWin;
   win->isFocusable = true;  // top level window should always be focusable
 
+#if PLATFORM_ANDROID  // need to test on newer iPhone
+  Widget* mainTbContNarrow = win->selectFirst(".window-layout-narrow")->selectFirst(".main-tb-container");
+#endif
   win->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
       getSafeAreaInsets(&topInset, &bottomInset);
-      if(bottomInset > 0)
+      if(bottomInset > 0) {
         static_cast<SvgRect*>(bottomPadding->node)->setRect(Rect::wh(20, bottomInset));
+#if PLATFORM_ANDROID  // need to test on newer iPhone
+        mainTbContNarrow->setMargins(0, 20, std::max(16.f, bottomInset), 20);
+#endif
+      }
       return true;
     }
     if(event->type == SDL_KEYDOWN) {
@@ -1463,6 +1472,12 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
         else if(!panelContainer->isVisible()) {
           // clear all history if minimized
           while(!panelHistory.empty()) popPanel();
+        }
+        return true;
+      }
+      else if(event->key.keysym.sym == SDLK_LEFT || event->key.keysym.sym == SDLK_RIGHT) {
+        if(pickResultStepper) {
+          pickResultStepper(event->key.keysym.sym == SDLK_LEFT ? -1 : 1);
         }
         return true;
       }

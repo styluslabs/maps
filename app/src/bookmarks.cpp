@@ -36,7 +36,9 @@ int MapsBookmarks::addBookmark(int list_id, const std::string& osm_id, const std
 
   auto it = bkmkMarkers.find(list_id);
   if(it != bkmkMarkers.end()) {
-    auto onPicked = [=](){ app->setPickResult(pos, name, props); };
+    auto onPicked = [=](){
+      app->setPickResult(pos, name, props, [=](int dir){ resultStepper(list_id, rowid, dir); });
+    };
     it->second->createMarker(pos, onPicked, {{{"name", name}}}, rowid);
   }
 
@@ -272,6 +274,24 @@ void MapsBookmarks::deleteList(int rowid, const std::string& title, bool clearOn
   }
 }
 
+void MapsBookmarks::resultStepper(int list_id, int rowid, int dir)
+{
+  // pretty ugly; we can make this more efficient if this feature proves more useful than expected
+  std::string sort = app->config["bookmarks"]["sort"].as<std::string>("date");
+  std::string sortStr = sort == "name" ? "title" : sort == "dist" ? "osmSearchRank(-1.0, lng, lat)" : "timestamp";
+  sortStr += (dir > 0) == (sort != "date") ? "" : " DESC";
+  std::string query = "SELECT rowid, title, props, lng, lat FROM bookmarks WHERE list_id = ? ORDER BY " + sortStr + ";";
+  bool abort = false;
+  int previd = -1;
+  SQLiteStmt(app->bkmkDB, query).bind(list_id).exec([&](int rowid2, std::string nm, std::string pr, double lng, double lat){
+    if(previd == rowid) {
+      app->setPickResult(LngLat(lng, lat), nm, pr, [=](int dir2){ resultStepper(list_id, rowid2, dir2); });
+      abort = true;
+    }
+    previd = rowid2;
+  }, false, &abort);
+}
+
 void MapsBookmarks::populateBkmks(int list_id, bool createUI)
 {
   std::string listname, color;
@@ -313,7 +333,9 @@ void MapsBookmarks::populateBkmks(int list_id, bool createUI)
   std::string query = "SELECT rowid, title, props, notes, lng, lat, timestamp FROM bookmarks WHERE list_id = ? ORDER BY " + strStr + ";";
   SQLiteStmt(app->bkmkDB, query).bind(list_id).exec([&](int rowid, std::string namestr,
       std::string propstr, const char* notestr, double lng, double lat, int64_t timestamp){
-    auto onPicked = [=](){ app->setPickResult(LngLat(lng, lat), namestr, propstr); };
+    auto onPicked = [=](){
+      app->setPickResult(LngLat(lng, lat), namestr, propstr, [=](int dir){ resultStepper(list_id, rowid, dir); });
+    };
     if(markerGroup)
       markerGroup->createMarker(LngLat(lng, lat), onPicked, {{{"name", namestr}}}, rowid);
 
@@ -467,7 +489,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
       // this is ridiculous ...
       std::string newname;
       SQLiteStmt(app->bkmkDB, "SELECT title FROM bookmarks WHERE rowid = ?;").bind(rowid).onerow(newname);
-      app->setPickResult(app->pickResultCoord, newname, app->pickResultProps); });
+      app->setPickResult(app->pickResultCoord, newname, app->pickResultProps, app->pickResultStepper); });
   };
 
   auto setListFn = [=](int newlistid, std::string listname){
@@ -490,7 +512,7 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
     bkmkPanelDirty = true;
     listsDirty = archiveDirty = true;
     // rebuild place info (listid, captured in several places, has changed)
-    app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps);
+    app->setPickResult(app->pickResultCoord, app->pickResultName, app->pickResultProps, app->pickResultStepper);
   };
 
   //Button* chooseListBtn = new Button(widget->containerNode()->selectFirst(".combobox"));

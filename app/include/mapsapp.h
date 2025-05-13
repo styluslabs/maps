@@ -83,7 +83,8 @@ public:
   Point lngLatToScreenPoint(LngLat lngLat);
   LngLat getMapCenter();
   double getElevation(LngLat pos, std::function<void(double)> callback = {});
-  void setPickResult(LngLat pos, std::string namestr, const std::string& propstr);
+  typedef std::function<void(int)> PickResultStepper;
+  void setPickResult(LngLat pos, std::string namestr, const std::string& propstr, PickResultStepper = {});
   const YAML::Node& sceneConfig();
   void placeInfoPluginError(const char* err);
   int getPanelWidth() const;
@@ -108,6 +109,7 @@ public:
   std::string pickResultProps;
   std::string pickResultOsmId;
   LngLat pickResultCoord = {NAN, NAN};
+  PickResultStepper pickResultStepper;
   LngLat tapLocation = {NAN, NAN};
   bool searchActive = false;
   int placeInfoProviderIdx = 0;

@@ -3,15 +3,16 @@
 
 function openRouteService(mode, waypoints)
 {
-  if(!secrets.openroute_auth) {
-    notifyError("route", "Open Route Service API key missing - set secrets['openroute_auth'] in plugins/_secrets.js");
+  const auth = secrets.openroute_auth || readSceneValue("config.secrets.openroute_auth");
+  if(!auth) {
+    notifyError("route", "Open Route Service API key missing - set config.secrets.openroute_auth");
     return;
   }
 
   const mode0 = mode.split("-")[0];
   const profile = mode0 == "walk" ? "foot-hiking" : mode0 == "bike" ? "cycling-road" : "driving-car";  //cycling-regular, cycling-mountain
   const url = "https://api.openrouteservice.org/v2/directions/" + profile + "/gpx";
-  const hdrs = "Content-Type: application/json\r\nAuthorization: " + secrets.openroute_auth;
+  const hdrs = "Content-Type: application/json\r\nAuthorization: " + auth;
   const body = {"coordinates": waypoints, "elevation": "true"};
 
   httpRequest(url, hdrs, JSON.stringify(body), function(content, error) {

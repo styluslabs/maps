@@ -399,6 +399,8 @@ styles:
     dashed-bike:   { mix: unlit-lines, dash: [1.0, 1.0] }
     dashed-rail:   { mix: unlit-lines, dash: [4.0, 4.0] }
     #rail-sleepers: { mix: unlit-lines, dash: [0.15, 7.0] }
+    # double dashed ... looks nice, but hard to see on lighter backgrounds
+    #    blocks.color: if(abs(v_texcoord.x - 0.5) < 0.20) { discard; }
 
     aerialway:
         mix: unlit-lines
@@ -488,7 +490,7 @@ layers:
             filter: { amenity: [university, college] }
             draw: { polygons: { visible: true, order: global.order.civic, color: global.color.civic } }
         military:
-            filter: { landuse: military }
+            filter: [ { landuse: military }, { amenity: prison } ]
             draw: { polygons: { visible: true, order: global.order.civic, color: global.color.military } }
         #urban:
         #    filter: { kind: urban_area }
@@ -744,7 +746,6 @@ layers:
             unpaved:
                 enabled: global.show_trails
                 filter:
-                    - highway: false  # for old schema
                     - highway: path
                     - { highway: footway, surface: unpaved }
                 draw: { lines: { color: global.color.unpaved_trail, width: [[10, 1px], [18, 3px]] } }
@@ -1435,7 +1436,7 @@ layers:
                     style: poi-points
                     sprite: waterfall
                     color: global.color.spring
-                    size: 24px
+                    size: 20px
                     priority: global.priority.spring
                     text:
                         font:
