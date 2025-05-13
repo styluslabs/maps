@@ -231,6 +231,8 @@ public:
   static bool simulateTouch;
   static bool lowPowerMode;
   static int prevVersion;
+  static int versionCode;
+  static std::string versionStr;
 
 private:
   void saveConfig();

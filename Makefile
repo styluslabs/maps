@@ -25,9 +25,11 @@ else
   #DEFS += GLM_FORCE_INTRINSICS
 endif
 
-# if deferred eval, make sure to only use for source that needs GITREV
-GITREV := $(shell git rev-parse --short HEAD || wsl git rev-parse --short HEAD)
-
+# if deferred eval, make sure to only use for source that needs GIT_REV
+# refs: https://stackoverflow.com/questions/17097263
+GIT_REV := $(shell git rev-parse --short HEAD || wsl git rev-parse --short HEAD)
+GIT_TAGCOUNT := $(shell git tag -l | wc -l || wsl git tag -l | wc -l)
+GIT_DESCRIBE := $(shell git describe --tags --dirty || wsl git describe --tags --dirty)
 ## common modules
 include module.mk
 include tangram-es/core/module.mk
@@ -35,11 +37,6 @@ include tangram-es/core/module.mk
 
 ifneq ($(windir),)
 # Windows
-MAJORVER := 1
-MINORVER := 0
-GITCOUNT := $(shell git rev-list --count HEAD || wsl git rev-list --count HEAD)
-APPVERSION := $(MAJORVER).$(MINORVER).$(GITCOUNT)
-
 MODULE_BASE := .
 
 MODULE_SOURCES += \
@@ -58,7 +55,8 @@ MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
 include $(ADD_MODULE)
 
 RESOURCES = app/windows/resources.rc
-RCFLAGS = /DVERSIONSTR=\"$(APPVERSION)\" /DVERSIONCSV="$(MAJORVER),$(MINORVER),$(GITCOUNT),0"
+RCFLAGS = /DVERSIONSTR=\"$(GIT_DESCRIBE)\" /DVERSIONCSV="1,0,$(GITTAGCOUNT),0"
+#/DVERSIONSTR=\"$(MAJORVER).$(MINORVER).$(GITTAGCOUNT)\" /DVERSIONCSV="$(MAJORVER),$(MINORVER),$(GITTAGCOUNT),0"
 #INCSYS += ../SDL/include
 DEFS += TANGRAM_WINDOWS _USE_MATH_DEFINES UNICODE NOMINMAX FONS_WPATH
 
@@ -84,7 +82,7 @@ LIBS = \
   ..\curl-8.13.0\builds\libcurl-vc-x64-release-dll-zlib-static-ipv6-sspi-schannel\lib\libcurl.lib
 
 # distribution package
-ZIPFILE = $(TARGET)-$(GITREV).zip
+ZIPFILE = $(TARGET)-$(GIT_DESCRIBE)-$(GIT_REV).zip
 ZIPDIR = Ascend
 DISTRES = \
   assets\config.default.yaml \
@@ -221,7 +219,7 @@ endif
 
 # distribution package
 TGZ_FOLDER = Ascend
-TGZ = $(TARGET)-$(GITREV).tar.gz
+TGZ = $(TARGET)-$(GIT_DESCRIBE)-$(GIT_REV).tar.gz
 DISTRES = \
   assets/config.default.yaml \
   assets/mapsources.default.yaml \

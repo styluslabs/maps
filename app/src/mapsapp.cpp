@@ -62,7 +62,8 @@ ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
 
-static constexpr int versionCode = 3;  // last incremented 1 Apr 2025
+std::string MapsApp::versionStr = PPVALUE_TO_STRING(MAPS_GIT_REV) + std::string("; ") + __DATE__;
+int MapsApp::versionCode = MAPS_GIT_COUNT;  // last incremented 1 Apr 2025
 int MapsApp::prevVersion = 0;
 
 struct JSCallInfo { int ncalls = 0; double secs = 0; };

@@ -39,4 +39,7 @@ MODULE_DEFS_PRIVATE = PUGIXML_NO_XPATH PUGIXML_NO_EXCEPTIONS SVGGUI_NO_SDL
 
 include $(ADD_MODULE)
 
-$(OBJDIR)/$(MODULE_BASE)/app/src/plugins.$(OBJEXT): DEFS_PRIVATE += MAPS_GIT_REV=$(GITREV)
+$(OBJDIR)/$(MODULE_BASE)/app/src/mapsapp.$(OBJEXT): DEFS_PRIVATE += MAPS_GIT_REV=$(GIT_REV) MAPS_GIT_COUNT=$(GIT_TAGCOUNT)
+
+# source will be `touch`ed before building distribution package
+SRC_WITH_VERSION_INFO=$(MODULE_BASE)/app/src/mapsapp.cpp

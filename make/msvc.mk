@@ -72,13 +72,16 @@ ZIP = $(BUILDDIR)/$(ZIPFILE)
 WIXBASE=$(basename $(WXS))
 MSI = $(BUILDDIR)/$(WIXBASE).msi
 
-.PHONY: all zip msi clean distclean
+.PHONY: all zip msi clean distclean rebuild_version_info
 
 all: $(TGT)
 
-zip: $(ZIP)
+zip: rebuild_version_info $(ZIP)
 
-msi: $(MSI)
+msi: rebuild_version_info $(MSI)
+
+rebuild_version_info:
+	wsl touch $(SRC_WITH_VERSION_INFO)
 
 # force C/C++
 $(OBJDIR)/$(FORCECPP): CFLAGS += /TP

@@ -83,17 +83,20 @@ TGT=$(BUILDDIR)/$(TARGET)
 # sort removes duplicates (which cause make error)
 BUILDDIRS=$(sort $(dir $(OBJ)))
 
-.PHONY: all tgz real_tgz clean distclean sourcelist compile_commands
+.PHONY: all tgz real_tgz clean distclean sourcelist compile_commands rebuild_version_info
 
 all: $(TGT)
 
-tgz:
-	make -f tests.mk
+tgz: rebuild_version_info
+	make -f tests.mk DEBUG=1
 	sudo mount --bind $${HOME}/styluslabs $${HOME}/build-chroot$${HOME}/styluslabs/
 	sudo mount --bind $${HOME}/maps $${HOME}/build-chroot$${HOME}/maps/
 	sudo chroot --userspec=$${USER}:$${USER} $${HOME}/build-chroot/ /bin/bash -c "cd $${HOME}/maps/explore && make DEBUG=0 BUILDDIR=build/LinuxRel real_tgz"
 	sudo umount $${HOME}/build-chroot$${HOME}/maps
 	sudo umount $${HOME}/build-chroot$${HOME}/styluslabs
+
+rebuild_version_info:
+	touch $(SRC_WITH_VERSION_INFO)
 
 real_tgz: $(TGZ)
 

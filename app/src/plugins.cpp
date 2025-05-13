@@ -501,8 +501,7 @@ Button* PluginManager::createPanel()
   TextBox* resultText = new TextBox(resultTextNode);
 
   std::string aboutSVG = std::string("<text class='weak' box-anchor='left' font-size='12' margin='8 0'>Ascend Maps build ")
-  + PPVALUE_TO_STRING(MAPS_GIT_REV) + "; " + __DATE__ + (IS_DEBUG ? " DEBUG" : "") +
-  "\ngithub.com/styluslabs/maps | support@styluslabs.com<text>";
+  + MapsApp::versionStr + (IS_DEBUG ? " DEBUG" : "") + "\ngithub.com/styluslabs/maps | support@styluslabs.com<text>";
 
   TextBox* creditsText = new TextBox(loadSVGFragment(aboutSVG.c_str()));
   creditsText->setMargins(6, 6);
