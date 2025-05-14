@@ -31,4 +31,4 @@ if [ ! -f ./gradlew ]; then
 fi
 
 [ -z "$ANDROID_HOME" ] && export ANDROID_HOME="$HOME/android-sdk"
-APP_VERSIONCODE=`git tag -l | wc -l` APP_VERSIONNAME=`git describe --tags --dirty` ./gradlew "$@"
+./gradlew "$@" -Papp_versioncode=`git tag -l | wc -l` -Papp_versionname=`git describe --tags --dirty`

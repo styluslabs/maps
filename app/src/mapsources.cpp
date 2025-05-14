@@ -388,7 +388,7 @@ void MapsSources::populateSources()
       };
     }
 
-    Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
+    //Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
     if(isLayer || isRaster) {
       Button* showBtn = createToolbutton(MapsApp::uiIcon("eye"), "Show");
       showBtn->node->addClass("show-btn");
@@ -422,11 +422,11 @@ void MapsSources::populateSources()
         if(key != currSource)
           rebuildSource(key);
       };
-      editBtn->onClicked = [=](){ populateSourceEdit(showBtn->isChecked() ? currSource : key); };
+      //editBtn->onClicked = [=](){ populateSourceEdit(showBtn->isChecked() ? currSource : key); };
     }
     else {
       item->onClicked = [=](){ if(key != currSource) rebuildSource(key); };
-      editBtn->onClicked = [=](){ populateSourceEdit(key); };
+      //editBtn->onClicked = [=](){ populateSourceEdit(key); };
     }
 
     Button* overflowBtn = createToolbutton(MapsApp::uiIcon("overflow"), "More");
@@ -474,7 +474,7 @@ void MapsSources::populateSources()
         deleteSrcFn("OK");
     });
 
-    container->addWidget(editBtn);
+    //container->addWidget(editBtn);
     container->addWidget(overflowBtn);
     if(archived)
       archivedContent->addWidget(item);
@@ -880,6 +880,9 @@ Button* MapsSources::createPanel()
     importSources(trimStr(importEdit->text()));
   }));
 
+  Button* editBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit", true);
+  editBtn->onClicked = [=](){ populateSourceEdit(currSource); };
+
   Button* createBtn = createToolbutton(MapsApp::uiIcon("add"), "New Source");
   createBtn->onClicked = [=](){
     currSource = "";
@@ -937,6 +940,7 @@ Button* MapsSources::createPanel()
   });
 
   auto sourcesHeader = app->createPanelHeader(MapsApp::uiIcon("layers"), "Map Source");
+  sourcesHeader->addWidget(editBtn);
   sourcesHeader->addWidget(createBtn);
   sourcesHeader->addWidget(legendBtn);
   sourcesHeader->addWidget(offlineBtn);

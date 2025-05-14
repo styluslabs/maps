@@ -5,8 +5,9 @@ android {
   namespace 'com.styluslabs.maps'
   defaultConfig {
     applicationId 'com.styluslabs.maps'
-    versionCode System.getenv("APP_VERSIONCODE")
-    versionName System.getenv("APP_VERSIONNAME")
+    // can't use env vars because of daemon
+    versionCode project.getProperty("app_versioncode").toInteger()
+    versionName String.valueOf(project.getProperty("app_versionname"))
     minSdkVersion 21
     targetSdkVersion 33
   }

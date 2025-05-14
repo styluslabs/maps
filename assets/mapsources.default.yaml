@@ -48,11 +48,16 @@ stylus-worldcover:
 
 stylus-bike-hike:
   title: Ascend OSM Bike & Hike
-  layers:
-    - stylus-osm-terrain
+  layers: [ stylus-osm-terrain ]
   updates:
     global.show_bike: true
     global.show_trails: true
+
+stylus-transit:
+  title: Ascend OSM Transit
+  layers: [ stylus-osm-terrain ]
+  updates:
+    global.show_transit: true
 
 opentopomap:
     title: OpenTopoMap
