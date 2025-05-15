@@ -305,6 +305,7 @@ hillshade-usgs:
     description: 1m elevation data (CON-US only)
     attribution: |
         United States 3DEP data courtesy of the U.S. Geological Survey
+    archived: true
     layer: true
     layers: [ hillshade ]
     updates:

@@ -454,6 +454,8 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
 {
   std::string liststr;
   SQLiteStmt(app->bkmkDB, "SELECT title FROM lists WHERE id = ?;").bind(listid).onerow(liststr);
+  int64_t timestamp = 0;
+  SQLiteStmt(app->bkmkDB, "SELECT timestamp FROM bookmarks WHERE rowid = ?;").bind(rowid).onerow(timestamp);
 
   Widget* section = createColumn({}, "", "", "hfill");
   TextBox* noteText = new TextBox(loadSVGFragment(
@@ -461,15 +463,10 @@ Widget* MapsBookmarks::getPlaceInfoSubSection(int rowid, int listid, std::string
   noteText->setText(notestr.c_str());
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), app->getPanelWidth() - 20).c_str());
 
-  //Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("pin"), liststr.c_str(), true);
-  // bit of a hack to use TextLabel on a toolbutton
-  Button* chooseListBtn = new Button(widgetNode("#toolbutton"));
-  chooseListBtn->setIcon(MapsApp::uiIcon("pin"));
-  chooseListBtn->node->setAttribute("box-anchor", "hfill");
-  TextLabel* listLabel = new TextLabel(chooseListBtn->containerNode()->selectFirst(".title"));
-  listLabel->node->setAttribute("box-anchor", "hfill");
-  listLabel->setVisible(true);
-  listLabel->setText(liststr.c_str());
+  if(timestamp > INT_MAX) { timestamp -= INT_MAX; }
+  std::string desc = ftimestr("%F %H:%M", timestamp*1000);
+  Button* chooseListBtn = createListItem(MapsApp::uiIcon("pin"), liststr.c_str(), desc.c_str());
+  chooseListBtn->selectFirst(".listitem-separator")->setVisible(false);
 
   Button* removeBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete");
   Button* addNoteBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
@@ -690,16 +687,35 @@ void MapsBookmarks::exportGpx(const char* filename, int listid)
   saveGPX(&gpx);
 }
 
+static const char* bkmkSchema = R"SQL(BEGIN;
+
+CREATE TABLE IF NOT EXISTS lists(
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  notes TEXT DEFAULT '',
+  color TEXT NOT NULL,
+  archived INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS bookmarks(
+  osm_id TEXT,
+  list_id INTEGER,
+  title TEXT NOT NULL,
+  props TEXT,
+  notes TEXT NOT NULL,
+  lng REAL,
+  lat REAL,
+  timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER))
+);
+
+CREATE INDEX IF NOT EXISTS bookmarks_list_id ON bookmarks (list_id);
+
+COMMIT;)SQL";
+
 Button* MapsBookmarks::createPanel()
 {
   // DB setup
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists(id INTEGER PRIMARY KEY, title TEXT NOT NULL,"
-      " notes TEXT DEFAULT '', color TEXT NOT NULL, archived INTEGER DEFAULT 0);");
-  //DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS lists_state(list_id INTEGER, ordering INTEGER, visible INTEGER);");
-  DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS bookmarks(osm_id TEXT, list_id INTEGER, title TEXT NOT NULL, props TEXT,"
-      " notes TEXT NOT NULL, lng REAL, lat REAL, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
-  //DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS saved_views(title TEXT UNIQUE, lng REAL, lat REAL, zoom REAL,"
-  //    " rotation REAL, tilt REAL, width REAL, height REAL);");
+  DB_exec(app->bkmkDB, bkmkSchema);
 
   // Bookmark lists panel (main and archived lists)
   Button* newListBtn = createToolbutton(MapsApp::uiIcon("add-folder"), "Create List");

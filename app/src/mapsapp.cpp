@@ -833,6 +833,7 @@ void MapsApp::mapUpdate(double time)
       if(!credits.empty()) { credits.append(" | "); }
       credits.append(trimStr(credit));
     }
+    std::replace(credits.begin(), credits.end(), '\n', ' ');
     attribText->setText(credits.c_str());
     attribText->setVisible(true);
   }
