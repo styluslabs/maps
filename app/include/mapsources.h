@@ -16,6 +16,7 @@ public:
   void updateSceneVar(const std::string& path, YAML::Node newval, const std::string& onchange, bool reload);
   void importSources(const std::string& src);
   bool syncImportFile(const std::string& filename);
+  void populateSourceEdit(std::string key);
   Button* createPanel();
 
   std::string currSource;
@@ -25,7 +26,6 @@ private:
   void populateSources();
   Widget* processUniformVar(const std::string& stylename, const std::string& name, const YAML::Node& varnode);
   void populateSceneVars();
-  void populateSourceEdit(std::string key);
   void sourceModified();
   void saveSources();
   void promptDownload(const std::vector<std::string>& keys);

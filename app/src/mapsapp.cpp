@@ -392,14 +392,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   }
   toolbar->addWidget(createStretch());
 
-  if(json["area"]) {
+  //if(json["area"]) {
     Button* showBoundsBtn = createActionbutton(MapsApp::uiIcon("border-dashed"), "Show Border");
     showBoundsBtn->onClicked = [this, id = json["osm_id"].Scalar()](){
       if(sceneConfig()["global"]["selected_osm_id"] != id)
         map->updateGlobals({ SceneUpdate{"global.selected_osm_id", id} });
     };
     toolbar->addWidget(showBoundsBtn);
-  }
+  //}
 
   Button* shareLocBtn = createActionbutton(MapsApp::uiIcon("share"), "Share");
   std::string geoquery = Url::escapeReservedCharacters(namestr);
@@ -710,12 +710,6 @@ void MapsApp::tapEvent(float x, float y)
     if(!result) return;
     auto& props = result->touchItem.properties;
     LOGD("Picked label: %s", result ? props->getAsString("name").c_str() : "none");
-    std::string itemId = props->getAsString("id");
-    std::string osmType = props->getAsString("osm_type");
-    if(itemId.empty())
-      itemId = props->getAsString("osm_id");
-    if(osmType.empty())
-      osmType = "node";
     // we'll clear history iff panel is minimized
     if(!panelContainer->isVisible())  // !mapsTracks->activeTrack)
       showPanel(infoPanel, false);
@@ -830,10 +824,24 @@ void MapsApp::mapUpdate(double time)
     }
     map->getScene()->tileManager()->addClientTileSource(tracksDataSource);
     //map->addTileSource(tracksDataSource);  -- Map will cache source and add to scenes automatically, which
-    // we don't want until we've added elevation source
+    //  we don't want until we've added elevation source
+    // show attribution
+    std::string credits;
+    for(const auto& src : sceneConfig()["sources"].pairs()) {
+      std::string credit = src.second["attribution"].as<std::string>("");
+      if(credit.empty()) { continue; }
+      if(!credits.empty()) { credits.append(" | "); }
+      credits.append(trimStr(credit));
+    }
+    attribText->setText(credits.c_str());
+    attribText->setVisible(true);
   }
   else
     return;
+
+  // hide attribtion upon interaction
+  if(attribText->isVisible() && !touchHandler->touchPoints.empty())
+    attribText->setVisible(false);
 
   if(locMarkerNeedsUpdate || locMarkerAngle != orientation + map->getRotation()*180/float(M_PI)) {
     updateLocMarker();
@@ -1445,7 +1453,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   win->sdlWindow = sdlWin;
   win->isFocusable = true;  // top level window should always be focusable
 
-#if PLATFORM_ANDROID  // need to test on newer iPhone
+#if PLATFORM_ANDROID
   Widget* mainTbContNarrow = win->selectFirst(".window-layout-narrow")->selectFirst(".main-tb-container");
 #endif
   win->addHandler([=](SvgGui* gui, SDL_Event* event) {
@@ -1835,6 +1843,20 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   legendContainer->node->addClass("legend");
   legendContainer->setMargins(0, 0, 14, 0);  // shift above scale bar
   mapsContent->addWidget(legendContainer);
+
+  // attribution text
+  //<g class="attrib-container" box-anchor="hfill" margin="5 5" layout="box">
+  //  <text class="attrib-text" font-size="10" box-anchor="hfill"></text>
+  //</g>
+  static const char* attribSVG = R"#(
+    <g class="attrib-container" box-anchor="hfill bottom" margin="6 100" layout="box">
+      <text class="attrib-text" font-size="12" stroke="white" stroke-width="2" stroke-alignment="outer" box-anchor="hfill"></text>
+    </g>
+  )#";
+  Button* attribBtn = new Button(loadSVGFragment(attribSVG));
+  attribText = new TextLabel(attribBtn->containerNode()->firstChild());
+  attribBtn->onClicked = [this](){ mapsSources->populateSourceEdit(mapsSources->currSource); };
+  mapsContent->addWidget(attribBtn);
 
   // misc setup
   placeInfoProviderIdx = pluginManager->placeFns.size();

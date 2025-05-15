@@ -308,7 +308,6 @@ application:
 sources:
     osm:
         type: MVT
-        #url: http://localhost:8080/v1/{z}/{x}/{y}
         url: http://tiles.styluslabs.com:8080/v1/{z}/{x}/{y}
         headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
         cache: stylus-osm
@@ -863,7 +862,7 @@ layers:
                         #visible: global.show_trails
                         order: global.order.piste
                         color: global.piste_color_fn
-                        width: [[10,0.5px],[11,1px],[12,1.25px],[13,2px],[18,3m]]
+                        width: [[10,0.5px],[11,0.75px],[12,1.0px],[13,1.5px],[18,3m]]
                         outline:
                             style: unlit-lines
                             color: global.color.piste_halo
@@ -1232,6 +1231,15 @@ layers:
             draw:
                 lines: { width: [[14, 1px], [16, 2px]] }
                 text: { priority: global.priority.transit_ref_bus }
+        selected:
+            draw:
+                sel-lines:
+                    visible: |
+                        function() { return !!feature.osm_id && feature.osm_id == global.selected_osm_id; }
+                    style: dashed-border
+                    order: global.order.border
+                    color: red
+                    width: 6px
 
 
     buildings:
@@ -1397,13 +1405,18 @@ layers:
 
         cave:
             exclusive: true
-            filter: { $zoom: { min: 15 }, natural: cave_entrance }
+            filter:
+                - { $zoom: { min: 15 }, natural: cave_entrance }
+                - { $zoom: { min: 15 }, historic: mine }
             draw:
                 points:
                     sprite: cave
                     size: 20px
                     priority: global.priority.cave
                     text: { font: { size: 11px, style: italic } }
+            mine:
+                filter: { historic: mine }
+                draw: { points: { sprite: abandoned_mine } }
             hide_text:
                 filter: { $zoom: { max: 16 } }
                 draw: { points: { text: { visible: false } } }

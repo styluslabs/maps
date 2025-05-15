@@ -15,12 +15,10 @@ class MapsSearch;
 class PluginManager;
 
 class SvgGui;
+class TextLabel;
 class Splitter;
 class Pager;
-class Widget;
-class Button;
 class Window;
-class Toolbar;
 class Menubar;
 class SharedMenu;
 class MapsWidget;
@@ -28,7 +26,6 @@ class ScaleBarWidget;
 class CrosshairWidget;
 class ProgressCircleWidget;
 class ManageColorsDialog;
-class SvgNode;
 class Color;
 class Painter;
 class Point;
@@ -183,6 +180,7 @@ public:
   Button* followGPSBtn = NULL;
   ProgressCircleWidget* progressWidget = NULL;
   std::function<bool(SvgGui*, Widget*, SDL_Event*)> pagerEventFilter;
+  TextLabel* attribText = NULL;
 
   Timer* progressTimer = NULL;
   float currProgress = 1;
