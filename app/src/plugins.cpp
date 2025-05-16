@@ -141,6 +141,12 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
   inState = NONE;
 }
 
+static duk_ret_t dukTryJsonDecode(duk_context* ctx, void*)
+{
+  duk_json_decode(ctx, -1);
+  return 1;
+}
+
 void PluginManager::jsPlaceInfo(int fnIdx, std::string props, LngLat pos)
 {
   cancelRequests(PLACE);
@@ -149,8 +155,13 @@ void PluginManager::jsPlaceInfo(int fnIdx, std::string props, LngLat pos)
   duk_context* ctx = jsContext;
   duk_get_global_string(ctx, placeFns[fnIdx].name.c_str());
   duk_push_string(ctx, props.c_str());
-  if(!props.empty())
-    duk_json_decode(ctx, -1);
+  if(!props.empty()) {
+    if(duk_safe_call(ctx, &dukTryJsonDecode, NULL, 1, 1) != 0) {
+      LOGW("duk_json_decode error on:\n%s", props.c_str());
+      duk_pop(ctx);
+      duk_push_object(ctx);
+    }
+  }
   duk_push_number(ctx, pos.longitude);
   duk_push_number(ctx, pos.latitude);
   // call the fn

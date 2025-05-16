@@ -63,7 +63,7 @@ std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
 
 std::string MapsApp::versionStr = PPVALUE_TO_STRING(MAPS_GIT_REV) + std::string("; ") + __DATE__;
-int MapsApp::versionCode = MAPS_GIT_COUNT;  // last incremented 1 Apr 2025
+int MapsApp::versionCode = MAPS_GIT_COUNT;  // this is number of git tags, so rebuild after tagging release!
 int MapsApp::prevVersion = 0;
 
 struct JSCallInfo { int ncalls = 0; double secs = 0; };
@@ -824,13 +824,14 @@ void MapsApp::mapUpdate(double time)
     map->getScene()->tileManager()->addClientTileSource(tracksDataSource);
     //map->addTileSource(tracksDataSource);  -- Map will cache source and add to scenes automatically, which
     //  we don't want until we've added elevation source
-    // show attribution
+    // show attribution ... note the hack to put OSM credits first
     std::string credits;
     for(const auto& src : sceneConfig()["sources"].pairs()) {
       std::string credit = src.second["attribution"].as<std::string>("");
-      if(credit.empty()) { continue; }
-      if(!credits.empty()) { credits.append(" | "); }
-      credits.append(trimStr(credit));
+      if(credit.empty()) {}
+      else if(credits.empty()) { credits = credit; }
+      else if(src.first == "osm") { credits = credit + " | " + credits; }
+      else { credits.append(" | ").append(credit); }
     }
     std::replace(credits.begin(), credits.end(), '\n', ' ');
     attribText->setText(credits.c_str());

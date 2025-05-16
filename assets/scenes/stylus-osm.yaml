@@ -1310,7 +1310,7 @@ layers:
             exclusive: true
             filter:
                 natural: [peak, volcano]
-                ele: true
+                ele: { min: 1 }
                 all:
                     - any: [ { $zoom: { min: 17 } }, global.show_trails ]
                     - any: [ { $zoom: { min: 15 } }, { name: true } ]

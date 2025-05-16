@@ -15,7 +15,8 @@ android {
   buildTypes {
     release {
       signingConfig signingConfigs.debug
-      debuggable true
+      //debuggable true
+      debuggable false
       minifyEnabled false
       proguardFiles getDefaultProguardFile('proguard-android.txt'),
                     'proguard-rules.pro'

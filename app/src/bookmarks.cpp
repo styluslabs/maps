@@ -624,14 +624,15 @@ static int importImageFolder(SQLiteStmt& insbkmk, int64_t list_id, const char* p
        LOGW("Error reading EXIF from %s (%d bytes): %d", fpath.c_str(), int(len), res);
        continue;
     }
-    if(exif.GeoLocation.Latitude == 0 && exif.GeoLocation.Longitude == 0) continue;
+    if(exif.GeoLocation.Latitude == 0 && exif.GeoLocation.Longitude == 0) { continue; }
     std::string date = exif.DateTime;
     // replace first two ':' with '-' to get proper date format
     for(size_t idx = 0, nrepl = 0; idx < date.size() && nrepl < 2; ++idx) {
       if(date[idx] == ':') { date[idx] = '-'; ++nrepl; }
     }
-    std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'/>"}]})",
-        exif.GeoLocation.Altitude, fpath.c_str());
+    int deg = exif.Orientation == 6 ? 90 : (exif.Orientation == 3 ? 270 : (exif.Orientation == 8 ? 180 : 0));
+    std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'%s/>"}]})",
+        exif.GeoLocation.Altitude, fpath.c_str(), deg ? fstring(" transform='rotate(%d)'", deg).c_str() : "");
     insbkmk.bind(list_id, 0, fpath.baseName(), props, "", exif.GeoLocation.Longitude, exif.GeoLocation.Latitude, date).exec();
     ++nimages;
   }

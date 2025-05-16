@@ -806,6 +806,7 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   //  we call wglMakeCurrent again at least once, even though wglGetCurrentContext() reports no change.
   // Happens even if other context is not shared! ... looks like it could be a VMware GL issue
   wglMakeCurrent(mainDC, mainCtx);
+  wglSwapIntervalEXT(1);  // vsync
 
   // main loop
   MSG msg;
