@@ -151,6 +151,8 @@ bing-earth:
 # historical: https://wayback.maptiles.arcgis.com
 arcgis-satellite:
     title: ArcGIS Satellite
+    attribution: |
+        Esri, Maxar, Earthstar Geographics, and the GIS User Community
     url: https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}
     updates:
         application.dark_base_map: true

@@ -268,14 +268,19 @@ function wikiExtractCb(_content, _error)
   addPlaceInfo("", "Summary", "<text class='wrap-text' font-size='12'>" + extract + "</text>");
 }
 
-function osmPlaceInfo(osmid)
+function osmPlaceInfo(props, lng, lat)
 {
-  if(osmid.startsWith("wiki:")) {
-    const url = "https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&exintro&explaintext&redirects=1&titles=" + osmid.substr(5);
+  const wiki = props["wiki"]
+  if(wiki) {
+    const url = "https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&exintro&explaintext&redirects=1&titles=" + wiki;
     httpRequest(url, wikiExtractCb);
   } else {
-    const url = "https://www.openstreetmap.org/api/0.6/" + osmid.replace(":", "/") + ".json";
-    httpRequest(url, osmPlaceInfoCb);
+    const id = props["osm_id"];
+    const type = props["osm_type"];
+    if(id && type) {
+      const url = "https://www.openstreetmap.org/api/0.6/" + type + "/" + id + ".json";
+      httpRequest(url, osmPlaceInfoCb);
+    }
   }
 }
 

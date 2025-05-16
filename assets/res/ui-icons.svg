@@ -433,4 +433,9 @@ document.addEventListener('DOMContentLoaded', function(event) {
   <path d="M14.5 4l4 4l-4 4m4-4h-12"/>
 </svg>
 
+<!-- humbleicons:cloud-sun -->
+<svg id="weather" class="icon-default" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M10 3.5V3m-6.5 7H3m11.596-4.596l.354-.354m-9.546.354L5.05 5.05M9 13.036a3.5 3.5 0 0 1 1.975.99M12.645 7a4 4 0 0 0-6.59 3.666M5 16.5A3.5 3.5 0 0 0 8.5 20h9.75a2.75 2.75 0 0 0 .734-5.4a5 5 0 0 0-9.614-1.491A3.504 3.504 0 0 0 5 16.5"/>
+</svg>
+
 </svg>

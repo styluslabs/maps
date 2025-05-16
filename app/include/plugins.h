@@ -27,7 +27,7 @@ public:
   void notifyRequest(UrlRequestHandle handle, int serial);
   UrlReqType clearRequest(int serial);
   void jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags);
-  void jsPlaceInfo(int fnIdx, std::string id);
+  void jsPlaceInfo(int fnIdx, std::string props, Tangram::LngLat pos);
   void jsRoute(int fnIdx, std::string routeMode, const std::vector<LngLat>& waypts);
   static bool dukTryCall(duk_context* ctx, int nargs);
 

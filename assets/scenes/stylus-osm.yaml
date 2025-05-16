@@ -566,7 +566,8 @@ layers:
                 order: global.order.water
                 color: global.color.water
         ocean:
-            filter: { water: ocean }
+            # world map tiles (z7 and below) still use class: ocean
+            filter: [ { water: ocean }, { class: ocean } ]
             # ensure that ocean has elevation = 0 (by not writing elevation)
             draw: { polygons: { style: ocean-polygons } }
         intermittent:

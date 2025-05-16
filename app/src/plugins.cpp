@@ -141,16 +141,20 @@ void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, L
   inState = NONE;
 }
 
-void PluginManager::jsPlaceInfo(int fnIdx, std::string id)
+void PluginManager::jsPlaceInfo(int fnIdx, std::string props, LngLat pos)
 {
   cancelRequests(PLACE);
   inState = PLACE;
 
   duk_context* ctx = jsContext;
   duk_get_global_string(ctx, placeFns[fnIdx].name.c_str());
-  duk_push_string(ctx, id.c_str());
+  duk_push_string(ctx, props.c_str());
+  if(!props.empty())
+    duk_json_decode(ctx, -1);
+  duk_push_number(ctx, pos.longitude);
+  duk_push_number(ctx, pos.latitude);
   // call the fn
-  dukTryCall(ctx, 1);
+  dukTryCall(ctx, 3);
   duk_pop(ctx);
   inState = NONE;
 }

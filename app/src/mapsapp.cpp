@@ -458,7 +458,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     getElevation(pos, elevFn);
 
   Widget* infoSection = infoContent->selectFirst(".info-section");
-  if(!osmid.empty() && !pluginManager->placeFns.empty()) {
+  if(!pluginManager->placeFns.empty()) {  // !osmid.empty() &&
     std::vector<std::string> cproviders = {"None"};
     for(auto& fn : pluginManager->placeFns)
       cproviders.push_back(fn.title.c_str());
@@ -469,10 +469,9 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
       placeInfoProviderIdx = providerSel->index();
       gui->deleteContents(infoContent->selectFirst(".info-section"), ".listitem");
       if(placeInfoProviderIdx > 0)
-        pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, osmid);
-
+        pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, pickResultProps, pickResultCoord);
     };
-    Widget* providerRow = createRow({createTextBox("Information from "), createStretch(), providerSel}, "3 6");
+    Widget* providerRow = createRow({createTextBox("Information plugin: "), createStretch(), providerSel}, "3 6");
     infoSection->addWidget(providerRow);
     infoSection->setVisible(true);
     providerSel->onChanged("");
@@ -496,7 +495,7 @@ void MapsApp::placeInfoPluginError(const char* err)
   Button* retryBtn = createToolbutton(MapsApp::uiIcon("retry"), "Retry", true);
   retryBtn->onClicked = [=](){
     gui->deleteContents(infoContent->selectFirst(".info-section"), ".listitem");
-    pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, pickResultOsmId);
+    pluginManager->jsPlaceInfo(placeInfoProviderIdx - 1, pickResultProps, pickResultCoord);
     retryBtn->setVisible(false);
   };
   infoContent->selectFirst(".info-section")->addWidget(retryBtn);
@@ -1846,9 +1845,6 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsContent->addWidget(legendContainer);
 
   // attribution text
-  //<g class="attrib-container" box-anchor="hfill" margin="5 5" layout="box">
-  //  <text class="attrib-text" font-size="10" box-anchor="hfill"></text>
-  //</g>
   static const char* attribSVG = R"#(
     <g class="attrib-container" box-anchor="hfill bottom" margin="6 100" layout="box">
       <text class="attrib-text" font-size="12" stroke="white" stroke-width="2" stroke-alignment="outer" box-anchor="hfill"></text>
@@ -1860,7 +1856,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   mapsContent->addWidget(attribBtn);
 
   // misc setup
-  placeInfoProviderIdx = pluginManager->placeFns.size();
+  placeInfoProviderIdx = 1;  //pluginManager->placeFns.size();
   // set window stylesheet
   themeCb->setChecked(cfg()["ui"]["theme"].as<std::string>("") != "light");
   themeCb->onClicked();

@@ -11,11 +11,11 @@ sources:
     - stylus-bike-hike
     - stylus-satellite
     - stylus-worldcover
+    - stylus-transit
     - enable-slope-angle
     - enable-contours
     - custom-slope-shading
     - hillshade
-    - hillshade-usgs
     - strava-all
     - opentopomap
     - arcgis-satellite
