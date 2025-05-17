@@ -207,28 +207,12 @@ std::string colorToStr(const Color& c)
   return std::string(buff);
 }
 
-// note that indices for sqlite3_column_* start from 0 while indices for sqlite3_bind_* start from 1
-bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb, SQLiteStmtFn bind)
+bool DB_exec(sqlite3* db, const char* sql)
 {
-  //if(sqlite3_exec(searchDB, sql, cb ? sqlite_static_helper : NULL, cb ? &cb : NULL, &zErrMsg) != SQLITE_OK) {
-  //auto t0 = std::chrono::high_resolution_clock::now();
-  int res;
-  sqlite3_stmt* stmt;
-  if(sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) {
-    LOGE("sqlite3_prepare_v2 error: %s", sqlite3_errmsg(db));
+  if(sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK) {
+    LOGE("sqlite3_exec error: %s", sqlite3_errmsg(db));
     return false;
   }
-  if(bind)
-    bind(stmt);
-  while ((res = sqlite3_step(stmt)) == SQLITE_ROW) {
-    if(cb)
-      cb(stmt);
-  }
-  if(res != SQLITE_DONE && res != SQLITE_OK)
-    LOGE("sqlite3_step error: %s", sqlite3_errmsg(db));
-  sqlite3_finalize(stmt);
-  //auto t1 = std::chrono::high_resolution_clock::now();
-  //logMsg("Query time: %.6f s for %s\n", std::chrono::duration<float>(t1 - t0).count(), sql);
   return true;
 }
 

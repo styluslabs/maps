@@ -630,7 +630,7 @@ static int importImageFolder(SQLiteStmt& insbkmk, int64_t list_id, const char* p
     for(size_t idx = 0, nrepl = 0; idx < date.size() && nrepl < 2; ++idx) {
       if(date[idx] == ':') { date[idx] = '-'; ++nrepl; }
     }
-    int deg = exif.Orientation == 6 ? 90 : (exif.Orientation == 3 ? 270 : (exif.Orientation == 8 ? 180 : 0));
+    int deg = exif.Orientation == 6 ? 90 : (exif.Orientation == 3 ? 180 : (exif.Orientation == 8 ? 270 : 0));
     std::string props = fstring(R"({"altitude": %.1f, "place_info":[{"icon":"", "title":"", "value":"<image href='%s' height='200'%s/>"}]})",
         exif.GeoLocation.Altitude, fpath.c_str(), deg ? fstring(" transform='rotate(%d)'", deg).c_str() : "");
     insbkmk.bind(list_id, 0, fpath.baseName(), props, "", exif.GeoLocation.Longitude, exif.GeoLocation.Latitude, date).exec();

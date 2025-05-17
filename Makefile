@@ -28,7 +28,7 @@ endif
 # if deferred eval, make sure to only use for source that needs GIT_REV
 # refs: https://stackoverflow.com/questions/17097263
 GIT_REV := $(shell git rev-parse --short HEAD || wsl git rev-parse --short HEAD)
-GIT_TAGCOUNT := $(shell git tag -l | wc -l || wsl git tag -l | wc -l)
+GIT_TAGCOUNT := $(shell (git tag -l || wsl git tag -l) | (wc -l || wsl wc -l))
 GIT_DESCRIBE := $(shell git describe --tags --dirty || wsl git describe --tags --dirty)
 ## common modules
 include module.mk

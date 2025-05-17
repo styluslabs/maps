@@ -46,7 +46,7 @@ std::string colorToStr(const Color& c);
 struct sqlite3_stmt;
 struct sqlite3;
 typedef std::function<void(sqlite3_stmt*)> SQLiteStmtFn;
-bool DB_exec(sqlite3* db, const char* sql, SQLiteStmtFn cb = SQLiteStmtFn(), SQLiteStmtFn bind = SQLiteStmtFn());
+bool DB_exec(sqlite3* db, const char* sql);
 
 struct sqlite3_context;
 struct sqlite3_value;
