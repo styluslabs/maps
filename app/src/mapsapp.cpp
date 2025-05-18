@@ -392,14 +392,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   }
   toolbar->addWidget(createStretch());
 
-  //if(json["area"]) {
+  if(json["osm_id"] && json["osm_type"].Scalar() != "node") {
     Button* showBoundsBtn = createActionbutton(MapsApp::uiIcon("border-dashed"), "Show Border");
     showBoundsBtn->onClicked = [this, id = json["osm_id"].Scalar()](){
       if(sceneConfig()["global"]["selected_osm_id"] != id)
         map->updateGlobals({ SceneUpdate{"global.selected_osm_id", id} });
     };
     toolbar->addWidget(showBoundsBtn);
-  //}
+  }
 
   Button* shareLocBtn = createActionbutton(MapsApp::uiIcon("share"), "Share");
   std::string geoquery = Url::escapeReservedCharacters(namestr);

@@ -9,7 +9,7 @@ static constexpr float rotateThreshold = 0.25f;  // radians
 static constexpr float shoveThreshold = 40;  // pixels/xyScale (translation of centroid of fingers)
 static constexpr float longPressThreshold = 8;  // pixels/xyScale
 static constexpr float mouseRotateScale = 0.001f;  // radians/pixel
-static constexpr float tiltThresholdRad = 75.0*M_PI/180;
+static constexpr float tiltThresholdRad = 15.0*M_PI/180;
 TouchHandler::TouchPt TouchHandler::TOUCHPT_NAN = {0, NAN, NAN, NAN};
 
 static int actionFromSDLFinger(unsigned int sdltype)
@@ -211,7 +211,7 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
         map->handleShoveGesture(com.y - prevCOM.y);
       else if(multiTouchState == TOUCH_ROTATE2) {
         //auto pos = app->getMapViewport().center();
-        map->handleRotateGesture(rotOrigin.x, rotOrigin.y, -(com.x - prevCOM.x)*mouseRotateScale);
+        map->handleRotateGesture(rotOrigin.x, rotOrigin.y, (com.x - prevCOM.x)*mouseRotateScale);
       }
     }
     if(multiTouchState != TOUCH_NONE || touchPoints.size() > prevpoints) {
