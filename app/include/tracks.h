@@ -64,7 +64,7 @@ private:
   void updateDistances();
   bool findPickedWaypoint(GpxFile* track);
   void toggleRouteEdit(bool show);
-  void newRoute(bool measure);
+  void newRoute(std::string mode);
   void createEditDialog();
   void editWaypoint(GpxFile* track, const Waypoint& wpt, std::function<void()> callback);
   void setStatsText(const char* selector, std::string str);

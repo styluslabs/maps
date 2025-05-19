@@ -592,8 +592,15 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
         });
       });
 #endif
-      Button* b = new Button(node);
-      b->onClicked = [imgnode](){
+      //Button* b = new Button(node);
+      Button* b = new Button(row->containerNode()->selectFirst(".button-wrapper"));
+      b->onClicked = [=](){
+        // "temporary" hack to step through photo bookmarks by tapping near edge
+        Rect bbox = b->node->bounds();
+        if(pickResultStepper) {
+          if(gui->prevFingerPos.x < bbox.left + 50) { pickResultStepper(-1); return; }
+          if(gui->prevFingerPos.x > bbox.right - 50) { pickResultStepper(1); return; }
+        }
         MapsApp::openURL(imgnode->m_linkStr.c_str());
       };
       imgnode->setSize(Rect::wh(getPanelWidth() - 20, 0));

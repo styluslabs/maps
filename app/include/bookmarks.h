@@ -32,6 +32,7 @@ private:
   Color nextListColor();
   void importGpx(const char* filename, const char* gpxsrc = NULL);
   void importImages(int64_t list_id, const char* path);
+  void startImageImport(std::string title, std::string path);
   void exportGpx(const char* filename, int listid);
   void editBookmark(int rowid, int listid, std::function<void()> callback);
   void deleteList(int rowid, const std::string& title, bool clearOnly);
@@ -42,6 +43,7 @@ private:
   DragDropList* listsContent = NULL;
   Widget* archivedPanel = NULL;
   Widget* archivedContent = NULL;
+  Dialog* importProgressDialog = NULL;
   bool mapAreaBkmks = false;
   bool bkmkPanelDirty = false;
   bool listsDirty = true;

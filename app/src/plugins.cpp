@@ -354,7 +354,8 @@ static int addRouteGPX(duk_context* ctx)
   const char* gpx = duk_require_string(ctx, 0);
   GpxFile track;
   loadGPX(&track, gpx);
-  for(auto& route : track.routes) {
+  auto& routes = !track.routes.empty() ? track.routes : track.tracks;
+  for(auto& route : routes) {
     // temporary hack until we switch to JSON endpoint for openrouteservice
     auto prevdesc = route.pts.empty() ? "" : route.pts.front().desc;
     for(size_t ii = 1; ii < route.pts.size(); ++ii) {

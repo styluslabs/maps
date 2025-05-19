@@ -1187,15 +1187,17 @@ void MapsTracks::toggleRouteEdit(bool show)
   //setRouteMode(activeTrack->routeMode);  // update previewMarker
 }
 
-void MapsTracks::newRoute(bool measure)
+void MapsTracks::newRoute(std::string mode)
 {
+  bool measure = mode == "measure";
   std::string dst = app->pickResultName.empty() ? lngLatToStr(app->pickResultCoord) : app->pickResultName;
   Waypoint wp1(app->currLocation.lngLat(), "Start");
   Waypoint wp2(app->pickResultCoord, dst, "", app->pickResultProps);
   double km = lngLatDist(wp1.lngLat(), wp2.lngLat());
+  if(mode.empty()) { mode = (km < 10 ? "walk" : km < 100 ? "bike" : "drive"); }
   navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
   navRoute.title = measure ? "Measurement" : "Navigation";
-  navRoute.routeMode = measure ? "direct" : (km < 10 ? "walk" : km < 100 ? "bike" : "drive");
+  navRoute.routeMode = measure ? "direct" : mode;
   // in some cases, we might want back btn to return to place info panel from measure/navigate; this would,
   //  not work currently if user opened place info from measure/navigate; also could make history too deep!
   app->showPanel(tracksPanel);
@@ -1222,12 +1224,17 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
   }
   else {
     Button* routeBtn = createActionbutton(MapsApp::uiIcon("directions"), "Route", true);
-    routeBtn->onClicked = [this](){ newRoute(false); };
-    //SvgGui::setupRightClick(routeBtn, [this](SvgGui*, Widget*, Point){ newRoute(true); });  -- just use measure!
+    routeBtn->onClicked = [this](){ newRoute(""); };
+    Menu* routeBtnMenu = createMenu(Menu::VERT);
+    routeBtnMenu->addItem("Walk", MapsApp::uiIcon("walk"), [=](){ newRoute("walk"); });
+    routeBtnMenu->addItem("Cycle", MapsApp::uiIcon("bike"), [=](){ newRoute("bike"); });
+    routeBtnMenu->addItem("Drive", MapsApp::uiIcon("car"), [=](){ newRoute("drive"); });
+    routeBtnMenu->autoClose = true;
+    routeBtn->setMenu(routeBtnMenu);
     tb->addWidget(routeBtn);
 
     Button* measureBtn = createActionbutton(MapsApp::uiIcon("measure"), "Measure", true);
-    measureBtn->onClicked = [this](){ newRoute(true); };
+    measureBtn->onClicked = [this](){ newRoute("measure"); };
     tb->addWidget(measureBtn);
   }
 }

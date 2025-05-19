@@ -639,6 +639,16 @@ static int importImageFolder(SQLiteStmt& insbkmk, int64_t list_id, const char* p
   return nimages;
 }
 
+void MapsBookmarks::startImageImport(std::string title, std::string path)
+{
+  int64_t list_id = insertNewList(title, nextListColor());
+  populateLists(false);
+  MapsApp::messageBox("Import images", fstring("Processing %s...", title.c_str()),
+      {"Continue in background"}, [=](std::string){ importProgressDialog = NULL; });
+  importProgressDialog = static_cast<Dialog*>(MapsApp::gui->windows.front()->modalOrSelf());
+  MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, path.c_str()); });
+}
+
 void MapsBookmarks::importImages(int64_t list_id, const char* path)
 {
   size_t nimages = 0;
@@ -661,10 +671,15 @@ void MapsBookmarks::importImages(int64_t list_id, const char* path)
   std::string errmsg = fstring("No geotagged images found in %s", path);
 #endif
   MapsApp::runOnMainThread([=](){
+    if(importProgressDialog) {
+      MapsApp::gui->closeWindow(importProgressDialog);
+      importProgressDialog = NULL;
+    }
     if(!nimages)
       MapsApp::messageBox("Import images", errmsg, {"OK"});
     else {
       listsDirty = true;
+      bkmkMarkers.erase(list_id);  // remove incomplete MarkerGroup if user viewed list before completion
       if(activeListId == list_id)
         populateBkmks(activeListId, true);
       else if(listsPanel->isVisible())
@@ -753,15 +768,11 @@ Button* MapsBookmarks::createPanel()
   overflowMenu->addItem("Import photos", [=](){
 #if PLATFORM_IOS
     if(!iosPlatform_getGeoTaggedPhotos(-1, {})) return;  // no access
-    int64_t list_id = insertNewList("Photo Library", nextListColor());
-    populateLists(false);
-    MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, "Photo Library"); });
+    startImageImport("Photo Library", "Photo Library");
 #else
     MapsApp::pickFolderDialog([this](const char* path){
       FSPath pathinfo(path);
-      int64_t list_id = insertNewList(pathinfo.baseName(), nextListColor());
-      populateLists(false);
-      MapsOffline::queueOfflineTask(0, [=](){ importImages(list_id, pathinfo.c_str()); });
+      startImageImport(pathinfo.baseName(), pathinfo.path);
     });
 #endif
   });
