@@ -768,10 +768,14 @@ Button* MapsBookmarks::createPanel()
   overflowMenu->addItem("Import photos", [=](){
 #if PLATFORM_IOS
     // in limited access case, we should direct user to restart app to choose different photos
-    iosPlatform_getPhotosPermission([=](int status){
+    iosPlatform_getPhotosPermission(app->win->sdlWindow, [=](int status){
       MapsApp::runOnMainThread([=](){
-        if(!status) { MapsApp::messageBox("Import photos",
+        if(status == 0) { MapsApp::messageBox("Import photos",
             "Enable Photos access for Ascend in iOS settings to import geotagged photos.", {"OK"}); }
+        else if(status == 1) {
+          MapsApp::messageBox("Import photos", "Import selected photos?", {"Import", "Cancel"},
+              [=](std::string res){ if(res == "Import") { startImageImport("Photo Library", "Photo Library"); } });
+        }
         else { startImageImport("Photo Library", "Photo Library"); }
       });
     });

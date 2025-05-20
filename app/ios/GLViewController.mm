@@ -4,6 +4,7 @@
 
 #import <CoreLocation/CoreLocation.h>
 #import <Photos/Photos.h>
+#import <PhotosUI/PhotosUI.h>
 
 #pragma mark "Location manager"
 
@@ -446,14 +447,31 @@ void iosPlatform_setClipboardText(const char* text)
 
 // photos
 
-void iosPlatform_getPhotosPermission(PhotoPermissionFn callback)
+void iosPlatform_getPhotosPermission(void* _vc, PhotoPermissionFn callback)
 {
-  if([PHPhotoLibrary authorizationStatus] == PHAuthorizationStatusAuthorized) { callback(2); return; }
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
-      callback(status == PHAuthorizationStatusAuthorized ? 2 : status == PHAuthorizationStatusLimited ? 1 : 0);
-    }];
-  });
+  if(@available(iOS 14, *)) {
+    PHAuthorizationStatus status = [PHPhotoLibrary authorizationStatusForAccessLevel:PHAccessLevelReadWrite];
+    if(status == PHAuthorizationStatusAuthorized) { callback(2); return; }
+
+    GLViewController* vc = (__bridge GLViewController*)_vc;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if(status == PHAuthorizationStatusLimited) {
+        [PHPhotoLibrary.sharedPhotoLibrary presentLimitedLibraryPickerFromViewController: vc];
+        callback(1);
+      } else {
+        [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelReadWrite handler:^(PHAuthorizationStatus s) {
+          callback(s == PHAuthorizationStatusAuthorized || s == PHAuthorizationStatusLimited ? 2 : 0);
+        }];
+      }
+    });
+  } else {
+    if([PHPhotoLibrary authorizationStatus] == PHAuthorizationStatusAuthorized) { callback(2); return; }
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
+        callback(status == PHAuthorizationStatusAuthorized ? 2 : 0);
+      }];
+    });
+  }
 }
 
 int iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback)

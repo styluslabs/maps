@@ -13,6 +13,7 @@
 		EF5D42E1240F4B8500BA10F4 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D6240F4B8500BA10F4 /* CoreGraphics.framework */; };
 		EF5D42E2240F4B8500BA10F4 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */; };
 		EF5D42E3240F4B8500BA10F4 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D8240F4B8500BA10F4 /* UIKit.framework */; };
+		EF89B5792DDD2AA800246E7B /* PhotosUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF89B5782DDD2AA700246E7B /* PhotosUI.framework */; };
 		EFC895F92D2A88C600585128 /* libascend.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EFC895F82D2A88C600585128 /* libascend.a */; };
 		EFE14E282C12AE5300317BC9 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E272C12AE5300317BC9 /* CoreLocation.framework */; };
 		EFE14E2A2C12AEBF00317BC9 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = EFE14E292C12AEBF00317BC9 /* main.m */; settings = {COMPILER_FLAGS = "-I."; }; };
@@ -35,6 +36,7 @@
 		EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGLES.framework; path = System/Library/Frameworks/OpenGLES.framework; sourceTree = SDKROOT; };
 		EF5D42D8240F4B8500BA10F4 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		EF5D42D9240F4B8500BA10F4 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		EF89B5782DDD2AA700246E7B /* PhotosUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = PhotosUI.framework; path = System/Library/Frameworks/PhotosUI.framework; sourceTree = SDKROOT; };
 		EFC895F82D2A88C600585128 /* libascend.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libascend.a; path = ../../build/Release/libascend.a; sourceTree = "<group>"; };
 		EFE14E252C12ADF300317BC9 /* libmaps-ios.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libmaps-ios.a"; path = "../../build/Release/libmaps-ios.a"; sourceTree = "<group>"; };
 		EFE14E272C12AE5300317BC9 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
@@ -59,6 +61,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EFC895F92D2A88C600585128 /* libascend.a in Frameworks */,
+				EF89B5792DDD2AA800246E7B /* PhotosUI.framework in Frameworks */,
 				EFE14E752C1A09AA00317BC9 /* Photos.framework in Frameworks */,
 				EF5D42DA240F4B8500BA10F4 /* Foundation.framework in Frameworks */,
 				EF5D42DC240F4B8500BA10F4 /* QuartzCore.framework in Frameworks */,
@@ -76,6 +79,7 @@
 		EF5D42CE240F4B8400BA10F4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				EF89B5782DDD2AA700246E7B /* PhotosUI.framework */,
 				EFC895F82D2A88C600585128 /* libascend.a */,
 				EF5054782C2147B200065499 /* maps-ios */,
 				EFE14E742C1A09AA00317BC9 /* Photos.framework */,

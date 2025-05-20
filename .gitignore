@@ -12,3 +12,4 @@
 
 *.apk
 *.jar
+.DS_Store
