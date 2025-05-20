@@ -446,17 +446,18 @@ void iosPlatform_setClipboardText(const char* text)
 
 // photos
 
+void iosPlatform_getPhotosPermission(PhotoPermissionFn callback)
+{
+  if([PHPhotoLibrary authorizationStatus] == PHAuthorizationStatusAuthorized) { callback(2); return; }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
+      callback(status == PHAuthorizationStatusAuthorized ? 2 : status == PHAuthorizationStatusLimited ? 1 : 0);
+    }];
+  });
+}
+
 int iosPlatform_getGeoTaggedPhotos(int64_t sinceTimestamp, AddGeoTaggedPhotoFn callback)
 {
-  if([PHPhotoLibrary authorizationStatus] != PHAuthorizationStatusAuthorized) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {}];
-    });
-    return 0;
-  }
-  else if(sinceTimestamp < 0)
-    return 1;  // access check
-
   NSDateFormatter* dateFormatter = [[NSDateFormatter alloc] init];
   [dateFormatter setDateFormat:@"YYYY-MM-dd HH:mm:ss"];
   PHFetchOptions* options = [[PHFetchOptions alloc] init];
@@ -499,7 +500,11 @@ void iosPlatform_getPhotoData(const char* localId, GetPhotoFn callback)
     return;
   }
 
-  [[PHImageManager defaultManager] requestImageDataForAsset:result.firstObject options:nil
+  PHImageRequestOptions* opts = [[PHImageRequestOptions alloc] init];
+  opts.deliveryMode = PHImageRequestOptionsDeliveryModeFastFormat;
+  opts.networkAccessAllowed = YES;
+
+  [[PHImageManager defaultManager] requestImageDataForAsset:result.firstObject options:opts
       resultHandler:^(NSData* imageData, NSString* dataUTI, UIImageOrientation orientation, NSDictionary* info) {
         callback(imageData.bytes, imageData.length, angleFromOrientation(orientation));
       }];

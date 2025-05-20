@@ -767,8 +767,14 @@ Button* MapsBookmarks::createPanel()
   });
   overflowMenu->addItem("Import photos", [=](){
 #if PLATFORM_IOS
-    if(!iosPlatform_getGeoTaggedPhotos(-1, {})) return;  // no access
-    startImageImport("Photo Library", "Photo Library");
+    // in limited access case, we should direct user to restart app to choose different photos
+    iosPlatform_getPhotosPermission([=](int status){
+      MapsApp::runOnMainThread([=](){
+        if(!status) { MapsApp::messageBox("Import photos",
+            "Enable Photos access for Ascend in iOS settings to import geotagged photos.", {"OK"}); }
+        else { startImageImport("Photo Library", "Photo Library"); }
+      });
+    });
 #else
     MapsApp::pickFolderDialog([this](const char* path){
       FSPath pathinfo(path);

@@ -2342,7 +2342,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   //sqlite3_config(SQLITE_CONFIG_URI, 1);  -- enable at compile time instead (here is too late on Android)
   FSPath dbPath(baseDir, "places.sqlite");
   if(sqlite3_open_v2(dbPath.c_str(), &bkmkDB, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK) {
-    logMsg("Error creating %s", dbPath.c_str());
+    LOGE("Error creating %s", dbPath.c_str());
     sqlite3_close(bkmkDB);
     bkmkDB = NULL;
   }
