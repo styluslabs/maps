@@ -22,7 +22,7 @@
 	url = https://github.com/btzy/nativefiledialog-extended.git
 [submodule "tangram-es"]
 	path = tangram-es
-	url = https://github.com/pbsurf/maps
+	url = https://github.com/styluslabs/tangram-ng
 	ignore = untracked
 [submodule "assets/shared"]
 	path = assets/shared
