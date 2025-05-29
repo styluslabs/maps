@@ -211,7 +211,6 @@ global:
     # priorities for colliding objects (points and text; lower value wins) - fractional part now orders within
     #  group defined by integer part, after ordering by visible state and camera space z coord
     priority:
-        continent: 5
         district_CN: 9
         neighborhood: 10
         peak: 14
@@ -250,7 +249,7 @@ global:
         # housenumbers only shown at high zoom and unlikely to collide
         housenumber: 350
         # cities, states, countries
-        place: { country: 6, state: 7, province: 7, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
+        place: { continent: 5, country: 6, state: 7, province: 7, island: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
         place_fn: |
             function() {
                 return (global.priority.place[feature.place] || 14) - Math.round(Math.sqrt(feature.population || 1))/65536;
@@ -1729,19 +1728,6 @@ layers:
     places:
         data: { source: osm, layer: place }
 
-        continents:
-            filter: { place: continent, $geometry: point }
-            draw:
-                text:
-                    text_source: global.names_two_lines
-                    priority: global.priority.continent
-                    font:
-                        family: global.primary_font
-                        size: 12px
-                        fill: global.color.place_name
-                        stroke: { color: global.color.place_halo, width: 4 }
-                        transform: uppercase
-
         # city labels with points - there may be some strange behavior due to proxy tiles w/ z < 9 when
         #  tiles with z >= 9 are missing
         city-points:
@@ -1798,7 +1784,21 @@ layers:
                         size: 12px
                         fill: global.color.place_name
                         stroke: { color: global.color.place_halo, width: 4 }
-                        #transform: uppercase
+
+            islands:
+                exclusive: true
+                filter: { place: [island, islet] }
+                draw: { text: { font: { style: italic } } }
+                show:
+                    filter:
+                       - { area: { min: 1500px2, max: 350000px2 } }
+                       - { area: { min: 1500px2 }, $zoom: { max: 12 } }
+                    draw: { text: { visible: true } }
+
+            continents:
+                exclusive: true
+                filter: { place: continent, $geometry: point }
+                draw: { text: { font: { transform: uppercase } } }
 
             countries:
                 exclusive: true

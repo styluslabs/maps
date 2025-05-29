@@ -141,6 +141,7 @@ NativeStyleFn userGetStyleFunction(Scene& scene, const std::string& jsSource)
     };
   }
 
+  LOGE("No native function found for tag '%s'", tag.c_str());
   return {};
 }
 

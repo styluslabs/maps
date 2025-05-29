@@ -778,6 +778,9 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   }
   // sceneFile will be used iff sceneYaml is empty
   Tangram::SceneOptions options(sceneYaml, Url(sceneFile), setPosition, sceneUpdates);  //, updates};
+  options.updates.push_back(SceneUpdate{"scene.elevation_source",
+      cfg()["sources"]["elevation"][0].as<std::string>("")});
+  if(terrain3D) { options.updates.push_back(SceneUpdate{"scene.terrain_3d", "true"}); }
   options.updates.push_back(SceneUpdate{"global.metric_units", metricUnits ? "true" : "false"});
   options.updates.push_back(SceneUpdate{"global.shuffle_seed", std::to_string(shuffleSeed)});
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
@@ -786,8 +789,6 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   options.preserveMarkers = true;
   options.debugStyles = Tangram::getDebugFlag(Tangram::DebugFlags::tile_bounds);
   options.metricUnits = metricUnits;
-  options.terrain3d = terrain3D;
-  options.elevationSource = cfg()["sources"]["elevation"][0].as<std::string>("");
   // fallback fonts
   FSPath basePath(baseDir);
   for(const auto& font : cfg()["fallback_fonts"])
