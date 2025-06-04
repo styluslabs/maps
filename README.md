@@ -1,6 +1,6 @@
 # Ascend Maps #
 
-A cross-platform application for displaying vector and raster maps, built on [Tangram NG](https://github.com/styluslabs/tangram-ng) (derived from [Tangram ES](https://github.com/tangrams/tangram-es)) and supporting [plugins](#plugin-system) for search, routing, map sources and more.  Includes a simple, customizable [style](#stylus-labs-osm-schema) for OpenStreetMap vector tiles.
+A cross-platform application for displaying vector and raster maps, built on [Tangram NG](https://github.com/styluslabs/tangram-ng) (derived from [Tangram ES](https://github.com/tangrams/tangram-es)) and supporting [plugins](#plugin-system) for search, routing, map sources and more.  Includes a simple, customizable [style](#ascend-osm-schema) for OpenStreetMap vector tiles.
 
 Features include 3D terrain, offline search, track recording and editing, managing saved places, saving map tiles for offline use, and more.
 
@@ -50,7 +50,7 @@ On Android, all files created by the application (except `config.yaml` and `maps
 
 Plugins written in Javascript can add search providers, routing providers, map tile providers, and more.
 
-Files in `plugins/` with `.js` extension are executed at application startup.  To reload, tap the reload button on the Plugin Console toolbar.  Some plugins (`openroute.js` and `sentinel2.js` currently) require third-party API keys to work - follow the instructions in the plugin's js file to obtain an API key, then create a file `plugins/_secrets.js` to set `secrets = { "some_api_key": value, "another_api_key": value }`.
+Files in `plugins/` with `.js` extension are executed at application startup.  To reload, tap the reload button on the Plugin Console toolbar.  Some plugins (`openroute.js` and `sentinel2.js` currently) require third-party API keys to work - follow the instructions in the plugin's js file to obtain an API key, then run, e.g, `writeSceneValue("config.secrets.sentinel2_id", "<api key>")` in the plugin console.  Alternatively, create a file `plugins/_secrets.js` to set `secrets = { "some_api_key": value, "another_api_key": value }`.
 
 Currently uses Duktape, so support for features from ES2015 and later is limited.
 
@@ -61,8 +61,9 @@ The included plugins give a sample of what's possible:
 * [openroute.js](assets/plugins/openroute.js) - routing with OpenRouteService
 * [osm-place-info.js](assets/plugins/osm-place-info.js) - gather place information (website, opening hours, etc.) from OSM API and Wikipedia
 * [sentinel2.js](assets/plugins/sentinel2.js) - weekly worldwide 10m satellite imagery from ESA Sentinel-2, with date picker in GUI.
-* [transform-query.js](assets/plugins/transform-query.js) - modify search query, e.g., for categorial searches
+* [transform-query.js](assets/plugins/transform-query.js) - modify search query, e.g., for categorical searches
 * [valhalla-osmde.js](assets/plugins/valhalla-osmde.js) - routing with Valhalla provided by osm.de
+* [weather.js](assets/plugins/weather.js) - add place information page with links to weather forecasts
 * [wikipedia-search.js](assets/plugins/wikipedia-search.js) - search for geotagged Wikipedia articles
 * [worldview.js](assets/plugins/worldview.js) - show daily worldwide satellite imagery from NASA Worldview, with date picker in GUI.
 
@@ -129,7 +130,6 @@ The application is provided under the GPL-3.0 license.  The modified Tangram-ES 
 * integrate [Valhalla](https://github.com/valhalla/valhalla/) for offline routing
 * Use QuickJS javascript engine instead of Duktape
 * more plugins
-* builds for Windows and Mac
 * globe view
 * pmtiles support
 
@@ -171,9 +171,9 @@ Storage use can be controlled with the `shrink_at` and `shrink_to` values in the
 
 ### Major components ###
 
-* [modified version of Tangram-ES](https://github.com/pbsurf/maps) - full compatibility with upstream will be restored in the future
+* [Tangram NG](https://github.com/styluslabs/tangram-ng) - fork of Tangram ES
     * Duktape javascript interpreter
-    * yaml-cpp
+    * glm
     * sqlite for mbtiles support
 * [ugui](https://github.com/styluslabs/ugui), [usvg](https://github.com/styluslabs/usvg), [ulib](https://github.com/styluslabs/ulib), [nanovgXC](https://github.com/styluslabs/nanovgXC) for GUI
     * [pugixml](https://github.com/zeux/pugixml)

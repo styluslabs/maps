@@ -338,6 +338,8 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
       LOGE("Cannot save offline tiles for source %s - no cache file specified", src->name().c_str());
     else {
       olinfo->sources.push_back({src->name(), info, src->maxZoom(), {}});
+      // add header to indicate offline map download so server can deprioritize if needed
+      olinfo->sources.back().info.urlOptions.httpOptions.headers += "X-Tile-Priority: background\r\n";
       if(!src->isRaster()) {
         // search data must remain accessible even if map source changed
         olinfo->sources.back().searchData = app->sceneConfig()["application"]["search_data"].clone();

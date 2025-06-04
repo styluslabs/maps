@@ -692,6 +692,10 @@ HGLRC createGLContext(HDC DC, HGLRC sharectx)
   return RC;
 }
 
+// refs:
+// - https://github.com/blender/blender/blob/main/intern/ghost/intern/GHOST_SystemWin32.cc
+// - https://github.com/glfw/glfw/blob/master/src/wgl_context.c
+
 int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lpszCmdLine, int nCmdShow)
 {
   SetProcessDPIAware();
