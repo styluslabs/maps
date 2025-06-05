@@ -99,6 +99,36 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist) {}
 void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 0; *bottom = 0; }
 void MapsApp::extractAssets(const char*) {}
 
+static void initBaseDir(const char* exepath)
+{
+  MapsApp::baseDir = canonicalPath("./");
+  if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists()) {
+    if(exepath)
+      MapsApp::baseDir = canonicalPath(FSPath(exepath).parentPath());
+    if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists())
+      MapsApp::baseDir = canonicalPath(FSPath(MapsApp::baseDir, "../../assets/"));
+  }
+
+  // if config.yaml already exists in base dir, use that
+  if(FSPath(MapsApp::baseDir, "config.yaml").exists()) { return; }
+  //if(FSPath(MapsApp::baseDir, "config.default.yaml").exists("rb+")) { return; }
+
+  // use $HOME/.config/ascend
+  const char* env_home = getenv("HOME");
+  if(!env_home || !env_home[0]) { return; }
+  FSPath xdgcfg(env_home, ".config/Ascend/");
+  if(!createPath(xdgcfg)) { return; }
+  if(!xdgcfg.child("config.default.yaml").exists()) {
+    FSPath base(MapsApp::baseDir);
+    // hardcoding resources to symlink is obviously not ideal...
+    const char* tolink[] = {"config.default.yaml", "mapsources.default.yaml", "plugins", "res", "scenes", "shared"};
+    for(const char* l : tolink) {
+      if(symlink(base.child(l).c_str(), xdgcfg.child(l).c_str()) != 0) { return; }  // abort on error
+    }
+  }
+  MapsApp::baseDir = xdgcfg.path;
+}
+
 int main(int argc, char* argv[])
 {
 #if PLATFORM_WIN
@@ -106,14 +136,7 @@ int main(int argc, char* argv[])
   winLogToConsole = attachParentConsole();  // printing to old console is slow, but Powershell is fine
 #endif
 
-  // config
-  MapsApp::baseDir = canonicalPath("./");
-  if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists()) {
-    if(argc > 0)
-      MapsApp::baseDir = canonicalPath(FSPath(argv[0]).parentPath());
-    if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists())
-      MapsApp::baseDir = canonicalPath(FSPath(MapsApp::baseDir, "../../assets/"));
-  }
+  initBaseDir(argc > 0 ? argv[0] : NULL);
   MapsApp::loadConfig("");
 
   // command line args

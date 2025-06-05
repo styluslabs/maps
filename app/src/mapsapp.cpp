@@ -2328,6 +2328,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // Google Maps and Apple Maps use opposite scaling for this gesture, so definitely needs to be configurable
   touchHandler->dblTapDragScale = cfg()["gestures"]["dbl_tap_drag_scale"].as<float>(1.0f);
   shuffleSeed = cfg()["random_shuffle_seed"].as<bool>(true) ? std::rand() : 0;
+  platform->defaultUserAgent = ("Tangram/1.0 (" PLATFORM_NAME "; v") + std::to_string(versionCode) + ")";
 
   initResources(baseDir.c_str());
 

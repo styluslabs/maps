@@ -250,19 +250,18 @@ static int httpRequest(duk_context* ctx)
   static int reqCounter = 0;
   // called from jsSearch, etc., so do not lock jsMutex (alternative is to use recursive_lock)
   duk_idx_t nargs = duk_get_top(ctx);
-  const char* urlstr = duk_require_string(ctx, 0);
-  const char* hdrstr = nargs > 2 ? duk_require_string(ctx, 1) : "";
-  const char* payload = nargs > 3 ? duk_require_string(ctx, 2) : "";
-  auto url = Url(urlstr);
+  auto url = Url(duk_require_string(ctx, 0));
+  Tangram::HttpOptions opts;
+  opts.headers = nargs > 2 ? duk_require_string(ctx, 1) : "";
+  opts.payload = nargs > 3 ? duk_require_string(ctx, 2) : "";
   std::string cbvar = fstring("_httpRequest_%d", ++reqCounter);
   duk_dup(ctx, nargs-1);
   duk_put_global_string(ctx, cbvar.c_str());
-  //duk_push_global_stash(ctx);
-  //duk_dup(ctx, 1);  // callback
-  //duk_put_prop_string(ctx, -2, cbvar.c_str());
+  if(opts.headers.find("User-Agent: ") == std::string::npos)
+    opts.headers.append("User-Agent: " + MapsApp::platform->defaultUserAgent + " (plugin)\r\n");
   // no easy way to get UrlRequestHandle into the callback, so use a separate identifier
   int reqSerial = reqCounter;
-  UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(url, {hdrstr, payload}, [=](UrlResponse&& response) {
+  UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(url, opts, [=](UrlResponse&& response) {
     if(!PluginManager::inst) return;  // app shutting down
     if(response.error == Platform::cancel_message)
       return;
