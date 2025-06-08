@@ -12,7 +12,7 @@
 #include <windows.h>
 #endif
 
-#if PLATFORM_WIN  //PLATFORM_DESKTOP
+#if PLATFORM_DESKTOP
 #define NANOVG_GL3_IMPLEMENTATION
 #define NVGSWU_GL3
 #else
