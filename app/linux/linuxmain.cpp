@@ -1,3 +1,4 @@
+#include <unistd.h>  // for symlink()
 #include "ugui/svggui_platform.h"
 #include "ugui/svggui.h"
 #include "usvg/svgwriter.h"
@@ -8,6 +9,7 @@
 #include "util/elevationManager.h"
 #include "util.h"
 #include "nfd.h"
+#include "stb_image_write.h"  // for screenshots
 
 #include "mapsources.h"
 #include "plugins.h"
@@ -16,12 +18,11 @@
 // conflict between Xlib Window and SvgGui Window (should have used namespace)
 #define Window XXWindow
 //#include <glad/glad.h>
-#define GL_GLEXT_PROTOTYPES
-//#define GLX_GLXEXT_PROTOTYPES
 #include <GL/glx.h>
 #include <GL/glext.h>
 
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <X11/extensions/XInput2.h>
 
 // MapsApp
@@ -36,7 +37,8 @@ struct X11Context {
 static X11Context xContext;
 
 static struct {
-  Atom absX, absY, absP, tiltX, tiltY, clipboard, imagePng, sdlSel, Incr, utf8String;
+  Atom absX, absY, absP, tiltX, tiltY, clipboard, imagePng, sdlSel, Incr,
+      UTF8_STRING, STRING, COMPOUND_TEXT, C_STRING, TARGETS;
 } XAtoms;
 
 void PLATFORM_WakeEventLoop(void)
@@ -93,8 +95,8 @@ int SDL_SetClipboardText(const char* text)
 
 void SDL_free(void* mem) { free(mem); }
 
-static SDL_Keymod currentKeymod = KMOD_NONE;
-SDL_Keymod SDL_GetModState() { return currentKeymod; }
+static SDL_Keymod currKeymod = KMOD_NONE;
+SDL_Keymod SDL_GetModState() { return currKeymod; }
 
 void SDL_SetTextInputRect(SDL_Rect* rect) {}
 SDL_bool SDL_IsTextInputActive() { return SDL_FALSE; }
@@ -444,7 +446,7 @@ static void processClipboardXEvent(XEvent* xevent)
     // if request for PNG failed, try text ... some applications (e.g. SDL!) don't copy requested target type
     //  to reply, so we use our own flag
     if(xevent->xselection.property == None && reqClipboardText)   //xevent->xselection.target == XAtoms.imagePng)
-      XConvertSelection(display, XAtoms.clipboard, XAtoms.utf8String, XAtoms.sdlSel, window, CurrentTime);
+      XConvertSelection(display, XAtoms.clipboard, XAtoms.UTF8_STRING, XAtoms.sdlSel, window, CurrentTime);
     else if(xevent->xselection.property == XAtoms.sdlSel) {
       // delete property = True needed for INCR to send next chunk
       if(XGetWindowProperty(display, window, XAtoms.sdlSel, 0, INT_MAX/4, True,
@@ -456,7 +458,7 @@ static void processClipboardXEvent(XEvent* xevent)
           cbuff = 1<<20;
           buff = (unsigned char*)malloc(cbuff);
         }
-        else if((seln_type == XAtoms.imagePng || seln_type == XAtoms.utf8String) && nbytes && src)
+        else if((seln_type == XAtoms.imagePng || seln_type == XAtoms.UTF8_STRING) && nbytes && src)
           clipboardFromBuffer(src, nbytes, seln_type == XAtoms.imagePng);  // does not require null term.
         XFree(src);
       }
@@ -497,7 +499,11 @@ static int linuxInitTablet(Display* xDisplay, Window xWindow)
   XAtoms.imagePng = XInternAtom(xDisplay, "image/png", 0);
   XAtoms.sdlSel = XInternAtom(xDisplay, "IMAGE_SELECTION", 0);
   XAtoms.Incr = XInternAtom(xDisplay, "INCR", 0);
-  XAtoms.utf8String = XInternAtom(xDisplay, "UTF8_STRING", 0);
+  XAtoms.UTF8_STRING = XInternAtom(xDisplay, "UTF8_STRING", 0);
+  XAtoms.STRING = XInternAtom(xDisplay, "STRING", 0);
+  XAtoms.COMPOUND_TEXT = XInternAtom(xDisplay, "COMPOUND_TEXT", 0);
+  XAtoms.C_STRING = XInternAtom(xDisplay, "C_STRING", 0);
+  XAtoms.TARGETS = XInternAtom(xDisplay, "TARGETS", 0);
 
   int event, err;
   if(!XQueryExtension(xDisplay, "XInputExtension", &xinput2_opcode, &event, &err))
@@ -544,6 +550,38 @@ static int requestClipboard()
   // XConvertSelection is asynchronous - we have to wait for SelectionNotify message
   XConvertSelection(xContext.dpy, XAtoms.clipboard, XAtoms.imagePng, XAtoms.sdlSel, xContext.win, CurrentTime);
   return 1;
+}
+
+void processSelectionRequest(XSelectionRequestEvent* xse)
+{
+  Atom selAtoms[] = {XAtoms.TARGETS, XAtoms.UTF8_STRING, XAtoms.STRING, XAtoms.COMPOUND_TEXT, XAtoms.C_STRING};
+
+  if(xse->property == None) { xse->property = xse->target; }
+
+  XEvent nxe;
+  nxe.xselection.type = SelectionNotify;
+  nxe.xselection.requestor = xse->requestor;
+  nxe.xselection.property = xse->property;
+  nxe.xselection.display = xse->display;
+  nxe.xselection.selection = xse->selection;
+  nxe.xselection.target = xse->target;
+  nxe.xselection.time = xse->time;
+
+  if(xse->target == XAtoms.TARGETS) {
+    XChangeProperty(xContext.dpy, xse->requestor, xse->property, XA_ATOM,
+        32, PropModeReplace, (const uint8_t *)selAtoms, sizeof(selAtoms)/sizeof(selAtoms[0]));
+  }
+  else if(std::find(std::begin(selAtoms), std::end(selAtoms), xse->target) != std::end(selAtoms)) {
+    if(xse->selection == XAtoms.clipboard) {  // XAtoms.PRIMARY
+      XChangeProperty(xContext.dpy, xse->requestor, xse->property, xse->target,
+          8, PropModeReplace, (const uint8_t*)currClipboard.c_str(), int(currClipboard.size()));
+    }
+  }
+  else {
+    nxe.xselection.property = None;  // not a supported target
+  }
+  XSendEvent(xContext.dpy, xse->requestor, 0, 0, &nxe);
+  XFlush(xContext.dpy);
 }
 
 // Map X11 KeySym to SDL_Keycode
@@ -617,6 +655,12 @@ static SDL_Keycode keySymToSDLK(KeySym keysym)
   case XK_F12: return SDLK_F12;
   case XK_Delete: return SDLK_DELETE;
   case XK_Caps_Lock: return SDLK_CAPSLOCK;
+  case XK_Home: return SDLK_HOME;
+  case XK_End: return SDLK_END;
+  case XK_Page_Up: return SDLK_PAGEUP;
+  case XK_Page_Down: return SDLK_PAGEDOWN;
+  case XK_Insert: return SDLK_INSERT;
+  case XK_Print: return SDLK_PRINTSCREEN;
   default:
     // Try to handle printable ASCII range
     if (keysym >= XK_space && keysym <= XK_asciitilde)
@@ -637,16 +681,15 @@ static void initKeycodeToSDLK()
   }
 }
 
-static SDL_Keymod keyStateToMods(int state)
+static void updateKeymods(SDL_Keycode key, bool down)
 {
-  uint32_t mods = 0;
-  if(state & ShiftMask) { mods |= KMOD_SHIFT; }
-  if(state & ControlMask) { mods |= KMOD_CTRL; }
-  if(state & Mod1Mask) { mods |= KMOD_ALT; }
-  if(state & Mod4Mask) { mods |= KMOD_GUI; }
-  //if(state & LockMask) { mods |= GLFW_MOD_CAPS_LOCK; }
-  //if(state & Mod2Mask) { mods |= GLFW_MOD_NUM_LOCK; }
-  return (SDL_Keymod)mods;
+  int mask = 0;
+  if(key == SDLK_RSHIFT || key == SDLK_LSHIFT) { mask = KMOD_SHIFT; }
+  else if(key == SDLK_RCTRL || key == SDLK_LCTRL) { mask = KMOD_CTRL; }
+  else if(key == SDLK_RALT || key == SDLK_LALT) { mask = KMOD_ALT; }
+  else if(key == SDLK_RGUI || key == SDLK_LGUI) { mask = KMOD_GUI; }
+  else { return; }
+  currKeymod = (SDL_Keymod)(down ? (currKeymod | mask) : (currKeymod & ~mask));
 }
 
 static struct {
@@ -711,15 +754,16 @@ static void processX11Event(XEvent* xevent)
   case KeyPress:
   case KeyRelease:
   {
-    currentKeymod = keyStateToMods(xevent->xkey.state);
+    SDL_Keycode sdlk = keycode > 0 && keycode < 256 ? keycodeToSDLK[keycode] : 0;
     bool down = xevent->type == KeyPress;
+    updateKeymods(sdlk, down);  // xevent->xkey.state reflects state before this key event
     SDL_Event event = {0};
     event.key.type = !down ? SDL_KEYUP : SDL_KEYDOWN;
     event.key.state = !down ? SDL_RELEASED : SDL_PRESSED;
     //event.key.repeat = LOWORD(lParam);
     event.key.keysym.scancode = (SDL_Scancode)keycode;
-    event.key.keysym.sym = keycode > 0 && keycode < 256 ? keycodeToSDLK[keycode] : 0;
-    event.key.keysym.mod = currentKeymod;
+    event.key.keysym.sym = sdlk;
+    event.key.keysym.mod = currKeymod;
     event.key.windowID = 0;  //keyboard->focus ? keyboard->focus->id : 0;
     SDL_PushEvent(&event);
     if (xevent->type != KeyPress || filtered) { break; }
@@ -755,6 +799,9 @@ static void processX11Event(XEvent* xevent)
     }
     break;
   }
+  case SelectionRequest:
+    processSelectionRequest(&xevent->xselectionrequest);
+    break;
   case SelectionNotify:
   case PropertyNotify:
     processClipboardXEvent(xevent);
@@ -762,29 +809,24 @@ static void processX11Event(XEvent* xevent)
   }
 }
 
-static int glxFbAttribs[] = {
-  GLX_X_RENDERABLE    , True,
-  GLX_DRAWABLE_TYPE   , GLX_WINDOW_BIT,
-  GLX_RENDER_TYPE     , GLX_RGBA_BIT,
-  GLX_X_VISUAL_TYPE   , GLX_TRUE_COLOR,
-  GLX_RED_SIZE        , 8,
-  GLX_GREEN_SIZE      , 8,
-  GLX_BLUE_SIZE       , 8,
-  GLX_ALPHA_SIZE      , 8,
-  GLX_DEPTH_SIZE      , 24,
-  GLX_STENCIL_SIZE    , 8,
-  GLX_DOUBLEBUFFER    , True,
-  GLX_SAMPLE_BUFFERS  , True,
-  GLX_SAMPLES         , 4,
-  None
-};
-
-static int glxCtxAttribs[] = {
-  GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-  GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-  //GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_ES2_PROFILE_BIT_EXT // GLX_CONTEXT_CORE_PROFILE_BIT_ARB
-  None
-};
+// spent more time trying to get xwd, maim, scrot, etc. working than it took to write this
+static void screenshotPng(int width, int height)
+{
+  Image img(width, height);
+  glReadBuffer(GL_FRONT);  // to get MSAA resolve ... in general reading front buffer not guaranteed to work
+  // GL_RGB, not GL_RGBA (alpha channel not allowed in screenshots)
+  glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.pixels());
+  glReadBuffer(GL_BACK);
+  auto pngname = std::to_string(mSecSinceEpoch()/1000) + ".png";
+  stbi_flip_vertically_on_write(1);
+  // initial value of GL_PACK_ALIGNMENT is 4
+  stbi_write_png(pngname.c_str(), width, height, 3, img.pixels(), (3*width + 0x3) & ~0x3);
+  stbi_flip_vertically_on_write(0);
+  //FileStream fstrm(pngname.c_str(), "wb");
+  //auto encoded = img.encodePNG();
+  //fstrm.write((char*)encoded.data(), encoded.size());
+  PLATFORM_LOG("Screenshot written to %s\n", pngname.c_str());
+}
 
 static void initBaseDir(const char* exepath)
 {
@@ -820,6 +862,30 @@ static void initBaseDir(const char* exepath)
 // https://hereket.com/posts/x11_window_with_shaders/
 // https://www.khronos.org/opengl/wiki/Tutorial:_OpenGL_3.0_Context_Creation_(GLX)
 // https://gist.github.com/baines/5a49f1334281b2685af5dcae81a6fa8a - XIM, XIC
+
+static int glxFbAttribs[] = {
+  GLX_X_RENDERABLE    , True,
+  GLX_DRAWABLE_TYPE   , GLX_WINDOW_BIT,
+  GLX_RENDER_TYPE     , GLX_RGBA_BIT,
+  GLX_X_VISUAL_TYPE   , GLX_TRUE_COLOR,
+  GLX_RED_SIZE        , 8,
+  GLX_GREEN_SIZE      , 8,
+  GLX_BLUE_SIZE       , 8,
+  GLX_ALPHA_SIZE      , 8,
+  GLX_DEPTH_SIZE      , 24,
+  GLX_STENCIL_SIZE    , 8,
+  GLX_DOUBLEBUFFER    , True,
+  GLX_SAMPLE_BUFFERS  , True,
+  GLX_SAMPLES         , 4,
+  None
+};
+
+static int glxCtxAttribs[] = {
+  GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+  GLX_CONTEXT_MINOR_VERSION_ARB, 3,
+  //GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_ES2_PROFILE_BIT_EXT, // GLX_CONTEXT_CORE_PROFILE_BIT_ARB
+  None
+};
 
 int main(int argc, char* argv[])
 {
@@ -867,7 +933,7 @@ int main(int argc, char* argv[])
 
   XSetWindowAttributes winSetAttrs = {};
   winSetAttrs.colormap = XCreateColormap(xDpy, rootWin, xVisual->visual, AllocNone);
-  winSetAttrs.background_pixel = 0xffafe9af;
+  winSetAttrs.background_pixel = scrInfo->black_pixel;
   winSetAttrs.event_mask = ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask |
                            EnterWindowMask | LeaveWindowMask | ButtonPressMask |
                            ButtonReleaseMask | PointerMotionMask | FocusChangeMask |
@@ -884,10 +950,12 @@ int main(int argc, char* argv[])
   if(!XSetWMProtocols(xDpy, xWin, &WMAtoms.WM_DELETE_WINDOW, 1))
     LOGE("Couldn't register WM_DELETE_WINDOW\n");
 
-  // don't bother with GLAD GLX loader for just one fn
+  // don't bother with GLAD GLX loader for just a few fns
   auto glXCreateContextAttribsARB =
       (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddress((const GLubyte*)"glXCreateContextAttribsARB");
-  if(!glXCreateContextAttribsARB) { LOGE("glXGetProcAddress() failed"); return -1; }
+  auto glXSwapIntervalEXT =
+      (PFNGLXSWAPINTERVALEXTPROC) glXGetProcAddress((const GLubyte*)"glXSwapIntervalEXT");
+  if(!glXCreateContextAttribsARB || !glXSwapIntervalEXT) { LOGE("glXGetProcAddress() failed"); return -1; }
 
   GLXContext mainCtx = glXCreateContextAttribsARB(xDpy, fbConfigs[0], NULL, true, glxCtxAttribs);
   //GLXContext mainCtx = glXCreateContext(xDpy, xVisual, None, True);
@@ -900,6 +968,7 @@ int main(int argc, char* argv[])
   Tangram::ElevationManager::offscreenWorker = std::move(offscreenWorker);
   glXMakeCurrent(xDpy, xWin, mainCtx);
   //gladLoadGL();
+  glXSwapIntervalEXT(xDpy, xWin, MapsApp::cfg()["gl_swap_interval"].as<int>(-1));
 
   // setup input context for keyboard input
   XSetLocaleModifiers("");
@@ -933,6 +1002,7 @@ int main(int argc, char* argv[])
   //app->map->setupGL();
   app->createGUI((SDL_Window*)xWin);
 
+  static bool takeScreenshot = false;
   app->win->addHandler([&](SvgGui*, SDL_Event* event){
     if(event->type == SDL_KEYDOWN) {
       if(event->key.keysym.sym == SDLK_q && event->key.keysym.mod & KMOD_CTRL)
@@ -941,6 +1011,21 @@ int main(int argc, char* argv[])
         app->mapsSources->reload();
         app->pluginManager->reload();
         app->loadSceneFile();  // reload scene
+      }
+      else if(event->key.keysym.sym == SDLK_PRINTSCREEN) {
+        // testing/debugging stuff
+        if((event->key.keysym.mod & KMOD_CTRL) && (event->key.keysym.mod & KMOD_SHIFT))
+          MapsApp::gui->pushUserEvent(SvgGui::KEYBOARD_HIDDEN, 0);  // can't use a menu item for this obviously
+        else if(event->key.keysym.mod & KMOD_CTRL)
+          SvgGui::debugDirty = !SvgGui::debugDirty;
+        //else if(event->key.keysym.mod & KMOD_ALT)
+        //  debugHovered = true;
+        else if(event->key.keysym.mod & KMOD_SHIFT) {
+          takeScreenshot = true;
+          MapsApp::platform->requestRender();
+        }
+        else
+          SvgGui::debugLayout = true;
       }
       else
         return false;
@@ -972,10 +1057,10 @@ int main(int argc, char* argv[])
     if(app->drawFrame(xContext.width, xContext.height))
       glXSwapBuffers(xDpy, xWin);
 
-    //if(takeScreenshot) {
-    //  screenshotPng(fbWidth, fbHeight);
-    //  takeScreenshot = false;
-    //}
+    if(takeScreenshot) {
+      screenshotPng(xContext.width, xContext.height);
+      takeScreenshot = false;
+    }
     if(SvgGui::debugLayout) {
       FileStream strm("debug_layout.svg", "wb");
       SvgWriter::DEBUG_CSS_STYLE = true;
@@ -994,10 +1079,10 @@ int main(int argc, char* argv[])
   delete app;
   NFD_Quit();
 
-  glXMakeCurrent(xDpy, xWin, NULL);
+  glXMakeCurrent(xDpy, None, NULL);
   offscreenWorker = std::move(Tangram::ElevationManager::offscreenWorker);
   if(offscreenWorker) {
-    offscreenWorker->enqueue([=](){ glXMakeCurrent(xDpy, xWin, NULL); });
+    offscreenWorker->enqueue([=](){ glXMakeCurrent(xDpy, None, NULL); });
     offscreenWorker->waitForCompletion();
     offscreenWorker.reset();  // wait for thread exit
   }
