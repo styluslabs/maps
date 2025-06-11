@@ -859,9 +859,10 @@ static void initBaseDir(const char* exepath)
 }
 
 // Refs:
-// https://hereket.com/posts/x11_window_with_shaders/
-// https://www.khronos.org/opengl/wiki/Tutorial:_OpenGL_3.0_Context_Creation_(GLX)
-// https://gist.github.com/baines/5a49f1334281b2685af5dcae81a6fa8a - XIM, XIC
+// - https://hereket.com/posts/x11_window_with_shaders/
+// - https://www.khronos.org/opengl/wiki/Tutorial:_OpenGL_3.0_Context_Creation_(GLX)
+// - https://gist.github.com/baines/5a49f1334281b2685af5dcae81a6fa8a - XIM, XIC
+// - https://github.com/blender/blender/blob/main/intern/ghost/intern/GHOST_SystemX11.cc
 
 static int glxFbAttribs[] = {
   GLX_X_RENDERABLE    , True,

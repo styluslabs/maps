@@ -1763,7 +1763,8 @@ void MapsTracks::createWayptContent()
     std::vector<std::string> pluginTitles;
     for(auto& fn : app->pluginManager->routeFns)
       pluginTitles.push_back(fn.title.c_str());
-    pluginFn = std::min(int(pluginTitles.size())-1, app->config["tracks"]["plugin"].as<int>(0));
+    // default to the last plugin (hack to pick valhalla)
+    pluginFn = std::min(pluginTitles.size()-1, app->config["tracks"]["plugin"].as<size_t>(INT_MAX));
     Menu* routePluginMenu = createRadioMenu(pluginTitles, [=](size_t idx){
       app->config["tracks"]["plugin"] = pluginFn = idx;
       if(activeTrack && activeTrack->routeMode != "direct")

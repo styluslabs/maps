@@ -165,7 +165,7 @@ usgs-imagery:
 
 sentinel2-recent:
     title: Sentinel-2 Recent
-    description: Weekly 10m imagery
+    description: Recent cloudless 10m imagery
     url: https://planetarycomputer.microsoft.com/api/data/v1/mosaic/ee3c35fe2906b21590b2153418b89570/tiles/WebMercatorQuad/{z}/{x}/{y}@2x?assets=B04&assets=B03&assets=B02&color_formula=Gamma%20RGB%203.2%20Saturation%200.8%20Sigmoidal%20RGB%2025%200.35&nodata=0&collection=sentinel-2-l2a&format=jpeg
     max_age: 86400
     updates:
@@ -173,7 +173,7 @@ sentinel2-recent:
 
 sentinel2-arcgis:
     title: Sentinel-2 Recent (ArcGIS)
-    description: Weekly 10m imagery
+    description: Recent cloudless 10m imagery
     archived: true
     url: |
         function(x,y,z) {

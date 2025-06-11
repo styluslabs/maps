@@ -41,8 +41,8 @@ function esaSentinel2()
     "application.dark_base_map": true
   };
   const mapSrc = {
-    "title": "Sentinel 2 " + date,
-    "description": sentinel2_id ? "10m imagery with 5 day revisit period" : "Set secrets.sentinel2_id to use!",
+    "title": "Sentinel-2 " + date,
+    "description": sentinel2_id ? "Weekly 10m imagery" : "Set secrets.sentinel2_id to use!",
     "url": sentinel2_id ? tileUrl : "",
     "zoom_offset": 1,  //"tile_size": 512,  -- download fewer tiles since usage is limited
     "max_zoom": 14,  // for 10m resolution

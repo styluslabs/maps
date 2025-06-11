@@ -63,8 +63,6 @@ search:
   offline_source: stylus-osm
 
 tracks:
-  # default to valhalla plugin
-  plugin: 1
   # point added to track if min_distance (m) OR min_time (sec) from last point; this sets density of points
   min_distance: 0.5
   min_time: 5

@@ -4,7 +4,7 @@ A cross-platform application for displaying vector and raster maps, built on [Ta
 
 Features include 3D terrain, offline search, track recording and editing, managing saved places, saving map tiles for offline use, and more.
 
-Available for [Android](https://github.com/styluslabs/maps/releases), [Linux](https://github.com/styluslabs/maps/releases), [Windows](https://github.com/styluslabs/maps/releases), and iOS: [App Store](https://apps.apple.com/us/app/ascend-maps/id6504321706), [Testflight](https://testflight.apple.com/join/3N1AUhj9).
+Available for [**Android**](https://github.com/styluslabs/maps/releases), [**Linux**](https://github.com/styluslabs/maps/releases), [**Windows**](https://github.com/styluslabs/maps/releases), and iOS: [**App Store**](https://apps.apple.com/us/app/ascend-maps/id6504321706), [Testflight](https://testflight.apple.com/join/3N1AUhj9).
 
 <img alt="Wikipedia search; Shaded relief" src="https://github.com/user-attachments/assets/d00ca2ca-f4d1-4f71-bef8-4dfcbb0b7d36" width="270">
 <img alt="3D Terrain" src="https://github.com/user-attachments/assets/c59d61bb-f09b-41e8-902c-1e7984cbeae4" width="270">
@@ -41,7 +41,7 @@ The default configuration includes [markers.yaml](assets/scenes/markers.yaml) fo
 
 ### Application data ###
 
-Application data is stored in the executable's folder on Linux (will be changed to `~/.config/styluslabs/maps` in the future).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more are available in `config.yaml` in the application data folder.  it can be edited directly after exiting the app or via the plugin console within the app, e.g., `readSceneValue("config.storage.shrink_at")`, `writeSceneValue("config.storage.shrink_at", 500000000)`.  See [config.default.yaml](assets/config.default.yaml) for documentation.
+Application data is stored in `~/.config/Ascend/` on Linux (unless `config.yaml` already exists in the current folder or the executable's folder).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more are available in `config.yaml` in the application data folder.  It can be edited directly after exiting the app or via the plugin console within the app, e.g., `readSceneValue("config.storage.shrink_at")`, `writeSceneValue("config.storage.shrink_at", 500000000)`.  See [config.default.yaml](assets/config.default.yaml) for documentation.
 
 On Android, all files created by the application (except `config.yaml` and `mapsources.yaml`) will be replaced when a newer APK is installed, so edits should only be made to copies, not the original files.
 
