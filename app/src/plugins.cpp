@@ -204,6 +204,21 @@ std::string PluginManager::evalJS(const char* s)
   return result;
 }
 
+void PluginManager::onMapEvent(MapEvent_t event)
+{
+  if(event == SCENE_LOADED)
+    onMapEventFn = app->sceneConfig()["application"]["on_map_event"].as<std::string>("");
+
+  //inState = UPDATE; ???
+  if(!onMapEventFn.empty()) {
+    duk_context* ctx = jsContext;
+    duk_get_global_string(ctx, onMapEventFn.c_str());
+    duk_push_int(ctx, int(event));
+    dukTryCall(ctx, 1);
+    duk_pop(ctx);
+  }
+}
+
 static int registerFunction(duk_context* ctx)
 {
   // alternative is to pass fn object instead of name, which we can then add to globals w/ generated name
@@ -461,6 +476,30 @@ static int writeSceneValue(duk_context* ctx)
   return 0;
 }
 
+static int updateSceneLight(duk_context* ctx)
+{
+  std::string lightname = duk_require_string(ctx, 0);
+  const char* paramstr = duk_is_string(ctx, 1) ? duk_require_string(ctx, 1) : duk_json_encode(ctx, 1);
+  auto yamlVal = YAML::Load(paramstr);
+  if(!yamlVal)
+    LOGE("Error parsing YAML string: %s", paramstr);
+  else
+    MapsApp::inst->mapsSources->updateSceneLight(lightname, yamlVal);
+  return 0;
+}
+
+static int getCameraPosition(duk_context* ctx)
+{
+  auto cam = MapsApp::inst->map->getCameraPosition();
+  duk_idx_t obj = duk_push_object(ctx);
+  duk_push_number(ctx, cam.longitude);  duk_put_prop_string(ctx, obj, "longitude");
+  duk_push_number(ctx, cam.latitude);  duk_put_prop_string(ctx, obj, "latitude");
+  duk_push_number(ctx, cam.zoom);  duk_put_prop_string(ctx, obj, "zoom");
+  duk_push_number(ctx, cam.rotation);  duk_put_prop_string(ctx, obj, "rotation");
+  duk_push_number(ctx, cam.tilt);  duk_put_prop_string(ctx, obj, "tilt");
+  return 1;
+}
+
 static int consoleLog(duk_context* ctx)
 {
   const char* msg = duk_require_string(ctx, 0);
@@ -495,6 +534,10 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "readSceneValue");
   duk_push_c_function(ctx, writeSceneValue, 2);
   duk_put_global_string(ctx, "writeSceneValue");
+  duk_push_c_function(ctx, updateSceneLight, 2);
+  duk_put_global_string(ctx, "updateSceneLight");
+  duk_push_c_function(ctx, getCameraPosition, 0);
+  duk_put_global_string(ctx, "getCameraPosition");
   // console.log
   duk_idx_t consoleObj = duk_push_object(ctx);
   duk_push_c_function(ctx, consoleLog, 1);

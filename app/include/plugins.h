@@ -21,6 +21,7 @@ public:
   ~PluginManager();
   void reload();
   Button* createPanel();
+  void onMapEvent(MapEvent_t event);
   void createFns(duk_context* ctx);
   std::string evalJS(const char* s);
   void cancelRequests(UrlReqType type);
@@ -61,6 +62,7 @@ public:
   std::vector<PluginFn> commandFns;
   struct UrlRequest { UrlReqType type; UrlRequestHandle handle; int serial; };
   std::list<UrlRequest> pendingRequests;
+  std::string onMapEventFn;
 
   static PluginManager* inst;
 };

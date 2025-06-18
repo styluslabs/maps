@@ -14,6 +14,7 @@ public:
   void rebuildSource(const std::string& srcname = "", bool async = true);
   void onMapEvent(MapEvent_t event);
   void updateSceneVar(const std::string& path, YAML::Node newval, const std::string& onchange, bool reload);
+  void updateSceneLight(const std::string& name, const YAML::Node& params);
   void importSources(const std::string& src);
   bool syncImportFile(const std::string& filename);
   void populateSourceEdit(std::string key);

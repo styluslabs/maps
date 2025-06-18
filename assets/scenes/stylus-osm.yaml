@@ -571,11 +571,14 @@ layers:
             draw: { polygons: { style: ocean-polygons } }
         intermittent:
             filter: { intermittent: true }
+            hide:
+                filter: { $zoom: { max: 10 } }
+                draw: { polygons: { visible: false } }
             draw:
                 polygons:
                     # draw border line instead of polygon (probably should rename draw group)
                     style: dashed-track
-                    width: [[10,0px],[11,1px],[15,2px]]
+                    width: 2px  #[[10,0px],[11,1px],[15,2px]]
 
 
     water_name:
@@ -598,6 +601,9 @@ layers:
         oceans:
             filter: { water: ocean, $zoom: { min: 1, max: 8 } }
             draw: { text: { font: { size: 14px } } }
+        intermittent:
+            filter: { intermittent: true, $zoom: { max: 10 } }
+            draw: { text: { visible: false } }
 
 
     waterway:
@@ -1142,19 +1148,21 @@ layers:
         data: { source: osm, layer: transportation }
         enabled: global.show_bike
         filter:
-            - bicycle: designated
-            # higher road types default to bicycle=yes, so bicycle=yes doesn't indicate any special accomodation
-            - { bicycle: yes, highway: [path, track, footway, pedestrian] }
-            - highway: cycleway
-            - cycleway: true
-            - cycleway_right: true
-            - cycleway_left: true
-            - mtb_scale: true
+            $zoom: { min: 10 }
+            any:
+                - bicycle: designated
+                # higher road types default to bicycle=yes, so bicycle=yes doesn't indicate any special accomodation
+                - { bicycle: yes, highway: [path, track, footway, pedestrian] }
+                - highway: cycleway
+                - cycleway: true
+                - cycleway_right: true
+                - cycleway_left: true
+                - mtb_scale: true
         draw:
             lines:
                 style: unlit-lines
                 color: global.color.bike_lane
-                width: [[13, 1.5px], [14, 2px]]
+                width: [[10, 1px], [13, 1.5px], [14, 2px]]
                 order: global.order.bicycle
         track:
             exclusive: true
@@ -1734,14 +1742,6 @@ layers:
             filter:
                 place: city
                 $zoom: { max: 9 }
-                any:
-                    - rank: false
-                    - { rank: { max: 1 }, $zoom: { min: 3 } }  # note that upper limit is in included!
-                    - { rank: { max: 3 }, $zoom: { min: 4 } }
-                    - { rank: { max: 4 }, $zoom: { min: 5 } }
-                    - { rank: { max: 6 }, $zoom: { min: 6 } }
-                    - { rank: { max: 7 }, $zoom: { min: 7 } }
-                    - { rank: { max: 10 }, $zoom: { min: 8 } }
             draw:
                 points:
                     size: 6px
@@ -1769,6 +1769,9 @@ layers:
             city-500k:
                 filter: { population: { min: 500000 } }
                 draw: { points: { text: { font: { size: [[6, 12px], [8, 14px], [12, 20px]] } } } }
+            special:  # San Jose has higher population than SF
+                filter: { name: "San Francisco" }
+                draw: { points: { priority: 8, text: { priority: 8 } } }
 
 
         # places w/text-only labels (not accompanying point)

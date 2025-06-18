@@ -809,7 +809,7 @@ void MapsApp::sendMapEvent(MapEvent_t event)
   //mapsOffline->onMapEvent(event);
   mapsSources->onMapEvent(event);
   mapsSearch->onMapEvent(event);
-  //pluginManager->onMapEvent(event);
+  pluginManager->onMapEvent(event);
 }
 
 void MapsApp::mapUpdate(double time)
@@ -844,6 +844,7 @@ void MapsApp::mapUpdate(double time)
     std::replace(credits.begin(), credits.end(), '\n', ' ');
     attribText->setText(credits.c_str());
     attribText->setVisible(true);
+    sendMapEvent(SCENE_LOADED);
   }
   else
     return;

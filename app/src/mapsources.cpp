@@ -6,6 +6,7 @@
 #include "data/mbtilesDataSource.h"
 #include "data/networkDataSource.h"
 #include "util/yamlUtil.h"
+#include "scene/lights.h"
 
 #include "usvg/svgpainter.h"
 #include "usvg/svgparser.h"
@@ -173,7 +174,15 @@ void MapsSources::reload()
 
 void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
 {
-  mapSources[key] = std::move(srcnode);
+  YAML::Node& dest = mapSources[key];
+  bool existed = bool(dest);
+  bool archived = existed && dest.at("archived").as<bool>(false);
+  dest = std::move(srcnode);
+  if(existed) {
+    if(!archived) { dest.remove("archived"); }
+    else { dest["archived"] = true; }
+  }
+
   if(!mapSources[key].has("__plugin"))
     saveSourcesNeeded = true;
   sourcesDirty = true;
@@ -533,6 +542,35 @@ void MapsSources::onMapEvent(MapEvent_t event)
       legendMenu->addItem(menuitem);
     }
     legendBtn->setVisible(app->legendContainer->containerNode()->firstChild() != NULL);
+  }
+}
+
+void MapsSources::updateSceneLight(const std::string& name, const YAML::Node& params)
+{
+  using namespace Tangram;
+  Light* light = NULL;
+  for(auto& l : app->map->getScene()->lights()) {
+    if(l->getInstanceName() == name) { light = l.get(); break; }
+  }
+  if(!light) { return; }
+
+  if (const YAML::Node& ambient = params["ambient"]) {
+    light->setAmbientColor(YamlUtil::getColorAsVec4(ambient));
+  }
+  if (const YAML::Node& diffuse = params["diffuse"]) {
+    light->setDiffuseColor(YamlUtil::getColorAsVec4(diffuse));
+  }
+  if (const YAML::Node& specular = params["specular"]) {
+    light->setSpecularColor(YamlUtil::getColorAsVec4(specular));
+  }
+  if(const YAML::Node& directionNode = params["direction"]) {
+    glm::vec3 direction;
+    if(YamlUtil::parseVec<glm::vec3>(directionNode, direction)) {
+      if(light->getType() == LightType::directional)
+        static_cast<DirectionalLight*>(light)->setDirection(direction);
+      else if(light->getType() == LightType::spot)
+        static_cast<SpotLight*>(light)->setDirection(direction);
+    }
   }
 }
 
