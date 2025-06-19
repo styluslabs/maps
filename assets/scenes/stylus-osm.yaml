@@ -589,7 +589,7 @@ layers:
             any: [ { $zoom: { min: 17 } }, { area: { min: 500px2 } } ]
         draw:
             text:
-                text_source: global.names_two_lines
+                text_source: global.names_one_line
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 priority: global.priority.water
                 font:
@@ -1692,45 +1692,48 @@ layers:
     boundaries:
         data: { source: osm, layer: boundary }
         filter:
-            admin_level: [2, 3, 4]
+            # admin_level=3 is for special divisions, not present for most countries
+            any:
+                - { admin_level: 2, $zoom: { min: 2 } }  # country
+                - { admin_level: 4, $zoom: { min: 6 } }  # state/provence
             not:
                 - maritime: true
                 - natural: coastline
         draw:
             lines:
-                style: unlit-lines
+                style: dashed-border
                 order: global.order.border
                 width: 1px
                 color: global.color.border
-
-            text:
-                priority: global.priority.boundary
-                text_source: global.names_one_line  #{ left: "", right: global.names_one_line } -- need to fix tilemaker
-                font:
-                    family: global.primary_font
-                    size: 12px
-                    fill: global.color.place_name
-                    stroke: { color: global.color.place_halo, width: 4 }
-                    transform: uppercase
-
-        region:
-            filter: { admin_level: [3, 4] }
-            draw: { text: { font: { size: 10px } } }
 
         country:
             filter: { admin_level: 2 }
             draw:
                 lines:
+                    style: unlit-lines
                     color: global.color.border_country
-                    width: 1px
-                text: { font: { weight: global.bold_weight } }
+                    width: 1.5px
             disputed:
                 filter: { disputed: true }
                 draw: { lines: { style: dashed-border } }
 
-        region:
-            filter: { admin_level: [3, 4] }
-            draw: { lines: { style: dashed-border } }
+        labels:
+            filter:
+                $zoom: { min: 8 }
+            draw:
+                text:
+                    priority: global.priority.boundary
+                    text_source: global.names_one_line  #{ left: "", right: global.names_one_line } -- need to fix tilemaker
+                    font:
+                        family: global.primary_font
+                        size: 10px
+                        fill: global.color.place_name
+                        stroke: { color: global.color.place_halo, width: 4 }
+                        transform: uppercase
+            country:
+                filter: { admin_level: 2 }
+                draw:
+                    text: { font: { size: 12px, weight: global.bold_weight } }
 
 
     places:
@@ -1744,6 +1747,7 @@ layers:
                 $zoom: { max: 9 }
             draw:
                 points:
+                    visible: false
                     size: 6px
                     color: global.color.city_point
                     priority: global.priority.place_fn
@@ -1751,7 +1755,8 @@ layers:
                     interactive: true
                     outline: { color: global.color.city_point_halo, width: 1px }
                     text:
-                        text_source: global.names_two_lines
+                        #text_source: global.names_two_lines
+                        text_source: global.names_one_line
                         priority: global.priority.place_fn
                         #collide: true
                         #optional: false
@@ -1760,15 +1765,17 @@ layers:
                             family: global.primary_font
                             fill: global.color.place_name
                             stroke: { color: global.color.place_halo, width: 4 }
-                            #transform: uppercase
-                            weight: global.bold_weight
+                            #weight: global.bold_weight
                             size: [[8, 10px], [12, 16px]]
-            city-100k:
-                filter: { population: { min: 100000, max: 500000 } }
-                draw: { points: { text: { font: { size: [[8, 12px], [12, 18px]] } } } }
             city-500k:
                 filter: { population: { min: 500000 } }
-                draw: { points: { text: { font: { size: [[6, 12px], [8, 14px], [12, 20px]] } } } }
+                draw: { points: { visible: true, text: { font: { size: [[6, 12px], [8, 14px], [12, 20px]] } } } }
+            city-100k:
+                filter: { $zoom: { min: 6 }, population: { min: 100000, max: 500000 } }
+                draw: { points: { visible: true, text: { font: { size: [[8, 12px], [12, 18px]] } } } }
+            default:
+                filter: { $zoom: { min: 7 } }
+                draw: { points: { visible: true } }
             special:  # San Jose has higher population than SF
                 filter: { name: "San Francisco" }
                 draw: { points: { priority: 8, text: { priority: 8 } } }
@@ -1780,7 +1787,7 @@ layers:
                 text:
                     visible: false
                     interactive: true
-                    text_source: global.names_two_lines
+                    text_source: global.names_one_line
                     priority: global.priority.place_fn
                     font:
                         family: global.primary_font
@@ -1816,7 +1823,6 @@ layers:
                 draw:
                     text:
                         visible: true
-                        text_source: global.names_one_line
                         font: { weight: 600, size: [[6, 14px], [8, 20px]] }
 
             regions:
@@ -1827,7 +1833,6 @@ layers:
                 draw:
                     text:
                         visible: true
-                        text_source: global.names_one_line
                         font:
                             size: [[6, 8px], [8, 12px]]
                             transform: uppercase
@@ -1842,6 +1847,9 @@ layers:
                     place: [city, town, village, suburb, hamlet]
                     not: { place_CN: [county, district, banner, subdistrict, neighbourhood] }
                     $zoom: { min: 9 } # show city point labels below z11
+                draw:
+                    text:
+                        text_source: global.names_two_lines
                 city:
                     filter: { place: city, $zoom: { min: 9, max: 14 } }
                     draw: { text: { visible: true, font: { weight: global.bold_weight, size: [[8, 10px], [12, 16px]] } } }

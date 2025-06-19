@@ -108,7 +108,8 @@ function createSolarSource()
   };
   const mapSrc = {
     "title": "Solar position",
-    "description": "Sun for hillshading",
+    "description": "Does not show shadows",
+    "archived": true,
     "layer": true,
     "layers": [ "hillshade" ],
     "updates": updates
