@@ -143,6 +143,16 @@ function osmPlaceInfoCb(_content, _error)
     httpRequest(wdurl, wikiDataCb);
   }
 
+  if(tags["prominence"]) {
+    const prom = Number(tags["prominence"]);
+    if(prom > 500) {
+      if(readSceneValue("global.metric_units") == "false")
+        addPlaceInfo("mountain", "Prominence", "Prominence: " + (prom * 3.28084).toFixed(0) + " ft");
+      else
+        addPlaceInfo("mountain", "Prominence", "Prominence: " + prom.toFixed(0) + " m");
+    }
+  }
+
   if(tags["population"] && !wikidata) {
     // " (" + tags["population:date"] + ")"
     addPlaceInfo(popIcon, "Population", Number(tags["population"]).toLocaleString());

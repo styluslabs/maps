@@ -697,7 +697,7 @@ layers:
                 draw: { lines: { width: [[13, 0], [13, 1.5px], [15, 9]] } }  #color: global.color.motorway_link
 
         trunk:
-            filter: { highway: [trunk, trunk_link], $zoom: { min: 8 } }
+            filter: { highway: [trunk, trunk_link], $zoom: { min: 8 } }  # z7 would be better for US
             draw:
                 lines:
                     order: global.order.major_road
@@ -708,18 +708,21 @@ layers:
                 draw: { lines: { width: [[14, 0], [14, 1.5px], [16, 8]] } }
 
         major_road:
-            filter: { highway: [primary, primary_link, secondary, secondary_link] }
+            filter: { highway: [primary, primary_link, secondary, secondary_link], $zoom: { min: 8 } }
             draw:
                 lines:
                     order: global.order.major_road
-                    width: [[10, 0], [13, 2px], [14, 2px], [16, 12]]
+                    width: [[10, 0], [10, 0.5px], [13, 2px], [14, 2px], [16, 12]]
                     outline: { width: [[16, 0], [17, 1]] }
             link:
                 filter: [ { highway: [primary_link, secondary_link] }, { ramp: true } ]
                 draw: { lines: { width: [[14, 0], [14, 1.5px], [16, 8]] } }
-            withref:
-                filter: { ref: true }
-                draw: { lines: { width: [[8, 0], [9, 1px], [13, 2px], [14, 2px], [16, 12]] } }
+            primary_ref:
+                filter: { highway: primary, ref: true }
+                draw: { lines: { width: [[8, 0.5px], [9, 1px], [13, 2px], [14, 2px], [16, 12]] } }
+            secondary_ref:
+                filter: { highway: secondary, ref: true }
+                draw: { lines: { width: [[9, 0], [9, 0.5px], [10, 1px], [13, 2px], [14, 2px], [16, 12]] } }
 
         minor_road:
             filter:
@@ -911,7 +914,8 @@ layers:
             route: false
             any:
                 - { highway: motorway, $zoom: { min: 6 } }
-                - { highway: [trunk, primary], $zoom: { min: 9 } }
+                - { highway: trunk, $zoom: { min: 8 } }
+                - { highway: primary, $zoom: { min: 9 } }
                 - { highway: [secondary, tertiary], $zoom: { min: 13 } }
                 - $zoom: { min: 14 }
         motorway:
@@ -1767,8 +1771,14 @@ layers:
                             stroke: { color: global.color.place_halo, width: 4 }
                             #weight: global.bold_weight
                             size: [[8, 10px], [12, 16px]]
+            capital:
+                filter: { capital: "yes" }
+                draw: { points: { size: 10px, texture: pois, sprite: capital } }
+            city-1m:
+                filter: { population: { min: 1000000 } }
+                draw: { points: { text: { font: { weight: global.bold_weight } } } }
             city-500k:
-                filter: { population: { min: 500000 } }
+                filter: [ { capital: "yes" }, { population: { min: 500000 } } ]
                 draw: { points: { visible: true, text: { font: { size: [[6, 12px], [8, 14px], [12, 20px]] } } } }
             city-100k:
                 filter: { $zoom: { min: 6 }, population: { min: 100000, max: 500000 } }
@@ -1807,19 +1817,19 @@ layers:
 
             continents:
                 exclusive: true
-                filter: { place: continent, $geometry: point }
+                filter: { place: continent, $zoom: { min: 2, max: 3 } }
                 draw: { text: { font: { transform: uppercase } } }
 
             countries:
                 exclusive: true
                 filter:
                     place: country
-                    $zoom: { max: 8 }
                     any:
-                        - { population: { min: 10000000 } }
-                        - { $zoom: { min: 5 }, population: 0 }
-                        - { $zoom: { min: 5 }, population: { min: 1000000 } }
-                        - { $zoom: { min: 6 } }
+                        - { $zoom: { max: 8 }, population: { min: 10000000 } }
+                        - { $zoom: { min: 5, max: 8 }, population: false }
+                        - { $zoom: { min: 5, max: 8 }, population: { min: 1000000 } }
+                        - { $zoom: { min: 6, max: 8 }, population: { min: 200000 } }
+                        - { $zoom: { min: 7, max: 9 } }
                 draw:
                     text:
                         visible: true
@@ -1829,17 +1839,17 @@ layers:
                 exclusive: true
                 filter:
                     place: [state, province]
-                    $zoom: { min: 5, max: 9 }
+                    $zoom: { min: 6, max: 9 }
                 draw:
                     text:
                         visible: true
                         font:
-                            size: [[6, 8px], [8, 12px]]
+                            size: [[6, 10px], [8, 12px]]
                             transform: uppercase
                 # use short name when available at low-zooms
                 short:
                     filter: { $zoom: { max: 7 } }
-                    draw: { text: { text_source: 'ref' } }
+                    draw: { text: { text_source: ['ref', 'name'] } }
 
             cities:
                 exclusive: true

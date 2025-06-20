@@ -486,6 +486,12 @@ document.addEventListener('DOMContentLoaded', function(event) {
   </g>
 </svg>
 
+<svg id="capital" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
+  <circle fill="#000000" cx="0" cy="0" r="20"/>
+  <circle fill="#ffffff" cx="0" cy="0" r="15"/>
+  <circle fill="#000000" cx="0" cy="0" r="8"/>
+</svg>
+
 <!-- one way arrow -->
 <svg id="arrow" class="other" width="13.5pt" height="13.5pt" viewBox="-25 -25 50 50">
   <path class="poi-bg" transform="rotate(90) scale(0.25) translate(-105, -210)" d="m 169.26688,222.66539 -83.4725,0 5.14,15.41125 c 0.16375,0.4925 0.2525,1.01875 0.2525,1.56625 0,2.73875 -2.22,4.9575 -4.9575,4.9575 -1.03875,0 -2.0025,-0.31875 -2.79875,-0.865 l -48.56875,-33.845 48.56875,-33.845 c 0.79625,-0.545 1.76,-0.865 2.79875,-0.865 2.7375,0 4.9575,2.22 4.9575,4.9575 0,0.5475 -0.0887,1.07375 -0.2525,1.56625 l -5.14,15.41125 83.4725,0 0,25.55 z"/>

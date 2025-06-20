@@ -1,6 +1,8 @@
 // from https://github.com/mourner/suncalc/blob/master/suncalc.js
 // - single fn version: https://observablehq.com/@mourner/sun-position-in-900-bytes
 
+// examples: https://app.shadowmap.org ; https://shademap.app
+
 var PI   = Math.PI,
     sin  = Math.sin,
     cos  = Math.cos,
