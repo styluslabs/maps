@@ -1699,7 +1699,8 @@ layers:
             # admin_level=3 is for special divisions, not present for most countries
             any:
                 - { admin_level: 2, $zoom: { min: 2 } }  # country
-                - { admin_level: 4, $zoom: { min: 6 } }  # state/provence
+                - { admin_level: 4, $zoom: { min: 6 } }  # state/province
+                - { admin_level: 4, $zoom: { min: 5 }, ISO3166_2: [US, CA] }  # large countries
             not:
                 - maritime: true
                 - natural: coastline

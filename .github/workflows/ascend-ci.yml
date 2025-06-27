@@ -13,5 +13,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev mesa-common-dev
     - name: tangram tests
       run: make -f tests.mk DEBUG=1
