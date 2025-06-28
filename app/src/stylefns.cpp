@@ -141,6 +141,19 @@ NativeStyleFn userGetStyleFunction(Scene& scene, const std::string& jsSource)
     };
   }
 
+  if(tag == "is_selected") {
+    // we are relying on the fact that Node refs are stable
+    const YAML::Node& selnode = scene.config()["global"]["selected_osm_id"];
+    return [&selnode](const Feature& feature, StyleParam::Value& val) {
+      val = false;
+      if(selnode.isString() && !selnode.getString().empty()) {
+        auto idprop = feature.props.get("osm_id");
+        if(idprop.is<std::string>() && idprop.get<std::string>() == selnode.getString()) { val = true; }
+      }
+      return true;
+    };
+  }
+
   LOGE("No native function found for tag '%s'", tag.c_str());
   return {};
 }

@@ -783,6 +783,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   if(terrain3D) { options.updates.push_back(SceneUpdate{"scene.terrain_3d", "true"}); }
   options.updates.push_back(SceneUpdate{"global.metric_units", metricUnits ? "true" : "false"});
   options.updates.push_back(SceneUpdate{"global.shuffle_seed", std::to_string(shuffleSeed)});
+  options.updates.push_back(SceneUpdate{"global.selected_osm_id", "~"});  // ensure Node exists
   options.diskTileCacheSize = 256*1024*1024;  // value for size is ignored (just >0 to enable cache)
   options.diskCacheDir = baseDir + "cache/";
   options.diskTileCacheMaxAge = cfg()["storage"]["max_age"].as<int64_t>(options.diskTileCacheMaxAge);
