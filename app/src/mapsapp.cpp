@@ -290,7 +290,7 @@ LngLat MapsApp::getMapCenter()
 std::string MapsApp::getPlaceTitle(const Properties& props) const
 {
   std::string name;
-  props.getString("name_en", name) || props.getString("name", name);
+  props.getString("name_en", name) || props.getString("name", name) || props.getString("ref", name);
   return name;
 }
 

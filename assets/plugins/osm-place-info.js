@@ -11,9 +11,13 @@ function getPlaceType(_props)
   if(!_props) return "";
   const props = JSON.parse(_props);
   var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["place"] || props["railway"] || props["natural"];
-  if(!type) return "";
-  type = type.replace(/_/g, " ");
-  return type.charAt(0).toUpperCase() + type.slice(1);
+  var route = props["route"];
+  if(route) { type = route + " route"; }
+  if(type) {
+    type = type.replace(/_/g, " ");
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+  return "";
 }
 
 // from https://github.com/osmlab/jsopeninghours

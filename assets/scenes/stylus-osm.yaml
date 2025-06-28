@@ -21,8 +21,7 @@ global:
 
     # HSL: 0 (== 360) is red, 120 is green, 240 is blue
     color:
-        #background: [.97, .955, .94] #'#f0ebeb'
-        #earth: white
+        selected: red
         default_label: black
         default_halo: white
         landuse: honeydew
@@ -42,6 +41,7 @@ global:
         water: '#9dc3de'  # == hsl(205, 50%, 74%) (compare ferry color)
         water_name: "#51909c"
         water_halo: "#e2eef0"
+        glacier_name: "#3A88BB"
         spring: hsl(210, 100%, 45%)
         beach: '#FEEFC3'  #[1.000,0.953,0.900]
         ice: white
@@ -77,6 +77,8 @@ global:
         airport_name: '#487585'
         shield: '#FFFFFF'
         motorway_shield: '#FFDC36'
+        hike_shield: hsl(33, 81%, 64%)
+        bike_shield: hsl(120, 70%, 70%)
         road_name: '#666'
         road_halo: white
         ferry_name: hsl(205, 42%, 62%)  #'#8db3ce'
@@ -264,6 +266,9 @@ global:
           const shuffle = ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536.0;
           return shuffle + (global.poi_priority[global.poi_sprite_fn()] || 101);
         }
+
+    is_selected_fn: |
+        function() /*@is_selected*/ { return !!feature.osm_id && feature.osm_id == global.selected_osm_id; }
 
     # bounds for country-specific filters
     japan_bounds:  # covers main islands, does not include Okinawa, etc
@@ -505,11 +510,10 @@ layers:
         selected:
             draw:
                 lines:
-                    visible: |
-                        function() { return !!feature.osm_id && feature.osm_id == global.selected_osm_id; }
+                    visible: global.is_selected_fn
                     style: dashed-border  #unlit-lines
                     order: global.order.border
-                    color: red  #global.color.parks_border
+                    color: global.color.selected
                     width: 1.5px
         default:
             enabled: false
@@ -883,6 +887,16 @@ layers:
                     filter: { $zoom: { min: 16 } }
                     draw: { lines: { style: piste-direction } }
 
+        selected-route:
+            filter: { route: [hiking, bicycle, mtb], $zoom: { min: 10 } }
+            draw:
+                lines:
+                    visible: global.is_selected_fn
+                    style: dashed-border
+                    order: global.order.border
+                    color: global.color.selected
+                    width: 1.5px
+
         road-icons:
             arrows:
                 # oneway arrows and shields are distinct groups!
@@ -908,19 +922,26 @@ layers:
         enabled: global.show_motorways
         data: { source: osm, layer: transportation }
         filter:
-            #function() { const s = feature.maxspeed.split(" "); return parseInt(s[0]) >= (s[1] == "mph" ? 50 : 80); }
+            #aeroway: false
             ref: true
-            aeroway: false
-            route: false
             any:
                 - { highway: motorway, $zoom: { min: 6 } }
                 - { highway: trunk, $zoom: { min: 8 } }
                 - { highway: primary, $zoom: { min: 9 } }
                 - { highway: [secondary, tertiary], $zoom: { min: 13 } }
-                - $zoom: { min: 14 }
+                - { highway: true, $zoom: { min: 14 } }
+                - { ref: global.show_trails, route: hiking, $zoom: { min: 10 } }
+                - { ref: global.show_bike, route: [bicycle, mtb], $zoom: { min: 10 } }
         motorway:
+            #function() { const s = feature.maxspeed.split(" "); return parseInt(s[0]) >= (s[1] == "mph" ? 50 : 80); }
             filter: { highway: motorway }
             draw: { points: { priority: global.priority.motorway_ref, color: global.color.motorway_shield } }
+        hike:
+            filter: { route: hiking }
+            draw: { points: { interactive: true, color: global.color.hike_shield } }
+        bike:
+            filter: { route: [bicycle, mtb] }
+            draw: { points: { interactive: true, color: global.color.bike_shield } }
         draw:
             points:
                 visible: function() { return feature.ref.split(";")[0].length <= 8; }
@@ -1246,8 +1267,7 @@ layers:
         selected:
             draw:
                 sel-lines:
-                    visible: |
-                        function() { return !!feature.osm_id && feature.osm_id == global.selected_osm_id; }
+                    visible: global.is_selected_fn
                     style: dashed-border
                     order: global.order.border
                     color: red
@@ -1372,10 +1392,8 @@ layers:
                  not: { leisure: [park, golf_course] }
                  any:
                     - { boundary: national_park, $zoom: { min: 8 } }
-                    #boundary: protected_area, leisure: nature_reserve
                     - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }
-                    #- { natural: wood, $zoom: { min: 11 } }
-                    #- { landuse: forest, $zoom: { min: 11 } }
+                    - { natural: glacier, $zoom: { min: 10 } }
                     - { landuse: [commercial, retail, military], $zoom: { min: 12 } }
             draw:
                 points: { visible: false }
@@ -1397,6 +1415,14 @@ layers:
             military:
                 filter: { landuse: military }
                 draw: { text: { font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } } } }
+            glacier:
+                filter: { natural: glacier }
+                draw:
+                    text:
+                        font:
+                            size: 11px
+                            fill: global.color.water_name
+                            stroke: { color: global.color.water_halo }
             # don't show label for tiny area or for huge area (where boundries may be offscreen) beyond z12
             show:
                 filter:
