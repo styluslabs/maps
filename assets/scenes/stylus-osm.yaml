@@ -58,6 +58,7 @@ global:
         motorway_muted: '#eee'
         path: '#fff'
         unpaved_trail: '#B06000'
+        scramble_trail: '#FFA500'
         bike_lane: '#008800'
         bike_path: '#004C00'
         bike_unpaved: '#306000'
@@ -234,6 +235,7 @@ global:
         motorway_name: 45  # shield generally more important than name for motorway
         road_tertiary: 50
         road_minor: 60
+        route_minor: 65
         # rivers have many possible label positions w/ limited conflict, whereas lakes have only one label
         water: 22
         waterway: 99
@@ -764,6 +766,10 @@ layers:
             poor:
                 filter: { trail_visibility: [ bad, very_bad, horrible, no, none, poor ] }
                 draw: { lines: { style: dashed-bike } }
+            scramble:
+                # what about demanding_mountain_hiking and alpine_hiking levels?
+                filter: { sac_scale: [ demanding_alpine_hiking, difficult_alpine_hiking ] }
+                draw: { lines: { color: global.color.scramble_trail } }
 
         tracks:
             filter:
@@ -1109,6 +1115,18 @@ layers:
                             fill: global.piste_color_fn
                             stroke: { color: global.color.piste_halo, width: 3 }
                             size: 12px
+
+            hike:
+                exclusive: true
+                filter: { route: [hiking, bicycle, mtb], $zoom: { min: 14 } }
+                draw:
+                    text:
+                        interactive: true
+                        priority: global.priority.route_minor
+                        font:
+                            fill: global.color.unpaved_trail
+                            size: 10px
+                            stroke: { width: 4 }
 
 
     airports:
@@ -1800,7 +1818,7 @@ layers:
                             size: [[8, 10px], [12, 16px]]
             capital:
                 filter: { capital: "yes" }
-                draw: { points: { size: 10px, texture: pois, sprite: capital } }
+                draw: { points: { size: 10px, texture: pois, sprite: capital, priority: 6.5, text: { priority: 6.5 } } }
             city-1m:
                 filter: { population: { min: 1000000 } }
                 draw: { points: { text: { font: { weight: global.bold_weight } } } }
