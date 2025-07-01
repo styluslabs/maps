@@ -19,7 +19,6 @@ LD = link /nologo
 LDFLAGS = /SUBSYSTEM:WINDOWS
 # resource compiler
 RC = rc
-RCFLAGS = /DVERSIONSTR=\"$(APPVERSION)\" /DVERSIONCSV="$(MAJORVER),$(MINORVER),$(GITCOUNT),0"
 # WiX - tool for creating MSI installer
 WIXCANDLE = "c:\Program Files (x86)\WiX Toolset v3.11\bin\candle.exe"
 WIXLIGHT = "c:\Program Files (x86)\WiX Toolset v3.11\bin\light.exe"
