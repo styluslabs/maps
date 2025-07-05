@@ -10,7 +10,7 @@ global:
     #camera_settings: { type: isometric, axis: [-.2, .2] }
     camera_settings: { type: perspective }
     # globals required for hillshading
-    earth_style: polygons
+    earth_style: unlit-polygons
     earth_color: '#E0E0E0'  #[.97, .955, .94] #'#f0ebeb'
     earth_order: 599  # should be above all other polygons
     #elevation_sources: []
@@ -99,6 +99,7 @@ global:
         park_halo: white
         housenumber: [0.30,0.30,0.30]  #"#d2b17d"
         housenumber_halo: [0.913,0.925,0.933]  #rgba(38,38,38,0.15)
+        landuse_name: [0.30,0.30,0.30]
         aerialway: '#555'
         aerialway_name: black
         aerialway_halo: white
@@ -214,6 +215,8 @@ global:
     # priorities for colliding objects (points and text; lower value wins) - fractional part now orders within
     #  group defined by integer part, after ordering by visible state and camera space z coord
     priority:
+        national_park: 7.5
+        forest: 8  # only one label for potentially large map feature, and only shown up to zoom 11 or 12
         district_CN: 9
         neighborhood: 10
         peak: 14
@@ -225,7 +228,6 @@ global:
         park: 20
         golf: 21
         cemetery: 22
-        forest: 8  # only one label for potentially large map feature, and only shown up to zoom 11 or 12
         # road labels
         oneway_arrow: 23
         motorway_ref: 24
@@ -295,7 +297,7 @@ application:
         show_trails: { label: Hike }
         show_transit: { label: Transit }
         show_parking: { label: Parking }
-        show_motorways: { label: Motorways }
+        #show_motorways: { label: Motorways }
 
     # specify fields indexed for search and filter to select indexed features
     search_data:
@@ -690,7 +692,7 @@ layers:
                     order: global.order.motorway
                     color: global.color.motorway_muted
                     width: [[4, 0], [5, 1px], [8, 1.5px], [14, 2px], [15, 12]]
-                    outline: { width: [[14, 0], [15, 2]] }
+                    outline: { width: [[14, 0], [14, 1]] }
             unmute:
                 enabled: global.show_motorways
                 draw: { lines: { color: global.color.motorway } }
@@ -1116,15 +1118,18 @@ layers:
                             stroke: { color: global.color.piste_halo, width: 3 }
                             size: 12px
 
-            hike:
+            hike_bike:
                 exclusive: true
                 filter: { route: [hiking, bicycle, mtb], $zoom: { min: 14 } }
+                hiking:
+                    filter: { route: hiking }
+                    draw: { text: { font: { fill: global.color.unpaved_trail } } }
                 draw:
                     text:
                         interactive: true
                         priority: global.priority.route_minor
                         font:
-                            fill: global.color.unpaved_trail
+                            fill: global.color.bike_path
                             size: 10px
                             stroke: { width: 4 }
 
@@ -1412,7 +1417,7 @@ layers:
                     - { boundary: national_park, $zoom: { min: 8 } }
                     - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }
                     - { natural: glacier, $zoom: { min: 10 } }
-                    - { landuse: [commercial, retail, military], $zoom: { min: 12 } }
+                    - { landuse: [commercial, retail, military, winter_sports], $zoom: { min: 12 } }
             draw:
                 points: { visible: false }
                 text:
@@ -1428,15 +1433,16 @@ layers:
                         fill: global.color.park_name
                         stroke: { color: global.color.park_halo, width: 3 }
             commercial:
-                filter: { landuse: [commercial, retail] }
-                draw: { text: { font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } } } }
-            military:
-                filter: { landuse: military }
-                draw: { text: { font: { fill: global.color.housenumber, stroke: { color: global.color.housenumber_halo } } } }
+                filter: { landuse: [commercial, retail, military, winter_sports] }
+                draw: { text: { font: { fill: global.color.landuse_name, stroke: { color: global.color.default_halo } } } }
+            national_park:
+                filter: { boundary: national_park }
+                draw: { text: { priority: global.priority.national_park } }
             glacier:
                 filter: { natural: glacier }
                 draw:
                     text:
+                        priority: global.priority.water
                         font:
                             size: 11px
                             fill: global.color.water_name
@@ -1444,8 +1450,11 @@ layers:
             # don't show label for tiny area or for huge area (where boundries may be offscreen) beyond z12
             show:
                 filter:
-                   - { area: { min: 1500px2, max: 350000px2 } }
-                   - { area: { min: 1500px2 }, $zoom: { max: 12 } }
+                    not: { access: [no, private] }
+                    any:
+                       - { area: false, $zoom: { min: 14, max: 16 } }  # winter_sports missing area in older tiles
+                       - { area: { min: 1500px2, max: 350000px2 } }
+                       - { area: { min: 1500px2 }, $zoom: { max: 12 } }
                 #[ global.show_land_polygons, { $zoom: { max: 12 } } ]
                 draw: { text: { visible: true } }
 
@@ -1659,6 +1668,7 @@ layers:
                             - $zoom: { min: 14 }
                             - { wikipedia: true, $zoom: { min: 12 } }
                             - { wikidata: true, $zoom: { min: 12 } }
+                            - { heritage_operator: whc, $zoom: { min: 11 } }  # UNESCO
                         - any:
                             - name: true
                             - tourism: [viewpoint, camp_site, information]
@@ -1680,29 +1690,34 @@ layers:
                     filter: { $zoom: { min: 18 }, name: true }
                     draw: { points: { sprite_default: generic } }
                 special:
-                    hike_camp_view:
+                    heritage:
                         exclusive: true
                         priority: 1
+                        filter: { heritage: [1, 2] }
+                        draw: { points: { sprite_default: ruins, priority: global.poi_priority.museum } }
+                    hike_camp_view:
+                        exclusive: true
+                        priority: 2
                         filter:
                             $zoom: { max: 17 }  # hide below z17 if !show_trails
                             any: [ { tourism: [viewpoint, camp_site] }, { highway: [trailhead] } ]
                         draw: { points: { visible: global.show_trails } }
                     information:
                         exclusive: true
-                        priority: 2
+                        priority: 3
                         filter: { tourism: information, $zoom: { max: 17 } }
                         draw: { points: { visible: false } }
                     # too many churches with wikipedia/wikidata
                     special_church:
                         exclusive: true
-                        priority: 3
+                        priority: 4
                         filter:
                             amenity: place_of_worship
                             any: [ {historic: true}, {tourism: true}, {building: cathedral} ]
                         draw: { points: { priority: global.poi_priority.museum } }
                     other_church:
                         exclusive: true
-                        priority: 4
+                        priority: 5
                         filter: { amenity: place_of_worship, $zoom: { max: 16 } }
                         draw: { points: { visible: false } }
                     parking:
@@ -1899,7 +1914,7 @@ layers:
             cities:
                 exclusive: true
                 filter:
-                    place: [city, town, village, suburb, hamlet]
+                    place: [city, town, village, hamlet]
                     not: { place_CN: [county, district, banner, subdistrict, neighbourhood] }
                     $zoom: { min: 9 } # show city point labels below z11
                 draw:
@@ -1921,13 +1936,14 @@ layers:
                     filter: { place: village, $zoom: { min: 10, max: 15 } }
                     draw: { text: { visible: true, font: { size: [[8, 9px], [12, 12px]] } } }
                 hamlet:
-                    filter: { place: [suburb, hamlet], $zoom: { min: 13, max: 15 } }
+                    filter: { place: hamlet, $zoom: { min: 13, max: 15 } }
                     draw: { text: { visible: true, font: { size: [[8, 8px], [12, 10px]] } } }
 
             neighborhoods:
                 exclusive: true
                 filter:
-                    - { place: [neighbourhood, quarter], $zoom: { min: 13, max: 19 } }
+                    - { place: suburb, $zoom: { min: 13, max: 16 } }
+                    - { place: [neighbourhood, quarter], $zoom: { min: 14, max: 19 } }
                     - { place_CN: [subdistrict, neighbourhood], $zoom: { min: 13, max: 17 } }
                     - { place_CN: [district], $zoom: { min: 11, max: 14 } }  # usually tagged with place=city
                     #- { class: microhood, $zoom: { min: 15 } }
@@ -1937,11 +1953,14 @@ layers:
                         priority: global.priority.neighborhood
                         interactive: false
                         font:
-                            size: [[13, 11px], [14, 11px], [15, 13px]]
+                            size: [[14, 10.5px], [16, 12.5px]]
                             style: italic
                             fill: global.color.hood_name
                             stroke: { color: global.color.hood_halo }
                             transform: uppercase
+                suburb:
+                    filter: { place: suburb }
+                    draw: { text: { font: { size: [[13, 11px], [15, 13px]] } } }
                 japan_chome:
                     # Japan "chome" districts tagged as neighborhoods in OSM - much smaller than neighborhoods
                     #  in other countries, so adjust zoom level range
@@ -1950,12 +1969,7 @@ layers:
                     filter: global.japan_bounds
                     shown:
                         filter: { $zoom: { min: 17, max: 19 } }
-                        draw:
-                            text:
-                                visible: true
-                                #priority: global.priority.housenumber
-                                font:
-                                    size: 12px
+                        draw: { text: { visible: true, font: { size: 12px } } }
                 china_district:
                     exclusive: true
                     priority: 2

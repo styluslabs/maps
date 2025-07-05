@@ -41,6 +41,7 @@
 #endif
 
 #define NANOVG_SW_IMPLEMENTATION
+#define NVGSW_QUIET_FRAME
 #include "nanovgXC/src/nanovg_sw.h"
 #include "nanovgXC/src/nanovg_sw_utils.h"
 

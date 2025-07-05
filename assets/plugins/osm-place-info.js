@@ -147,6 +147,10 @@ function osmPlaceInfoCb(_content, _error)
     httpRequest(wdurl, wikiDataCb);
   }
 
+  if(tags["heritage:operator"] == "whc") {
+    addPlaceInfo("globe", "UNESCO", "<a href='https://whc.unesco.org/en/list/?search=" + encodeURI(tags["name"]) + "'><text>World Heritage Site</text></a>");
+  }
+
   if(tags["prominence"]) {
     const prom = Number(tags["prominence"]);
     if(prom > 500) {

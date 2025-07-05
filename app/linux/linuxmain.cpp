@@ -774,7 +774,7 @@ static void processX11Event(XEvent* xevent)
       buff.resize(count + 1, '\0');
       count = Xutf8LookupString(xContext.ic, &xevent->xkey, (char*)buff.data(), buff.size(), NULL, &status);
     }
-    if((status != XLookupChars && status != XLookupBoth) || buff[0] < 0x20) { break; }
+    if((status != XLookupChars && status != XLookupBoth) || buff[0] < 0x20 || buff[0] == 0x7F) { break; }
     // can't blindly split UTF-8 string, so just print error for now
     if(count > SDL_TEXTINPUTEVENT_TEXT_SIZE - 1)
       LOGE("Input string too long!!!");

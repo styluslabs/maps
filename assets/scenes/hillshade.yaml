@@ -169,7 +169,7 @@ styles:
                     vec4 base_color = vec4(0.88, 0.88, 0.88, 1.0);
                     #else
                     #define HILLSHADE_BLEND_OVER
-                    vec4 base_color = vec4(0.0, 0.0, 0.0, 1.0);  //v_color;
+                    vec4 base_color = vec4(0.0, 0.0, 0.0, 0.0);  //v_color;
                     #endif
                 color: |
                     #ifdef SHOW_CONTOURS
@@ -179,8 +179,8 @@ styles:
                     #ifdef SHOW_HYPSOMETRIC
                         // terrain colormap (i.e., map height to color) for low zooms
                         vec4 relief = texture2D(u_terrain_color, vec2(elev/5000., 0.5));
-                        float reliefmix = u_min_contour_elev > 0.0 && elev < u_min_contour_elev ? 0.0 : 0.5;
-                        base_color = mix(base_color, vec4(relief.rgb, 0.0), reliefmix);
+                        if(u_min_contour_elev <= 0.0 || elev >= u_min_contour_elev)
+                          base_color = mix(base_color, vec4(relief.rgb, 0.75), 1.0/(1.0 + base_color.a));
                     #endif
                     } else {
                         // contour lines
@@ -215,15 +215,15 @@ styles:
                         dup = fract(hc/coarse)*coarse * px_per_elev;
                         ddn = abs(1. - fract(hc/coarse))*coarse * px_per_elev;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
-                        base_color = mix(base_color, vec4(u_contour_color.rgb, 0.0), u_contour_color.a*min(cov, 1.));
+                        base_color = mix(base_color, u_contour_color, min(cov, 1.));
                     }
                     #endif
                     // apply lighting to get final color
                     #ifdef HILLSHADE_BLEND_OVER
                     vec4 shading = calculateLighting(v_position.xyz, normal, vec4(1.0));
-                    // for blending over background and opaque polygons; see 24/07/24 rev for supporting shading > 1.0
-                    float alpha = 1.0 - base_color.a * shading.r;
-                    color = vec4(base_color.rgb * shading.r/alpha, alpha);
+                    // for blending over background and opaque polygons; scale by 1/(1-light_accumulator_ambient) instead?
+                    color = vec4(4.0*shading.rgb - 3.0, 0.25);
+                    color = mix(color, base_color, base_color.a);
                     #else
                     color = calculateLighting(v_position.xyz, normal, base_color);
                     color = vec4(color.rgb, 1.0);
