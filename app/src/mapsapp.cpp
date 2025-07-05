@@ -428,14 +428,13 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   Widget* distwdgt = item->selectFirst(".dist-text");
   Widget* diricon = item->selectFirst(".direction-icon");
   if(distwdgt && diricon) {
-    distwdgt->setVisible(hasLocation);
-    diricon->setVisible(hasLocation);
     double dist = lngLatDist(currLocation.lngLat(), pos);
     double bearing = lngLatBearing(currLocation.lngLat(), pos);
     SvgUse* icon = static_cast<SvgUse*>(diricon->node);
     if(icon)
       icon->setTransform(Transform2D::rotating(bearing, icon->viewport().center()));
-    diricon->setVisible(dist < MapProjection::EARTH_CIRCUMFERENCE_METERS/1000/4);
+    diricon->setVisible(hasLocation && dist < MapProjection::EARTH_CIRCUMFERENCE_METERS/1000/4);
+    distwdgt->setVisible(hasLocation);
     distwdgt->setText(distKmToStr(dist, 2, 4).c_str());
   }
 
@@ -969,6 +968,7 @@ void MapsApp::gotoCameraPos(const CameraPosition& campos)
 void MapsApp::updateLocMarker()
 {
   if(!locMarker) {
+    if(currLocation.lngLat() == LngLat(0,0)) { return; }  // wait until we have location
     locMarker = map->markerAdd();
     map->markerSetStylingFromPath(locMarker, "layers.loc-marker.draw.marker");
     map->markerSetDrawOrder(locMarker, INT_MAX);
@@ -1633,6 +1633,17 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   overflowMenu->addSubmenu("Undelete", undeleteMenu);
   undeleteMenu->parent()->setVisible(false);  // hidden when empty
 
+  auto setLocFn = [this](){
+    Location loc(currLocation);
+    if(!std::isnan(pickResultCoord.latitude)) {
+      loc.lng = pickResultCoord.longitude;
+      loc.lat = pickResultCoord.latitude;
+    }
+    else
+      map->getPosition(loc.lng, loc.lat);
+    updateLocation(loc);
+  };
+
 #ifdef NDEBUG
   if(cfg()["ui"]["show_debug"].as<bool>(false))
 #endif
@@ -1706,16 +1717,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       LOGW("Scene YAML dumped to %s", filename.c_str());
     });
     appDebugMenu->addItem("Print JS stats", [this](){ dumpJSStats(map->getScene()); });
-    appDebugMenu->addItem("Set location", [this](){
-      Location loc(currLocation);
-      if(!std::isnan(pickResultCoord.latitude)) {
-        loc.lng = pickResultCoord.longitude;
-        loc.lat = pickResultCoord.latitude;
-      }
-      else
-        map->getPosition(loc.lng, loc.lat);
-      updateLocation(loc);
-    });
+    appDebugMenu->addItem("Set location", setLocFn);
     overflowMenu->addSubmenu("App debug", appDebugMenu);
   }
 
@@ -1772,7 +1774,9 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   followGPSBtn = createCheckBoxMenuItem("Follow");
   followGPSBtn->onClicked = [this](){ toggleFollow(); };
   recenterMenu->addItem(followGPSBtn);
-
+#if PLATFORM_DESKTOP
+  recenterMenu->addItem("Set Location", setLocFn);
+#endif
   recenterMenu->addItem("Previous View", [this](){ gotoCameraPos(CameraPosition(prevCamPos)); });
 
   //recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
@@ -1786,8 +1790,8 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
       return;
     }
-    if(followState != NO_FOLLOW)
-      return;
+    if(followState != NO_FOLLOW) { return; }
+    if(currLocation.lngLat() == LngLat(0,0)) { return; }  // don't jump to Null Island
 
     auto campos = map->getCameraPosition().setLngLat(currLocation.lngLat());
     //campos.zoom = std::min(campos.zoom, 16.0f);

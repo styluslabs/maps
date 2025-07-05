@@ -1042,9 +1042,11 @@ int main(int argc, char* argv[])
 
   app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
 
+#ifndef NDEBUG
   app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, NAN, 0, NAN, 0});
-  app->updateGpsStatus(10, 10);  // turn location maker blue
   app->updateOrientation(0, M_PI/2, 0, 0);
+#endif
+  app->updateGpsStatus(10, 10);  // turn location maker blue
 
   // main loop
   while(MapsApp::runApplication) {

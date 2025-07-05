@@ -77,9 +77,5 @@ styles:
                     if(num_en > 0.0 && fslope >= 0.0 && fslope <= 1.0 && faspect >= 0.0 && faspect <= 1.0 && felev >= 0.0 && felev <= 1.0) {
                       float fmix = pow(fslope*faspect*felev, 1.0/num_en);
                       vec4 c = mix(u_custom_color_0, u_custom_color_1, fmix);
-                    //#ifdef HILLSHADE_BLEND_OVER
-                      base_color = mix(base_color, vec4(c.rgb, 0.0), c.a);
-                    //#else
-                      //base_color.rgb = mix(base_color.rgb, c.rgb, c.a);
-                    //#endif
+                      base_color = mix(base_color, vec4(c.rgb, 0.75), 1.0/(1.0 + base_color.a));
                     }

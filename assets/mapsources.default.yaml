@@ -12,6 +12,9 @@ stylus-osm:
     scene: scenes/stylus-osm.yaml
     #download_url: "https://github.com/styluslabs/maps/?tab=readme-ov-file#generating-tiles"
     archived: true
+    updates:
+        global.contour_color: "#B2B2B2"
+        global.show_contours: global.show_trails
 
 stylus-osm-dark:
     title: Ascend OSM Dark
@@ -25,9 +28,6 @@ stylus-osm-terrain:
     layers:
         - stylus-osm
         - hillshade
-    updates:
-        global.contour_color: "#B2B2B2"
-        global.show_contours: global.show_trails
 
 stylus-satellite:
     title: Ascend OSM + Satellite
@@ -218,6 +218,7 @@ enable-contours:
     layers: [ hillshade ]
     updates:
         global.show_contours: true
+        global.enable_contour_vars: true
 
 enable-slope-angle:
     title: Slope Angle

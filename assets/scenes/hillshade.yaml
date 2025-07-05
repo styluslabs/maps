@@ -29,6 +29,7 @@ global:
     base_mix_color: [0.9, 0.9, 0.9, 0.8]
     show_contours: false
     show_hypsometric: true
+    enable_contour_vars: false
 
 
 application:
@@ -37,11 +38,11 @@ application:
             style: hillshade
             label: Hillshade Exaggeration
         contour_color:
-            enabled: global.show_contours
+            enabled: global.enable_contour_vars
             label: Contour Color
             type: color
         u_min_contour_elev:
-            enabled: global.show_contours
+            enabled: global.enable_contour_vars
             style: hillshade
             label: Min Contour Elevation (m)
             step: 100

@@ -104,7 +104,7 @@ function createSolarSource()
     "global.solar_time": nowstr.slice(11),
     "application.gui_variables.solar_color": { label: "Sun color", type: "color", onchange: "updateSun", reload: false },
     "application.gui_variables.solar_date": { label: "Date", type: "date", onchange: "updateSun", reload: false },
-    "application.gui_variables.solar_time": { label: "Time (HH:MM[+/-hhmm])", type: "time", onchange: "updateSun", reload: false },
+    "application.gui_variables.solar_time": { label: "Time (HH:MM[+/-hh:mm])", type: "time", onchange: "updateSun", reload: false },
     "application.on_map_event": "onMapEvent_Solar",
     "lights.light2.origin": "camera"  // explicitly set origin to make light dynamic
   };
