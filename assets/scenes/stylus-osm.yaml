@@ -538,12 +538,11 @@ layers:
                     width: 8px
 
 
-    pier:
+    landuse_misc:
         data: { source: osm, layer: landuse }
-        enabled: global.show_polygons
-        filter: { man_made: [pier, breakwater, groyne] }
         pier_areas:
-            filter: { $geometry: polygon }  #$zoom: { min: 13 }
+            enabled: global.show_polygons
+            filter: { man_made: [pier, breakwater, groyne], $geometry: polygon }
             draw:
                 polygons:
                     style: unlit-polygons
@@ -553,7 +552,8 @@ layers:
                 filter: { man_made: pier }
                 draw: { polygons: { color: global.color.pier } }
         pier_lines:
-            filter: { $geometry: line }
+            enabled: global.show_polygons
+            filter: { man_made: [pier, breakwater, groyne], $geometry: line }
             pier: { filter: { man_made: pier }, draw: { lines: { color: global.color.pier } } }
             draw:
                 lines:
@@ -561,6 +561,19 @@ layers:
                     order: global.order.pier
                     color: global.color.breakwater
                     width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
+        valley:
+            filter: { natural: [valley, gorge], name: true, $zoom: { min: 12 } }
+            draw:
+                text:
+                    text_source: global.names_one_line
+                    transition: { show: { time: 0s }, hide: { time: 1s } }
+                    priority: global.priority.saddle
+                    font:
+                        family: global.primary_font
+                        size: 9.5px
+                        style: italic
+                        fill: global.color.default_label
+                        stroke: { color: global.color.default_halo, width: 3 }
 
 
     water:
@@ -765,13 +778,16 @@ layers:
                     - highway: path
                     - { highway: footway, surface: unpaved }
                 draw: { lines: { color: global.color.unpaved_trail, width: [[10, 1px], [18, 3px]] } }
+                #named:
+                #    filter: [ { name: true }, { ref: true }, { relation_member: true } ]
+                #    draw: { lines: { width: [[10, 1px], [18, 3px]] } }
+                scramble:
+                    # what about demanding_mountain_hiking and alpine_hiking levels?
+                    filter: { sac_scale: [ demanding_alpine_hiking, difficult_alpine_hiking ] }
+                    draw: { lines: { color: global.color.scramble_trail } }
             poor:
                 filter: { trail_visibility: [ bad, very_bad, horrible, no, none, poor ] }
                 draw: { lines: { style: dashed-bike } }
-            scramble:
-                # what about demanding_mountain_hiking and alpine_hiking levels?
-                filter: { sac_scale: [ demanding_alpine_hiking, difficult_alpine_hiking ] }
-                draw: { lines: { color: global.color.scramble_trail } }
 
         tracks:
             filter:
@@ -1416,8 +1432,8 @@ layers:
                  any:
                     - { boundary: national_park, $zoom: { min: 8 } }
                     - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }
-                    - { natural: glacier, $zoom: { min: 10 } }
-                    - { landuse: [commercial, retail, military, winter_sports], $zoom: { min: 12 } }
+                    - { natural: [glacier, wood, grassland, grass, scrub, fell, heath, wetland, beach, sand], $zoom: { min: 10 } }
+                    - { landuse: [commercial, retail, military, winter_sports, forest, meadow], $zoom: { min: 12 } }
             draw:
                 points: { visible: false }
                 text:
@@ -1438,6 +1454,11 @@ layers:
             national_park:
                 filter: { boundary: national_park }
                 draw: { text: { priority: global.priority.national_park } }
+            natural:
+                filter:
+                    - landuse: [forest, meadow]
+                    - natural: [wood, grassland, grass, scrub, fell, heath, wetland, beach, sand]
+                draw: { text: { font: { size: 9.5px } } }
             glacier:
                 filter: { natural: glacier }
                 draw:
@@ -1702,15 +1723,20 @@ layers:
                             $zoom: { max: 17 }  # hide below z17 if !show_trails
                             any: [ { tourism: [viewpoint, camp_site] }, { highway: [trailhead] } ]
                         draw: { points: { visible: global.show_trails } }
-                    information:
+                    vistor_center:
                         exclusive: true
                         priority: 3
+                        filter: { information: [office, vistor_centre] }
+                        draw: { points: { sprite: ranger_station } }
+                    information:
+                        exclusive: true
+                        priority: 4
                         filter: { tourism: information, $zoom: { max: 17 } }
                         draw: { points: { visible: false } }
                     # too many churches with wikipedia/wikidata
                     special_church:
                         exclusive: true
-                        priority: 4
+                        priority: 5
                         filter:
                             amenity: place_of_worship
                             any: [ {historic: true}, {tourism: true}, {building: cathedral} ]

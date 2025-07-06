@@ -272,8 +272,10 @@ static int httpRequest(duk_context* ctx)
   std::string cbvar = fstring("_httpRequest_%d", ++reqCounter);
   duk_dup(ctx, nargs-1);
   duk_put_global_string(ctx, cbvar.c_str());
-  if(opts.headers.find("User-Agent: ") == std::string::npos)
-    opts.headers.append("User-Agent: " + MapsApp::platform->defaultUserAgent + " (plugin)\r\n");
+  if(opts.headers.find("User-Agent:") == std::string::npos) {
+    if(!opts.headers.empty()) { opts.headers.append("\r\n"); }
+    opts.headers.append("User-Agent: " + MapsApp::platform->defaultUserAgent + " (plugin)");
+  }
   // no easy way to get UrlRequestHandle into the callback, so use a separate identifier
   int reqSerial = reqCounter;
   UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(url, opts, [=](UrlResponse&& response) {

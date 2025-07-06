@@ -54,7 +54,7 @@ function wikipediaSearch(query, bounds, flags)
       '  SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }' +
       '} GROUP BY ?item ?itemLabel ?url ORDER BY ASC(?dist) LIMIT 1000');
 
-    httpRequest(url, "Accept:	application/sparql-results+json", function(_content, _error) {
+    httpRequest(url, "Accept: application/sparql-results+json", function(_content, _error) {
       if(!_content) { notifyError("search", "Wikipedia Search error: " + _error); return; }
       const content = JSON.parse(_content);
       const data = (content["results"] || {})["bindings"] || [];
