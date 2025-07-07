@@ -43,6 +43,7 @@ global:
         water_halo: "#e2eef0"
         glacier_name: "#3A88BB"
         spring: hsl(210, 100%, 45%)
+        hot_spring: orange
         beach: '#FEEFC3'  #[1.000,0.953,0.900]
         ice: white
         rock: '#F5F0E5'
@@ -216,9 +217,8 @@ global:
     #  group defined by integer part, after ordering by visible state and camera space z coord
     priority:
         national_park: 7.5
-        forest: 8  # only one label for potentially large map feature, and only shown up to zoom 11 or 12
-        district_CN: 9
-        neighborhood: 10
+        campus: 10
+        forest: 11  # only one label for potentially large map feature, and only shown up to zoom 11 or 12
         peak: 14
         saddle: 15
         cave: 16
@@ -228,6 +228,7 @@ global:
         park: 20
         golf: 21
         cemetery: 22
+        special_culture: 34
         # road labels
         oneway_arrow: 23
         motorway_ref: 24
@@ -238,6 +239,7 @@ global:
         road_tertiary: 50
         road_minor: 60
         route_minor: 65
+        zoomed_ref: 70
         # rivers have many possible label positions w/ limited conflict, whereas lakes have only one label
         water: 22
         waterway: 99
@@ -255,14 +257,15 @@ global:
         # housenumbers only shown at high zoom and unlikely to collide
         housenumber: 350
         # cities, states, countries
-        place: { continent: 5, country: 6, state: 7, province: 7, island: 8, city: 9, town: 10, village: 11, suburb: 12, hamlet: 13 }
+        district_CN: 9
+        place: { continent: 5, country: 6, state: 7, province: 7, island: 8, city: 9, town: 10, village: 11, hamlet: 12, borough: 12, suburb: 13 }  # neighborhood: 14, quarter: 14
         place_fn: |
             function() {
                 return (global.priority.place[feature.place] || 14) - Math.round(Math.sqrt(feature.population || 1))/65536;
                 //return (global.priority.place[feature.place] || 14) + 100.0/(100 + (feature.population || 1));
             }
 
-    poi_priority: { "viewpoint": 31, "campground": 31, "trailhead": 31, "information": 99, "parking": 102, "toilet": 32, "drinking_water": 32, "artwork": 42, "museum": 41, "theme_park": 40, "attraction": 42, "university": 33, "school": 52, "library": 41, "theatre": 41, "religious": 101, "shop": 101, "bike_shop": 101, "pharmacy": 101, "fuel": 101, "grocery": 34, "convenience": 51, "liquor": 101, "clothes": 101, "hardware": 101, "gym": 101, "bank": 101, "dentist": 101, "auto_repair": 101, "laundry": 101, "scissor": 101, "restaurant": 43, "cafe": 44, "bar": 44, "bakery": 44, "hospital": 101, "doctor": 101, "hotel": 101, "tree": 20, "golf": 21, "christian": 90, "muslim": 90, "buddhist": 90, "hindu": 90, "shinto": 90, "jewish": 90, "ruins": 41, "default": 101 }
+    poi_priority: { "viewpoint": 31, "campground": 31, "trailhead": 31, "information": 99, "parking": 102, "toilet": 32, "drinking_water": 32, "marina": 41, "ranger_station": 40, "artwork": 42, "museum": 35, "theme_park": 40, "attraction": 42, "university": 33, "school": 52, "library": 41, "theatre": 41, "religious": 101, "shop": 101, "bike_shop": 101, "pharmacy": 101, "fuel": 101, "grocery": 38, "convenience": 51, "liquor": 101, "clothes": 101, "hardware": 101, "gym": 101, "bank": 101, "dentist": 101, "auto_repair": 101, "laundry": 101, "scissor": 101, "post_office": 100, "restaurant": 43, "cafe": 44, "bar": 44, "bakery": 44, "hospital": 101, "doctor": 101, "hotel": 101, "tree": 20, "golf": 21, "christian": 90, "muslim": 90, "buddhist": 90, "hindu": 90, "shinto": 90, "jewish": 90, "ruins": 41, "stadium": 40, "default": 101 }
 
     # - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
     poi_priority_fn: |
@@ -562,7 +565,8 @@ layers:
                     color: global.color.breakwater
                     width: [[13, 0px], [14, 0.5px],[15, 1.5px], [16, 2.5px],[17, 3px],[18, 3m]]
         valley:
-            filter: { natural: [valley, gorge], name: true, $zoom: { min: 12 } }
+            # area is set to square of valley's length
+            filter: { natural: [valley, gorge], name: true, $zoom: { min: 12 }, area: { min: 50000px2 } }
             draw:
                 text:
                     text_source: global.names_one_line
@@ -756,10 +760,10 @@ layers:
                     outline: { width: [[17, 0], [18, 1]] }
             service:
                 filter: { highway: service }
-                draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 4px], [17, 8]] } }
+                draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 4px], [17, 5]] } }
             parking:
                 filter: { service: parking_aisle }
-                draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 2px], [17, 4]] } }
+                draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 2px], [17, 3]] } }
 
         paths:
             filter: { highway: [footway, path, steps, pedestrian] }
@@ -966,6 +970,10 @@ layers:
         bike:
             filter: { route: [bicycle, mtb] }
             draw: { points: { interactive: true, color: global.color.bike_shield } }
+        zoomed:
+            # at high zoom, give line labels priority over shields
+            filter: { $zoom: { min: 16 }, not: { highway: motorway } }
+            draw: { points: { priority: global.priority.zoomed_ref } }
         draw:
             points:
                 visible: function() { return feature.ref.split(";")[0].length <= 8; }
@@ -1136,6 +1144,7 @@ layers:
 
             hike_bike:
                 exclusive: true
+                enabled: global.show_trails
                 filter: { route: [hiking, bicycle, mtb], $zoom: { min: 14 } }
                 hiking:
                     filter: { route: hiking }
@@ -1192,9 +1201,9 @@ layers:
         filter:
             aeroway: aerodrome
             any:
-                - { aerodrome: international, $zoom: { min: 12 } }
-                - { aerodrome: regional, $zoom: { min: 13 } }
-                - $zoom: { min: 14 }
+                - { area: { min: 1500px2, max: 350000px2 } }
+                - { area: { min: 1500px2 }, $zoom: { max: 12 } }
+                - { area: false, $zoom: { min: 14 } }  #aerodrome: international
         draw:
             text:
                 interactive: true
@@ -1392,11 +1401,12 @@ layers:
                     text:
                         text_source: |
                             function() {
-                                const name = global.show_name_en && feature.name_en ? feature.name_en : feature.name;
+                                var name = global.show_name_en && feature.name_en ? feature.name_en : feature.name;
                                 const ele = global.metric_units ? feature.ele : feature.ele*3.2808399;
                                 if(!name) { return ele.toFixed(0); }
-                                const elided = name.length > 17 ? name.substring(0, 17) + "…" : name;
-                                return elided + "\n" + ele.toFixed(0);
+                                if(name.slice(-9) == " Mountain") { name = name.slice(0, -9) + " Mt."; }
+                                if(name.length > 18) { name = name.substring(0, 17) + "…"; }
+                                return name + "\n" + ele.toFixed(0);
                             }
                         text_wrap: 100
                         max_lines: 2
@@ -1407,9 +1417,13 @@ layers:
         saddle:
             exclusive: true
             filter:
-                natural: saddle
-                any: [ { $zoom: { min: 17 } }, global.show_trails ]
                 name: true
+                any:
+                    - { natural: saddle, any: [ { $zoom: { min: 17 } }, global.show_trails ] }
+                    - { natural: cape, $zoom: { min: 15 } }
+            saddle:
+                filter: { natural: saddle }
+                draw: { text: { font: { size: 9.5px } } }
             draw:
                 points: { visible: false }
                 text:
@@ -1418,7 +1432,7 @@ layers:
                     priority: global.priority.saddle
                     font:
                         family: global.primary_font
-                        size: 9.5px
+                        size: 12px
                         style: italic
                         fill: global.color.default_label
                         stroke: { color: global.color.default_halo, width: 3 }
@@ -1427,17 +1441,18 @@ layers:
             exclusive: true
             filter:
                  name: true
+                 area: { min: 1500px2 }
                  # give park POI (w/ icon) priority
                  not: { leisure: [park, golf_course] }
                  any:
-                    - { boundary: national_park, $zoom: { min: 8 } }
-                    - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }
-                    - { natural: [glacier, wood, grassland, grass, scrub, fell, heath, wetland, beach, sand], $zoom: { min: 10 } }
-                    - { landuse: [commercial, retail, military, winter_sports, forest, meadow], $zoom: { min: 12 } }
+                    - { boundary: national_park }  #, $zoom: { min: 8 } }
+                    - { protect_class: ['1', '1a', '1b', '2', '3', '5'] }  #, $zoom: { min: 10 } }
+                    - { natural: [glacier, wood, grassland, grass, scrub, fell, heath, wetland, beach, sand] }  #, $zoom: { min: 10 } }
+                    - { landuse: [commercial, retail, military, winter_sports, forest, meadow, grass] }  #, $zoom: { min: 12 } }
+                    - { landuse: industrial, area: { min: 5000px2 } }
             draw:
                 points: { visible: false }
                 text:
-                    visible: false
                     interactive: true
                     text_source: global.names_one_line
                     transition: { show: { time: 0s }, hide: { time: 1s } }
@@ -1449,16 +1464,18 @@ layers:
                         fill: global.color.park_name
                         stroke: { color: global.color.park_halo, width: 3 }
             commercial:
-                filter: { landuse: [commercial, retail, military, winter_sports] }
+                filter: { landuse: [commercial, retail, industrial, military, winter_sports] }
                 draw: { text: { font: { fill: global.color.landuse_name, stroke: { color: global.color.default_halo } } } }
             national_park:
                 filter: { boundary: national_park }
                 draw: { text: { priority: global.priority.national_park } }
             natural:
                 filter:
-                    - landuse: [forest, meadow]
-                    - natural: [wood, grassland, grass, scrub, fell, heath, wetland, beach, sand]
-                draw: { text: { font: { size: 9.5px } } }
+                    not: { protect_class: ['1', '1a', '1b', '2', '3', '5'] }
+                    any:
+                        - landuse: [forest, meadow, grass]
+                        - natural: [wood, grassland, grass, scrub, fell, heath, wetland, beach, sand]
+                draw: { text: { priority: global.priority.park, font: { size: 9.5px } } }
             glacier:
                 filter: { natural: glacier }
                 draw:
@@ -1468,16 +1485,12 @@ layers:
                             size: 11px
                             fill: global.color.water_name
                             stroke: { color: global.color.water_halo }
-            # don't show label for tiny area or for huge area (where boundries may be offscreen) beyond z12
-            show:
+            # don't show label for huge area (where boundries may be offscreen) beyond z12
+            hide:
                 filter:
-                    not: { access: [no, private] }
-                    any:
-                       - { area: false, $zoom: { min: 14, max: 16 } }  # winter_sports missing area in older tiles
-                       - { area: { min: 1500px2, max: 350000px2 } }
-                       - { area: { min: 1500px2 }, $zoom: { max: 12 } }
-                #[ global.show_land_polygons, { $zoom: { max: 12 } } ]
-                draw: { text: { visible: true } }
+                    - { access: [no, private] }
+                    - { area: { min: 350000px2 }, $zoom: { min: 12 } }
+                draw: { text: { visible: false } }
 
         traffic_signal:
             exclusive: true
@@ -1523,6 +1536,9 @@ layers:
                             style: italic
                             fill: global.color.spring
                             stroke: { color: global.color.default_halo, width: 2 }
+            hot:
+                filter: { not: { natural: spring } }
+                draw: { points: { color: global.color.hot_spring } }
             hide_text:
                 filter: { $zoom: { max: 17 } }
                 draw: { points: { text: { visible: false } } }
@@ -1715,7 +1731,10 @@ layers:
                         exclusive: true
                         priority: 1
                         filter: { heritage: [1, 2] }
-                        draw: { points: { sprite_default: ruins, priority: global.poi_priority.museum } }
+                        draw: { points: { priority: global.poi_priority.museum } }
+                        default:
+                            filter: [ { heritage: 1 }, { $zoom: { min: 15 } } ]
+                            draw: { points: { sprite_default: ruins } }
                     hike_camp_view:
                         exclusive: true
                         priority: 2
@@ -1733,17 +1752,24 @@ layers:
                         priority: 4
                         filter: { tourism: information, $zoom: { max: 17 } }
                         draw: { points: { visible: false } }
+                    special_culture:
+                        exclusive: true
+                        priority: 5
+                        filter:
+                            tourism: museum
+                            any: [ {historic: true}, {wikipedia: true} ]  #, {wikidata: true}
+                        draw: { points: { priority: global.priority.special_culture } }
                     # too many churches with wikipedia/wikidata
                     special_church:
                         exclusive: true
-                        priority: 5
+                        priority: 6
                         filter:
                             amenity: place_of_worship
                             any: [ {historic: true}, {tourism: true}, {building: cathedral} ]
                         draw: { points: { priority: global.poi_priority.museum } }
                     other_church:
                         exclusive: true
-                        priority: 5
+                        priority: 7
                         filter: { amenity: place_of_worship, $zoom: { max: 16 } }
                         draw: { points: { visible: false } }
                     parking:
@@ -1766,9 +1792,19 @@ layers:
                         # we want to suppress small schools and libraries
                         campus:
                             filter:
-                                amenity: [university, college, library]
+                                amenity: [college, library]
                                 area: { min: 1500px2 }
                             draw: { points: { visible: true, priority: global.poi_priority.university } }
+                        university:
+                            filter: { amenity: university, area: { min: 1500px2 } }
+                            draw:
+                                points:
+                                    visible: true
+                                    priority: global.priority.campus
+                                    text:
+                                        anchor: [bottom, right, left]
+                                        max_lines: 4
+                                        font: { size: [[12, 12px], [16, 14px]] }
                         show:
                             filter: { $zoom: { min: 16 } }
                             draw: { points: { visible: true } }
@@ -1893,8 +1929,11 @@ layers:
 
             islands:
                 exclusive: true
-                filter: { place: [island, islet] }
+                filter: { place: [island, islet, archipelago] }
                 draw: { text: { font: { style: italic } } }
+                archipelago:
+                    filter: { place: archipelago }
+                    draw: { text: { font: { transform: uppercase } } }
                 show:
                     filter:
                        - { area: { min: 1500px2, max: 350000px2 } }
@@ -1932,6 +1971,9 @@ layers:
                         font:
                             size: [[6, 10px], [8, 12px]]
                             transform: uppercase
+                big:
+                    filter: { ISO3166_2: [US, CA] }
+                    draw: { text: { font: { size: [[6, 11px], [8, 12.5px]] } } }
                 # use short name when available at low-zooms
                 short:
                     filter: { $zoom: { max: 7 } }
@@ -1968,6 +2010,7 @@ layers:
             neighborhoods:
                 exclusive: true
                 filter:
+                    - { place: borough, $zoom: { min: 12, max: 15 } }
                     - { place: suburb, $zoom: { min: 13, max: 16 } }
                     - { place: [neighbourhood, quarter], $zoom: { min: 14, max: 19 } }
                     - { place_CN: [subdistrict, neighbourhood], $zoom: { min: 13, max: 17 } }
@@ -1976,7 +2019,7 @@ layers:
                 draw:
                     text:
                         visible: false
-                        priority: global.priority.neighborhood
+                        #priority: global.priority.neighborhood - use place_fn
                         interactive: false
                         font:
                             size: [[14, 10.5px], [16, 12.5px]]
@@ -1984,6 +2027,9 @@ layers:
                             fill: global.color.hood_name
                             stroke: { color: global.color.hood_halo }
                             transform: uppercase
+                borough:
+                    filter: { place: borough }
+                    draw: { text: { font: { size: [[12, 12px], [14, 14px]] } } }
                 suburb:
                     filter: { place: suburb }
                     draw: { text: { font: { size: [[13, 11px], [15, 13px]] } } }

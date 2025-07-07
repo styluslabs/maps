@@ -20,7 +20,7 @@ global:
           "pharmacy": "pharmacy", "bar": "bar", "pub": "bar", "nightclub": "bar", "library": "library",
           "cinema": "theatre", "theatre": "theatre", "concert_hall": "theatre", "arts_centre": "theatre",
           "place_of_worship": "religious", "bank": "bank", "hospital": "hospital", "clinic": "doctor",
-          "doctors": "doctor", "fuel": "fuel", "dentist": "dentist", "toilets": "toilet",
+          "doctors": "doctor", "fuel": "fuel", "dentist": "dentist", "toilets": "toilet", "post_office": "post_office",
           "drinking_water": "drinking_water", "water_point": "drinking_water", "ranger_station": "ranger_station" }
         historic: { "monument": "artwork", "archaeological_site": "ruins", "castle": "ruins", "fort": "ruins" }
         shop: { "beverages": "cafe", "confectionery": "cafe", "bakery": "bakery", "pastry": "bakery",
@@ -32,8 +32,10 @@ global:
           "dry_cleaning": "laundry", "hairdresser": "scissor", "beauty": "scissor" }
         railway: { "station": "train", "tram_stop": "tram" }
         station: { "light_rail": "tram" }
+        landuse: { "recreation_ground": "gym" }
 
-    poi_type: { "viewpoint": "public", "campground": "public", "trailhead": "public", "information": "public", "parking": "public", "toilet": "public", "drinking_water": "public", "marina": "public", "ranger_station": "public", "artwork": "culture", "museum": "culture", "theme_park": "culture", "attraction": "culture", "school": "culture", "library": "culture", "theatre": "culture", "religious": "culture", "shop": "shop", "bike_shop": "shop", "pharmacy": "shop", "fuel": "shop", "grocery": "shop", "convenience": "shop", "liquor": "shop", "clothes": "shop", "hardware": "shop", "gym": "service", "bank": "service", "dentist": "service", "auto_repair": "service", "laundry": "service", "scissor": "service", "restaurant": "food", "cafe": "food", "bar": "food", "bakery": "food", "hospital": "medical", "doctor": "medical", "hotel": "lodging", "tree": "outdoor", "golf": "outdoor", "christian": "culture", "muslim": "culture", "buddhist": "culture", "hindu": "culture", "shinto": "culture", "jewish": "culture", "ruins": "culture", "stadium": "culture" }
+    # also update poi_priority!
+    poi_type: { "viewpoint": "public", "campground": "public", "trailhead": "public", "information": "public", "parking": "public", "toilet": "public", "drinking_water": "public", "marina": "public", "ranger_station": "public", "artwork": "culture", "museum": "culture", "theme_park": "culture", "attraction": "culture", "school": "culture", "library": "culture", "theatre": "culture", "religious": "culture", "shop": "shop", "bike_shop": "shop", "pharmacy": "shop", "fuel": "shop", "grocery": "shop", "convenience": "shop", "liquor": "shop", "clothes": "shop", "hardware": "shop", "gym": "service", "bank": "service", "dentist": "service", "auto_repair": "service", "laundry": "service", "scissor": "service", "post_office": "service", "restaurant": "food", "cafe": "food", "bar": "food", "bakery": "food", "hospital": "medical", "doctor": "medical", "hotel": "lodging", "tree": "outdoor", "golf": "outdoor", "christian": "culture", "muslim": "culture", "buddhist": "culture", "hindu": "culture", "shinto": "culture", "jewish": "culture", "ruins": "culture", "stadium": "culture" }
 
     poi_color:
         public: "#1A73E8"

@@ -10,7 +10,7 @@ function getPlaceType(_props)
 {
   if(!_props) return "";
   const props = JSON.parse(_props);
-  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["place"] || props["railway"] || props["natural"];
+  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["place"] || props["railway"] || props["natural"] || props["landuse"];
   var route = props["route"];
   if(route) { type = route + " route"; }
   if(type) {
