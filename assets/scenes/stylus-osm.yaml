@@ -45,7 +45,7 @@ global:
         spring: hsl(210, 100%, 45%)
         hot_spring: orange
         beach: '#FEEFC3'  #[1.000,0.953,0.900]
-        ice: white
+        ice: '#DDECEC'
         rock: '#F5F0E5'
         road: '#fff'
         casing_16: '#999'
@@ -543,6 +543,16 @@ layers:
 
     landuse_misc:
         data: { source: osm, layer: landuse }
+        glacier:
+            # show glacier outline for 3d (since we want to still show name)
+            enabled: global.show_polygons
+            filter: { natural: glacier, none: [ global.show_land_polygons ] }
+            draw:
+                lines:
+                    style: dashed-border
+                    color: global.color.ice
+                    order: global.order.pier
+                    width: 1.5px
         pier_areas:
             enabled: global.show_polygons
             filter: { man_made: [pier, breakwater, groyne], $geometry: polygon }
