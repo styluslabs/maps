@@ -673,9 +673,7 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
   SQLiteStmt(app->bkmkDB, query).bind(olinfo.id, olinfo.lngLat00.longitude, olinfo.lngLat00.latitude,
       olinfo.lngLat11.longitude, olinfo.lngLat11.latitude, olinfo.maxZoom, app->mapsSources->currSource, maptitle, 1).exec();
 
-  auto campos = app->map->getEnclosingCameraPosition(olinfo.lngLat00, olinfo.lngLat11);  //, {32})
-  campos.zoom -= 0.25f;
-  app->gotoCameraPos(campos);  //app->map->setCameraPositionEased(, 0.5f);
+  app->lookAt(olinfo.lngLat00, olinfo.lngLat11);
 
   std::shared_ptr<YAML::Node> searchYaml;
   if(!poiimport && !tileSource->isRaster())
@@ -758,9 +756,7 @@ void MapsOffline::populateOffline()
         app->map->markerSetVisible(rectMarker, true);
       app->map->markerSetStylingFromPath(rectMarker, "layers.offline-region.draw.marker");
       app->map->markerSetPolyline(rectMarker, bounds, 5);
-      auto campos = app->map->getEnclosingCameraPosition(bounds[0], bounds[2]);  //, {32});
-      campos.zoom -= 0.25f;
-      app->gotoCameraPos(campos);  //app->map->setCameraPositionEased(, 0.5f);
+      app->lookAt(bounds[0], bounds[2]);
       if(app->mapsSources->currSource != sourcestr)
         app->mapsSources->rebuildSource(sourcestr);
     };

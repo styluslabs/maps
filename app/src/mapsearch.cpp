@@ -429,11 +429,7 @@ void MapsSearch::resultsUpdated(int flags)
       double scrx, scry;
       if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
           || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
-        auto pos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);  //, {32});
-        pos.zoom = std::min(pos.zoom, 16.0f);
-        pos.tilt = map->getTilt();
-        pos.rotation = map->getRotation();
-        app->gotoCameraPos(pos);  //map->flyTo(pos, 1.0);
+        app->lookAt(minLngLat, maxLngLat, 16, map->getRotation(), map->getTilt());
         flyingToResults = true;  // has to be set after flyTo()
       }
     }

@@ -21,7 +21,8 @@ global:
           "cinema": "theatre", "theatre": "theatre", "concert_hall": "theatre", "arts_centre": "theatre",
           "place_of_worship": "religious", "bank": "bank", "hospital": "hospital", "clinic": "doctor",
           "doctors": "doctor", "fuel": "fuel", "dentist": "dentist", "toilets": "toilet", "post_office": "post_office",
-          "drinking_water": "drinking_water", "water_point": "drinking_water", "ranger_station": "ranger_station" }
+          "drinking_water": "drinking_water", "water_point": "drinking_water", "ranger_station": "ranger_station",
+          "fountain": "attraction", "monastery": "religious" }
         historic: { "monument": "artwork", "archaeological_site": "ruins", "castle": "ruins", "fort": "ruins" }
         shop: { "beverages": "cafe", "confectionery": "cafe", "bakery": "bakery", "pastry": "bakery",
           "supermarket": "grocery", "convenience": "convenience", "greengrocer": "convenience", "deli": "convenience",

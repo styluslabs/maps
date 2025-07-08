@@ -10,6 +10,11 @@ function nominatimSearch(query, bounds, flags)
       const r = content[ii];
       const tags = {"name": r.display_name, [r.category]: r.type};
       addSearchResult(r.osm_id, r.lat, r.lon, r.importance, flags, tags);
+      if(ii == 0 && r.boundingbox) {
+        const b = r.boundingbox;
+        flags = flags & ~0x08;  // clear FLY_TO
+        lookAt(b[2], b[0], b[3], b[1], 15);
+      }
     }
     addSearchResult(0, 0, 0, 0, flags | 0x4000, {});  // MapSearch::UPDATE_RESULTS flag
   });

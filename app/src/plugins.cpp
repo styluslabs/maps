@@ -502,6 +502,17 @@ static int getCameraPosition(duk_context* ctx)
   return 1;
 }
 
+static int lookAt(duk_context* ctx)
+{
+  double lng0 = duk_to_number(ctx, 0);
+  double lat0 = duk_to_number(ctx, 1);
+  double lng1 = duk_to_number(ctx, 2);
+  double lat1 = duk_to_number(ctx, 3);
+  double zoom = duk_to_number(ctx, 4);
+  MapsApp::inst->lookAt(LngLat(lng0, lat0), LngLat(lng1, lat1), zoom);
+  return 0;
+}
+
 static int consoleLog(duk_context* ctx)
 {
   const char* msg = duk_require_string(ctx, 0);
@@ -540,6 +551,8 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "updateSceneLight");
   duk_push_c_function(ctx, getCameraPosition, 0);
   duk_put_global_string(ctx, "getCameraPosition");
+  duk_push_c_function(ctx, lookAt, 5);
+  duk_put_global_string(ctx, "lookAt");
   // console.log
   duk_idx_t consoleObj = duk_push_object(ctx);
   duk_push_c_function(ctx, consoleLog, 1);

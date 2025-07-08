@@ -87,6 +87,7 @@ public:
   int getPanelWidth() const;
   std::string getPlaceTitle(const Properties& props) const;
   void gotoCameraPos(const CameraPosition& campos);
+  void lookAt(LngLat a, LngLat b, float maxZoom = 16, float rotation = 0, float tilt = 0);
   void updateLocPlaceInfo();
   std::shared_ptr<TileSource> getElevationSource();
   void toggleFollow();

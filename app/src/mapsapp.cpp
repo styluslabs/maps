@@ -965,6 +965,15 @@ void MapsApp::gotoCameraPos(const CameraPosition& campos)
     map->flyTo(campos, 1.0);
 }
 
+void MapsApp::lookAt(LngLat a, LngLat b, float maxZoom, float rotation, float tilt)
+{
+  auto campos = map->getEnclosingCameraPosition(a, b);
+  campos.zoom = std::min(maxZoom, campos.zoom - 0.25f);
+  campos.rotation = rotation;
+  campos.tilt = tilt;
+  gotoCameraPos(campos);
+}
+
 void MapsApp::updateLocMarker()
 {
   if(!locMarker) {

@@ -10,7 +10,7 @@ function getPlaceType(_props)
 {
   if(!_props) return "";
   const props = JSON.parse(_props);
-  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["place"] || props["railway"] || props["natural"] || props["landuse"];
+  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["place"] || props["railway"] || props["natural"] || props["landuse"] || props["highway"];
   var route = props["route"];
   if(route) { type = route + " route"; }
   if(type) {
@@ -207,6 +207,8 @@ function osmPlaceInfoCb(_content, _error)
       addPlaceInfo("clock", "Hours", "Open 24 hours");
     } else if(hourstag == "sunrise-sunset") {
       addPlaceInfo("clock", "Hours", "Open sunrise to sunset");
+    } else if(hourstag == "closed" || hourstag == "off") {
+      addPlaceInfo("clock", "Hours", "Closed");
     } else {
       var hours = parseOpeningHours(hourstag);
       // a common error is using , instead of ;, so try working around that
@@ -214,7 +216,7 @@ function osmPlaceInfoCb(_content, _error)
         hours = parseOpeningHours(hourstag.replace(/,/g, ";"));
       }
       if(!hours) {
-        addPlaceInfo("clock", "Hours", hourstag);
+        addPlaceInfo("clock", "Hours", "Opening hours\r" + hourstag.split(/\s*;\s*/).join("\n"));
       } else {
         //console.log(hours);
         const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -254,6 +256,7 @@ function osmPlaceInfoCb(_content, _error)
             }
           }
         }
+        if(!state) { state = "Unknown"; }
 
         var daily = [];
         // TODO: use \t for alignment!
