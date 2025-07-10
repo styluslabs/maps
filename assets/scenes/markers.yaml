@@ -170,7 +170,8 @@ layers:
                     anchor: [right, left, bottom, top]
                     #collide: true
                     #optional: true
-                    max_lines: 2
+                    text_wrap: 18
+                    max_lines: 3
                     offset: [0px, -11px]
                     font:
                         family: global.marker_font

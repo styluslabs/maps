@@ -745,6 +745,7 @@ static void processX11Event(XEvent* xevent)
     requestClipboard();  // X11 clipboard request is async, so load immediately
   case FocusOut:
   {
+    currKeymod = KMOD_NONE;  // reset mod state because we don't get key events when not focused
     SDL_Event event = {0};
     event.type = SDL_WINDOWEVENT;
     event.window.event = xevent->type == FocusIn ? SDL_WINDOWEVENT_FOCUS_GAINED : SDL_WINDOWEVENT_FOCUS_LOST;

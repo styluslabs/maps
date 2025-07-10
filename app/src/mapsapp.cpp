@@ -289,9 +289,14 @@ LngLat MapsApp::getMapCenter()
 // this should get list of name properties from config or current scene to support other languages
 std::string MapsApp::getPlaceTitle(const Properties& props) const
 {
-  std::string name;
-  props.getString("name_en", name) || props.getString("name", name) || props.getString("ref", name);
-  return name;
+  std::string name_en, name, ref;
+  props.getString("name_en", name_en);
+  props.getString("name", name);
+  if(!name_en.empty() && !name.empty() && name_en != name) { return name_en + " (" + name + ")"; }
+  if(!name_en.empty()) { return name_en; }
+  if(!name.empty()) { return name; }
+  props.getString("ref", ref);
+  return ref;
 }
 
 void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& propstr, PickResultStepper stepper)

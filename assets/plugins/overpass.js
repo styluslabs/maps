@@ -30,4 +30,4 @@ function overpassSearch(query, bounds, flags)
   });
 }
 
-registerFunction("overpassSearch", "search-unified", "Overpass Search");
+registerFunction("overpassSearch", "search-unified-slow", "Overpass Search");
