@@ -145,6 +145,8 @@ global:
         water: 624
         pier: 626
         bldg: 630
+        tunnel_casing: 635
+        tunnel: 636
         transportation_casing: 638
         transportation: 640
         rail_sleepers: 640
@@ -156,7 +158,8 @@ global:
         piste: 665
         major_road: 670
         motorway: 680
-        bridge: 700
+        bridge_casing: 700
+        bridge: 701
         bicycle: 720
         transit: 750
         # put bus routes on top so they aren't hidden by wider route train/subway/tram routes
@@ -707,14 +710,22 @@ layers:
         rounded:
             filter: { $zoom: { min: 18 } }
             draw: { lines: { cap: round } }
-        bridge:
+        # layers are evaluated in order of incr priority, with default being INT_MAX, so for exclusive layers
+        #  smallest number wins, but for non-exclusive largest number wins (overwrites others), so to override
+        #  layer w/ equal (e.g., default) priority, we have to use reverse alphabetical sort
+        "!bridge":
             filter: { brunnel: bridge }
-            priority: 1
-            draw: { lines: { order: global.order.bridge } }
-        tunnel:
+            draw:
+                lines:
+                    order: global.order.bridge
+                    outline: { order: global.order.bridge_casing }
+        "!tunnel":
             filter: { brunnel: tunnel, $zoom: { min: 12 } }
-            priority: 1
-            draw: { lines: { color: global.color.tunnel, outline: { color: global.color.tunnel_casing } } }
+            draw:
+                lines:
+                    order: global.order.tunnel
+                    color: global.color.tunnel
+                    outline: { order: global.order.tunnel_casing, color: global.color.tunnel_casing }
 
         motorway:
             filter: { highway: [motorway, motorway_link] }
@@ -727,10 +738,9 @@ layers:
             unmute:
                 enabled: global.show_motorways
                 draw: { lines: { color: global.color.motorway } }
-            tunnel:
+            "!tunnel":
                 filter: { brunnel: tunnel, $zoom: { min: 12 } }
-                priority: 1
-                draw: { lines: { color: global.color.motorway_tunnel } }
+                draw: { lines: { order: global.order.tunnel, color: global.color.motorway_tunnel } }
             link:
                 filter: [ { highway: motorway_link }, { ramp: true } ]
                 draw: { lines: { width: [[13, 0], [13, 1.5px], [15, 9]] } }  #color: global.color.motorway_link
