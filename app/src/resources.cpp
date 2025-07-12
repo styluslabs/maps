@@ -297,6 +297,8 @@ void initResources(const char* baseDir)
 {
   bool uigpu = MapsApp::cfg()["ui"]["gpu_render"].as<bool>(true);
   Painter::initFontStash(FONS_DELAY_LOAD | (uigpu ? FONS_SUMMED : FONS_SDF));
+  // small '?' - default notdef glyph is too prominent
+  fonsInternalParams(Painter::fontStash)->notDefCodePt = 0xFE56;
 #if PLATFORM_IOS || PLATFORM_OSX
   const char* dfltFont = "shared/fonts/SanFranciscoDisplay-Regular.otf";
   const char* boldFont = "shared/fonts/SanFranciscoDisplay-Bold.otf";
