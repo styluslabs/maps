@@ -581,24 +581,22 @@ static void replaceSceneVar(std::vector<SceneUpdate>& vars, const std::string& p
   vars.push_back(SceneUpdate{path, newval});
 }
 
-void MapsSources::updateSceneVar(const std::string& path, YAML::Node newval, const std::string& onchange, bool reload)
+void MapsSources::updateSceneVar(const std::string& path,
+    YAML::Node newval, const std::string& onchange, const std::string& reload)
 {
   std::string newstr = yamlToStr(newval);
   replaceSceneVar(app->sceneUpdates, path, newstr);
   replaceSceneVar(currUpdates, path, newstr);
   sourceModified();
-
-  if(!onchange.empty()) {
-    app->map->updateGlobals({app->sceneUpdates.back()});
-    app->pluginManager->jsCallFn(onchange.c_str());
-    rebuildSource(currSource);  // plugin will update mapSources, so we need to reload completely
-  }
-  else if(reload) {
+  app->map->updateGlobals({app->sceneUpdates.back()}, reload != "none");
+  if(!onchange.empty()) { app->pluginManager->jsCallFn(onchange.c_str()); }
+  if(reload == "none" || reload == "false") { return; }
+  // w/ onchange, plugin could update mapSources, so we need to reload completely
+  if(!onchange.empty()) { rebuildSource(currSource); }
+  else {
     app->loadSceneFile();
     sceneVarsLoaded = false;
   }
-  else
-    app->map->updateGlobals({app->sceneUpdates.back()});
 }
 
 static Tangram::Style* findStyle(Tangram::Scene* scene, const std::string name)
@@ -654,7 +652,7 @@ void MapsSources::populateSceneVars()
     std::string label = var.second["label"].as<std::string>("");
     std::string onchange = var.second["onchange"].as<std::string>("");
     std::string stylename = var.second["style"].as<std::string>("");
-    bool reload = var.second["reload"].as<std::string>("") != "false";
+    std::string reload = var.second["reload"].as<std::string>("");
     if(!varsContent->containerNode()->children().empty())
       varsContent->addWidget(createHRule(1));
     if(!stylename.empty()) {  // shader uniform

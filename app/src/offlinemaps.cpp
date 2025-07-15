@@ -339,7 +339,7 @@ void MapsOffline::saveOfflineMap(int mapid, LngLat lngLat00, LngLat lngLat11, in
     else {
       olinfo->sources.push_back({src->name(), info, src->maxZoom(), {}});
       // add header to indicate offline map download so server can deprioritize if needed
-      olinfo->sources.back().info.urlOptions.httpOptions.headers += "X-Tile-Priority: background\r\n";
+      olinfo->sources.back().info.urlOptions.httpOptions.addHeader("X-Tile-Priority", "background");
       if(!src->isRaster()) {
         // search data must remain accessible even if map source changed
         olinfo->sources.back().searchData = app->sceneConfig()["application"]["search_data"].clone();

@@ -7,7 +7,7 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  tangram-tests:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -17,3 +17,39 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev mesa-common-dev libfontconfig1-dev libcurl4-openssl-dev
     - name: tangram tests
       run: make -f tests.mk DEBUG=1
+
+  linux-build:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev mesa-common-dev libfontconfig1-dev libcurl4-openssl-dev
+    - name: Build tgz
+      run: make real_tgz
+
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    - name: Gradle Assemble
+      run: gww assembleRelease
+      working-directory: app/android
+
+  #windows-build:
+  #  runs-on: windows-latest
+  #  steps:
+  #  - uses: actions/checkout@v4
+  #    with:
+  #      submodules: recursive
+  #  - name: Build tgz
+  #    run: make real_tgz

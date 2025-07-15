@@ -164,13 +164,16 @@ styles:
                     float slope = length(grad);
                     float slope_degs = atan(slope/coslat)*180.0/3.141592;
                     // setup base color - this could be moved to setup block
+                    vec4 contour_color = u_contour_color;
                     #if ELEVATION_INDEX
                     vec4 base_color = sampleRaster(0);
                     #elif defined(TANGRAM_TERRAIN_3D)
                     vec4 base_color = vec4(0.88, 0.88, 0.88, 1.0);
                     #else
                     #define HILLSHADE_BLEND_OVER
+                    vec4 shading = calculateLighting(v_position.xyz, normal, vec4(1.0));
                     vec4 base_color = vec4(0.0, 0.0, 0.0, 0.0);  //v_color;
+                    contour_color = shading*contour_color;
                     #endif
                 color: |
                     #ifdef SHOW_CONTOURS
@@ -216,12 +219,11 @@ styles:
                         dup = fract(hc/coarse)*coarse * px_per_elev;
                         ddn = abs(1. - fract(hc/coarse))*coarse * px_per_elev;
                         cov += max(0.5 - dup + coarsehw, 0.) + max(0.5 - ddn + coarsehw, 0.);
-                        base_color = mix(base_color, u_contour_color, min(cov, 1.));
+                        base_color = mix(base_color, contour_color, min(cov, 1.));
                     }
                     #endif
                     // apply lighting to get final color
                     #ifdef HILLSHADE_BLEND_OVER
-                    vec4 shading = calculateLighting(v_position.xyz, normal, vec4(1.0));
                     // for blending over background and opaque polygons; scale by 1/(1-light_accumulator_ambient) instead?
                     color = vec4(4.0*shading.rgb - 3.0, 0.25);
                     color = mix(color, base_color, base_color.a);

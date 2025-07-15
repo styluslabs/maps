@@ -1480,7 +1480,7 @@ layers:
                     - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }
                     - { natural: [glacier], $zoom: { min: 10 } }
                     - { landuse: [commercial, retail, winter_sports], $zoom: { min: 12 } }
-                    - { landuse: [industrial, military], area: { min: 5000px2 }, $zoom: { min: 12 } }
+                    - { landuse: [industrial, military], area: { min: 5000px2 }, $zoom: { min: 10 } }
                     - { amenity: prison, area: { min: 5000px2 }, $zoom: { min: 12 } }
             draw:
                 points: { visible: false }
@@ -1852,7 +1852,7 @@ layers:
                             filter: { amenity: [college, library], area: { min: 1500px2 } }
                             draw: { points: { visible: true, priority: global.poi_priority.university } }
                         university:
-                            filter: { amenity: university, area: { min: 1500px2 }, $zoom: { max: 18 } }
+                            filter: { amenity: university, area: { min: 500px2 }, $zoom: { max: 18 } }
                             draw: { points: { visible: true, priority: global.priority.campus } }
                         campus:
                             filter: { amenity: university, area: { min: 4000px2 } }

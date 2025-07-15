@@ -13,7 +13,7 @@ public:
   void addSource(const std::string& key, YAML::Node srcnode);
   void rebuildSource(const std::string& srcname = "", bool async = true);
   void onMapEvent(MapEvent_t event);
-  void updateSceneVar(const std::string& path, YAML::Node newval, const std::string& onchange, bool reload);
+  void updateSceneVar(const std::string& path, YAML::Node newval, const std::string& onchange, const std::string& reload);
   void updateSceneLight(const std::string& name, const YAML::Node& params);
   void importSources(const std::string& src);
   bool syncImportFile(const std::string& filename);

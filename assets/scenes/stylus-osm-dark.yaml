@@ -59,6 +59,7 @@ global:
         water_name: hsl(190, 32%, 76%)
         water_halo: black
         landuse_name: [0.75,0.75,0.75]
+        airport_name: '#88C5E5'
 
 # two-pass method used by translucent blend mode eliminates issue w/ overlapping line segments when alpha < 1
 styles:
