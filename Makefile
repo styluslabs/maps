@@ -186,7 +186,7 @@ include make/android.mk
 else
 # Linux
 # GLFW
-include tangram-es/platforms/common/module.mk
+#include tangram-es/platforms/common/module.mk
 
 # Linux platfrom
 MODULE_BASE := .
@@ -198,8 +198,6 @@ MODULE_SOURCES += \
   tangram-es/platforms/common/linuxSystemFontHelper.cpp \
   deps/nfd/src/nfd_portal.cpp \
   app/linux/linuxmain.cpp
-#  app/src/glfwmain.cpp \
-#  $(STYLUSLABS_DEPS)/ugui/example/glfwSDL.c
 
 MODULE_INC_PUBLIC = tangram-es/platforms/linux/src
 MODULE_INC_PRIVATE = app/include tangram-es/platforms/common deps/nfd/src/include $(STYLUSLABS_DEPS) $(STYLUSLABS_DEPS)/nanovgXC
