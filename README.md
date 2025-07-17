@@ -154,6 +154,8 @@ Tangram-ES supports RTL text and complex shaping through Harfbuzz and Freetype. 
 
 Storage use can be controlled with the `shrink_at` and `shrink_to` values in the `storage` section of `config.yaml`.
 
+To enable debug menus, run the following in the plugin console: `writeSceneValue("config.ui.show_debug", "true")`
+
 
 ### GUI ###
 

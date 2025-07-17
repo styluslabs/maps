@@ -31,6 +31,7 @@ private:
   void saveSources();
   void promptDownload(const std::vector<std::string>& keys);
   bool isLayerShown(const std::string& key, const std::vector<std::string>& layerkeys);
+  void importSourcesFile(const std::string& path, const std::vector<char>& ymlstr);
 
   Widget* sourcesPanel = NULL;
   Widget* sourceEditPanel = NULL;

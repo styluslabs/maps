@@ -830,6 +830,25 @@ void MapsSources::populateSourceEdit(std::string key)
     populateSceneVars();
 }
 
+void MapsSources::importSourcesFile(const std::string& path, const std::vector<char>& ymlstr)
+{
+  YAML::Node yml = YAML::Load(ymlstr.data(), ymlstr.size());
+  if(!yml) {
+    MapsApp::messageBox("Import error", fstring("YAML error parsing '%s'", path.c_str()));
+    return;
+  }
+  const auto& y = yml;
+  if(y["global"] || y["layers"] || y["styles"] || y["import"] || y["sources"]) {
+    createSource("", fstring("{title: '%s', scene: %s}", FSPath(path).baseName().c_str(), path.c_str()));
+  }
+  else {
+    for(auto node : yml.pairs())
+      mapSources[node.first.Scalar()] = std::move(node.second);
+  }
+  saveSources();
+  populateSources();
+}
+
 void MapsSources::importSources(const std::string& src)
 {
   std::string key;
@@ -845,22 +864,8 @@ void MapsSources::importSources(const std::string& src)
     app->platform->startUrlRequest(Url(src), [=](UrlResponse&& response){ MapsApp::runOnMainThread( [=](){
       if(response.error)
         MapsApp::messageBox("Import error", fstring("Unable to load '%s': %s", src.c_str(), response.error));
-      else {
-        YAML::Node yml = YAML::Load(response.content.data(), response.content.size());
-        if(yml) {
-          const auto& y = yml;
-          if(y["global"] || y["layers"] || y["styles"] || y["import"] || y["sources"])
-            createSource("", fstring("{title: '%s', scene: %s}", FSPath(src).baseName().c_str(), src.c_str()));
-          else {
-            for(auto node : yml.pairs())
-              mapSources[node.first.Scalar()] = std::move(node.second);
-          }
-          saveSources();
-          populateSources();
-        }
-        else
-          MapsApp::messageBox("Import error", fstring("YAML error parsing '%s'", src.c_str()));
-      }
+      else
+        importSourcesFile(src, response.content);
     } ); });
     return;
   }
@@ -907,7 +912,7 @@ Button* MapsSources::createPanel()
 
   auto importFileFn = [=](std::unique_ptr<PlatformFile> file){
     importDialog->finish(Dialog::CANCELLED);
-    importSources(file->readAll().data());
+    importSourcesFile("file://" + file->fsPath(), file->readAll());
   };
   importFileBtn->onClicked = [=](){ MapsApp::openFileDialog({{"YAML files", "yaml,yml"}}, importFileFn); };
 
