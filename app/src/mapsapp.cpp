@@ -165,6 +165,7 @@ public:
 
   Map* map;
   bool useDirectDraw = false;
+  bool showZoom = false;
 };
 
 Rect ScaleBarWidget::bounds(SvgPainter* svgp) const
@@ -207,9 +208,8 @@ void ScaleBarWidget::directDraw(Painter* p) const
   real n = firstdigit < 2 ? 1 : firstdigit < 5 ? 2 : 5;
   real scaledist = n * pow10;
   std::string str = fstring(format, scaledist);
-#if IS_DEBUG
-  str += fstring("  (z%.2f)", map->getZoom());
-#endif
+  if(showZoom)
+    str += fstring("  (z%.2f)", map->getZoom());
 
   real y0 = bbox.height() - 4;
   real w = bbox.width() - 4;
@@ -656,18 +656,6 @@ void MapsApp::longPressEvent(float x, float y)
   double lng, lat;
   if(!map->screenPositionToLngLat(x, y, &lng, &lat))
     return;
-
-  // print tile bounds (e.g., for aligned OSM extracts)
-  if(getDebugFlag(Tangram::tile_bounds)) {
-    auto meters = MapProjection::lngLatToProjectedMeters({lng, lat});
-    TileID tile = MapProjection::projectedMetersTile(meters, int(map->getZoom()));
-    auto bounds = MapProjection::tileBounds(tile);
-    auto llmin = MapProjection::projectedMetersToLngLat(bounds.min);
-    auto llmax = MapProjection::projectedMetersToLngLat(bounds.max);
-    LOG("%s: [%.9f,%.9f,%.9f,%.9f]", tile.toString().c_str(),
-        llmin.longitude, llmin.latitude, llmax.longitude, llmax.latitude);
-  }
-
   // clear panel history unless editing track/route
   if(!mapsTracks->activeTrack)
     showPanel(infoPanel);
@@ -1860,6 +1848,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   scaleBar = new ScaleBarWidget(map.get());
   scaleBar->node->setAttribute("box-anchor", revbtns ? "bottom right" : "bottom left");
   scaleBar->setMargins(6, 10);
+  scaleBar->showZoom = cfg()["ui"]["show_debug"].as<bool>(false);
   mapsContent->addWidget(scaleBar);
 
   crossHair = new CrosshairWidget();

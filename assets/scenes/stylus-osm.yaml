@@ -1875,7 +1875,7 @@ layers:
             any:
                 - { admin_level: 2, $zoom: { min: 2 } }  # country
                 - { admin_level: 4, $zoom: { min: 6 } }  # state/province
-                - { admin_level: 4, $zoom: { min: 5 }, ISO3166_2: [US, CA] }  # large countries
+                - { admin_level: 4, $zoom: { min: 5 }, ISO3166_2: [US, CA, CN] }  # large countries
             not:
                 - maritime: true
                 - natural: coastline
@@ -1925,27 +1925,22 @@ layers:
             filter:
                 place: city
                 $zoom: { max: 9 }
+                any: [ { place_CN: false }, { place_CN: "prefecture-level_city" }, { population: { min: 5000000 } } ]
             draw:
                 points:
                     visible: false
                     size: 6px
                     color: global.color.city_point
                     priority: global.priority.place_fn
-                    #collide: false
                     interactive: true
                     outline: { color: global.color.city_point_halo, width: 1px }
                     text:
-                        #text_source: global.names_two_lines
                         text_source: global.names_one_line
                         priority: global.priority.place_fn
-                        #collide: true
-                        #optional: false
-                        interactive: true
                         font:
                             family: global.primary_font
                             fill: global.color.place_name
                             stroke: { color: global.color.place_halo, width: 4 }
-                            #weight: global.bold_weight
                             size: [[8, 10px], [12, 16px]]
             capital:
                 filter: { capital: "yes" }
@@ -1962,6 +1957,11 @@ layers:
             default:
                 filter: { $zoom: { min: 7 } }
                 draw: { points: { visible: true } }
+
+            #"!china":
+            #    filter: { place_CN: true, not: { place_CN: "prefecture-level_city" } }
+            #    draw: { points: { visible: false } }
+
             special:  # San Jose has higher population than SF
                 filter: { name: "San Francisco" }
                 draw: { points: { priority: 8, text: { priority: 8 } } }
@@ -2026,11 +2026,11 @@ layers:
                             size: [[6, 10px], [8, 12px]]
                             transform: uppercase
                 big:
-                    filter: { ISO3166_2: [US, CA] }
+                    filter: { ISO3166_2: [US, CA, CN] }
                     draw: { text: { font: { size: [[6, 11px], [8, 12.5px]] } } }
                 # use short name when available at low-zooms
                 short:
-                    filter: { $zoom: { max: 7 } }
+                    filter: { $zoom: { max: 7 }, not: { ISO3166_2: [CN, PH] } }
                     draw: { text: { text_source: ['ref', 'name'] } }
 
             cities:
@@ -2055,11 +2055,15 @@ layers:
                     filter: { place: town, $zoom: { min: 9, max: 14 } }
                     draw: { text: { visible: true, font: { size: [[8, 10px], [12, 14px]] } } }
                 village:
-                    filter: { place: village, $zoom: { min: 10, max: 15 } }
+                    filter: { place: village, $zoom: { min: 11, max: 15 } }
                     draw: { text: { visible: true, font: { size: [[8, 9px], [12, 12px]] } } }
                 hamlet:
                     filter: { place: hamlet, $zoom: { min: 13, max: 15 } }
                     draw: { text: { visible: true, font: { size: [[8, 8px], [12, 10px]] } } }
+                # most towns in China have place:CN, but many villages do not, so this is the best we can do
+                "!china":
+                    filter: { place: town, place_CN: true, $zoom: { max: 10 } }
+                    draw: { text: { visible: false } }
 
             neighborhoods:
                 exclusive: true
