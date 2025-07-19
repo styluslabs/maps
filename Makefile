@@ -156,11 +156,11 @@ DEFS += TANGRAM_IOS GLES_SILENCE_DEPRECATION
 include make/ios.mk
 
 else ifneq ($(ANDROID),)
-# ./gww assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.keystore && mv signed_app-release.apk ascend.apk
+# ./gww assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.jks && mv signed_app-release.apk ascend.apk
 
 # System.loadLibrary("droidmaps") in MapsLib.java
 TARGET = libdroidmaps.so
-ANDROID_NDK = $(HOME)/android-sdk/ndk/26.3.11579264
+ANDROID_NDK ?= $(HOME)/android-sdk/ndk/26.3.11579264
 
 # platform
 MODULE_BASE := .
