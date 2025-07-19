@@ -1957,11 +1957,6 @@ layers:
             default:
                 filter: { $zoom: { min: 7 } }
                 draw: { points: { visible: true } }
-
-            #"!china":
-            #    filter: { place_CN: true, not: { place_CN: "prefecture-level_city" } }
-            #    draw: { points: { visible: false } }
-
             special:  # San Jose has higher population than SF
                 filter: { name: "San Francisco" }
                 draw: { points: { priority: 8, text: { priority: 8 } } }

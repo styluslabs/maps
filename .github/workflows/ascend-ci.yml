@@ -33,9 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      run: git clone --recurse-submodules https://github.com/styluslabs/maps
+      #uses: actions/checkout@v4
+      #with:
+      #  submodules: recursive
     - name: Setup JDK
       uses: actions/setup-java@v4
       with:
@@ -43,7 +44,7 @@ jobs:
         java-version: '17'
     - name: Gradle Assemble
       run: ./gww assembleRelease
-      working-directory: app/android
+      working-directory: maps/app/android
 
   #windows-build:
   #  runs-on: windows-latest
