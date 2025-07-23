@@ -93,6 +93,6 @@ ui:
 #tile_cache_limit: 536870912
 
 # for debugging
-num_tile_workers: 2
-
-msaa_samples: 2
+#tangram:
+#  num_tile_workers: 2
+#  msaa_samples: 4

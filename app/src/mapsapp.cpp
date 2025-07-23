@@ -787,7 +787,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   for(const auto& font : cfg()["fallback_fonts"])
     options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(basePath.child(font.Scalar()).path)));
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
-  options.numTileWorkers = cfg()["num_tile_workers"].as<int>(2);
+  options.numTileWorkers = cfg()["tangram"]["num_tile_workers"].as<int>(2);
   dumpJSStats(NULL);  // reset stats
   map->loadScene(std::move(options), async);
 
@@ -2452,6 +2452,11 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   if(glNeedsInit) {
     glNeedsInit = false;
     map->setupGL();
+
+    int samples = cfg()["tangram"]["msaa_samples"].as<int>(4);
+    mapsFBFlags = NVGLU_FB_DEPTH | (samples << NVGLU_SAMPLES_SHIFT);
+    mapsFB = nvgluCreateFramebuffer(NULL, 0, 0, NVGLU_NO_NVG_IMAGE | mapsFBFlags);
+
     // Painter created here since GL context required to build shaders
     // ALIGN_SCISSOR needed only due to rotated direction-icon inside scroll area
     if(cfg()["ui"]["gpu_render"].as<bool>(true)) {
@@ -2503,10 +2508,18 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   if(!mapdirty && !dirty.isValid())
     return false;
 
-  //Rect scissor = mapsWidget->viewport*gui->paintScale;
-  //nvgluSetScissor(0, 0, int(scissor.width() + 0.5), std::min(int(scissor.height() + 10), fbHeight));
-  map->render();
-  //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
+  if(mapsFB) {
+    int prevFBO = nvgluBindFramebuffer(mapsFB);
+    nvgluSetFramebufferSize(mapsFB, fbWidth, fbHeight, mapsFBFlags);
+    //Rect scissor = mapsWidget->viewport*gui->paintScale;
+    //nvgluSetScissor(0, 0, int(scissor.width() + 0.5), std::min(int(scissor.height() + 10), fbHeight));
+    map->render();
+    //nvgluSetScissor(0, 0, 0, 0);  // disable scissor
+    nvgluBlitFramebuffer(nvglFB, prevFBO);  // MSAA resolve
+  }
+  else
+    map->render();
+
   // selection queries are processed by render(); if nothing selected, tapLocation will still be valid
   if(pickedMarkerId > 0) {
     if(pickedMarkerId == locMarker) {
@@ -2538,6 +2551,7 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
         nvgluSetScissor(0, 0, 0, 0);  // disable scissor for blit
         nvgluBindFBO(prevFBO);
       }
+      // have to use shader to blit because glBlitFramebuffer doesn't support blending
       nvgswuSetBlend(1);
       nvgswuBlitTex(nvglBlit, nvgluGetTexture(nvglFB), 0);
     }

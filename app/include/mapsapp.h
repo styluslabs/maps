@@ -252,7 +252,9 @@ private:
   bool locMarkerNeedsUpdate = true;
   int shuffleSeed = 0;
 
+  int mapsFBFlags = 0;
   int nvglFBFlags = 0;
+  NVGLUframebuffer* mapsFB = NULL;
   NVGLUframebuffer* nvglFB = NULL;
   NVGSWUblitter* nvglBlit = NULL;
 };
