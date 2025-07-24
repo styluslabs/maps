@@ -2452,11 +2452,11 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
   if(glNeedsInit) {
     glNeedsInit = false;
     map->setupGL();
-
+#ifdef MAPS_TANGRAM_FBO
     int samples = cfg()["tangram"]["msaa_samples"].as<int>(4);
     mapsFBFlags = NVGLU_FB_DEPTH | (samples << NVGLU_SAMPLES_SHIFT);
     mapsFB = nvgluCreateFramebuffer(NULL, 0, 0, NVGLU_NO_NVG_IMAGE | mapsFBFlags);
-
+#endif
     // Painter created here since GL context required to build shaders
     // ALIGN_SCISSOR needed only due to rotated direction-icon inside scroll area
     if(cfg()["ui"]["gpu_render"].as<bool>(true)) {
@@ -2464,10 +2464,6 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
       nvglBlit = nvgswuCreateBlitter();
       painter.reset(new Painter(Painter::PAINT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));
       painter->setBackgroundColor(Color::TRANSPARENT_COLOR);
-      //scaleBarPainter.reset(new Painter(Painter::PAINT_GL));
-      //scaleBar->useDirectDraw = true;
-      //crossHair->useDirectDraw = true;
-      //gui->fullRedraw = true;
     }
     else
       painter.reset(new Painter(Painter::PAINT_SW | Painter::SW_BLIT_GL | Painter::CACHE_IMAGES | Painter::ALIGN_SCISSOR));

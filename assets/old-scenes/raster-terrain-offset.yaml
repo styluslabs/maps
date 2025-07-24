@@ -1,5 +1,0 @@
-import: raster-terrain.yaml
-
-sources:
-    terrain-normals:
-        zoom_offset: 1
