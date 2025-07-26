@@ -1,15 +1,28 @@
 #import "OpenGLView.h"
 #import <QuartzCore/QuartzCore.h>
-#include <OpenGLES/ES3/gl.h>
-#include <OpenGLES/ES3/glext.h>
+//#import <Metal/Metal.h>
+//#include <OpenGLES/ES3/gl.h>
+//#include <OpenGLES/ES3/glext.h>
+
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES3/gl3.h>
+
 #include "iosApp.h"
 
 @interface OpenGLView() {
-  CAEAGLLayer* _eaglLayer;
-  EAGLContext* _context;
-  EAGLContext* _context2;
-  GLuint _colorRenderBuffer, _depthRenderBuffer, _msaaRenderBuffer;
-  GLuint _frameBuffer, _msaaFrameBuffer;
+  //CAEAGLLayer* _eaglLayer;
+  //EAGLContext* _context;
+  //EAGLContext* _context2;
+
+  CAMetalLayer* mtl_layer;
+  EGLContext egl_context;
+  EGLSurface egl_surface;
+  EGLDisplay egl_display;
+  EGLContext egl_context2;
+
+  //GLuint _colorRenderBuffer, _depthRenderBuffer, _msaaRenderBuffer;
+  //GLuint _frameBuffer, _msaaFrameBuffer;
   int width, height, samples;
 }
 
@@ -23,11 +36,98 @@
 
 + (Class)layerClass
 {
-  return [CAEAGLLayer class];
+  return [CAMetalLayer class];
 }
 
 - (void)setupLayerAndContext
 {
+    iosApp_getGLConfig(&samples);  // in the future this could also provide, e.g., sRGB setting
+    // MSAA is cheap on mobile (tile-based) GPUs and 2x MSAA apparently can have artifacts on iPhone
+    if(samples > 1) { samples = 4; }
+
+    mtl_layer = (CAMetalLayer*) self.layer;
+    //mtl_layer.opaque = YES;
+    //mtl_layer.device = MTLCreateSystemDefaultDevice();
+    //mtl_layer.contentsScale = [UIScreen mainScreen].scale;
+
+    EGLAttrib egl_display_attribs[] = {
+        EGL_PLATFORM_ANGLE_TYPE_ANGLE, EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE,
+        EGL_POWER_PREFERENCE_ANGLE, EGL_HIGH_POWER_ANGLE,
+        EGL_NONE
+    };
+
+    EGLDisplay display = eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_ANGLE, (void*) EGL_DEFAULT_DISPLAY, egl_display_attribs);
+    egl_display = display;
+    if (display == EGL_NO_DISPLAY)
+    {
+        NSLog(@"Failed to get EGL display");
+        exit(1);  //return SDL_APP_FAILURE;
+    }
+
+    if (eglInitialize(display, NULL, NULL) == false)
+    {
+        NSLog(@"Failed to initialize EGL");
+        exit(1);  //return SDL_APP_FAILURE;
+    }
+
+    EGLint egl_config_attribs[] = {
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_DEPTH_SIZE, 24,
+        EGL_STENCIL_SIZE, 8,
+        EGL_COLOR_BUFFER_TYPE, EGL_RGB_BUFFER,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_SAMPLES, samples,
+        EGL_NONE
+    };
+
+    EGLConfig config;
+    EGLint configs_count;
+    if (!eglChooseConfig(display, egl_config_attribs, &config, 1, &configs_count))
+    {
+        NSLog(@"Failed to choose EGL config");
+        exit(1);  //return SDL_APP_FAILURE;
+    }
+
+    EGLint egl_context_attribs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 3,
+        EGL_NONE
+    };
+    EGLContext context = eglCreateContext(display, config, EGL_NO_CONTEXT, egl_context_attribs);
+    egl_context = context;
+    if (context == EGL_NO_CONTEXT) {
+        NSLog(@"Failed to create EGL context");
+        exit(1);  //return SDL_APP_FAILURE;
+    }
+
+    egl_context2 = eglCreateContext(display, config, context, egl_context_attribs);
+    if(!egl_context2) { NSLog(@"Offscreen context: eglCreateContext() error %X", eglGetError()); }
+
+    EGLSurface surface = eglCreateWindowSurface(display, config, (__bridge EGLNativeWindowType)mtl_layer, NULL);
+    egl_surface = surface;
+    if (surface == EGL_NO_SURFACE)
+    {
+        NSLog(@"Failed to create EGL surface");
+        exit(1);  //return SDL_APP_FAILURE;
+    }
+
+    if (!eglMakeCurrent(display, surface, surface, context))
+    {
+        NSLog(@"Failed to make EGL context current");
+        exit(1);  //return SDL_APP_FAILURE;
+    }
+
+    const char* renderer = glGetString(GL_RENDERER);
+    const char* vendor = glGetString(GL_VENDOR);
+    const char* version = glGetString(GL_VERSION);
+    NSLog(@"\nOpenGL ES Renderer: %s, Vendor: %s, Version: %s\n", renderer, vendor, version);
+
+    eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+/*
   iosApp_getGLConfig(&samples);  // in the future this could also provide, e.g., sRGB setting
   // MSAA is cheap on mobile (tile-based) GPUs and 2x MSAA apparently can have artifacts on iPhone
   if(samples > 1) { samples = 4; }
@@ -54,11 +154,13 @@
   glGenRenderbuffers(1, &_msaaRenderBuffer);
   glGenFramebuffers(1, &_frameBuffer);
   glGenFramebuffers(1, &_msaaFrameBuffer);
+*/
 }
 
 // this should be called from a thread
 - (void)createSharedContext
 {
+/*
   // seems there can be a deadlock between creating shared context on worker thread and using main context
   //  on main thread, so we have to create shared context on main thread too
   //EAGLContext* _context2 = [[EAGLContext alloc] initWithAPI:[_context API] sharegroup:[_context sharegroup]];
@@ -67,10 +169,17 @@
   } else if (![EAGLContext setCurrentContext:_context2]) {
       NSLog(@"setCurrentContext failed for shared OpenGL context");
   }
+*/
+
+
+  int curr_res = eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, egl_context2);
+  if(curr_res == EGL_FALSE) { NSLog(@"Offscreen context: eglMakeCurrent() error %X", eglGetError()); }
+
 }
 
 - (void)setupBuffers
 {
+/*
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);
   [_context renderbufferStorage:GL_RENDERBUFFER fromDrawable:_eaglLayer];
 
@@ -98,10 +207,12 @@
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);
   if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
     NSLog(@"Error creating GLES framebuffer.");
+*/
 }
 
 - (void)destroyBuffers
 {
+/*
   glDeleteFramebuffers(1, &_frameBuffer);
   glDeleteFramebuffers(1, &_msaaFrameBuffer);
   _frameBuffer = 0; _msaaFrameBuffer = 0;
@@ -109,10 +220,12 @@
   glDeleteRenderbuffers(1, &_colorRenderBuffer);
   glDeleteRenderbuffers(1, &_msaaRenderBuffer);
   _depthRenderBuffer = 0; _colorRenderBuffer = 0; _msaaRenderBuffer = 0;
+*/
 }
 
 - (void)swapBuffers
 {
+/*
   if (samples > 1) {
     const GLenum attachments[] = {GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT};
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _frameBuffer);
@@ -122,11 +235,17 @@
   }
   glBindRenderbuffer(GL_RENDERBUFFER, _colorRenderBuffer);  // make sure correct renderbuffer is bound
   [_context presentRenderbuffer:GL_RENDERBUFFER];
+*/
+  eglSwapBuffers(egl_display, egl_surface);
 }
 
 - (void)makeContextCurrent
 {
-  [EAGLContext setCurrentContext:_context];
+  //[EAGLContext setCurrentContext:_context];
+  if(!eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context))
+  {
+      NSLog(@"Failed to make EGL context current on thread!");
+  }
 }
 
 - (id)initWithFrame:(CGRect)frame
@@ -152,13 +271,20 @@
   int w = (int)(self.bounds.size.width * self.contentScaleFactor);
   int h = (int)(self.bounds.size.height * self.contentScaleFactor);
   if(w != width || h != height) {
+    NSLog(@"layoutSubviews: %d x %d (scale %f)", w, h, self.contentScaleFactor);
     UIWindow *window = UIApplication.sharedApplication.keyWindow;
     CGFloat topInset = window.safeAreaInsets.top;
     CGFloat bottomInset = window.safeAreaInsets.bottom;
 
     iosApp_stopLoop();
-    [self makeContextCurrent];
-    [self setupBuffers];
+    
+    width = w;
+    height = h;
+    //eglQuerySurface(eglDisplay, eglSurface, EGL_WIDTH, &width);
+    //eglQuerySurface(eglDisplay, eglSurface, EGL_HEIGHT, &height);
+
+    //[self makeContextCurrent];
+    //[self setupBuffers];
     iosApp_startLoop(width, height, self.contentScaleFactor*163, (float)topInset, (float)bottomInset);
   }
 }
@@ -226,47 +352,3 @@
 
 @end
 
-// main loop
-/*static CFRunLoopRef mainRunLoop = NULL;
-
-void iosPumpEventsBlocking(void)
-{
-  if(!mainRunLoop)
-    mainRunLoop = CFRunLoopGetCurrent();
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 100, TRUE);
-
-  // necessary???
-  [EAGLContext setCurrentContext:_context];
-
-  sdlWin = {display, surface, nativeWin};
-  if(!app) {
-    app = new MapsApp(MapsApp::platform);
-    app->createGUI(&sdlWin);
-    app->mapsOffline->resumeDownloads();
-    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
-  }
-  app->setDpi(dpi);
-  MapsApp::runApplication = true;
-  while(MapsApp::runApplication) {
-    //MapsApp::taskQueue.wait();
-    int fbWidth = 0, fbHeight = 0;
-    SDL_GetWindowSize(&sdlWin, &fbWidth, &fbHeight);
-    if(app->drawFrame(fbWidth, fbHeight))
-      swapBuffers();  //display, surface);
-    // app not fully initialized until after first frame
-    //if(!initialQuery.empty()) {
-    //  app->mapsSearch->doSearch(initialQuery);
-    //  initialQuery.clear();
-    //}
-  }
-  sdlWin = {0, 0};
-}*/
-
-/*
-// Only override drawRect: if you perform custom drawing.
-// An empty implementation adversely affects performance during animation.
-- (void)drawRect:(CGRect)rect
-{
-  // Drawing code
-}
-*/

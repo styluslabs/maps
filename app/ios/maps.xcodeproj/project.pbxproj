@@ -11,9 +11,13 @@
 		EF5D42DC240F4B8500BA10F4 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D1240F4B8500BA10F4 /* QuartzCore.framework */; };
 		EF5D42DE240F4B8500BA10F4 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D3240F4B8500BA10F4 /* CoreMotion.framework */; };
 		EF5D42E1240F4B8500BA10F4 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D6240F4B8500BA10F4 /* CoreGraphics.framework */; };
-		EF5D42E2240F4B8500BA10F4 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D7240F4B8500BA10F4 /* OpenGLES.framework */; };
 		EF5D42E3240F4B8500BA10F4 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D8240F4B8500BA10F4 /* UIKit.framework */; };
 		EF89B5792DDD2AA800246E7B /* PhotosUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF89B5782DDD2AA700246E7B /* PhotosUI.framework */; };
+		EF89B5802E2F17E700246E7B /* libEGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF89B57E2E2EF97C00246E7B /* libEGL.framework */; };
+		EF89B5812E2F17E700246E7B /* libEGL.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EF89B57E2E2EF97C00246E7B /* libEGL.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		EF89B5832E2F17EA00246E7B /* libGLESv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF89B57C2E2EF95600246E7B /* libGLESv2.framework */; };
+		EF89B5842E2F17EA00246E7B /* libGLESv2.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EF89B57C2E2EF95600246E7B /* libGLESv2.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		EF89B5862E2F872000246E7B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF5D42D0240F4B8400BA10F4 /* Metal.framework */; };
 		EFC895F92D2A88C600585128 /* libascend.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EFC895F82D2A88C600585128 /* libascend.a */; };
 		EFE14E282C12AE5300317BC9 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E272C12AE5300317BC9 /* CoreLocation.framework */; };
 		EFE14E2A2C12AEBF00317BC9 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = EFE14E292C12AEBF00317BC9 /* main.m */; settings = {COMPILER_FLAGS = "-I."; }; };
@@ -22,6 +26,21 @@
 		EFE14E6C2C1630D600317BC9 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = EFE14E6B2C1630D500317BC9 /* assets */; };
 		EFE14E752C1A09AA00317BC9 /* Photos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EFE14E742C1A09AA00317BC9 /* Photos.framework */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		EF89B5822E2F17E700246E7B /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				EF89B5812E2F17E700246E7B /* libEGL.framework in Embed Frameworks */,
+				EF89B5842E2F17EA00246E7B /* libGLESv2.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		EF5054782C2147B200065499 /* maps-ios */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; name = "maps-ios"; path = "../../build/SimRelease/maps-ios.app/maps-ios"; sourceTree = "<group>"; };
@@ -37,6 +56,9 @@
 		EF5D42D8240F4B8500BA10F4 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		EF5D42D9240F4B8500BA10F4 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		EF89B5782DDD2AA700246E7B /* PhotosUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = PhotosUI.framework; path = System/Library/Frameworks/PhotosUI.framework; sourceTree = SDKROOT; };
+		EF89B57A2E2EF8F500246E7B /* libEGL */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libEGL; path = ../../../Downloads/ANGLE/libEGL.framework/libEGL; sourceTree = "<group>"; };
+		EF89B57C2E2EF95600246E7B /* libGLESv2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = libGLESv2.framework; path = ../../../Downloads/ANGLE/libGLESv2.framework; sourceTree = "<group>"; };
+		EF89B57E2E2EF97C00246E7B /* libEGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = libEGL.framework; path = ../../../Downloads/ANGLE/libEGL.framework; sourceTree = "<group>"; };
 		EFC895F82D2A88C600585128 /* libascend.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libascend.a; path = ../../build/Release/libascend.a; sourceTree = "<group>"; };
 		EFE14E252C12ADF300317BC9 /* libmaps-ios.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libmaps-ios.a"; path = "../../build/Release/libmaps-ios.a"; sourceTree = "<group>"; };
 		EFE14E272C12AE5300317BC9 /* CoreLocation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreLocation.framework; path = System/Library/Frameworks/CoreLocation.framework; sourceTree = SDKROOT; };
@@ -62,13 +84,15 @@
 			files = (
 				EFC895F92D2A88C600585128 /* libascend.a in Frameworks */,
 				EF89B5792DDD2AA800246E7B /* PhotosUI.framework in Frameworks */,
+				EF89B5832E2F17EA00246E7B /* libGLESv2.framework in Frameworks */,
 				EFE14E752C1A09AA00317BC9 /* Photos.framework in Frameworks */,
 				EF5D42DA240F4B8500BA10F4 /* Foundation.framework in Frameworks */,
 				EF5D42DC240F4B8500BA10F4 /* QuartzCore.framework in Frameworks */,
 				EFE14E282C12AE5300317BC9 /* CoreLocation.framework in Frameworks */,
+				EF89B5802E2F17E700246E7B /* libEGL.framework in Frameworks */,
 				EF5D42DE240F4B8500BA10F4 /* CoreMotion.framework in Frameworks */,
 				EF5D42E1240F4B8500BA10F4 /* CoreGraphics.framework in Frameworks */,
-				EF5D42E2240F4B8500BA10F4 /* OpenGLES.framework in Frameworks */,
+				EF89B5862E2F872000246E7B /* Metal.framework in Frameworks */,
 				EF5D42E3240F4B8500BA10F4 /* UIKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -79,6 +103,9 @@
 		EF5D42CE240F4B8400BA10F4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				EF89B57E2E2EF97C00246E7B /* libEGL.framework */,
+				EF89B57C2E2EF95600246E7B /* libGLESv2.framework */,
+				EF89B57A2E2EF8F500246E7B /* libEGL */,
 				EF89B5782DDD2AA700246E7B /* PhotosUI.framework */,
 				EFC895F82D2A88C600585128 /* libascend.a */,
 				EF5054782C2147B200065499 /* maps-ios */,
@@ -138,6 +165,7 @@
 				EF612E5D23C2FB01000BB825 /* Sources */,
 				EF612E5E23C2FB01000BB825 /* Frameworks */,
 				EF612E5F23C2FB01000BB825 /* Resources */,
+				EF89B5822E2F17E700246E7B /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -359,6 +387,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 8U8646Y4MM;
 				ENABLE_BITCODE = NO;
+				FRAMEWORK_SEARCH_PATHS = /Users/mwhite/Downloads/ANGLE;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Explore-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Ascend;
@@ -371,7 +400,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				INFOPLIST_OUTPUT_FORMAT = XML;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -399,6 +428,7 @@
 				CURRENT_PROJECT_VERSION = 1.2.0;
 				DEVELOPMENT_TEAM = 8U8646Y4MM;
 				ENABLE_BITCODE = NO;
+				FRAMEWORK_SEARCH_PATHS = /Users/mwhite/Downloads/ANGLE;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Explore-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Ascend;
@@ -411,7 +441,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				INFOPLIST_OUTPUT_FORMAT = XML;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

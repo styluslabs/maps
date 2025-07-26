@@ -119,6 +119,8 @@ include $(ADD_MODULE)
 
 DEFS += TANGRAM_IOS GLES_SILENCE_DEPRECATION
 
+INC += /Users/mwhite/Downloads/ANGLE/include
+
 ## For now, we'll only support building lib w/ make and let Xcode build the final app
 #XIB = ios/LaunchView.xib
 ## app store now requires app icon be in an asset catalog
