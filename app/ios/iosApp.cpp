@@ -245,7 +245,7 @@ void iosApp_stopLoop()
 
 void iosApp_getGLConfig(int* samplesOut)
 {
-  *samplesOut = MapsApp::cfg()["msaa_samples"].as<int>(2);
+  *samplesOut = MapsApp::cfg()["tangram"]["msaa_samples"].as<int>(4);
 }
 
 void iosApp_imeTextUpdate(const char* text, int selStart, int selEnd)
