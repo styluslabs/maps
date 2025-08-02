@@ -79,7 +79,7 @@ public:
   Rect getMapViewport();
   Point lngLatToScreenPoint(LngLat lngLat);
   LngLat getMapCenter();
-  double getElevation(LngLat pos, std::function<void(double)> callback = {});
+  double getElevation(LngLat pos, std::function<void(double)> callback = {}, bool forcecall = false);
   typedef std::function<void(int)> PickResultStepper;
   void setPickResult(LngLat pos, std::string namestr, const std::string& propstr, PickResultStepper = {});
   const YAML::Node& sceneConfig();

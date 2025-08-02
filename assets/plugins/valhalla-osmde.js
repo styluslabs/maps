@@ -1,5 +1,6 @@
 // web interface: https://valhalla.openstreetmap.de
 // refs: https://github.com/valhalla/valhalla/blob/master/docs/docs/api/turn-by-turn/api-reference.md
+// Valhalla format=gpx doesn't seem to support elevation
 
 const valhalla_options = {
   "pedestrian":{
@@ -105,8 +106,9 @@ function valhallaOsmde(mode, waypoints)
       notifyError("route", "Valhalla osm.de error");
     else {
       const content = JSON.parse(_content);
-      addRoutePolyline(content.trip.legs[0].shape, content.trip.legs[0].elevation);
-      const steps = content.trip.legs[0].maneuvers;
+      const leg = content.trip.legs[0];
+      addRoutePolyline(leg.shape, leg.elevation, leg.summary.time);
+      const steps = leg.maneuvers;
       for(var ii = 0; ii < steps.length; ii++) {
         if(!steps[ii].instruction || steps[ii].type == 0 || steps[ii].type == 8) continue;
         addRouteStep(steps[ii].instruction, steps[ii].begin_shape_index);

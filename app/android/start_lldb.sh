@@ -65,6 +65,7 @@ fi
 echo "Found PID of the app: $PID"
 
 # Start LLDB and attach to the running app
+# ... seems to have stopped working with script - have to start lldb and run commands manually; try without '-b' arg?
 #platform connect connect://localhost:12345  -- using TCP works sometimes, but usually hangs, requiring toggling of USB debugging on device to reset
 # Android devs thought it would be a good idea to use SIGSEGV for routine signaling in ART ... WTF?
 "$LLDB_PATH" -b <<EOF

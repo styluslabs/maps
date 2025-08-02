@@ -4,6 +4,8 @@
 #include "mapscomponent.h"
 #include "gpxfile.h"
 #include "ulib/fileutil.h"
+#include "isect2d.h"
+#include "glm/vec2.hpp"
 
 class TrackPlot;
 class TrackSparkline;
@@ -61,6 +63,7 @@ private:
   Waypoint* addWaypoint(Waypoint wpt);
   void removeTrackMarkers(GpxFile* track);
   void updateStats(GpxFile* track);
+  Waypoint* nearestRoutePt(const Waypoint& wpt);
   void updateDistances();
   bool findPickedWaypoint(GpxFile* track);
   void toggleRouteEdit(bool show);
@@ -119,6 +122,7 @@ private:
   Button* tracksBtn = NULL;
   Button* recordTrackBtn = NULL;
   Button* plotEditBtn = NULL;
+  Button* insertWayptBtn = NULL;
 
   std::unique_ptr<FileStream> recordGPXStrm;
   Timer* recordTimer = NULL;
@@ -132,6 +136,7 @@ private:
   double cropStart = 0;
   double cropEnd = 1;
   double recordLastSave = 0;
+  size_t nElevPending = 0;
   //bool drawTrack = false;
   bool directRoutePreview = false;
   bool tracksDirty = true;
@@ -141,10 +146,14 @@ private:
   bool showAllWaypts = false;
   bool archiveLoaded = false;
   bool tapToAddWaypt = false;
+  bool insertWaypt = false;
   bool replaceWaypt = false;  // replacing waypt from search or bookmarks
   bool stealPickResult = false;  // adding waypt from search or bookmarks
   std::unique_ptr<SelectDialog> selectTrackDialog;
   std::unique_ptr<Dialog> editWayptDialog;
   std::unique_ptr<Dialog> newTrackDialog;
   std::unique_ptr<Dialog> editTrackDialog;
+
+  isect2d::ISect2D<glm::vec2> routeCollider;
+  glm::dvec2 routeOrigin;
 };

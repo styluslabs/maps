@@ -413,6 +413,10 @@ static int addRoutePolyline(duk_context* ctx)
       wpt.loc.alt = elev[idx]*(1-f) + elev[idx+1]*f;
     }
   }
+  // also support array of times?
+  if(duk_is_number(ctx, 2) && !route.empty()) {
+    route.back().loc.time = duk_get_number(ctx, 2);
+  }
 
   MapsApp::inst->mapsTracks->addRoute(std::move(route));
   return 0;
@@ -536,7 +540,7 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addPlaceInfo");
   duk_push_c_function(ctx, addRouteGPX, 1);
   duk_put_global_string(ctx, "addRouteGPX");
-  duk_push_c_function(ctx, addRoutePolyline, 2);
+  duk_push_c_function(ctx, addRoutePolyline, 3);
   duk_put_global_string(ctx, "addRoutePolyline");
   duk_push_c_function(ctx, addRouteStep, 2);
   duk_put_global_string(ctx, "addRouteStep");

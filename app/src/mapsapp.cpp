@@ -1165,7 +1165,7 @@ static double elevationLerp(const Tangram::Raster& raster, LngLat pos)
   return t0 + fy*(t1 - t0);
 }
 
-double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
+double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback, bool forcecall)
 {
   using namespace Tangram;
   static Raster prevTex(NOT_A_TILE, nullptr);
@@ -1198,14 +1198,17 @@ double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback)
   task->setScenePrana(map->getScene()->prana());
   elevSrc->loadTileData(task, {[=](std::shared_ptr<TileTask> _task) {
     runOnMainThread([=](){
-      if(!_task->hasData()) { return; }
-      auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
-      auto tex = std::make_unique<Texture>(TextureOptions(), false);
-      if(tex->loadImageFromMemory((const uint8_t*)data.data(), data.size())) {
-        prevTex.texture = std::move(tex);
-        prevTex.tileID = tileId;
-        callback(elevationLerp(prevTex, pos));
+      if(_task->hasData()) {
+        auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
+        auto tex = std::make_unique<Texture>(TextureOptions(), false);
+        if(tex->loadImageFromMemory((const uint8_t*)data.data(), data.size())) {
+          prevTex.texture = std::move(tex);
+          prevTex.tileID = tileId;
+          callback(elevationLerp(prevTex, pos));
+          return;
+        }
       }
+      if(forcecall) { callback(NAN); }
     });
   }});
   return 0;
@@ -1743,13 +1746,10 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->setMargins(0, 0, 6, 0);
   reorientBtn->onClicked = [this](){
+    if(followState != NO_FOLLOW) { toggleFollow(); }
     LngLat center = getMapCenter();
     CameraPosition campos = {center.longitude, center.latitude, map->getZoom(), 0, 0};
     map->setCameraPositionEased(campos, 1.0);
-    if(followState != NO_FOLLOW) {
-      followState = NO_FOLLOW;
-      recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
-    }
   };
   reorientBtn->setVisible(false);
   // prevent complete UI layout when compass icon is rotated

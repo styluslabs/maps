@@ -260,6 +260,8 @@ static void xi2ReportTabletEvent(XIDeviceEvent* xevent, TabletData* device)
 
 static void xi2ReportMouseEvent(XIDeviceEvent* xevent, TabletData* device)
 {
+  if(MapsApp::simulateTouch && !device->buttons && !device->prevButtons) { return; }  // discard hover events
+
   unsigned int button = device->buttons ^ device->prevButtons;
   unsigned int eventtype = SDL_FINGERMOTION;
   if(device->buttons != device->prevButtons)
@@ -269,7 +271,7 @@ static void xi2ReportMouseEvent(XIDeviceEvent* xevent, TabletData* device)
   SDL_Event event = {0};
   event.type = eventtype;
   event.tfinger.timestamp = SDL_GetTicks(); // normally done by SDL_PushEvent()
-  event.tfinger.touchId = SDL_TOUCH_MOUSEID;
+  event.tfinger.touchId = MapsApp::simulateTouch ? 0 : SDL_TOUCH_MOUSEID;
   event.tfinger.fingerId = eventtype == SDL_FINGERMOTION ? device->buttons : button;
   event.tfinger.x = xevent->event_x;
   event.tfinger.y = xevent->event_y;

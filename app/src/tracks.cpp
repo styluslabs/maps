@@ -10,7 +10,6 @@
 #include "gaml/src/yaml.h"
 #include "util/yamlPath.h"
 #include "util/mapProjection.h"
-#include "isect2d.h"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -653,54 +652,26 @@ static std::string wayptDetailStr(double distm, double alt, const std::string& d
   return s;
 }
 
-void MapsTracks::updateDistances()
+Waypoint* MapsTracks::nearestRoutePt(const Waypoint& wpt)
 {
-  if(!activeTrack || activeTrack->routes.empty()) return;
-  auto& route = activeTrack->routes.back().pts;
-  if(route.empty()) return;
-  auto wayPtItems = wayptContent->select(".listitem");  //->content->containerNode()->children();
-
+  float dist = FLT_MAX;
+  Waypoint* rtePt = NULL;
   if(activeTrack->routeMode == "direct") {
-    size_t rteidx = 0;
-    for(Widget* item : wayPtItems) {
-      auto it = activeTrack->findWaypoint(item->node->getStringAttr("__sortkey"));
-      if(!it->routed) continue;
-      while(rteidx < route.size()-1 && route[rteidx].lngLat() != it->lngLat()) ++rteidx;
-      TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
-      double alt = it->loc.alt > 0 ? it->loc.alt : route[rteidx].loc.alt;
-      detail->setText(wayptDetailStr(route[rteidx].dist, alt, it->desc).c_str());
-      it->dist = route[rteidx].dist;  // for stats plot
+    for(Waypoint& p : activeTrack->routes.back().pts) {
+      double d = lngLatDist(wpt.lngLat(), p.lngLat());
+      if(d < dist) {
+        dist = d;
+        rtePt = &p;
+      }
     }
-    return;
+    return rtePt;
   }
 
-  double xmin = DBL_MAX, ymin = DBL_MAX, xmax = DBL_MIN, ymax = DBL_MIN;
-  for(const Waypoint& rtept : route) {
-    auto r = MapProjection::lngLatToProjectedMeters(rtept.lngLat());
-    xmin = std::min(xmin, r.x);
-    ymin = std::min(ymin, r.y);
-    xmax = std::max(xmax, r.x);
-    ymax = std::max(ymax, r.y);
-  }
-
-  isect2d::ISect2D<glm::vec2> collider;
-  collider.resize({64, 64}, {xmax-xmin, ymax-ymin});
-  Tangram::ProjectedMeters r0(xmin, ymin);
-  for(const Waypoint& rtept : route) {
-    auto r = MapProjection::lngLatToProjectedMeters(rtept.lngLat()) - r0;
-    isect2d::AABB<glm::vec2> aabb(r.x, r.y, r.x, r.y);
-    aabb.m_userData = (void*)(&rtept);
-    collider.insert(aabb);
-  }
-
-  glm::dvec2 radius{(xmax-xmin)/64, (ymax-ymin)/64};
-  for(Widget* item : wayPtItems) {
-    float dist = FLT_MAX;
-    Waypoint* rtePt = NULL;
-    auto it = activeTrack->findWaypoint(item->node->getStringAttr("__sortkey"));
-    auto r = MapProjection::lngLatToProjectedMeters(it->lngLat()) - r0;
+  auto r = MapProjection::lngLatToProjectedMeters(wpt.lngLat()) - routeOrigin;
+  glm::dvec2 radius = {routeCollider.xpad, routeCollider.ypad};
+  do {
     isect2d::AABB<glm::vec2> aabb(r.x - radius.x, r.y - radius.y, r.x + radius.x, r.y + radius.y);
-    collider.intersect(aabb, [&](auto& a, auto& b) {
+    routeCollider.intersect(aabb, [&](auto& a, auto& b) {
       float d = glm::distance(a.getCentroid(), b.getCentroid());
       if(d < dist) {
         dist = d;
@@ -708,11 +679,48 @@ void MapsTracks::updateDistances()
       }
       return true;
     }, false);
+    radius *= 2;
+  } while(!rtePt && radius.x < routeCollider.res_x && radius.y < routeCollider.res_y);
 
+  return rtePt;
+}
+
+void MapsTracks::updateDistances()
+{
+  if(!activeTrack || activeTrack->routes.empty()) return;
+  auto& route = activeTrack->routes.back().pts;
+  if(route.empty()) return;
+  auto wayPtItems = wayptContent->select(".listitem");  //->content->containerNode()->children();
+
+  if(activeTrack->routeMode != "direct") {
+    double xmin = DBL_MAX, ymin = DBL_MAX, xmax = DBL_MIN, ymax = DBL_MIN;
+    for(const Waypoint& rtept : route) {
+      auto r = MapProjection::lngLatToProjectedMeters(rtept.lngLat());
+      xmin = std::min(xmin, r.x);
+      ymin = std::min(ymin, r.y);
+      xmax = std::max(xmax, r.x);
+      ymax = std::max(ymax, r.y);
+    }
+
+    routeCollider.clear();
+    routeCollider.resize({64, 64}, {xmax-xmin, ymax-ymin});
+    routeOrigin = {xmin, ymin};
+    for(const Waypoint& rtept : route) {
+      auto r = MapProjection::lngLatToProjectedMeters(rtept.lngLat()) - routeOrigin;
+      isect2d::AABB<glm::vec2> aabb(r.x, r.y, r.x, r.y);
+      aabb.m_userData = (void*)(&rtept);
+      routeCollider.insert(aabb);
+    }
+  }
+
+  for(Widget* item : wayPtItems) {
+    auto it = activeTrack->findWaypoint(item->node->getStringAttr("__sortkey"));
+    Waypoint* rtePt = nearestRoutePt(*it);
     if(!rtePt) continue;  // should never happen
     double distm = rtePt->dist + 1000*lngLatDist(rtePt->lngLat(), it->lngLat());
+    double alt = it->loc.alt > 0 ? it->loc.alt : rtePt->loc.alt;
     TextLabel* detail = static_cast<TextLabel*>(item->selectFirst(".detail-text"));
-    detail->setText(wayptDetailStr(distm, it->loc.alt, it->desc).c_str());
+    detail->setText(wayptDetailStr(distm, alt, it->desc).c_str());
     it->dist = rtePt->dist;  // for stats plot
   }
 }
@@ -724,6 +732,7 @@ void MapsTracks::createRoute(GpxFile* track)
   retryBtn->setVisible(false);
   track->routes.clear();
   track->modified = true;
+  plotDirty = true;
   if(track->routeMode == "direct") {
     track->routes.emplace_back();
     for(Waypoint& wp : track->waypoints) {
@@ -752,6 +761,7 @@ void MapsTracks::addRoute(std::vector<Waypoint>&& route)
   activeTrack->routes.emplace_back();
   activeTrack->routes.back().pts = std::move(route);
   activeTrack->modified = true;
+  plotDirty = true;
   updateStats(activeTrack);
   updateDistances();
   updateTrackMarker(activeTrack);
@@ -881,6 +891,17 @@ Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
     auto it0 = insertionWpt.empty() ? activeTrack->waypoints.end() : activeTrack->findWaypoint(insertionWpt);
     if((--it0)->lngLat() == wpt.lngLat())
       return NULL;
+  }
+
+  if(insertWaypt) {
+    Waypoint* rtept = nearestRoutePt(wpt);
+    float mindist = FLT_MAX;
+    for(const Waypoint& p : activeTrack->waypoints) {
+      if(p.routed && p.dist > rtept->dist && p.dist < mindist) {
+        mindist = p.dist;
+        insertionWpt = p.uid;
+      }
+    }
   }
 
   auto it = activeTrack->addWaypoint(wpt, insertionWpt);
@@ -1196,6 +1217,8 @@ void MapsTracks::newRoute(std::string mode)
   navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
   navRoute.title = measure ? "Measurement" : "Navigation";
   navRoute.routeMode = measure ? "direct" : mode;
+  // clear insert waypoint mode for new route
+  if(insertWaypt) { insertWayptBtn->onClicked(); }
   // in some cases, we might want back btn to return to place info panel from measure/navigate; this would,
   //  not work currently if user opened place info from measure/navigate; also could make history too deep!
   app->showPanel(tracksPanel);
@@ -1227,8 +1250,17 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     routeBtnMenu->addItem("Walk", MapsApp::uiIcon("walk"), [=](){ newRoute("walk"); });
     routeBtnMenu->addItem("Cycle", MapsApp::uiIcon("bike"), [=](){ newRoute("bike"); });
     routeBtnMenu->addItem("Drive", MapsApp::uiIcon("car"), [=](){ newRoute("drive"); });
+#if PLATFORM_DESKTOP
     routeBtnMenu->autoClose = true;
     routeBtn->setMenu(routeBtnMenu);
+#endif
+    // autoclose menu doesn't work inside ScrollWidget!
+    SvgGui::setupRightClick(routeBtn, [=](SvgGui* gui, Widget* w, Point p){
+      gui->showMenu(routeBtnMenu);
+      gui->setPressed(routeBtnMenu);
+      routeBtn->node->setXmlClass(
+          addWord(removeWord(routeBtn->node->xmlClass(), "hovered"), "pressed").c_str());
+    });
     tb->addWidget(routeBtn);
 
     Button* measureBtn = createActionbutton(MapsApp::uiIcon("measure"), "Measure", true);
@@ -1667,6 +1699,35 @@ void MapsTracks::createPlotContent()
     updateStats(activeTrack);
   });
 
+  trackPlotOverflow->addItem("Set elevation", MapsApp::uiIcon("mountain"), [this](){
+    if(nElevPending > 0) {
+      MapsApp::messageBox("Set elevation", "Previous task still running, please wait and try again.",
+          {"OK"}, [this](std::string) { nElevPending = 0; });  // prevent getting stuck w/ nElevPending > 0
+      return;
+    }
+    if(origLocs.empty()) { origLocs = activeTrack->activeWay()->pts; }
+    GpxFile* track = activeTrack;
+    GpxWay* way = activeTrack->activeWay();
+    auto& locs = way->pts;
+    size_t nlocs = locs.size();
+    nElevPending = nlocs;
+    for(size_t ptidx = 0; ptidx < nlocs; ++ptidx) {
+      app->getElevation(locs[ptidx].lngLat(), [=](double ele){
+        if(activeTrack != track || track->activeWay() != way || way->pts.size() != nlocs) {
+          LOGW("Set elevation task aborted due to change of track!");
+          --nElevPending;
+          return;
+        }
+        if(!std::isnan(ele)) { way->pts[ptidx].loc.alt = ele; }
+        if(--nElevPending == 0) {
+          plotDirty = true;
+          trackPlot->zoomScale = 1.0;
+          updateStats(activeTrack);
+        }
+      }, true);  // always call callback so nElevPending is updated
+    }
+  });
+
   editTrackTb = createToolbar({cancelPlotEdit, savePlotEdit, createStretch(), cropTrackBtn, deleteSegmentBtn, moreTrackOptionsBtn});
   editTrackTb->setVisible(false);
 
@@ -1834,6 +1895,14 @@ void MapsTracks::createWayptContent()
   };
   tapToAddWayptBtn->setChecked(tapToAddWaypt);
   rteEditOverflow->addItem(tapToAddWayptBtn);
+
+  insertWayptBtn = createCheckBoxMenuItem("Insert waypoint");
+  insertWayptBtn->onClicked = [=](){
+    insertWaypt = !insertWaypt;
+    insertWayptBtn->setChecked(insertWaypt);
+  };
+  insertWayptBtn->setChecked(insertWaypt);
+  rteEditOverflow->addItem(insertWayptBtn);
 
   routeEditTb = createToolbar({ previewDistText, createStretch(),
       retryBtn, mapCenterWayptBtn, searchWayptBtn, bkmkWayptBtn, rteEditOverflowBtn });
