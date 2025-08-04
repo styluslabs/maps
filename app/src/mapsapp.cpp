@@ -722,6 +722,7 @@ void MapsApp::tapEvent(float x, float y)
       if(panelContainer->isVisible())
         return;  // info panel will be closed and pick result cleared
       showPanelContainer(true);
+      map->getPlatform().requestRender();  // when redisplaying panel, no map change to wake event loop, so force
     }
     else {
       //map->markerSetVisible(pickResultMarker, false);  // ???
@@ -737,8 +738,6 @@ void MapsApp::tapEvent(float x, float y)
     if(!result) return;
     mapsTracks->onFeaturePicked(result);
   });
-
-  //map->getPlatform().requestRender();
 }
 
 void MapsApp::hoverEvent(float x, float y)

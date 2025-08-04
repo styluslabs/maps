@@ -1104,15 +1104,15 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       app->map->lngLatToScreenPosition(mappos.longitude, mappos.latitude, &scrpos.x, &scrpos.y);
       app->crossHair->setRoutePreviewOrigin((scrpos - scrcenter)/MapsApp::gui->paintScale);
       double distkm = lngLatDist(mappos, app->getMapCenter());
+      double distm = 1000*distkm;
       std::string mainstr = MapsApp::distKmToStr(distkm);
       // elevation (if available)
-      double jut = 0;
+      double dz = 0, jut = 0;
       if(it->loc.alt != 0) {
         double elev = app->getElevation(app->getMapCenter());
         if(elev != 0) {
-          double dz = elev - it->loc.alt;
+          dz = elev - it->loc.alt;
           mainstr += (dz > 0 ? " | +" : " | ") + MapsApp::elevToStr(dz);
-          double distm = 1000*distkm;
           jut = dz*dz/std::sqrt(distm*distm + dz*dz);
         }
       }
@@ -1126,7 +1126,11 @@ void MapsTracks::onMapEvent(MapEvent_t event)
         else if(bchange < -180) bchange += 360;
         detailstr += fstring(" (%+.1f\u00B0)", bchange);
       }
-      if(jut > 100) {
+      if(dz != 0 && distm > 0) {
+        detailstr += fstring(" | %.1f%%", 100*dz/distm);
+      }
+      // don't show jut for multi-step measurements
+      if(activeTrack->waypoints.size() < 2 && jut > 100) {
         detailstr += " | Jut " + MapsApp::elevToStr(jut);
       }
       previewDistText->setVisible(true);
