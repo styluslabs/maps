@@ -173,3 +173,4 @@ Dialog* createInputDialog(std::initializer_list<Widget*> widgets, const char* ti
     const char* acceptLabel, std::function<void()> onAccept, std::function<void()> onCancel = {});
 class ScrollWidget;
 ScrollWidget* createScrollWidget(Widget* contents, real minHeight = 120, real maxHeight = -160);
+void setupLongPressMenu(Widget* btn, Menu* menu);

@@ -146,7 +146,7 @@ private:
   bool showAllWaypts = false;
   bool archiveLoaded = false;
   bool tapToAddWaypt = false;
-  bool insertWaypt = false;
+  bool autoInsertWaypt = false;
   bool replaceWaypt = false;  // replacing waypt from search or bookmarks
   bool stealPickResult = false;  // adding waypt from search or bookmarks
   std::unique_ptr<SelectDialog> selectTrackDialog;

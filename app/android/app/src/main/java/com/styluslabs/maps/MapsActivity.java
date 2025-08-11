@@ -249,6 +249,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     // looks like you may need to use Play Services (or LocationManagerCompat?) for fused location prior to API 31 (Android 12)
     // - see https://developer.android.com/training/location/request-updates
     if(canGetLocation()) {
+      Location lastLocation;
       // requesting updates from just fused provider doesn't turn on GPS!
       // min GPS dt = 0 (ms), dr = 1 (meters)
       try {  // looks like requestLocationUpdates() might throw on some devices if location disabled
@@ -256,12 +257,17 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         //locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 1, this);
         if(locationManager.getProvider("fused") != null) {
           locationManager.requestLocationUpdates("fused", 0, 1, this);
-          onLocationChanged(locationManager.getLastKnownLocation("fused"));
+          lastLocation = locationManager.getLastKnownLocation("fused");
         }
         else
-          onLocationChanged(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER));
-        if(mGnssStatusCallback != null)
+          lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        onLocationChanged(lastLocation);
+        if(mGnssStatusCallback != null) {
+          // no way to get GnssStatus on demand, so clear status if last location is too old or inaccurate
+          if(lastLocation.getElapsedRealtimeAgeMillis() > 10000 || lastLocation.getAccuracy() > 100)
+            MapsLib.updateGpsStatus(0, 0);
           locationManager.registerGnssStatusCallback(mGnssStatusCallback);  //catch (SecurityException e)
+        }
         else {
           onGpsStatusChanged(0);
           locationManager.addGpsStatusListener(this);  //catch (SecurityException e)

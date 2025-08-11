@@ -37,6 +37,15 @@ Button* createActionbutton(const SvgNode* icon, const char* title, bool showTitl
   return widget;
 }
 
+void setupLongPressMenu(Widget* btn, Menu* menu)
+{
+  SvgGui::setupRightClick(btn, [=](SvgGui* gui, Widget* w, Point p){
+    gui->showMenu(menu);
+    gui->setPressed(menu);
+    btn->node->setXmlClass(addWord(removeWord(btn->node->xmlClass(), "hovered"), "pressed").c_str());
+  });
+}
+
 ScrollWidget* createScrollWidget(Widget* contents, real minHeight, real maxHeight)  //real minw, real maxw
 {
   auto scrollWidget = new ScrollWidget(new SvgDocument(), contents);

@@ -1820,12 +1820,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   };
 
   recenterBtn->addWidget(recenterMenu);
-  SvgGui::setupRightClick(recenterBtn, [=](SvgGui* gui, Widget* w, Point p){
-    gui->showMenu(recenterMenu);  //gui->showContextMenu(recenterMenu, p, w);
-    gui->setPressed(recenterMenu);
-    recenterBtn->node->setXmlClass(
-        addWord(removeWord(recenterBtn->node->xmlClass(), "hovered"), "pressed").c_str());
-  });
+  setupLongPressMenu(recenterBtn, recenterMenu);
 
   // GPS status button (show satellite status when searching for position)
 

@@ -866,14 +866,16 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   overflowMenu->addItem("Add waypoints before", [=](){
     if(track != activeTrack)
       populateTrack(track);
+    if(autoInsertWaypt) { insertWayptBtn->onClicked(); }
     insertionWpt = uid;
   });
 
   overflowMenu->addItem("Add waypoints after", [=](){
     if(track != activeTrack)
       populateTrack(track);
+    if(autoInsertWaypt) { insertWayptBtn->onClicked(); }
     auto it = track->findWaypoint(uid);
-    if(it != track->waypoints.end()) ++it;
+    if(it != track->waypoints.end()) { ++it; }
     insertionWpt = it != track->waypoints.end() ? it->uid : "";
   });
 
@@ -889,11 +891,11 @@ Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
   // prevent insertion of duplicate waypoint
   if(!activeTrack->waypoints.empty()) {
     auto it0 = insertionWpt.empty() ? activeTrack->waypoints.end() : activeTrack->findWaypoint(insertionWpt);
-    if((--it0)->lngLat() == wpt.lngLat())
-      return NULL;
+    if(it0 != activeTrack->waypoints.end() && it0->lngLat() == wpt.lngLat()) { return NULL; }
+    if(it0 != activeTrack->waypoints.begin() && (--it0)->lngLat() == wpt.lngLat()) { return NULL; }
   }
 
-  if(insertWaypt) {
+  if(autoInsertWaypt) {
     Waypoint* rtept = nearestRoutePt(wpt);
     float mindist = FLT_MAX;
     for(const Waypoint& p : activeTrack->waypoints) {
@@ -1222,7 +1224,7 @@ void MapsTracks::newRoute(std::string mode)
   navRoute.title = measure ? "Measurement" : "Navigation";
   navRoute.routeMode = measure ? "direct" : mode;
   // clear insert waypoint mode for new route
-  if(insertWaypt) { insertWayptBtn->onClicked(); }
+  if(autoInsertWaypt) { insertWayptBtn->onClicked(); }
   // in some cases, we might want back btn to return to place info panel from measure/navigate; this would,
   //  not work currently if user opened place info from measure/navigate; also could make history too deep!
   app->showPanel(tracksPanel);
@@ -1245,6 +1247,28 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       if(wpt)
         setPlaceInfoSection(activeTrack, *wpt);
     };
+
+    Menu* addWptMenu = createMenu(Menu::VERT, false);
+    addWptMenu->addItem("Prepend", [=](){
+      auto prev = std::exchange(insertionWpt, activeTrack->waypoints.front().uid);
+      addWptBtn->onClicked();
+      insertionWpt = prev;
+    });
+    addWptMenu->addItem("Auto insert", [=](){
+      auto prev = std::exchange(autoInsertWaypt, true);
+      addWptBtn->onClicked();
+      autoInsertWaypt = prev;
+    });
+    addWptMenu->addItem("Append", [=](){
+      auto prev = std::exchange(insertionWpt, "");
+      addWptBtn->onClicked();
+      insertionWpt = prev;
+    });
+#if PLATFORM_DESKTOP  // autoclose menu doesn't work w/ touch inside ScrollWidget!
+    addWptMenu->autoClose = true;
+    addWptBtn->setMenu(addWptMenu);
+#endif
+    setupLongPressMenu(addWptBtn, addWptMenu);
     tb->addWidget(addWptBtn);
   }
   else {
@@ -1254,17 +1278,11 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     routeBtnMenu->addItem("Walk", MapsApp::uiIcon("walk"), [=](){ newRoute("walk"); });
     routeBtnMenu->addItem("Cycle", MapsApp::uiIcon("bike"), [=](){ newRoute("bike"); });
     routeBtnMenu->addItem("Drive", MapsApp::uiIcon("car"), [=](){ newRoute("drive"); });
-#if PLATFORM_DESKTOP
+#if PLATFORM_DESKTOP  // autoclose menu doesn't work w/ touch inside ScrollWidget!
     routeBtnMenu->autoClose = true;
     routeBtn->setMenu(routeBtnMenu);
 #endif
-    // autoclose menu doesn't work inside ScrollWidget!
-    SvgGui::setupRightClick(routeBtn, [=](SvgGui* gui, Widget* w, Point p){
-      gui->showMenu(routeBtnMenu);
-      gui->setPressed(routeBtnMenu);
-      routeBtn->node->setXmlClass(
-          addWord(removeWord(routeBtn->node->xmlClass(), "hovered"), "pressed").c_str());
-    });
+    setupLongPressMenu(routeBtn, routeBtnMenu);
     tb->addWidget(routeBtn);
 
     Button* measureBtn = createActionbutton(MapsApp::uiIcon("measure"), "Measure", true);
@@ -1900,12 +1918,13 @@ void MapsTracks::createWayptContent()
   tapToAddWayptBtn->setChecked(tapToAddWaypt);
   rteEditOverflow->addItem(tapToAddWayptBtn);
 
-  insertWayptBtn = createCheckBoxMenuItem("Insert waypoint");
+  insertWayptBtn = createCheckBoxMenuItem("Auto insert waypoint");
   insertWayptBtn->onClicked = [=](){
-    insertWaypt = !insertWaypt;
-    insertWayptBtn->setChecked(insertWaypt);
+    autoInsertWaypt = !autoInsertWaypt;
+    insertWayptBtn->setChecked(autoInsertWaypt);
+    if(autoInsertWaypt) { insertionWpt.clear(); }
   };
-  insertWayptBtn->setChecked(insertWaypt);
+  insertWayptBtn->setChecked(autoInsertWaypt);
   rteEditOverflow->addItem(insertWayptBtn);
 
   routeEditTb = createToolbar({ previewDistText, createStretch(),
