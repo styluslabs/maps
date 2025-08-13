@@ -840,7 +840,9 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
   noteText->setText(wpt.desc.c_str());
   noteText->setText(SvgPainter::breakText(static_cast<SvgText*>(noteText->node), app->getPanelWidth() - 20).c_str());
 
-  Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), track->title.c_str(), true);
+  Button* chooseListBtn = createListItem(MapsApp::uiIcon("waypoint"), track->title.c_str());
+  chooseListBtn->selectFirst(".listitem-separator")->setVisible(false);
+  //Button* chooseListBtn = createToolbutton(MapsApp::uiIcon("waypoint"), track->title.c_str(), true);
   Button* removeBtn = createToolbutton(MapsApp::uiIcon("discard"), "Delete");
   Button* addNoteBtn = createToolbutton(MapsApp::uiIcon("edit"), "Edit");
 
@@ -879,7 +881,7 @@ void MapsTracks::setPlaceInfoSection(GpxFile* track, const Waypoint& wpt)
     insertionWpt = it != track->waypoints.end() ? it->uid : "";
   });
 
-  Widget* toolRow = createRow({chooseListBtn, createStretch(), removeBtn, addNoteBtn, overflowBtn});
+  Widget* toolRow = createRow({chooseListBtn, removeBtn, addNoteBtn, overflowBtn});
   Widget* section = createColumn({toolRow, noteText}, "", "", "hfill");
   Widget* container = app->infoContent->selectFirst(".waypt-section");
   container->addWidget(section);
@@ -1264,10 +1266,10 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       addWptBtn->onClicked();
       insertionWpt = prev;
     });
-#if PLATFORM_DESKTOP  // autoclose menu doesn't work w/ touch inside ScrollWidget!
-    addWptMenu->autoClose = true;
-    addWptBtn->setMenu(addWptMenu);
-#endif
+//#if PLATFORM_DESKTOP  // autoclose menu doesn't work w/ touch inside ScrollWidget!
+//    addWptMenu->autoClose = true;
+//    addWptBtn->setMenu(addWptMenu);
+//#endif
     setupLongPressMenu(addWptBtn, addWptMenu);
     tb->addWidget(addWptBtn);
   }
@@ -1278,10 +1280,10 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
     routeBtnMenu->addItem("Walk", MapsApp::uiIcon("walk"), [=](){ newRoute("walk"); });
     routeBtnMenu->addItem("Cycle", MapsApp::uiIcon("bike"), [=](){ newRoute("bike"); });
     routeBtnMenu->addItem("Drive", MapsApp::uiIcon("car"), [=](){ newRoute("drive"); });
-#if PLATFORM_DESKTOP  // autoclose menu doesn't work w/ touch inside ScrollWidget!
-    routeBtnMenu->autoClose = true;
-    routeBtn->setMenu(routeBtnMenu);
-#endif
+//#if PLATFORM_DESKTOP  // autoclose menu doesn't work w/ touch inside ScrollWidget!
+//    routeBtnMenu->autoClose = true;
+//    routeBtn->setMenu(routeBtnMenu);
+//#endif
     setupLongPressMenu(routeBtn, routeBtnMenu);
     tb->addWidget(routeBtn);
 

@@ -39,6 +39,7 @@ Button* createActionbutton(const SvgNode* icon, const char* title, bool showTitl
 
 void setupLongPressMenu(Widget* btn, Menu* menu)
 {
+  if(!menu->parent()) { btn->addWidget(menu); }
   SvgGui::setupRightClick(btn, [=](SvgGui* gui, Widget* w, Point p){
     gui->showMenu(menu);
     gui->setPressed(menu);
