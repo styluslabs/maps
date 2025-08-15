@@ -548,9 +548,9 @@ layers:
     landuse_misc:
         data: { source: osm, layer: landuse }
         glacier:
-            # show glacier outline for 3d (since we want to still show name)
+            # show glacier outline for 3d (since we want to still show name); too busy at low zooms
             enabled: global.show_polygons
-            filter: { natural: glacier, none: [ global.show_land_polygons ] }
+            filter: { natural: glacier, $zoom: { min: 10 }, none: [ global.show_land_polygons ] }
             draw:
                 lines:
                     style: dashed-border
