@@ -241,6 +241,7 @@ global:
         road_secondary: 40
         motorway_name: 45  # shield generally more important than name for motorway
         road_tertiary: 50
+        road_residential: 55
         road_minor: 60
         route_minor: 65
         zoomed_ref: 70
@@ -513,7 +514,7 @@ layers:
 
     protected_area:
         data: { source: osm, layer: landuse }
-        enabled: global.show_polygons
+        #enabled: global.show_polygons
         filter:
             - { boundary: national_park, $zoom: { min: 8 } }
             - { protect_class: ['1', '1a', '1b', '2', '3', '5'], $zoom: { min: 10 } }  #boundary: protected_area,
@@ -1042,7 +1043,7 @@ layers:
                 font:
                     family: global.primary_font
                     fill: global.color.road_name
-                    stroke: { color: global.color.road_halo, width: 2 }
+                    stroke: { color: global.color.road_halo, width: 4 }
                     # 0px to hide by default
                     size: 0px
 
@@ -1070,9 +1071,7 @@ layers:
                     repeat_distance: 100px
                     repeat_group: roads
                     priority: global.priority.road_primary
-                    font:
-                        size: 14px
-                        stroke: { width: 4 }
+                    font: { size: 14px }
 
         secondary:
             exclusive: true
@@ -1082,9 +1081,7 @@ layers:
                     repeat_distance: 100px
                     repeat_group: roads
                     priority: global.priority.road_secondary
-                    font:
-                        size: 14px
-                        stroke: { width: 4 }
+                    font: { size: 13px }
 
         tertiary:
             exclusive: true
@@ -1092,19 +1089,23 @@ layers:
             draw:
                 text:
                     priority: global.priority.road_tertiary
-                    font:
-                        size: 12px
-                        stroke: { width: 4 }
+                    font: { size: 12px }
+
+        residential:
+            exclusive: true
+            filter: { highway: residential, $zoom: { min: 15 } }
+            draw:
+                text:
+                    priority: global.priority.road_residential
+                    font: { size: 11px }
 
         minor:
             exclusive: true
-            filter: { highway: [unclassified, residential, road, living_street, service], $zoom: { min: 16 } }
+            filter: { highway: [unclassified, road, living_street, service], $zoom: { min: 16 } }
             draw:
                 text:
                     priority: global.priority.road_minor
-                    font:
-                        size: 10px
-                        stroke: { width: 4 }
+                    font: { size: 10px }
 
         paths:
             exclusive: true
@@ -1112,9 +1113,7 @@ layers:
             draw:
                 text:
                     priority: global.priority.road_minor
-                    font:
-                        size: 10px
-                        stroke: { width: 4 }
+                    font: { size: 10px }
 
         tracks:
             exclusive: true
@@ -1122,9 +1121,7 @@ layers:
             draw:
                 text:
                     priority: global.priority.road_minor
-                    font:
-                        size: 10px
-                        stroke: { width: 4 }
+                    font: { size: 10px }
 
         aerialway:
             exclusive: true
@@ -1151,7 +1148,7 @@ layers:
                         font:
                             size: 10px
                             fill: global.color.ferry_name
-                            stroke: { color: global.color.ferry_halo, width: 4px }
+                            stroke: { color: global.color.ferry_halo }
                             style: italic
 
             piste:
@@ -1180,7 +1177,6 @@ layers:
                         font:
                             fill: global.color.bike_path
                             size: 10px
-                            stroke: { width: 4 }
 
 
     airports:
