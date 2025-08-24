@@ -9,7 +9,8 @@ function nasaWorldView()
 
   const updates = {
     "global.worldview_date": date,
-    "application.gui_variables.worldview_date": { "label": "Date", "type": "date", "onchange": "nasaWorldView" },
+    "application.gui_variables.worldview_date":
+        { "label": "Date", "type": "date", "onchange": "nasaWorldView", "reload": "false" },  // addMapSource will trigger reload
     "application.dark_base_map": true
   };
   const mapSrc = {

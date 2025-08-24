@@ -188,9 +188,10 @@ void MapsSources::addSource(const std::string& key, YAML::Node srcnode)
   sourcesDirty = true;
   if(sourcesPanel && sourcesPanel->isVisible())
     populateSources();
-  else if(sourceEditPanel && sourceEditPanel->isVisible() && key == currSource)
-    populateSourceEdit(key);
-  //for(auto& k : layerkeys) -- TODO: if modified layer is in use, reload
+  //else if(sourceEditPanel && sourceEditPanel->isVisible() && key == currSource)
+  //  populateSourceEdit(key);
+  if(key == currSource || isLayerShown(key, {}))
+    rebuildSource(currSource);
 }
 
 void MapsSources::saveSources()
