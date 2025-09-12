@@ -910,6 +910,7 @@ int main(int argc, char* argv[])
       LOGE("Unknown command line argument: %s", argv[argi]);
   }
 
+  XInitThreads();  // seems this might be required due to glXMakeCurrent for offscreen worker
   // window setup
   Display* xDpy = XOpenDisplay(0);
   xContext.dpy = xDpy;
@@ -918,15 +919,20 @@ int main(int argc, char* argv[])
 
   Screen* scrInfo = DefaultScreenOfDisplay(xDpy);
   float inches = scrInfo->mwidth/25.4;
-  float dpi = inches > 2 && inches < 24 ? scrInfo->width/inches : scrInfo->width/11.2f;
+  float dpi = inches > 2 && inches < 240 ? scrInfo->width/inches : scrInfo->width/11.2f;
+  if(inches > 15) { dpi *= 1.5; }  // desktop screen
 
-  struct { int x,y,w,h; } winRect = { 0, 0, scrInfo->width/2, int(0.9f*scrInfo->height) };
+  XSizeHints winSize = {};
+  winSize.flags = PPosition | PSize;
+  winSize.x = 0; winSize.y = 0;
+  winSize.width = scrInfo->width/2;
+  winSize.height = int(0.9f*scrInfo->height);
   const YAML::Node& posYaml = MapsApp::cfg()["ui"]["position"];
   if(posYaml.size() == 4) {
-    winRect.x = posYaml[0].as<int>(0);
-    winRect.y = posYaml[1].as<int>(0);
-    winRect.w = posYaml[2].as<int>(winRect.w);
-    winRect.h = posYaml[3].as<int>(winRect.h);
+    winSize.x = posYaml[0].as<int>(0);
+    winSize.y = posYaml[1].as<int>(0);
+    winSize.width = posYaml[2].as<int>(winSize.width);
+    winSize.height = posYaml[3].as<int>(winSize.height);
   }
 
   if(!glXQueryExtension(xDpy, NULL, NULL)) { LOGE("glXQueryExtension() failed."); return -1; }
@@ -944,10 +950,11 @@ int main(int argc, char* argv[])
                            EnterWindowMask | LeaveWindowMask | ButtonPressMask |
                            ButtonReleaseMask | PointerMotionMask | FocusChangeMask |
                            PropertyChangeMask | KeymapStateMask;
-  Window xWin = XCreateWindow(xDpy, rootWin, winRect.x, winRect.y, winRect.w, winRect.h, 0,
+  Window xWin = XCreateWindow(xDpy, rootWin, 0, 0, winSize.width, winSize.height, 0,
       xVisual->depth, InputOutput, xVisual->visual, CWBackPixel | CWEventMask | CWColormap, &winSetAttrs);
   xContext.win = xWin;
-  XStoreName(xDpy, xWin, "Ascend Maps");
+  //XStoreName(xDpy, xWin, "Ascend Maps");
+  XSetStandardProperties(xDpy, xWin, "Ascend", "Ascend", None, NULL, 0, &winSize);
   XMapWindow(xDpy, xWin);
 
   WMAtoms.WM_PROTOCOLS = XInternAtom(xDpy, "WM_PROTOCOLS", False);
@@ -996,7 +1003,7 @@ int main(int argc, char* argv[])
   if(NFD_Init() != NFD_OKAY)
     LOGE("NFD_Init error: %s", NFD_GetError());
 
-  // XGetWindowAttributes is slow, so don't cal every frame
+  // XGetWindowAttributes is slow, so don't call every frame
   XWindowAttributes winAttrs;
   XGetWindowAttributes(xDpy, xWin, &winAttrs);
   xContext.width = winAttrs.width;

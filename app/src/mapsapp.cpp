@@ -2311,6 +2311,7 @@ void MapsApp::saveConfig()
 
 void MapsApp::setDpi(float dpi)
 {
+  dpi = std::max(150.0f, std::min(dpi, 600.0f));  // scaling < 1 gives poor quality
   float ui_scale = cfg()["ui"]["ui_scale"].as<float>(1.0f);
   gui->paintScale = ui_scale*dpi/150.0;
   gui->inputScale = 1/gui->paintScale;
