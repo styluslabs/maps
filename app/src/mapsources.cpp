@@ -252,7 +252,7 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
     else {
       const auto& src = mapSources.at(srcname);
       if(!src) return;
-      if(src["layers"]) {  //&& !src["layer"].as<bool>(false)) {
+      if(src["layers"] && !src["scene"]) {  //&& !src["layer"].as<bool>(false)) {
         for(const auto& layer : src["layers"])
           currLayers.push_back({getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f});
         for(const auto& update : src["updates"].pairs())

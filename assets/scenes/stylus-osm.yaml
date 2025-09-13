@@ -1441,6 +1441,7 @@ layers:
                                 const ele = global.metric_units ? feature.ele : feature.ele*3.2808399;
                                 if(!name) { return ele.toFixed(0); }
                                 if(name.slice(-9) == " Mountain") { name = name.slice(0, -9) + " Mt."; }
+                                else if(name.slice(0, 6) == "Mount ") { name = "Mt. " + name.slice(6); }
                                 if(name.length > 18) { name = name.substring(0, 17) + "…"; }
                                 return name + "\n" + ele.toFixed(0);
                             }
