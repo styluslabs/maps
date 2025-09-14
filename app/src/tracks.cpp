@@ -39,6 +39,7 @@ void MapsTracks::updateLocation(const Location& loc)
     if(dt <= 0) return;
     // update speed even if point is rejected
     double a = std::exp(-dt*speedInvTau);
+    // GPS speed can be more accurate than dist/time due to e.g. doppler measurements of GPS signal
     double spd = std::isnan(loc.spd) ? dist/dt : loc.spd;
     currSpeed = a*currSpeed + (1-a)*spd;
     // note MapsApp::updateLocation() has already filtered out points w/ poserr increased too much vs. prev
@@ -482,6 +483,23 @@ void MapsTracks::setStatsText(const char* selector, std::string str)
   static_cast<SvgTspan*>(widget->node->selectFirst(".stat-value-tspan"))->setText(value);
 }
 
+static double calcCurrSlope(const std::vector<Waypoint>& locs, int nsteps = 101, double step = 1)
+{
+  if(locs.size() < 2) { return 0; }
+  double d_target = locs.back().dist;
+  size_t jj = locs.size() - 2;
+  double result = 0;
+  for(int kk = 0; kk < nsteps; ++kk) {
+    while(jj > 0 && locs[jj].dist > d_target) { --jj; }
+    double t = std::max(0.0, d_target - locs[jj].dist)/(locs[jj+1].dist - locs[jj].dist);
+    double z_val = locs[jj].loc.alt + t*(locs[jj+1].loc.alt - locs[jj].loc.alt);
+    result += ((nsteps - 1)/2 - kk) * z_val;
+    d_target -= step;
+  }
+  double n = nsteps;
+  return result/(step * n*(n*n - 1)/12);
+}
+
 void MapsTracks::updateStats(GpxFile* track)
 {
   static const char* notime = u8"\u2014";  // emdash
@@ -495,7 +513,7 @@ void MapsTracks::updateStats(GpxFile* track)
 
   double movingTime = isTrack ? 0 : totalTime;
   double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0;
-  double estSpeed = 0, maxSpeed = 0, currSlope = 0, movingTimeGps = 0, rawDist = 0, movingDist = 0;  //currSpeed = 0,
+  double estSpeed = 0, maxSpeed = 0, currSlope = 0, movingTimeGps = 0, rawDist = 0, movingDist = 0;
   size_t prevDistLoc = 0, prevVertLoc = 0;
   if(!locs.empty()) locs.front().dist = 0;
   for(size_t ii = 1; ii < locs.size(); ++ii) {
@@ -552,8 +570,6 @@ void MapsTracks::updateStats(GpxFile* track)
   }
 
   if(!locs.empty()) {
-    // docs say this can be more accurate than dist/time due to e.g. doppler measurements of GPS signal
-    //currSpeed = locs.back().loc.spd;
     for(size_t ii = locs.size() - 1; ii-- > 0;) {
       if(locs.back().dist - locs[ii].dist > 10 && (locs.back().loc.time - locs[ii].loc.time > 10
           || std::abs(locs.back().loc.alt - locs[ii].loc.alt) > 10)) {
@@ -561,6 +577,9 @@ void MapsTracks::updateStats(GpxFile* track)
         break;
       }
     }
+
+    currSlope = calcCurrSlope(locs);
+
   }
 
   liveStatsRow->setVisible(isRecording);
