@@ -9,6 +9,7 @@
 #include "util/elevationManager.h"
 #include "util.h"
 #include "nfd.h"
+#include "stb_image.h"
 #include "stb_image_write.h"  // for screenshots
 
 #include "mapsources.h"
@@ -861,6 +862,20 @@ static void initBaseDir(const char* exepath)
   MapsApp::baseDir = xdgcfg.path;
 }
 
+static void setWinIcon(Display* xDpy, Window xWin, const char* iconpath)
+{
+  int width = 0, height = 0, nchannels = 0;
+  uint32_t* pixels = (uint32_t*)stbi_load(iconpath, &width, &height, &nchannels, 4);
+  if(!pixels) { PLATFORM_LOG("Error loading icon file %s\n", iconpath); return; }
+  std::vector<unsigned long> netWmIcon(width * height + 2);
+  netWmIcon[0] = width;
+  netWmIcon[1] = height;
+  for(int ii = 0; ii < width * height; ++ii) { netWmIcon[ii+2] = Color::swapRB(pixels[ii]); }
+  stbi_image_free(pixels);
+  XChangeProperty(xDpy, xWin, XInternAtom(xDpy, "_NET_WM_ICON", False), XInternAtom(xDpy, "CARDINAL", False),
+      32, PropModeReplace, (unsigned char *)netWmIcon.data(), netWmIcon.size());
+}
+
 // Refs:
 // - https://hereket.com/posts/x11_window_with_shaders/
 // - https://www.khronos.org/opengl/wiki/Tutorial:_OpenGL_3.0_Context_Creation_(GLX)
@@ -918,9 +933,9 @@ int main(int argc, char* argv[])
   Window rootWin = XDefaultRootWindow(xDpy);
 
   Screen* scrInfo = DefaultScreenOfDisplay(xDpy);
-  float inches = scrInfo->mwidth/25.4;
-  float dpi = inches > 2 && inches < 240 ? scrInfo->width/inches : scrInfo->width/11.2f;
-  if(inches > 15) { dpi *= 1.5; }  // desktop screen
+  //float inches = scrInfo->mwidth/25.4;
+  //float dpi = inches > 2 && inches < 240 ? scrInfo->width/inches : scrInfo->width/11.2f;
+  float dpi = scrInfo->width/12.0f;  // ignore physical size of screen - larger screen is typically further away
 
   XSizeHints winSize = {};
   winSize.flags = PPosition | PSize;
@@ -954,7 +969,8 @@ int main(int argc, char* argv[])
       xVisual->depth, InputOutput, xVisual->visual, CWBackPixel | CWEventMask | CWColormap, &winSetAttrs);
   xContext.win = xWin;
   //XStoreName(xDpy, xWin, "Ascend Maps");
-  XSetStandardProperties(xDpy, xWin, "Ascend", "Ascend", None, NULL, 0, &winSize);
+  XSetStandardProperties(xDpy, xWin, "Ascend Maps", "Ascend Maps", None, NULL, 0, &winSize);
+  setWinIcon(xDpy, xWin, FSPath(MapsApp::baseDir, "shared/icons/app144x144.png").c_str());
   XMapWindow(xDpy, xWin);
 
   WMAtoms.WM_PROTOCOLS = XInternAtom(xDpy, "WM_PROTOCOLS", False);
