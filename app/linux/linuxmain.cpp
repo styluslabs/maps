@@ -862,6 +862,8 @@ static void initBaseDir(const char* exepath)
   MapsApp::baseDir = xdgcfg.path;
 }
 
+// If WM_CLASS is set correctly, launcher icon specified in .desktop file will be used (as desired)
+/*
 static void setWinIcon(Display* xDpy, Window xWin, const char* iconpath)
 {
   int width = 0, height = 0, nchannels = 0;
@@ -875,6 +877,7 @@ static void setWinIcon(Display* xDpy, Window xWin, const char* iconpath)
   XChangeProperty(xDpy, xWin, XInternAtom(xDpy, "_NET_WM_ICON", False), XInternAtom(xDpy, "CARDINAL", False),
       32, PropModeReplace, (unsigned char *)netWmIcon.data(), netWmIcon.size());
 }
+*/
 
 // Refs:
 // - https://hereket.com/posts/x11_window_with_shaders/
@@ -968,9 +971,27 @@ int main(int argc, char* argv[])
   Window xWin = XCreateWindow(xDpy, rootWin, 0, 0, winSize.width, winSize.height, 0,
       xVisual->depth, InputOutput, xVisual->visual, CWBackPixel | CWEventMask | CWColormap, &winSetAttrs);
   xContext.win = xWin;
+
+  // set WM_CLASS so window is associated with correct launcher icon
+  const char* res_name = "Ascend";
+  const char* res_class = "Ascend";
+  XClassHint classHint;
+  classHint.res_name = (char*)res_name;  // don't cast string directly to avoid warning
+  classHint.res_class = (char*)res_class;
+  XSetClassHint(xDpy, xWin, &classHint);
+
+  // set _NET_WM_PID and _NET_WM_WINDOW_TYPE
+  pid_t pid = getpid();
+  XChangeProperty(xDpy, xWin, XInternAtom(xDpy, "_NET_WM_PID", False),
+      XInternAtom(xDpy, "CARDINAL", False), 32, PropModeReplace, (unsigned char *)&pid, 1);
+  Atom NET_WM_WINDOW_TYPE_NORMAL = XInternAtom(xDpy, "_NET_WM_WINDOW_TYPE_NORMAL", False);
+  XChangeProperty(xDpy, xWin, XInternAtom(xDpy, "_NET_WM_WINDOW_TYPE", False),
+      XA_ATOM, 32, PropModeReplace, (unsigned char *)&NET_WM_WINDOW_TYPE_NORMAL, 1);
+
+  // set WM_NAME (window title)
   //XStoreName(xDpy, xWin, "Ascend Maps");
   XSetStandardProperties(xDpy, xWin, "Ascend Maps", "Ascend Maps", None, NULL, 0, &winSize);
-  setWinIcon(xDpy, xWin, FSPath(MapsApp::baseDir, "shared/icons/app144x144.png").c_str());
+  //setWinIcon(xDpy, xWin, FSPath(MapsApp::baseDir, "shared/icons/app144x144.png").c_str());
   XMapWindow(xDpy, xWin);
 
   WMAtoms.WM_PROTOCOLS = XInternAtom(xDpy, "WM_PROTOCOLS", False);
