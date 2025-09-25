@@ -36,6 +36,14 @@ android {
     buildConfig true
   }
 
+  // newer android versions can use uncompressed jni lib inside zip without extracting it, but
+  //  stick with old behavior for now for smaller APK
+  packagingOptions {
+    jniLibs {
+      useLegacyPackaging true
+    }
+  }
+
   lint {
     abortOnError false
     fatal 'NewApi'
