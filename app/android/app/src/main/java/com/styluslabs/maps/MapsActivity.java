@@ -20,6 +20,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.net.Uri;
 import android.util.Log;
 import android.text.Editable;
@@ -264,7 +265,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         onLocationChanged(lastLocation);
         if(mGnssStatusCallback != null) {
           // no way to get GnssStatus on demand, so clear status if last location is too old or inaccurate
-          if(lastLocation.getElapsedRealtimeAgeMillis() > 10000 || lastLocation.getAccuracy() > 100)
+          double age = (SystemClock.elapsedRealtimeNanos() - lastLocation.getElapsedRealtimeNanos())/1.0E9;
+          if(age > 10 || lastLocation.getAccuracy() > 100)
             MapsLib.updateGpsStatus(0, 0);
           locationManager.registerGnssStatusCallback(mGnssStatusCallback);  //catch (SecurityException e)
         }
@@ -373,7 +375,6 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public static void updateLocation(Location loc)
   {
-    //Log.v("Tangram", loc.toString());
     double lat = loc.getLatitude();  // degrees
     double lng = loc.getLongitude();  // degrees
     float poserr = loc.getAccuracy();  // accuracy in meters
@@ -392,6 +393,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public void onLocationChanged(Location loc)
   {
     if(loc == null) return;  // getLastKnownLocation() can return null
+    //Log.v("Tangram", loc.toString());
     if(hasGpsFix && loc.getProvider().equals("fused")) return;
     // for correcting orientation - convert degrees to radians
     mDeclination = new GeomagneticField((float)loc.getLatitude(), (float)loc.getLongitude(),

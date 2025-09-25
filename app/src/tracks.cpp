@@ -483,6 +483,7 @@ void MapsTracks::setStatsText(const char* selector, std::string str)
   static_cast<SvgTspan*>(widget->node->selectFirst(".stat-value-tspan"))->setText(value);
 }
 
+// deriv from 2nd order Savitky-Golay smoothing
 static double calcCurrSlope(const std::vector<Waypoint>& locs, int nsteps = 101, double step = 1)
 {
   if(locs.size() < 2) { return 0; }
@@ -491,7 +492,8 @@ static double calcCurrSlope(const std::vector<Waypoint>& locs, int nsteps = 101,
   double result = 0;
   for(int kk = 0; kk < nsteps; ++kk) {
     while(jj > 0 && locs[jj].dist > d_target) { --jj; }
-    double t = std::max(0.0, d_target - locs[jj].dist)/(locs[jj+1].dist - locs[jj].dist);
+    double t = (d_target - locs[jj].dist)/(locs[jj+1].dist - locs[jj].dist);
+    if(!(t >= 0)) { t = 0; }  // handle t < 0 and NaN
     double z_val = locs[jj].loc.alt + t*(locs[jj+1].loc.alt - locs[jj].loc.alt);
     result += ((nsteps - 1)/2 - kk) * z_val;
     d_target -= step;
@@ -569,18 +571,16 @@ void MapsTracks::updateStats(GpxFile* track)
     }
   }
 
-  if(!locs.empty()) {
-    for(size_t ii = locs.size() - 1; ii-- > 0;) {
-      if(locs.back().dist - locs[ii].dist > 10 && (locs.back().loc.time - locs[ii].loc.time > 10
-          || std::abs(locs.back().loc.alt - locs[ii].loc.alt) > 10)) {
-        currSlope = (locs.back().loc.alt - locs[ii].loc.alt)/(locs.back().dist - locs[ii].dist);
-        break;
-      }
-    }
-
-    currSlope = calcCurrSlope(locs);
-
-  }
+  //if(!locs.empty()) {
+  //  for(size_t ii = locs.size() - 1; ii-- > 0;) {
+  //    if(locs.back().dist - locs[ii].dist > 10 && (locs.back().loc.time - locs[ii].loc.time > 10
+  //        || std::abs(locs.back().loc.alt - locs[ii].loc.alt) > 10)) {
+  //      currSlope = (locs.back().loc.alt - locs[ii].loc.alt)/(locs.back().dist - locs[ii].dist);
+  //      break;
+  //    }
+  //  }
+  //}
+  currSlope = calcCurrSlope(locs);
 
   liveStatsRow->setVisible(isRecording);
   nonliveStatsRow->setVisible(!isRecording);
