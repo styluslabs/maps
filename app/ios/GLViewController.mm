@@ -417,8 +417,15 @@ void iosPlatform_openURL(const char* url)
 
 void iosPlatform_excludeFromBackup(const char* url)
 {
-  NSURL* nsurl = [NSURL URLWithString:@(url)];
-  [nsurl setResourceValue:@(YES) forKey:NSURLIsExcludedFromBackupKey error:nil];
+  NSArray* paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+  NSString* documentsPath = [paths firstObject];
+  NSString* cacheFolderPath = [documentsPath stringByAppendingPathComponent:@(url)];
+  NSURL* nsurl = [NSURL fileURLWithPath:cacheFolderPath];
+  //NSURL* nsurl = [NSURL URLWithString:@(url)];
+  NSError* nserror = nil;
+  if(![nsurl setResourceValue:@(YES) forKey:NSURLIsExcludedFromBackupKey error:&nserror]) {
+    NSLog(@"Error excluding %@ from backup: %@", nsurl, nserror);
+  }
 }
 
 void iosPlatform_setStatusBarBG(void* _vc, int isLight)

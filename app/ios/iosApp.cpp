@@ -183,7 +183,9 @@ static int mainLoop(int width, int height, float dpi, float topinset, float boti
     app->setDpi(dpi);
     app->createGUI(sdlWin);
     // docs say ~/Library/Caches can be cleared by iOS, so tiles should not be stored there!
-    iosPlatform_excludeFromBackup(FSPath(MapsApp::baseDir, "cache/").c_str());
+    iosPlatform_excludeFromBackup("cache");  //FSPath(MapsApp::baseDir, "cache/").c_str());
+    //iosPlatform_excludeFromBackup("shared");
+    iosPlatform_excludeFromBackup("fts1.sqlite");
 
     auto offscreenWorker = std::make_unique<Tangram::AsyncWorker>("Offscreen GL worker");
     offscreenWorker->enqueue([](){ iosPlatform_createSharedContext(sdlWin); });
