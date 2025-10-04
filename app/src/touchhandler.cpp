@@ -99,7 +99,7 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
   }
   else if(event->type == SDL_MOUSEWHEEL) {
     Point p = gui->prevFingerPos;
-    uint32_t mods = (PLATFORM_WIN || PLATFORM_LINUX) ? (event->wheel.direction >> 16) : SDL_GetModState();
+    uint32_t mods = (event->wheel.direction >> 16);  //: SDL_GetModState();
     app->onMouseWheel(p.x*xyScale, p.y*xyScale,
         event->wheel.x/120.0, event->wheel.y/120.0, mods & KMOD_ALT, mods & KMOD_CTRL);
   }

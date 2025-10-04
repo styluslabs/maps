@@ -138,6 +138,18 @@
     self.contentScaleFactor = [[UIScreen mainScreen] scale];
     self.multipleTouchEnabled = YES;
     [self setupLayerAndContext];
+    // gesture recognizer to get trackpad scroll events on macOS
+    if (@available(iOS 14.0, *) && [NSProcessInfo processInfo].isiOSAppOnMac) {
+      UIPanGestureRecognizer* pan =
+          [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleScroll:)];
+      pan.allowedScrollTypesMask = UIScrollTypeMaskAll;
+      pan.allowedTouchTypes = @[];  // only capture scroll gesture  // @(UITouchTypeIndirect)
+      [self addGestureRecognizer:pan];
+
+      UIHoverGestureRecognizer* hover =
+          [[UIHoverGestureRecognizer alloc] initWithTarget:self action:@selector(handleHover:)];
+      [self addGestureRecognizer:hover];
+    }
   }
   return self;
 }
@@ -162,6 +174,50 @@
     iosApp_startLoop(width, height, self.contentScaleFactor*163, (float)topInset, (float)bottomInset);
   }
 }
+
+// iOS on macOS input handling
+
+- (void)handleScroll:(UIPanGestureRecognizer *)gesture
+{
+  CGPoint translation = [gesture translationInView:self];
+  //NSLog(@"Scroll delta: (x: %.2f, y: %.2f)", translation.x, translation.y);
+
+  UIKeyModifierFlags flags = gesture.modifierFlags;
+  unsigned int mods = (flags & UIKeyModifierControl) ? KMOD_CTRL : 0;
+  mods |= (flags & UIKeyModifierShift) ? KMOD_SHIFT : 0;
+  mods |= (flags & UIKeyModifierAlternate) ? KMOD_ALT : 0;
+  mods |= (flags & UIKeyModifierCommand) ? KMOD_GUI : 0;
+
+  SDL_Event event = { 0 };  // we'll leave windowID and which == 0
+  event.type = SDL_MOUSEWHEEL;
+  //event.wheel.timestamp = SDL_GetTicks();
+  event.wheel.x = translation.x;
+  event.wheel.y = translation.y;
+  event.wheel.direction = SDL_MOUSEWHEEL_NORMAL | (mods << 16);
+  SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);
+
+  NSLog(@"Scroll: %.3f, %.3f", translation.x, translation.y);
+
+  // Reset the translation so deltas are incremental
+  [gesture setTranslation:CGPointZero inView:self];
+}
+
+- (void)handleHover:(UIHoverGestureRecognizer *)gesture
+{
+  if (gesture.state == UIGestureRecognizerStateBegan || gesture.state == UIGestureRecognizerStateChanged) {
+    CGPoint loc = [gesture locationInView:self];
+    float scale = self.contentScaleFactor;
+    SDL_Event event = {0};
+    event.type = SDL_FINGERMOTION;
+    //event.tfinger.timestamp = SDL_GetTicks();
+    event.tfinger.touchId = SDL_TOUCH_MOUSEID;
+    //event.tfinger.fingerId = 0;
+    event.tfinger.x = loc.x * scale;
+    event.tfinger.y = loc.y * scale;
+    SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);  //SDL_PushEvent(&event);
+  }
+}
+
 // touch input
 
 - (void)sendTouchEvent:(UITouch *)touch ofType:(int)eventType forFinger:(size_t)fingerId
@@ -225,48 +281,3 @@
 }
 
 @end
-
-// main loop
-/*static CFRunLoopRef mainRunLoop = NULL;
-
-void iosPumpEventsBlocking(void)
-{
-  if(!mainRunLoop)
-    mainRunLoop = CFRunLoopGetCurrent();
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 100, TRUE);
-
-  // necessary???
-  [EAGLContext setCurrentContext:_context];
-
-  sdlWin = {display, surface, nativeWin};
-  if(!app) {
-    app = new MapsApp(MapsApp::platform);
-    app->createGUI(&sdlWin);
-    app->mapsOffline->resumeDownloads();
-    app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
-  }
-  app->setDpi(dpi);
-  MapsApp::runApplication = true;
-  while(MapsApp::runApplication) {
-    //MapsApp::taskQueue.wait();
-    int fbWidth = 0, fbHeight = 0;
-    SDL_GetWindowSize(&sdlWin, &fbWidth, &fbHeight);
-    if(app->drawFrame(fbWidth, fbHeight))
-      swapBuffers();  //display, surface);
-    // app not fully initialized until after first frame
-    //if(!initialQuery.empty()) {
-    //  app->mapsSearch->doSearch(initialQuery);
-    //  initialQuery.clear();
-    //}
-  }
-  sdlWin = {0, 0};
-}*/
-
-/*
-// Only override drawRect: if you perform custom drawing.
-// An empty implementation adversely affects performance during animation.
-- (void)drawRect:(CGRect)rect
-{
-  // Drawing code
-}
-*/

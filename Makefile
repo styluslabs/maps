@@ -31,8 +31,8 @@ GIT_REV := $(shell git rev-parse --short HEAD || wsl git rev-parse --short HEAD)
 GIT_TAGCOUNT := $(shell git rev-list --count --tags --no-walk || wsl git rev-list --count --tags --no-walk)
 GIT_DESCRIBE := $(shell git describe --tags --dirty || wsl git describe --tags --dirty)
 ## common modules
-include module.mk
 include tangram-es/core/module.mk
+include module.mk
 
 
 ifneq ($(windir),)
