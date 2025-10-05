@@ -179,8 +179,18 @@
 
 - (void)handleScroll:(UIPanGestureRecognizer *)gesture
 {
+  static float scale = 8.0f;
+  static CGPoint remainder = {0, 0};
+  if (gesture.state == UIGestureRecognizerStateBegan) {
+    remainder = CGPointZero;
+  }
+
   CGPoint translation = [gesture translationInView:self];
-  //NSLog(@"Scroll delta: (x: %.2f, y: %.2f)", translation.x, translation.y);
+  //NSLog(@"Scroll delta: (x: %.3f, y: %.3f)", translation.x, translation.y);
+  CGPoint total = { translation.x + remainder.x, translation.y + remainder.y };
+  CGPoint intDelta = { floor(total.x / scale), floor(total.y / scale) };
+  remainder.x = total.x - intDelta.x * scale;
+  remainder.y = total.y - intDelta.y * scale;
 
   UIKeyModifierFlags flags = gesture.modifierFlags;
   unsigned int mods = (flags & UIKeyModifierControl) ? KMOD_CTRL : 0;
@@ -191,14 +201,11 @@
   SDL_Event event = { 0 };  // we'll leave windowID and which == 0
   event.type = SDL_MOUSEWHEEL;
   //event.wheel.timestamp = SDL_GetTicks();
-  event.wheel.x = translation.x;
-  event.wheel.y = translation.y;
+  event.wheel.x = intDelta.x;
+  event.wheel.y = intDelta.y;
   event.wheel.direction = SDL_MOUSEWHEEL_NORMAL | (mods << 16);
   SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);
 
-  NSLog(@"Scroll: %.3f, %.3f", translation.x, translation.y);
-
-  // Reset the translation so deltas are incremental
   [gesture setTranslation:CGPointZero inView:self];
 }
 
