@@ -139,16 +139,18 @@
     self.multipleTouchEnabled = YES;
     [self setupLayerAndContext];
     // gesture recognizer to get trackpad scroll events on macOS
-    if (@available(iOS 14.0, *) && [NSProcessInfo processInfo].isiOSAppOnMac) {
-      UIPanGestureRecognizer* pan =
-          [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleScroll:)];
-      pan.allowedScrollTypesMask = UIScrollTypeMaskAll;
-      pan.allowedTouchTypes = @[];  // only capture scroll gesture  // @(UITouchTypeIndirect)
-      [self addGestureRecognizer:pan];
+    if (@available(iOS 14.0, *)) {
+      if([NSProcessInfo processInfo].isiOSAppOnMac) {
+        UIPanGestureRecognizer* pan =
+            [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleScroll:)];
+        pan.allowedScrollTypesMask = UIScrollTypeMaskAll;
+        pan.allowedTouchTypes = @[];  // only capture scroll gesture  // @(UITouchTypeIndirect)
+        [self addGestureRecognizer:pan];
 
-      UIHoverGestureRecognizer* hover =
-          [[UIHoverGestureRecognizer alloc] initWithTarget:self action:@selector(handleHover:)];
-      [self addGestureRecognizer:hover];
+        UIHoverGestureRecognizer* hover =
+            [[UIHoverGestureRecognizer alloc] initWithTarget:self action:@selector(handleHover:)];
+        [self addGestureRecognizer:hover];
+      }
     }
   }
   return self;
@@ -176,6 +178,9 @@
 }
 
 // iOS on macOS input handling
+// None of the following work to detect two finger click on trackpad ("right click"): UITapGestureRecognizer,
+//  UILongPressGestureRecognizer, checking UIEvent buttonMask in touchesEnded(); we only get an orphan
+//  touchesEnded() call with insufficent info to distinguish from regular finger up event
 
 - (void)handleScroll:(UIPanGestureRecognizer *)gesture
 {
