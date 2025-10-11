@@ -23,4 +23,5 @@ function openRouteService(mode, waypoints)
   });
 }
 
-registerFunction("openRouteService", "route", "Open Route Service");
+const auth = secrets.openroute_auth || readSceneValue("config.secrets.openroute_auth");
+if(auth) { registerFunction("openRouteService", "route", "Open Route Service"); }

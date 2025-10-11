@@ -150,6 +150,10 @@
         UIHoverGestureRecognizer* hover =
             [[UIHoverGestureRecognizer alloc] initWithTarget:self action:@selector(handleHover:)];
         [self addGestureRecognizer:hover];
+
+        UIContextMenuInteraction* rightclick =
+            [[UIContextMenuInteraction alloc] initWithDelegate:self];
+        [self addInteraction:rightclick];
       }
     }
   }
@@ -228,6 +232,25 @@
     event.tfinger.y = loc.y * scale;
     SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);  //SDL_PushEvent(&event);
   }
+}
+
+- (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+                         configurationForMenuAtLocation:(CGPoint)loc
+{
+  int ts = (int)((long long)([NSProcessInfo processInfo].systemUptime*1000.0 + 0.5) % INT_MAX);
+  float scale = self.contentScaleFactor;
+  SDL_Event event = {0};
+  event.type = SDL_FINGERDOWN;
+  event.tfinger.timestamp = ts;
+  event.tfinger.touchId = SDL_TOUCH_MOUSEID;
+  event.tfinger.fingerId = SDL_BUTTON_RIGHT;
+  event.tfinger.x = loc.x * scale;
+  event.tfinger.y = loc.y * scale;
+  SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);
+  event.type = SDL_FINGERUP;
+  event.tfinger.timestamp = ts + 100;
+  SDL_PeepEvents(&event, 1, SDL_ADDEVENT, 0, 0);
+  return nil;
 }
 
 // touch input

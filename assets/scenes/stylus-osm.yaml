@@ -270,7 +270,7 @@ global:
                 //return (global.priority.place[feature.place] || 14) + 100.0/(100 + (feature.population || 1));
             }
 
-    poi_priority: { "viewpoint": 31, "campground": 31, "trailhead": 31, "information": 99, "parking": 102, "toilet": 32, "drinking_water": 32, "marina": 41, "ranger_station": 40, "artwork": 42, "museum": 35, "theme_park": 40, "attraction": 42, "university": 33, "school": 52, "library": 41, "theatre": 41, "religious": 101, "shop": 101, "bike_shop": 101, "pharmacy": 101, "fuel": 101, "grocery": 38, "convenience": 51, "liquor": 101, "clothes": 101, "hardware": 101, "gym": 101, "bank": 101, "dentist": 101, "auto_repair": 101, "laundry": 101, "scissor": 101, "post_office": 100, "restaurant": 43, "cafe": 44, "bar": 44, "bakery": 44, "hospital": 101, "doctor": 101, "hotel": 101, "tree": 20, "golf": 21, "christian": 90, "muslim": 90, "buddhist": 90, "hindu": 90, "shinto": 90, "jewish": 90, "ruins": 41, "stadium": 40, "default": 101 }
+    poi_priority: { "heritage": 30, "viewpoint": 31, "campground": 31, "trailhead": 31, "information": 99, "parking": 102, "toilet": 32, "drinking_water": 32, "marina": 41, "ranger_station": 40, "artwork": 42, "museum": 35, "theme_park": 40, "attraction": 42, "university": 33, "school": 52, "library": 41, "theatre": 41, "religious": 101, "shop": 101, "bike_shop": 101, "pharmacy": 101, "fuel": 101, "grocery": 38, "convenience": 51, "liquor": 101, "clothes": 101, "hardware": 101, "gym": 101, "bank": 101, "dentist": 101, "auto_repair": 101, "laundry": 101, "scissor": 101, "post_office": 100, "restaurant": 43, "cafe": 44, "bar": 44, "bakery": 44, "hospital": 101, "doctor": 101, "hotel": 101, "tree": 20, "golf": 21, "christian": 90, "muslim": 90, "buddhist": 90, "hindu": 90, "shinto": 90, "jewish": 90, "ruins": 41, "stadium": 40, "default": 101 }
 
     # - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
     poi_priority_fn: |
@@ -1778,8 +1778,8 @@ layers:
                     heritage:
                         exclusive: true
                         priority: 1
-                        filter: { heritage: [1, 2] }
-                        draw: { points: { priority: global.poi_priority.museum } }
+                        filter: { heritage: [1, 2], $zoom: { max: 18 } }
+                        draw: { points: { priority: global.poi_priority.heritage } }
                         default:
                             filter: [ { heritage: 1 }, { $zoom: { min: 15 } } ]
                             draw: { points: { sprite_default: ruins } }

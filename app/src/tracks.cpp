@@ -1214,6 +1214,7 @@ void MapsTracks::setRouteMode(const std::string& mode)
   app->drawOnMap = routeEditTb->isVisible() && mode == "draw";
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
+  app->config["tracks"]["routemode"] = mode;
   createRoute(activeTrack);
 }
 
@@ -1240,7 +1241,10 @@ void MapsTracks::newRoute(std::string mode)
   Waypoint wp1(app->currLocation.lngLat(), "Start");
   Waypoint wp2(app->pickResultCoord, dst, "", app->pickResultProps);
   double km = lngLatDist(wp1.lngLat(), wp2.lngLat());
-  if(mode.empty()) { mode = (km < 10 ? "walk" : km < 100 ? "bike" : "drive"); }
+  if(mode.empty()) {
+    const char* dfltmode = (km < 10 ? "walk" : km < 100 ? "bike" : "drive");
+    mode = app->cfg()["tracks"]["routemode"].as<std::string>(dfltmode);
+  }
   navRoute = GpxFile();  //removeTrackMarkers(&navRoute);
   navRoute.title = measure ? "Measurement" : "Navigation";
   navRoute.routeMode = measure ? "direct" : mode;
@@ -1252,7 +1256,7 @@ void MapsTracks::newRoute(std::string mode)
   app->panelToSkip = tracksPanel;
   populateTrack(&navRoute);
   toggleRouteEdit(measure);  // should we also show route edit for navigation?
-  if(!measure && km > 0.01)
+  if(!measure && app->hasLocation && km > 0.01)
     addWaypoint(wp1);  //"Current location"
   addWaypoint(wp2);
 }
