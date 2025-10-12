@@ -893,8 +893,8 @@ void MapsApp::mapUpdate(double time)
     progressWidget->setVisible(false);
   }
 
-  // prompt for 3D terrain if first time tilting
-  if(cpos.tilt != 0 && !terrain3D && !cfg()["terrain_3d"]["enabled"].IsDefined()) {
+  // prompt for 3D terrain if first time tilting (once fingers lifted)
+  if(touchHandler->touchPoints.empty() && cpos.tilt != 0 && !terrain3D && !cfg()["terrain_3d"]["enabled"].IsDefined()) {
     config["terrain_3d"]["enabled"] = false;
     MapsApp::messageBox("3D Terrain",
         fstring("Enable 3D terrain?\n\n3D terrain can be controlled from the overflow menu and is best used "
