@@ -167,7 +167,9 @@ void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd, bool 
 {
   trkpt.append_attribute("lat").set_value(fstring("%.7f", wpt.loc.lat).c_str());
   trkpt.append_attribute("lon").set_value(fstring("%.7f", wpt.loc.lng).c_str());
-  trkpt.append_child("ele").append_child(pugi::node_pcdata).set_value(fstring("%.1f", wpt.loc.alt).c_str());
+  // missing altitude is read back as 0, so not a problem to skip an actual ele == 0 point
+  if(wpt.loc.alt != 0)
+    trkpt.append_child("ele").append_child(pugi::node_pcdata).set_value(fstring("%.1f", wpt.loc.alt).c_str());
   if(savespd && wpt.loc.spd > 0)
     trkpt.append_child("speed").append_child(pugi::node_pcdata).set_value(fstring("%.2f", wpt.loc.spd).c_str());
   if(wpt.loc.time > 0)

@@ -10,6 +10,7 @@
 class TrackPlot;
 class TrackSparkline;
 class TrackSliders;
+class PlatformFile;
 struct Timer;
 
 class MapsTracks : public MapsComponent {
@@ -26,6 +27,9 @@ public:
   void fingerEvent(int action, LngLat pos);
   void routePluginError(const char* err);
   bool onFeaturePicked(const Tangram::FeaturePickResult* result);
+  void loadTrackGPX(std::unique_ptr<PlatformFile> file);
+
+  Widget* tracksPanel = NULL;
 
   MarkerID trackHoverMarker = 0;
   MarkerID trackStartMarker = 0;
@@ -85,7 +89,6 @@ private:
   void createTrackListPanel();
   void createTrackPanel();
 
-  Widget* trackPanel = NULL;
   Toolbar* trackToolbar = NULL;
   Widget* trackContainer = NULL;
   Menu* trackOverflow = NULL;
@@ -95,7 +98,7 @@ private:
 
   DragDropList* tracksContent = NULL;
   Widget* archivedContent = NULL;
-  Widget* tracksPanel = NULL;
+  Widget* trackPanel = NULL;
   Widget* archivedPanel = NULL;
   Widget* statsContent = NULL;
   DragDropList* wayptContent = NULL;

@@ -165,8 +165,19 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   @Override
   protected void onNewIntent(Intent intent)  // refs: Write MainActivity.java
   {
-    if(intent.getAction().equals(Intent.ACTION_VIEW) && intent.getScheme().equals("geo"))
+    String action = intent.getAction();
+    if(Intent.ACTION_VIEW.equals(action) && "geo".equals(intent.getScheme()))
       MapsLib.handleUri(intent.getDataString());
+    else if(Intent.ACTION_VIEW.equals(action) || Intent.ACTION_EDIT.equals(action)) {
+      if("application/gpx+xml".equals(intent.getType()) && intent.getData() != null) {
+        try {
+          ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(intent.getData(), "r");
+          MapsLib.openFileDesc(0, intent.getData().getPath(), pfd.detachFd());
+        } catch(Exception e) {
+          Log.v("onNewIntent", "Error opening document: " + intent.getData().toString(), e);
+        }
+      }
+    }
     else
       super.onNewIntent(intent);
   }
@@ -375,6 +386,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   public static void updateLocation(Location loc)
   {
+    int provider = "fused".equals(loc.getProvider()) ? 2 : 1;
+    if(!hasGpsFix) { provider = -provider; }
     double lat = loc.getLatitude();  // degrees
     double lng = loc.getLongitude();  // degrees
     float poserr = loc.getAccuracy();  // accuracy in meters
@@ -394,7 +407,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     if(loc == null) return;  // getLastKnownLocation() can return null
     //Log.v("Tangram", loc.toString());
-    if(hasGpsFix && loc.getProvider().equals("fused")) return;
+    //if(hasGpsFix && loc.getProvider().equals("fused")) return;
     // for correcting orientation - convert degrees to radians
     mDeclination = new GeomagneticField((float)loc.getLatitude(), (float)loc.getLongitude(),
         (float)loc.getAltitude(), loc.getTime()).getDeclination()*(float)java.lang.Math.PI/180;
@@ -616,7 +629,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
 
   private static final int ID_OPEN_DOCUMENT = 2;
   private static final int ID_READ_FOLDER = 3;
-  private static final int ID_WRITE_FOLDER = 3;
+  private static final int ID_WRITE_FOLDER = 4;
 
   public void openFile()  //Uri pickerInitialUri)
   {
@@ -664,7 +677,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
           getContentResolver().takePersistableUriPermission(treeUri, flags | Intent.FLAG_GRANT_READ_URI_PERMISSION);
           Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, DocumentsContract.getTreeDocumentId(treeUri));
           ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
-          MapsLib.openFileDesc(uri.getPath(), pfd.detachFd());  //pfd.getFd());
+          MapsLib.openFileDesc(requestCode, uri.getPath(), pfd.detachFd());  //pfd.getFd());
           //pfd.close();
         } catch(Exception e) {
           Log.v("Tangram", "Error opening directory: " + resultData.getData().toString(), e);
@@ -680,7 +693,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
             //  access is only possible via file description from content resolver; takePersistableUriPermission() does not help
             //getContentResolver().takePersistableUriPermission(resultData.getData(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
             ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(resultData.getData(), "r");
-            MapsLib.openFileDesc(resultData.getData().getPath(), pfd.detachFd());
+            MapsLib.openFileDesc(requestCode, resultData.getData().getPath(), pfd.detachFd());
             //pfd.close();
           } catch(Exception e) {
             Log.v("Tangram", "Error opening document: " + resultData.getData().toString(), e);

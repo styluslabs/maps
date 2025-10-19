@@ -22,10 +22,10 @@ public class MapsLib
   public static native void keyEvent(int keycode, int action);
   public static native void charInput(int c, int newCursorPosition);
   public static native void onUrlComplete(long requestHandle, byte[] rawDataBytes, String errorMessage);
-  public static native void updateLocation(long time, double lat, double lng, float poserr, double alt, float alterr, float dir, float direrr, float spd, float spderr);
+  public static native void updateLocation(int provider, long time, double lat, double lng, float poserr, double alt, float alterr, float dir, float direrr, float spd, float spderr);
   public static native void updateOrientation(long time, float azimuth, float pitch, float roll);
   public static native void updateGpsStatus(int satsVisible, int satsUsed);
-  public static native void openFileDesc(String filename, int fd);
+  public static native void openFileDesc(int request, String filename, int fd);
   public static native void handleUri(String uri);
   public static native void imeTextUpdate(String text, int selStart, int selEnd);
 }

@@ -2239,6 +2239,17 @@ void MapsApp::saveFileDialog(std::vector<FileDialogFilter_t> filters, std::strin
 }
 #endif
 
+void MapsApp::onFileDropped(std::unique_ptr<PlatformFile> file)
+{
+  FSPath path(file->fsPath());
+  if(path.extension() == "gpx" || path.extension() == "GPX") {
+    showPanel(mapsTracks->tracksPanel);
+    mapsTracks->loadTrackGPX(std::move(file));
+  }
+  else
+    LOGW("Unknown file received: %s", file->fsPath().c_str());
+}
+
 #include "util/yamlUtil.h"
 
 bool MapsApp::loadConfig(const char* assetPath)

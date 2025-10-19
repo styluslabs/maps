@@ -808,10 +808,12 @@ JNI_FN(onUrlComplete)(JNIEnv* env, jclass, jlong handle, jbyteArray data, jstrin
   static_cast<AndroidPlatform*>(MapsApp::platform)->onUrlComplete(env, handle, data, err);
 }
 
-JNI_FN(updateLocation)(JNIEnv* env, jclass, long time, double lat, double lng, float poserr,
+JNI_FN(updateLocation)(JNIEnv* env, jclass, jint provider, long time, double lat, double lng, float poserr,
     double alt, float alterr, float dir, float direrr, float spd, float spderr)
 {
   MapsApp::runOnMainThread([=](){
+    // provider: 1 = gps, 2 = fused; x -1 if no GPS fix; if we have GPS fix, discard either fused or GPS locs
+    if(app->cfg()["use_fused_location"].as<bool>(false) ? provider == 1 : provider == 2) { return; }
     app->updateLocation(Location{time/1000.0, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr});
   });
 }
@@ -869,8 +871,11 @@ public:
   }
 };
 
-JNI_FN(openFileDesc)(JNIEnv* env, jclass, jstring jfilename, jint jfd)
+JNI_FN(openFileDesc)(JNIEnv* env, jclass, jint request, jstring jfilename, jint jfd)
 {
+  // should match onActivityResult() request codes in MapsActivity.java
+  enum { DROPPED = 0, ID_OPEN_DOCUMENT = 2, ID_READ_FOLDER = 3, ID_WRITE_FOLDER = 4 };
+
   char buff[256];
   int len = readlink(("/proc/self/fd/" + std::to_string(jfd)).c_str(), buff, 256);
   if(len > 0 && len < 256) {
@@ -884,14 +889,17 @@ JNI_FN(openFileDesc)(JNIEnv* env, jclass, jstring jfilename, jint jfd)
       s.replace(pos, sizeof("/mnt/user/0/") - 1, "/storage/");
     PLATFORM_LOG("readlink returned: %s (fd %d)\n", buff, jfd);
     //const char* filename = env->GetStringUTFChars(jfilename, 0);
-    if(openFileCallback) {
+    if(request == ID_OPEN_DOCUMENT && openFileCallback) {
       MapsApp::runOnMainThread([s, jfd, cb=std::move(openFileCallback)](){
         cb(std::make_unique<AndroidFile>(s, jfd));
       });
     }
-    else if(pickFolderCallback)
+    else if((request == ID_READ_FOLDER || request == ID_WRITE_FOLDER) && pickFolderCallback)
       MapsApp::runOnMainThread([s, cb=std::move(pickFolderCallback)](){ cb(s.c_str()); });
+    else if(request == DROPPED)
+      MapsApp::runOnMainThread([s, jfd](){ app->onFileDropped(std::make_unique<AndroidFile>(s, jfd)); });
     //env->ReleaseStringUTFChars(jfilename, filename);
   }
   openFileCallback = {};  // clear
+  pickFolderCallback = {};
 }

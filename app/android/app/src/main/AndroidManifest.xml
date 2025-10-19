@@ -52,6 +52,13 @@
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="geo" />
       </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <action android:name="android.intent.action.EDIT"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:mimeType="application/gpx+xml"/>
+      </intent-filter>
     </activity>
 
     <service

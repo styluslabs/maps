@@ -91,6 +91,7 @@ public:
   void updateLocPlaceInfo();
   std::shared_ptr<TileSource> getElevationSource();
   void toggleFollow();
+  void onFileDropped(std::unique_ptr<PlatformFile> file);
 
   Location currLocation = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   float orientation = 0;

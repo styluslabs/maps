@@ -1382,6 +1382,54 @@ void MapsTracks::updateDB(GpxFile* track)
   tracksDirty = true;
 }
 
+void MapsTracks::loadTrackGPX(std::unique_ptr<PlatformFile> file)
+{
+  GpxFile track("", "", file->fsPath());  // set filename as fallback for track title
+  loadGPX(&track, file->readAll().data());
+  if(track.waypoints.empty() && !track.activeWay()) {
+    MapsApp::messageBox("Import error", fstring("Error reading %s", file->fsPath().c_str()), {"OK"});
+    return;
+  }
+  track.filename.clear();  // we will copy to tracks/ folder
+
+  auto saveFn = [this](GpxFile&& gpx) {
+    tracks.push_back(std::move(gpx));
+    updateDB(&tracks.back());
+    populateTrack(&tracks.back());
+    saveTrack(&tracks.back());  // save track after updating description with stats
+  };
+
+  int ntracks = track.routes.size() + track.tracks.size();
+  if(ntracks > 1) {
+    int idx = 0;
+    for(auto& rte : track.routes) {
+      auto title = track.title + " Route " + std::to_string(++idx);
+      if(!rte.title.empty()) { title = rte.title + " (" + title + ")"; }
+      GpxFile subtrack(title, !rte.desc.empty() ? rte.desc : track.desc, "");
+      subtrack.loaded = true;
+      subtrack.hasSpeed = track.hasSpeed;
+      subtrack.waypoints = track.waypoints;
+      subtrack.routes.push_back(rte);
+      saveFn(std::move(subtrack));
+    }
+    idx = 0;
+    for(auto& trk : track.tracks) {
+      auto title = track.title + " Track " + std::to_string(++idx);
+      if(!trk.title.empty()) { title = trk.title + " (" + title + ")"; }
+      GpxFile subtrack(title, !trk.desc.empty() ? trk.desc : track.desc, "");
+      subtrack.loaded = true;
+      subtrack.hasSpeed = track.hasSpeed;
+      subtrack.waypoints = track.waypoints;
+      subtrack.tracks.push_back(trk);
+      saveFn(std::move(subtrack));
+    }
+    app->popPanel();  // show the track list
+    MapsApp::messageBox("Import GPX", fstring("Imported %d tracks", ntracks), {"OK"});
+  }
+  else
+    saveFn(std::move(track));
+}
+
 void MapsTracks::startRecording()
 {
   recordTrack = true;
@@ -2148,19 +2196,7 @@ void MapsTracks::createTrackListPanel()
   };
 
   Button* loadTrackBtn = createToolbutton(MapsApp::uiIcon("open-folder"), "Load Track");
-  auto loadTrackFn = [=](std::unique_ptr<PlatformFile> file){
-    GpxFile track("", "", "");
-    loadGPX(&track, file->readAll().data());
-    if(track.waypoints.empty() && !track.activeWay()) {
-      MapsApp::messageBox("Import error", fstring("Error reading %s", file->fsPath().c_str()), {"OK"});
-      return;
-    }
-    //track.filename.clear();  // we will copy to tracks/ folder
-    tracks.push_back(std::move(track));
-    updateDB(&tracks.back());
-    populateTrack(&tracks.back());
-    saveTrack(&tracks.back());  // save track after updating description with stats
-  };
+  auto loadTrackFn = [=](std::unique_ptr<PlatformFile> file){ loadTrackGPX(std::move(file)); };
   loadTrackBtn->onClicked = [=](){ MapsApp::openFileDialog({{"GPX files", "gpx"}}, loadTrackFn); };
 
   recordTrackBtn = createToolbutton(MapsApp::uiIcon("record"), "Record", true);
