@@ -43,10 +43,10 @@ public class MapsService extends Service implements LocationListener
   {
     long intervalMsec = (long)(minInterval*1000);
     locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, intervalMsec, minDistance, this);
-    //if(locationManager.getProvider("fused") != null) {
-    //  locationManager.requestLocationUpdates("fused", intervalMsec, minDistance, this);
+    if(locationManager.getProvider("fused") != null) {
+      locationManager.requestLocationUpdates("fused", intervalMsec, minDistance, this);
     //  onLocationChanged(locationManager.getLastKnownLocation("fused"));
-    //}
+    }
     //else
       onLocationChanged(locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER));
   }
@@ -55,7 +55,7 @@ public class MapsService extends Service implements LocationListener
   public void onLocationChanged(Location loc)
   {
     if(loc == null) return;  // getLastKnownLocation() can return null
-    MapsActivity.updateLocation(loc);
+    MapsActivity.updateLocation(loc, true);
   }
 
   @Override

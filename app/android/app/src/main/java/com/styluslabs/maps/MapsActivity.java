@@ -384,10 +384,10 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
      } });
   }
 
-  public static void updateLocation(Location loc)
+  public static void updateLocation(Location loc, boolean hasfix)
   {
     int provider = "fused".equals(loc.getProvider()) ? 2 : 1;
-    if(!hasGpsFix) { provider = -provider; }
+    if(!hasfix) { provider = -provider; }
     double lat = loc.getLatitude();  // degrees
     double lng = loc.getLongitude();  // degrees
     float poserr = loc.getAccuracy();  // accuracy in meters
@@ -398,7 +398,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     float spd = loc.hasSpeed() ? loc.getSpeed() : Float.NaN;  // m/s
     float spderr = loc.getSpeedAccuracyMetersPerSecond();  // speed accuracy in m/s
     long time = loc.getTime();  // ms since unix epoch
-    MapsLib.updateLocation(time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
+    MapsLib.updateLocation(provider, time, lat, lng, poserr, alt, alterr, dir, direrr, spd, spderr);
   }
 
   // LocationListener
@@ -411,7 +411,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     // for correcting orientation - convert degrees to radians
     mDeclination = new GeomagneticField((float)loc.getLatitude(), (float)loc.getLongitude(),
         (float)loc.getAltitude(), loc.getTime()).getDeclination()*(float)java.lang.Math.PI/180;
-    updateLocation(loc);
+    updateLocation(loc, hasGpsFix);
   }
 
   @Override

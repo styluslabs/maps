@@ -1407,6 +1407,7 @@ void MapsTracks::loadTrackGPX(std::unique_ptr<PlatformFile> file)
       if(!rte.title.empty()) { title = rte.title + " (" + title + ")"; }
       GpxFile subtrack(title, !rte.desc.empty() ? rte.desc : track.desc, "");
       subtrack.loaded = true;
+      subtrack.visible = true;
       subtrack.hasSpeed = track.hasSpeed;
       subtrack.waypoints = track.waypoints;
       subtrack.routes.push_back(rte);
@@ -1418,6 +1419,7 @@ void MapsTracks::loadTrackGPX(std::unique_ptr<PlatformFile> file)
       if(!trk.title.empty()) { title = trk.title + " (" + title + ")"; }
       GpxFile subtrack(title, !trk.desc.empty() ? trk.desc : track.desc, "");
       subtrack.loaded = true;
+      subtrack.visible = true;
       subtrack.hasSpeed = track.hasSpeed;
       subtrack.waypoints = track.waypoints;
       subtrack.tracks.push_back(trk);
