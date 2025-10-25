@@ -25,6 +25,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/XInput2.h>
+#include <malloc.h>
 
 // MapsApp
 
@@ -1058,9 +1059,15 @@ int main(int argc, char* argv[])
       if(event->key.keysym.sym == SDLK_q && event->key.keysym.mod & KMOD_CTRL)
         MapsApp::runApplication = false;
       else if(event->key.keysym.sym == SDLK_F5) {
-        app->mapsSources->reload();
-        app->pluginManager->reload();
-        app->loadSceneFile();  // reload scene
+        if((event->key.keysym.mod & KMOD_CTRL) && (event->key.keysym.mod & KMOD_SHIFT)) {
+          malloc_trim(0);
+          PLATFORM_LOG("Ran malloc_trim(0)\n");
+        }
+        else {
+          app->mapsSources->reload();
+          app->pluginManager->reload();
+          app->loadSceneFile();  // reload scene
+        }
       }
       else if(event->key.keysym.sym == SDLK_PRINTSCREEN) {
         // testing/debugging stuff
