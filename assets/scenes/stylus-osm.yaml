@@ -806,10 +806,9 @@ layers:
                 filter:
                     - highway: path
                     - { highway: footway, surface: unpaved }
-                draw: { lines: { color: global.color.unpaved_trail, width: [[10, 1px], [18, 3px]] } }
-                #named:
-                #    filter: [ { name: true }, { ref: true }, { relation_member: true } ]
-                #    draw: { lines: { width: [[10, 1px], [18, 3px]] } }
+                default:
+                    #filter: [ { $zoom: { min: 12 } }, { name: true }, { ref: true }, { has_name: true } ]
+                    draw: { lines: { color: global.color.unpaved_trail, width: [[10, 1px], [18, 3px]] } }
                 scramble:
                     # what about demanding_mountain_hiking and alpine_hiking levels?
                     filter: { sac_scale: [ demanding_alpine_hiking, difficult_alpine_hiking ] }
