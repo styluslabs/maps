@@ -501,6 +501,9 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
     if(query.size() > 1 && providerIdx == 0) {  // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
       offlineListSearch("name : " + searchStr, lngLat00, lngLat11);  // restrict live search to name
     }
+    else if(query.size() > 2 && providerIdx > 0 && providerFlags.autocomplete) {
+      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, LIST_SEARCH | AUTOCOMPLETE);
+    }
     return;
   }
 
@@ -748,6 +751,7 @@ Button* MapsSearch::createPanel()
     static_cast<TextLabel*>(searchPanel->selectFirst(".panel-title"))->setText(title.c_str());
     std::string typestr = idx > 0 ? app->pluginManager->searchFns[idx-1].type : "";
     StringRef type(typestr);
+    providerFlags.autocomplete = type.contains("-autocomplete");
     providerFlags.slow = type.contains("-slow");
     providerFlags.unified = type.contains("-unified");
     providerFlags.more = type.contains("-more");

@@ -49,7 +49,7 @@ public:
   bool moreListResultsAvail = false;
   // search flags
   enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, FLY_TO = 0x8, NEXTPAGE = 0x10,
-         UPDATE_RESULTS = 0x4000, MORE_RESULTS = 0x8000 };
+         AUTOCOMPLETE = 0x20, UPDATE_RESULTS = 0x4000, MORE_RESULTS = 0x8000 };
   static constexpr size_t MAX_MAP_RESULTS = 1000;
 
   static void indexTileData(TileTask* task, int mapId, const std::vector<SearchData>& searchData);
@@ -68,6 +68,7 @@ private:
   LngLat dotBounds00, dotBounds11;
   std::string searchStr;
   struct {
+    bool autocomplete = false;
     bool unified = false;
     bool slow = false;
     bool more = false;

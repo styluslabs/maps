@@ -10,14 +10,19 @@ function getPlaceType(_props)
 {
   if(!_props) return "";
   const props = JSON.parse(_props);
-  var type = props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["place"] || props["railway"] || props["natural"] || props["landuse"] || props["highway"];
-  var route = props["route"];
+  var type = props["place"] || props["tourism"] || props["leisure"] || props["amenity"] || props["historic"] || props["shop"] || props["railway"] || props["natural"] || props["landuse"] || props["highway"] || "";
+  const route = props["route"];
   if(route) { type = route + " route"; }
   if(type) {
     type = type.replace(/_/g, " ");
-    return type.charAt(0).toUpperCase() + type.slice(1);
+    type = type.charAt(0).toUpperCase() + type.slice(1);
   }
-  return "";
+  const admin = props["admin"];
+  if(admin) {
+    if(type) { type += " \u2022 "; }
+    type += admin;
+  }
+  return type;
 }
 
 // from https://github.com/osmlab/jsopeninghours
