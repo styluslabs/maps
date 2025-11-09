@@ -305,8 +305,8 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     <g layout="flex" flex-direction="column" box-anchor="hfill">
       <rect box-anchor="fill" width="48" height="48"/>
       <g class="place-info-row" layout="flex" flex-direction="row" box-anchor="hfill" margin="6 0">
-        <text class="place-text" margin="0 6" font-size="14"></text>
-        <rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/>
+        <text class="place-text" margin="0 6" font-size="14" box-anchor="hfill"></text>
+        <!-- rect class="stretch" fill="none" box-anchor="fill" width="20" height="20"/ -->
         <use class="icon elevation-icon" display="none" width="18" height="18" xlink:href=":/ui-icons.svg#mountain"/>
         <text class="elevation-text" margin="0 6" font-size="14"></text>
         <use class="icon direction-icon" width="18" height="18" xlink:href=":/ui-icons.svg#arrow-narrow-up"/>
@@ -444,9 +444,9 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   }
 
   // show place type
-  SvgText* placenode = static_cast<SvgText*>(item->containerNode()->selectFirst(".place-text"));
-  if(placenode && !placetype.empty())
-    placenode->addText(placetype.c_str());
+  TextLabel* placeLabel = new TextLabel(item->containerNode()->selectFirst(".place-text"));
+  if(!placetype.empty())
+    placeLabel->setText(placetype.c_str());
 
    auto elevFn = [this](double elev){
     Widget* elevWidget = infoContent->selectFirst(".elevation-text");
