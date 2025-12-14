@@ -322,19 +322,20 @@ std::string MapsSources::createSource(std::string savekey, const std::string& ya
     YAML::Node& node = mapSources[savekey];
     bool newsrc = !node;
     node["title"] = trimStr(titleEdit->text());
-    if(newsrc || node.has("layers")) {
+    if(newsrc || !(currLayers.size() == 1 && currLayers[0].source == savekey)) {  //node.has("layers")) {
       YAML::Node& layers = node["layers"] = YAML::Array();
       for(auto& src : currLayers) {
         layers.push_back(src.opacity < 1 ?
             YAML::Node({{"source", src.source}, {"opacity", src.opacity}}) : src.source);
       }
+      node["updates"] = YAML::Map();
     }
     else if(node.has("url"))
       node["url"] = trimStr(urlEdit->text());
     else if(node.has("scene"))
       node["scene"] = trimStr(urlEdit->text());
 
-    YAML::Node& updates = node["updates"] = YAML::Map();  // default to undefined node (not written to output)
+    YAML::Node& updates = node["updates"];  // default to undefined node (not written to output)
     // note that gui var changes will come after any defaults in currUpdates and thus replace them as desired
     for(const SceneUpdate& upd : currUpdates)   //app->sceneUpdates) {
       updates[upd.path[0] == '+' ? upd.path.substr(1) : upd.path] = upd.value;

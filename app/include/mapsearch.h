@@ -76,6 +76,7 @@ private:
   bool flyingToResults = false;
   bool newMapSearch = true;
   bool isCurrLocDistOrigin = true;
+  bool sortByDist = false;
   int selectedResultIdx = -1;
 
   AsyncWorker searchWorker = {"Ascend MapsSearch worker"};

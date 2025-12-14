@@ -288,8 +288,6 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int fla
   // if results don't fill height, scroll area won't scroll, so onScroll won't be called to get more results!
   int limit = std::max(20, int(app->win->winBounds().height()/42 + 1));
   int offset = listResults.size();
-  // if '*' not appended to string, we assume categorical search - no info for ranking besides dist
-  bool sortByDist = queryStr.back() != '*' || app->cfg()["search"]["sort"].as<std::string>("rank") == "dist";
   int64_t gen = ++listSearchGen;
 
   searchWorker.enqueue([=](){
@@ -298,9 +296,10 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int fla
     res.reserve(limit);
     bool abort = false;
     // should we add tokenize = porter to CREATE TABLE? seems we want it on query, not content!
+    // if '*' not appended to string, we assume categorical search - no info for ranking besides dist
     std::string query = fstring("SELECT pois.rowid, lng, lat, rank, props FROM pois_fts JOIN pois ON"
         " pois.ROWID = pois_fts.ROWID WHERE pois_fts MATCH ? ORDER BY osmSearchRank(%s, lng, lat) LIMIT %d OFFSET ?;",
-        sortByDist ? "-1.0" : "rank", limit);
+        (queryStr.back() != '*' || sortByDist) ? "-1.0" : "rank", limit);
     searchDB.stmt(query)
         .bind(queryStr, offset)
         .exec([&](int rowid, double lng, double lat, double score, const char* json){
@@ -502,7 +501,8 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       offlineListSearch("name : " + searchStr, lngLat00, lngLat11);  // restrict live search to name
     }
     else if(query.size() > 2 && providerIdx > 0 && providerFlags.autocomplete) {
-      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, LIST_SEARCH | AUTOCOMPLETE);
+      int flags = LIST_SEARCH | AUTOCOMPLETE | (sortByDist ? SORT_BY_DIST : 0);
+      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
     }
     return;
   }
@@ -531,7 +531,6 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   if(providerIdx == 0)
     offlineListSearch(searchStr, lngLat00, lngLat11, phase == RETURN ? FLY_TO : 0);
   else {
-    bool sortByDist = app->cfg()["search"]["sort"].as<std::string>("rank") == "dist";
     int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
     if(providerFlags.unified)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
@@ -796,6 +795,7 @@ Button* MapsSearch::createPanel()
   while(initSortIdx < 2 && initSort != resultSortKeys[initSortIdx]) ++initSortIdx;
   Menu* sortMenu = createRadioMenu({"Relevence", "Distance"}, [this](size_t ii){
     app->config["search"]["sort"] = resultSortKeys[ii];
+    sortByDist = ii == 1;
     if(!queryText->text().empty())
       searchText(queryText->text(), RETURN);
   }, initSortIdx);
@@ -851,7 +851,6 @@ Button* MapsSearch::createPanel()
       else {
         // plugin is responsible for managing data needed to get next page of results, since it may not
         //  just be an offset (e.g., could be a session-specific token)
-        bool sortByDist = app->cfg()["search"]["sort"].as<std::string>("rank") == "dist";
         int flags = LIST_SEARCH | NEXTPAGE | (sortByDist ? SORT_BY_DIST : 0);
         app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
       }
