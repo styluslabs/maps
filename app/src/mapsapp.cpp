@@ -411,6 +411,10 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   shareLocBtn->onClicked = [=](){
     openURL(fstring("geo:%.7f,%.7f?q=%s", pos.latitude, pos.longitude, geoquery.c_str()).c_str());
   };
+  Menu* shareLocMenu = createMenu(Menu::VERT, false);
+  shareLocMenu->addItem("Copy name", [namestr]() { SDL_SetClipboardText(namestr.c_str()); });
+  shareLocBtn->addWidget(shareLocMenu);
+  setupLongPressMenu(shareLocBtn, shareLocMenu);
   toolbar->addWidget(shareLocBtn);
   toolbar->node->addClass("action-bar");
 

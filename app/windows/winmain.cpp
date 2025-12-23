@@ -665,11 +665,13 @@ HGLRC createGLContext(HDC DC, HGLRC sharectx)
     WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
     WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
     WGL_COLOR_BITS_ARB, 24,  // some sources use 32, but docs clearly state this does not include alpha bits
+#ifndef MAPS_TANGRAM_FBO
     WGL_ALPHA_BITS_ARB, 8,
     WGL_DEPTH_BITS_ARB, 24,
     WGL_STENCIL_BITS_ARB, 8,
     WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
     WGL_SAMPLES_ARB, 4,
+#endif
     0
   };
   int pixelFormatID; UINT numFormats;

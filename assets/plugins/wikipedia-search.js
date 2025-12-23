@@ -40,11 +40,14 @@ function wikipediaSearch(query, bounds, flags)
     // some wikidata entries have multiple entries for P625 (coordinates); GROUP_CONCAT instead of SAMPLE
     //  breaks ordering by dist; queries attempting to extract numerical lng, lat timed out
     // seems wikidata does not store wikipedia pageid, only title and URL
+    const orderby = (flags & 0x4) ? 'ASC(?dist)' : 'DESC(?sitelinks) ASC(?dist)';
+    // `?item wikibase:statements ?statements .` is a potential alternative to sitelinks
     const url = 'https://query.wikidata.org/sparql?query=' + encodeURIComponent(
-      'SELECT ?item ?itemLabel (SAMPLE(?wikiTitle) AS ?wikiTitle)' +
+      'SELECT ?item ?itemLabel (SAMPLE(?wikiTitle) AS ?wikiTitle) (SAMPLE(?sitelinks) AS ?sitelinks)' +
       '    (SAMPLE(?where) AS ?lnglat) (SAMPLE(?dists) AS ?dist) ?url WHERE {' +
       '  ?url schema:about ?item; schema:name ?wikiTitle; schema:inLanguage "en";' +
       '      schema:isPartOf <https://en.wikipedia.org/>.' +
+      '  ?item wikibase:sitelinks ?sitelinks .' +
       '  SERVICE wikibase:around {' +
       '      ?item wdt:P625 ?where .' +
       '      bd:serviceParam wikibase:center "Point(' + lng + ' ' + lat + ')"^^geo:wktLiteral.' +
@@ -52,7 +55,7 @@ function wikipediaSearch(query, bounds, flags)
       '      bd:serviceParam wikibase:distance ?dists.' +
       '  }' +
       '  SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }' +
-      '} GROUP BY ?item ?itemLabel ?url ORDER BY ASC(?dist) LIMIT 1000');
+      '} GROUP BY ?item ?itemLabel ?url ORDER BY ' + orderby + ' LIMIT 1000');
 
     httpRequest(url, "Accept: application/sparql-results+json", function(_content, _error) {
       if(!_content) { notifyError("search", "Wikipedia Search error: " + _error); return; }
