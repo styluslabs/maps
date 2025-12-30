@@ -204,7 +204,8 @@ MapsSearch::~MapsSearch() {}
 
 void MapsSearch::clearSearchResults()
 {
-  app->pluginManager->cancelRequests(PluginManager::SEARCH);  // cancel any outstanding search requests
+  app->pluginManager->cancelRequests(PluginManager::MAP_SEARCH);  // cancel any outstanding search requests
+  app->pluginManager->cancelRequests(PluginManager::LIST_SEARCH);
   app->gui->deleteContents(resultsContent, ".listitem");
   listResultOffset = 0;
   resultCountText->setText(" ");  // use non-empty string to maintain layout height
@@ -412,10 +413,13 @@ void MapsSearch::resultsUpdated(int flags)
 
   // zoom out if necessary to show first 5 results
   if(flags & FLY_TO) {
+    bool zoomtophits = app->cfg()["search"]["zoom_top_hits"].as<bool>(false);
     Map* map = app->map.get();
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
     for(size_t ii = 0; ii < listResults.size(); ++ii) {
       auto& res = listResults[ii];
+      // if any results are on screen, don't change view
+      if(!zoomtophits && map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)) { return; }
       if(ii < 5 || lngLatDist(app->getMapCenter(), res.pos) < 2.0) {
         minLngLat.longitude = std::min(minLngLat.longitude, res.pos.longitude);
         minLngLat.latitude = std::min(minLngLat.latitude, res.pos.latitude);
@@ -425,9 +429,8 @@ void MapsSearch::resultsUpdated(int flags)
     }
 
     if(minLngLat.longitude != 180) {
-      double scrx, scry;
-      if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude, &scrx, &scry)
-          || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude, &scrx, &scry)) {
+      if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude)
+          || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude)) {
         app->lookAt(minLngLat, maxLngLat, 16, map->getRotation(), map->getTilt());
         flyingToResults = true;  // has to be set after flyTo()
       }

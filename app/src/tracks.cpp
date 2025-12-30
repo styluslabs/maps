@@ -698,8 +698,10 @@ Waypoint* MapsTracks::nearestRoutePt(const Waypoint& wpt)
       }
       return true;
     }, false);
+    if(aabb.min.x < -routeCollider.res_x && aabb.max.x > routeCollider.res_x
+        && aabb.min.y < -routeCollider.res_y && aabb.max.y > routeCollider.res_y) { break; }
     radius *= 2;
-  } while(!rtePt && radius.x < routeCollider.res_x && radius.y < routeCollider.res_y);
+  } while(!rtePt);
 
   return rtePt;
 }
@@ -917,12 +919,15 @@ Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
   }
 
   if(autoInsertWaypt) {
+    insertionWpt.clear();
     Waypoint* rtept = nearestRoutePt(wpt);
-    float mindist = FLT_MAX;
-    for(const Waypoint& p : activeTrack->waypoints) {
-      if(p.routed && p.dist > rtept->dist && p.dist < mindist) {
-        mindist = p.dist;
-        insertionWpt = p.uid;
+    if(rtept) {
+      float mindist = FLT_MAX;
+      for(const Waypoint& p : activeTrack->waypoints) {
+        if(p.routed && p.dist > rtept->dist && p.dist < mindist) {
+          mindist = p.dist;
+          insertionWpt = p.uid;
+        }
       }
     }
   }

@@ -115,8 +115,9 @@ PluginManager::UrlReqType PluginManager::clearRequest(int serial)
 void PluginManager::jsSearch(int fnIdx, std::string queryStr, LngLat lngLat00, LngLat lngLat11, int flags)
 {
   //std::lock_guard<std::mutex> lock(jsMutex);
-  cancelRequests(SEARCH);
-  inState = SEARCH;
+  auto state = (flags & MapsSearch::LIST_SEARCH) ? LIST_SEARCH : MAP_SEARCH;
+  cancelRequests(state);
+  inState = state;
 
   duk_context* ctx = jsContext;
   // fn

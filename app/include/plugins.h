@@ -15,7 +15,7 @@ struct PluginFn
 class PluginManager : public MapsComponent
 {
 public:
-  enum UrlReqType { NONE, SEARCH, PLACE, ROUTE } inState = NONE;
+  enum UrlReqType { NONE, LIST_SEARCH, MAP_SEARCH, PLACE, ROUTE } inState = NONE;
 
   PluginManager(MapsApp* _app);
   ~PluginManager();
