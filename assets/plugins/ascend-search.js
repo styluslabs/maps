@@ -27,4 +27,4 @@ function ascendSearch(query, bounds, flags)
   });
 }
 
-registerFunction("ascendSearch", "search-autocomplete-more", "Online Search");
+registerFunction("ascendSearch", "search-unified-autocomplete-more", "Online Search");

@@ -950,10 +950,15 @@ layers:
                     width: 1.5px
 
         road-icons:
+            # ideally, we'd show oneway arrows for major roads at z16, but we need to show for every road (since
+            #  absence implies not oneway) and don't want to hide names, so we need to join road segments for better placement
             arrows:
-                # oneway arrows and shields are distinct groups!
-                #exclusive: true
-                filter: { oneway: 1, $zoom: { min: 17 } }
+                filter:
+                    oneway: 1
+                    not: { service: parking_aisle }
+                    any:
+                        - { $zoom: { min: 17 }, highway: [motorway_link, trunk, primary, secondary, tertiary, residential] }
+                        - { $zoom: { min: 18 } }
                 draw:
                     points:
                         #collide: false
@@ -963,10 +968,12 @@ layers:
                         sprite: arrow
                         color: global.color.oneway_arrow
                         flat: true
-                        size: [[17, 18px], [18, 20px], [20, 32px]]
+                        size: [[16, 12px], [17, 18px], [18, 20px], [20, 32px]]
                         placement: spaced
-                        placement_min_length_ratio: 0.5
+                        placement_min_length_ratio: 0
                         placement_spacing: [[17, 70px], [20, 175px]]
+                        repeat_distance: 150px
+                        repeat_group: oneway
                         angle: auto
 
 
