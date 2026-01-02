@@ -47,6 +47,7 @@ styles:
     slope-angle:
         shaders:
             uniforms:
+                u_slope_angle_opacity: 0.75  # need unique name since could be other mixins with opacity
                 u_min_slope_angle: 20.0  # we could use stop-opacity="0" instead
                 # some more colormaps: https://www.fabiocrameri.ch/
                 u_slope_angle: |
@@ -66,5 +67,10 @@ styles:
             blocks:
                 color: |
                     vec4 tint = texture2D(u_slope_angle, vec2(slope_degs/90.0, 0.5));
-                    if(elev > 0. && slope_degs >= u_min_slope_angle)
-                      base_color = mix(base_color, vec4(tint.rgb, 0.75), 1.0/(1.0 + base_color.a));
+                    if(elev > 0. && slope_degs >= u_min_slope_angle) {
+                    #ifdef HILLSHADE_BLEND_OVER
+                      base_color = mix(base_color, vec4(tint.rgb, tint.a*u_slope_angle_opacity), 1.0/(1.0 + base_color.a));
+                    #else
+                      base_color = mix(base_color, tint, u_slope_angle_opacity);
+                    #endif
+                    }

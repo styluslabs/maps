@@ -55,6 +55,7 @@ styles:
         shaders:
             #defines:
             uniforms:
+                u_custom_slope_opacity: 0.75
                 u_custom_color_0: global.custom_slope_color_0
                 u_custom_color_1: global.custom_slope_color_1
                 u_min_slope: 27.5
@@ -77,5 +78,9 @@ styles:
                     if(num_en > 0.0 && fslope >= 0.0 && fslope <= 1.0 && faspect >= 0.0 && faspect <= 1.0 && felev >= 0.0 && felev <= 1.0) {
                       float fmix = pow(fslope*faspect*felev, 1.0/num_en);
                       vec4 c = mix(u_custom_color_0, u_custom_color_1, fmix);
-                      base_color = mix(base_color, vec4(c.rgb, 0.75), 1.0/(1.0 + base_color.a));
+                    #ifdef HILLSHADE_BLEND_OVER
+                      base_color = mix(base_color, vec4(c.rgb, c.a*u_custom_slope_opacity), 1.0/(1.0 + base_color.a));
+                    #else
+                      base_color = mix(base_color, c, u_custom_slope_opacity);
+                    #endif
                     }

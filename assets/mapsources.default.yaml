@@ -225,6 +225,8 @@ enable-slope-angle:
     scene: scenes/slope-angle.yaml
     layer: true
     layers: [hillshade]
+    opacity_uniform: hillshade.shaders.uniforms.u_slope_angle_opacity
+    default_opacity: 0.75
     updates:
         styles.hillshade.mix#-1: slope-angle
 
@@ -233,6 +235,8 @@ custom-slope-shading:
     scene: scenes/custom-slope-shading.yaml
     layer: true
     layers: [hillshade]
+    opacity_uniform: hillshade.shaders.uniforms.u_custom_slope_opacity
+    default_opacity: 0.75
     updates:
         styles.hillshade.mix#-1: custom-slope-shading
 

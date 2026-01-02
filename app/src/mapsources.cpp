@@ -22,6 +22,12 @@
 
 static std::string getLayerName(const YAML::Node& n) { return n.IsMap() ? n["source"].Scalar() : n.Scalar(); }
 
+static float getLayerOpacity(const YAML::Node& sources, const YAML::Node& n)
+{
+  float dflt = sources[getLayerName(n)]["default_opacity"].as<float>(1.0f);
+  return n.IsMap() ? n["opacity"].as<float>(dflt) : dflt;
+}
+
 class SourceBuilder
 {
 public:
@@ -53,7 +59,7 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
   // allow layers together w/ url or scene for mixins like slope-angle
   if(src["layers"]) {  // multi-layer
     for (const auto& layer : src["layers"]) {
-      addLayer(getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f);
+      addLayer(getLayerName(layer), getLayerOpacity(sources, layer));
     }
   }
 
@@ -62,7 +68,7 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
     updates.emplace_back("+sources." + rasterN + ".type", "Raster");
     for (const auto& attr : src.pairs()) {
       const std::string& k = attr.first.Scalar();
-      if(k != "title" && k != "archived" && k != "updates" && k != "layer" && k != "download_url")
+      if(k != "title" && k != "archived" && k != "updates" && k != "layer" && k != "download_url" && k != "default_opacity")
         updates.emplace_back("+sources." + rasterN + "." + attr.first.Scalar(), yamlToStr(attr.second));
     }
     // if cache file is not explicitly specified, use key since it is guaranteed to be unique
@@ -102,6 +108,10 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
   else if(src["scene"]) {  // vector map
     imports.push_back(src["scene"].Scalar());
     ++order;  //order = 9001;  // subsequent rasters should be drawn on top of the vector map
+  }
+
+  if(src["opacity_uniform"] && !std::isnan(opacity)) {
+    updates.emplace_back("+styles." + src["opacity_uniform"].as<std::string>("INVALID"), fstring("%.3f", opacity));
   }
 
   for(const auto& update : src["updates"].pairs())
@@ -254,12 +264,12 @@ void MapsSources::rebuildSource(const std::string& srcname, bool async)
       if(!src) return;
       if(src["layers"] && !src["scene"]) {  //&& !src["layer"].as<bool>(false)) {
         for(const auto& layer : src["layers"])
-          currLayers.push_back({getLayerName(layer), layer.IsMap() ? layer["opacity"].as<float>(1.0f) : 1.0f});
+          currLayers.push_back({ getLayerName(layer), getLayerOpacity(mapSources, layer) });
         for(const auto& update : src["updates"].pairs())
           currUpdates.emplace_back("+" + update.first.Scalar(), yamlToStr(update.second));
       }
       else
-        currLayers.push_back({srcname, 1.0f});
+        currLayers.push_back({srcname, 1.0f});  // single layer, opacity is always 1.0 (not default_opacity)
     }
   }
 
@@ -376,6 +386,7 @@ void MapsSources::populateSources()
     bool archived = src["archived"].as<bool>(false);
     bool isLayer = src["layer"].as<bool>(false);
     bool isRaster = bool(src["url"]);
+    float dfltOpacity = src["default_opacity"].as<float>(1.0f);
     if(!src["layers"] || isLayer) {
       layerKeys.push_back(key);
       layerTitles.push_back(src["title"].Scalar());
@@ -419,7 +430,7 @@ void MapsSources::populateSources()
           currLayers.insert(it, {key, 1.0f});
         }
         else
-          currLayers.push_back({key, 1.0f});
+          currLayers.push_back({key, dfltOpacity});
         // treat as new source (to edit an existing multi-layer source, user can go to edit sources directly)
         currSource = "";
         titleEdit->setText("Untitled");
@@ -500,7 +511,8 @@ void MapsSources::populateSources()
   if(!selectLayerDialog) {
     selectLayerDialog.reset(createSelectDialog("Choose Layer", MapsApp::uiIcon("layers")));
     selectLayerDialog->onSelected = [this](int idx){
-      currLayers.push_back({layerKeys[idx], 1.0f});
+      float alpha = mapSources[layerKeys[idx]].at("default_opacity").as<float>(1.0f);
+      currLayers.push_back({layerKeys[idx], alpha});
       rebuildSource();  //currLayers);
       populateSourceEdit("");
     };
@@ -760,23 +772,37 @@ void MapsSources::populateSourceEdit(std::string key)
       Button* item = createListItem(MapsApp::uiIcon("layers"), mapSources[layername]["title"].Scalar().c_str());
       Widget* container = item->selectFirst(".child-container");
 
-      // if raster layer, show opacity control
-      if(mapSources[layername].has("url") && !std::isnan(layer.opacity)) {
+      // if raster layer (or explicit opacity uniform), show opacity control
+      auto uniform_path = mapSources[layername].at("opacity_uniform").as<std::string>();
+      if(uniform_path.size() || (mapSources[layername].has("url") && !std::isnan(layer.opacity))) {
+        // would arguably be better to use gui_variables for opacity_uniform, but much bigger refactor needed
+        //  and has issue of how to determine which layer gui variable belongs to
+        std::string opacity_style = "raster-" + layername;
+        std::string opacity_uniform = "u_opacity";
+        if(uniform_path.size()) {
+          auto parts = splitStr<std::vector>(uniform_path.c_str(), '.');
+          if(parts.size() < 2) {
+            LOGE("Invalid opacity_uniform for source %s: %s", layername.c_str(), uniform_path.c_str());
+            continue;
+          }
+          opacity_style = parts[0];
+          opacity_uniform = parts[parts.size() - 1];
+        }
+
         Button* opacityBtn = createToolbutton(
             MapsApp::uiIcon("opacity"), fstring("%d%%", int(layer.opacity*100 + 0.5f)).c_str(), true);
-
         Slider* opacitySlider = createSlider();
         opacitySlider->setValue(layer.opacity);
         opacitySlider->onValueChanged = [=](real val){
           // can't cache style because Scene could be reloaded w/o repeating populateSourceEdit()
-          Tangram::Style* style = findStyle(app->map->getScene(), "raster-" + layername);
+          Tangram::Style* style = findStyle(app->map->getScene(), opacity_style);
           if(!style) return;
           opacityBtn->setTitle(fstring("%d%%", int(val*100 + 0.5)).c_str());
           auto it = std::find(currLayers.begin(), currLayers.end(), layername);
           if(it != currLayers.end())
             it->opacity = val;
           for(auto& uniform : style->styleUniforms()) {
-            if(uniform.first.name == "u_opacity" && uniform.second.is<float>()) {
+            if(uniform.first.name == opacity_uniform && uniform.second.is<float>()) {
               uniform.second.set<float>(val);
               app->platform->requestRender();
               sourceModified();
