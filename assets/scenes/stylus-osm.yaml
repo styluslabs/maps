@@ -808,7 +808,7 @@ layers:
                     - { highway: footway, surface: unpaved }
                 default:
                     #filter: [ { $zoom: { min: 12 } }, { name: true }, { ref: true }, { has_name: true } ]
-                    draw: { lines: { color: global.color.unpaved_trail, width: [[10, 1px], [18, 3px]] } }
+                    draw: { lines: { color: global.color.unpaved_trail, width: [[10, 0.5px], [12, 1px], [18, 3px]] } }
                 scramble:
                     # what about demanding_mountain_hiking and alpine_hiking levels?
                     filter: { sac_scale: [ demanding_alpine_hiking, difficult_alpine_hiking ] }
@@ -1261,7 +1261,7 @@ layers:
             lines:
                 style: unlit-lines
                 color: global.color.bike_lane
-                width: [[10, 1px], [13, 1.5px], [14, 2px]]
+                width: [[10, 0.7px], [11, 1px], [13, 1.5px], [14, 2px]]
                 order: global.order.bicycle
         track:
             exclusive: true
@@ -1278,6 +1278,7 @@ layers:
             unpaved:
                 filter: [ { surface: unpaved }, { mtb_scale: true }, { highway: [path, track], surface: false } ]
                 draw: { lines: { style: dashed-bike, color: global.mtb_color_fn } }
+                #hide: { filter: { $zoom: { max: 12 } }, draw: { lines: { width: 0 } } }
         lane:
             exclusive: true
             priority: 2
