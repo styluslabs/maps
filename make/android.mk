@@ -4,17 +4,18 @@
 
 # common C and C++ flags
 CFLAGS += -MMD -fPIC -fvisibility=hidden -ffunction-sections -fdata-sections -Wall -Werror=return-type -Wno-strict-aliasing
+NDK_PREBUILT := $(wildcard $(ANDROID_NDK)/toolchains/llvm/prebuilt/*)
 # C++
-CXX = $(ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-linux-android21
+CXX = $(NDK_PREBUILT)/bin/clang++ --target=aarch64-linux-android21
 CXXFLAGS += --std=c++14 -fexceptions -frtti
 # C
-CC = $(ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-linux-android21
+CC = $(NDK_PREBUILT)/bin/clang --target=aarch64-linux-android21
 CCFLAGS += --std=c99 -Werror=implicit-function-declaration -Werror=int-conversion
 # linker
 LD = $(CXX) -shared
 LDFLAGS += --std=c++14 -static-libstdc++ -fexceptions -frtti -fPIC -fvisibility=hidden -Wl,-soname,$(TARGET) -Wl,--exclude-libs,ALL -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--no-undefined-version -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments -Wl,--gc-sections
 # strip/objcopy; alternatively, we could let gradle strip library
-STRIP = $(ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip -s
+STRIP = $(NDK_PREBUILT)/bin/llvm-strip -s
 
 
 DEBUG ?= 0

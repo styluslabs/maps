@@ -1434,6 +1434,9 @@ layers:
                 natural: [peak, volcano]
                 ele: { min: 1 }
                 all:
+                    # only special peaks below z12
+                    - any: [ { wikipedia: true }, { prominence: true }, { $zoom: { min: 12 } } ]
+                    # not show_trails: named peaks from z15, all from z17
                     - any: [ { $zoom: { min: 17 } }, global.show_trails ]
                     - any: [ { $zoom: { min: 15 } }, { name: true } ]
             draw:
