@@ -60,32 +60,45 @@ jobs:
       with:
         submodules: recursive
         path: maps
-    - name: Checkout curl
-      uses: actions/checkout@v4
-      with:
-        repository: curl/curl
-        ref: curl-8_17_0
-        path: curl
-    - name: Configure libcurl
+    - name: Download curl and zlib sources
+      shell: powershell
       run: |
-        cmake -S curl -B curl/build ^
-          -G "Visual Studio 17 2022" ^
-          -A x64 ^
-          -DBUILD_SHARED_LIBS=ON ^
-          -DCMAKE_BUILD_TYPE=Release ^
-          -DCURL_USE_SCHANNEL=ON ^
-          -DCURL_USE_OPENSSL=OFF ^
-          -DCURL_WINDOWS_SSPI=ON ^
-          -DENABLE_IPV6=ON ^
-          -DCURL_ZLIB=ON ^
-          -DZLIB_USE_STATIC_LIBS=ON ^
-          -DCURL_DISABLE_TESTS=ON
+        # Download and extract curl (latest version as of early 2026)
+        curl.exe -L -o curl.zip https://github.com/curl/curl/releases/download/curl-8_18_0/curl-8.18.0.zip
+        Expand-Archive curl.zip -DestinationPath .
+        Rename-Item "curl-8.18.0" "curl"
+
+        # Download and extract zlib
+        curl.exe -L -o zlib.zip https://github.com/madler/zlib/archive/refs/tags/v1.3.1.zip
+        Expand-Archive zlib.zip -DestinationPath .
+        Rename-Item "zlib-1.3.1" "zlib"
+    - name: Build zlib (Static)
+      shell: pwsh
+      run: |
+        cd zlib
+        cmake -B build -G "Visual Studio 17 2022" -A x64 `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DBUILD_SHARED_LIBS=OFF
+        cmake --build build --config Release
     - name: Build libcurl
-      run: cmake --build curl/build --config Release
+      shell: pwsh
+      run: |
+        cd curl
+        cmake -B build -G "Visual Studio 17 2022" -A x64 `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DBUILD_SHARED_LIBS=ON `
+          -DBUILD_CURL_EXE=ON `
+          -DCURL_ZLIB=ON `
+          -DZLIB_INCLUDE_DIR="$pwd\..\zlib;$pwd\..\zlib\build" `
+          -DZLIB_LIBRARY="$pwd\..\zlib\build\Release\zlibstatic.lib" `
+          -DCURL_USE_SCHANNEL=ON `
+          -DCURL_WINDOWS_SSPI=ON `
+          -DENABLE_IPV6=ON `
+          -DCURL_USE_LIBPSL=OFF
+        cmake --build build --config Release
     - name: Download make.exe
       run: |
-        curl -L -o make.exe ^
-          https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
+        curl -L -o make.exe https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
     - name: Add make.exe to PATH
       run: |
         echo %CD%>>"%GITHUB_PATH%"
