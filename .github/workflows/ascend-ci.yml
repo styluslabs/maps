@@ -5,6 +5,7 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  #workflow_dispatch:  # for manual run
 
 jobs:
   tangram-tests:
@@ -45,12 +46,58 @@ jobs:
     - name: Gradle Assemble
       run: ./gww assembleRelease
       working-directory: maps/app/android
+    - name: Upload release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-apk
+        path: maps/app/android/app/build/outputs/apk/release/app-release.apk
 
-  #windows-build:
-  #  runs-on: windows-latest
-  #  steps:
-  #  - uses: actions/checkout@v4
-  #    with:
-  #      submodules: recursive
-  #  - name: Build tgz
-  #    run: make real_tgz
+  windows-build:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout maps
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        path: maps
+    - name: Checkout curl
+      uses: actions/checkout@v4
+      with:
+        repository: curl/curl
+        ref: curl-8_17_0
+        path: curl
+    - name: Configure libcurl
+      run: |
+        cmake -S curl -B curl/build ^
+          -G "Visual Studio 17 2022" ^
+          -A x64 ^
+          -DBUILD_SHARED_LIBS=ON ^
+          -DCMAKE_BUILD_TYPE=Release ^
+          -DCURL_USE_SCHANNEL=ON ^
+          -DCURL_USE_OPENSSL=OFF ^
+          -DCURL_WINDOWS_SSPI=ON ^
+          -DENABLE_IPV6=ON ^
+          -DCURL_ZLIB=ON ^
+          -DZLIB_USE_STATIC_LIBS=ON ^
+          -DCURL_DISABLE_TESTS=ON
+    - name: Build libcurl
+      run: cmake --build curl/build --config Release
+    - name: Download make.exe
+      run: |
+        curl -L -o make.exe ^
+          https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
+    - name: Add make.exe to PATH
+      run: |
+        echo %CD%>>"%GITHUB_PATH%"
+    - name: Build Maps
+      working-directory: maps
+      #env:
+      #  CURL_INCLUDE_DIR: ${{ github.workspace }}\curl\build\include
+      #  CURL_LIB_DIR:     ${{ github.workspace }}\curl\build\lib\Release
+      #  CURL_LIB:         libcurl.lib
+      run: make zip
+    - name: Upload release ZIP
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-win64-zip
+        path: maps/build/Release/*.zip

@@ -80,7 +80,7 @@ zip: rebuild_version_info $(ZIP)
 msi: rebuild_version_info $(MSI)
 
 rebuild_version_info:
-	wsl touch $(SRC_WITH_VERSION_INFO)
+	copy /b $(SRC_WITH_VERSION_INFO) +,,
 
 # force C/C++
 $(OBJDIR)/$(FORCECPP): CFLAGS += /TP

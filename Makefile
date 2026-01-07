@@ -37,6 +37,8 @@ include module.mk
 
 ifneq ($(windir),)
 # Windows
+CURL_BASE := ../curl
+
 MODULE_BASE := .
 
 MODULE_SOURCES += \
@@ -49,7 +51,7 @@ MODULE_SOURCES += \
   deps/nanovgXC/glad/glad_wgl.c
 
 MODULE_INC_PUBLIC = $(STYLUSLABS_DEPS)/nanovgXC
-MODULE_INC_PRIVATE = app/include tangram-es/platforms/common tangram-es/platforms/windows/src $(STYLUSLABS_DEPS) ../curl-8.13.0/include deps/nfd/src/include
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/common tangram-es/platforms/windows/src $(STYLUSLABS_DEPS) $(CURL_BASE)/include deps/nfd/src/include
 MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
 
 include $(ADD_MODULE)
@@ -79,7 +81,7 @@ LIBS = \
   setupapi.lib \
   imm32.lib \
   version.lib \
-  ..\curl-8.13.0\builds\libcurl-vc-x64-release-dll-zlib-static-ipv6-sspi-schannel\lib\libcurl.lib
+  $(CURL_BASE)\build\lib\Release\libcurl.lib
 
 # distribution package
 ZIPFILE = $(TARGET)-$(GIT_DESCRIBE)-$(GIT_REV).zip
@@ -91,7 +93,7 @@ DISTRES = \
   assets\res \
   assets\scenes \
   assets\shared \
-  ..\curl-8.13.0\builds\libcurl-vc-x64-release-dll-zlib-static-ipv6-sspi-schannel\bin\libcurl.dll
+  $(CURL_BASE)\build\lib\Release\libcurl.dll
 # installer
 #WXS = windows/InstallWrite.wxs
 
