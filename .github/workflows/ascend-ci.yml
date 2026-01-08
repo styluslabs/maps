@@ -97,18 +97,14 @@ jobs:
           -DCURL_USE_LIBPSL=OFF
         cmake --build build --config Release
     - name: Download make.exe
-      run: |
-        curl -L -o make.exe https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
-    - name: Add make.exe to PATH
-      run: |
-        echo %CD%>>"%GITHUB_PATH%"
+      run: curl -L -o make.exe https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
     - name: Build Maps
       working-directory: maps
       #env:
       #  CURL_INCLUDE_DIR: ${{ github.workspace }}\curl\build\include
       #  CURL_LIB_DIR:     ${{ github.workspace }}\curl\build\lib\Release
       #  CURL_LIB:         libcurl.lib
-      run: make zip
+      run: ..\make.exe zip
     - name: Upload release ZIP
       uses: actions/upload-artifact@v4
       with:
