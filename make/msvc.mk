@@ -80,7 +80,7 @@ zip: rebuild_version_info $(ZIP)
 msi: rebuild_version_info $(MSI)
 
 rebuild_version_info:
-	powershell (Get-Item "$(SRC_WITH_VERSION_INFO)").LastWriteTime = Get-Date
+	powershell -Command "(Get-Item '$(SRC_WITH_VERSION_INFO)').LastWriteTime = Get-Date"
 
 # force C/C++
 $(OBJDIR)/$(FORCECPP): CFLAGS += /TP

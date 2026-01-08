@@ -100,11 +100,14 @@ jobs:
       run: curl -L -o make.exe https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
     - name: Build Maps
       working-directory: maps
-      #env:
+      env:
+        SHELL: 'C:\Windows\System32\cmd.exe'
       #  CURL_INCLUDE_DIR: ${{ github.workspace }}\curl\build\include
       #  CURL_LIB_DIR:     ${{ github.workspace }}\curl\build\lib\Release
       #  CURL_LIB:         libcurl.lib
-      run: ..\make.exe zip
+      run: |
+           ..\make.exe --version
+           ..\make.exe zip
     - name: Upload release ZIP
       uses: actions/upload-artifact@v4
       with:
