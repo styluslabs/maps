@@ -98,19 +98,16 @@ jobs:
         cmake --build build --config Release
     - name: Download make.exe
       run: curl -L -o make.exe https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
+    - name: MSVC command prompt
+      uses: ilammy/msvc-dev-cmd@v1
+    - name: Build Maps
+      shell: cmd
+      working-directory: maps
+      run: ..\make.exe SHELL=cmd.exe zip
     # SSH session to debug workflow
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
-    - name: Build Maps
-      working-directory: maps
-      env:
-        SHELL: 'C:\Windows\System32\cmd.exe'
-      #  CURL_INCLUDE_DIR: ${{ github.workspace }}\curl\build\include
-      #  CURL_LIB_DIR:     ${{ github.workspace }}\curl\build\lib\Release
-      #  CURL_LIB:         libcurl.lib
-      run: |
-           ..\make.exe --version
-           ..\make.exe zip
+      if: ${{ failure() }}
     - name: Upload release ZIP
       uses: actions/upload-artifact@v4
       with:
