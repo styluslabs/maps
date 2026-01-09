@@ -98,6 +98,10 @@ jobs:
         cmake --build build --config Release
     - name: Download make.exe
       run: curl -L -o make.exe https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
+    # SSH session to debug workflow
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      timeout-minutes: 30
     - name: Build Maps
       working-directory: maps
       env:
