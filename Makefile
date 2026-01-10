@@ -35,7 +35,7 @@ include tangram-es/core/module.mk
 include module.mk
 
 
-ifneq ($(windir),)
+ifeq ($(OS),Windows_NT)
 # Windows
 CURL_BASE := ../curl
 
@@ -81,7 +81,7 @@ LIBS = \
   setupapi.lib \
   imm32.lib \
   version.lib \
-  $(CURL_BASE)\build\lib\Release\libcurl.lib
+  $(CURL_BASE)\build\lib\Release\libcurl_imp.lib
 
 # distribution package
 ZIPFILE = $(TARGET)-$(GIT_DESCRIBE)-$(GIT_REV).zip
