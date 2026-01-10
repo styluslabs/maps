@@ -113,7 +113,7 @@ $(ZIP): $(TGT) $(DISTRES)
 	mkdir "$(BUILDDIR)/$(ZIPDIR)"
 	powershell cp "$(TGT)" "$(BUILDDIR)/$(ZIPDIR)"
 	cmd /C for %I in ( $(DISTRES) ) do powershell cp -r %I $(BUILDDIR)/$(ZIPDIR)
-	powershell rm "$(BUILDDIR)/$(ZIPDIR)/shared/.git"
+	powershell rm -Recurse -Force "$(BUILDDIR)/$(ZIPDIR)/shared/.git"
 	(cd $(BUILDDIR) && tar.exe -acf $(ZIPFILE) $(ZIPDIR))
 	rmdir /s /q "$(BUILDDIR)/$(ZIPDIR)"
 
