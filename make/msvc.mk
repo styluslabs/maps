@@ -8,17 +8,17 @@
 #  LIBCMT vs. MSVCRT
 CFLAGS = /MT /Zc:preprocessor
 # C++
-CXX = cl /nologo
+CXX = cl.exe /nologo
 CXXFLAGS = /std:c++14
 #/GR- /D_HAS_EXCEPTIONS=0
 # C
-CC = cl /nologo
+CC = cl.exe /nologo
 CCFLAGS =
 # linkerc
-LD = link /nologo
+LD = link.exe /nologo
 LDFLAGS = /SUBSYSTEM:WINDOWS
 # resource compiler
-RC = rc
+RC = rc.exe
 # WiX - tool for creating MSI installer
 WIXCANDLE = "c:\Program Files (x86)\WiX Toolset v3.11\bin\candle.exe"
 WIXLIGHT = "c:\Program Files (x86)\WiX Toolset v3.11\bin\light.exe"

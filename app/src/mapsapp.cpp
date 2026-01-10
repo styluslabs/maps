@@ -6,6 +6,7 @@
 #include "pugixml.hpp"
 #include <sys/stat.h>
 #include <fstream>
+#include <chrono>
 // for elevation
 #include "util/elevationManager.h"
 #include "data/rasterSource.h"
