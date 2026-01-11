@@ -8,9 +8,7 @@ else
   OBJDIR=$(BUILDDIR)
 endif
 
-ifeq ($(MAKECMDGOALS),compile_commands)
-  OBJEXT=clangd
-else ifeq ($(OS),Windows_NT)
+ifeq ($(OS),Windows_NT)
   OBJEXT=obj
 else
   OBJEXT=o
