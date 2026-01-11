@@ -28,7 +28,7 @@ Available for [**Android**](https://github.com/styluslabs/maps/releases), [**Lin
 
 ### Building ###
 
-On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, install build dependencies (`apt install libgtk-3-dev libcurl4-openssl-dev libfontconfig-dev libxinerama-dev` on Debian/Ubuntu), then run `cd maps && make` to generate `build/Release/ascend`.  To build and install for Android (on Linux w/ Android SDK and NDK installed), `cd maps/app/android && ./gww installRelease`.  The `gww` (gradle wrapper wrapper) script will download and run `gradlew`.  To install the Android SDK and NDK, run `gww --install-sdk`.
+On Linux, `git clone --recurse-submodules https://github.com/styluslabs/maps`, install build dependencies (`apt install libgtk-3-dev libcurl4-openssl-dev libfontconfig-dev libxinerama-dev` on Debian/Ubuntu, `dnf install gtk3-devel libcurl-devel fontconfig-devel libXinerama-devel` on Fedora, etc.), then run `cd maps && make` to generate `build/Release/ascend`.  To build and install for Android (on Linux w/ Android SDK and NDK installed), `cd maps/app/android && ./gww installRelease`.  The `gww` (gradle wrapper wrapper) script will download and run `gradlew`.  To install the Android SDK and NDK, run `gww --install-sdk`.
 
 
 ### Adding map sources ###
