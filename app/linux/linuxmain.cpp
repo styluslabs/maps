@@ -1019,7 +1019,9 @@ int main(int argc, char* argv[])
   Tangram::ElevationManager::offscreenWorker = std::move(offscreenWorker);
   glXMakeCurrent(xDpy, xWin, mainCtx);
   //gladLoadGL();
-  glXSwapIntervalEXT(xDpy, xWin, MapsApp::cfg()["gl_swap_interval"].as<int>(-1));
+  const char* glXexts = glXQueryExtensionsString(xDpy, DefaultScreen(xDpy));
+  int dfltswap = strstr(glXexts, "GLX_EXT_swap_control_tear") ? -1 : 1;
+  glXSwapIntervalEXT(xDpy, xWin, MapsApp::cfg()["gl_swap_interval"].as<int>(dfltswap));
 
   // setup input context for keyboard input
   XSetLocaleModifiers("");
