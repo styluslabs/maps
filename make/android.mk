@@ -4,7 +4,7 @@
 
 # common C and C++ flags
 CFLAGS += -MMD -fPIC -fvisibility=hidden -ffunction-sections -fdata-sections -Wall -Werror=return-type -Wno-strict-aliasing
-NDK_PREBUILT := $(wildcard $(ANDROID_NDK)/toolchains/llvm/prebuilt/*)
+NDK_PREBUILT := $(wildcard $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/*)
 # C++
 CXX = $(NDK_PREBUILT)/bin/clang++ --target=aarch64-linux-android21
 CXXFLAGS += --std=c++14 -fexceptions -frtti

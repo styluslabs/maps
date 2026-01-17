@@ -162,7 +162,7 @@ else ifneq ($(ANDROID),)
 
 # System.loadLibrary("droidmaps") in MapsLib.java
 TARGET = libdroidmaps.so
-ANDROID_NDK ?= $(HOME)/android-sdk/ndk/26.3.11579264
+ANDROID_NDK_HOME ?= $(ANDROID_HOME)/ndk/26.3.11579264
 
 # platform
 MODULE_BASE := .
