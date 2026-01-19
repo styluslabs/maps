@@ -391,6 +391,7 @@ void MapsSearch::updateMapResults(LngLat lngLat00, LngLat lngLat11, int flags)
 void MapsSearch::resultsUpdated(int flags)
 {
   if(flags & MAP_SEARCH) {
+    newMapSearch = false;  // be sure this is clear in case there were no results
     moreMapResultsAvail = mapResults.size() >= MAX_MAP_RESULTS;
     for(size_t idx = 0; idx < mapResults.size(); ++idx) {
       auto& mapres = mapResults[idx];
@@ -404,15 +405,17 @@ void MapsSearch::resultsUpdated(int flags)
       saveToBkmksBtn->setEnabled(true);
   }
 
-  if(!(flags & LIST_SEARCH)) { return; }
-  populateResults();
-  int nresults = std::max(mapResults.size(), listResults.size());
-  bool more = mapResults.size() > listResults.size() ? moreMapResultsAvail : moreListResultsAvail;
-  resultCountText->setText(nresults == 1 ? "1 result" :
-      fstring("%s%d results", more ? "over " : "" , nresults).c_str());
+  if(flags & LIST_SEARCH) {
+    populateResults();
+    int nresults = std::max(mapResults.size(), listResults.size());
+    bool more = mapResults.size() > listResults.size() ? moreMapResultsAvail : moreListResultsAvail;
+    resultCountText->setText(nresults == 1 ? "1 result" :
+        fstring("%s%d results", more ? "over " : "" , nresults).c_str());
+  }
 
-  // zoom out if necessary to show first 5 results
-  if(flags & FLY_TO) {
+  // zoom out if necessary to show results if both map and list results complete
+  bool fly = mapResults.empty() || ((flags & MAP_SEARCH) && (flags & LIST_SEARCH));
+  if((flags & FLY_TO) && !newMapSearch && !listResults.empty() && fly) {
     bool zoomtophits = app->cfg()["search"]["zoom_top_hits"].as<bool>(false);
     Map* map = app->map.get();
     LngLat minLngLat(180, 90), maxLngLat(-180, -90);
@@ -527,14 +530,16 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
 
   //if(searchStr.empty()) { return; }  ... NO! This breaks no-query plugins!!!
   // we want to run map search before list search
+  // set FLY_TO for map search because we now only fly when both map and list queries complete
+  int fly = phase == RETURN ? FLY_TO : 0;
   if(providerIdx == 0 || !providerFlags.unified)
-    updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
+    updateMapResults(lngLat00, lngLat11, MAP_SEARCH | fly);
 
   resultCountText->setText("Searching...");
   if(providerIdx == 0)
-    offlineListSearch(searchStr, lngLat00, lngLat11, phase == RETURN ? FLY_TO : 0);
+    offlineListSearch(searchStr, lngLat00, lngLat11, fly);
   else {
-    int flags = LIST_SEARCH | (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
+    int flags = LIST_SEARCH | fly | (sortByDist ? SORT_BY_DIST : 0);
     if(providerFlags.unified)
       updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
     else
