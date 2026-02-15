@@ -87,6 +87,7 @@ jobs:
         cmake -B build -G "Visual Studio 17 2022" -A x64 `
           -DCMAKE_BUILD_TYPE=Release `
           -DBUILD_SHARED_LIBS=ON `
+          -DBUILD_STATIC_LIBS=ON `
           -DBUILD_CURL_EXE=ON `
           -DCURL_ZLIB=ON `
           -DZLIB_INCLUDE_DIR="$pwd\..\zlib;$pwd\..\zlib\build" `
