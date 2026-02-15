@@ -326,6 +326,23 @@ hillshade-usgs:
             max_zoom: 16
             cache: usgs-elevation
 
+mapterhorn:
+  title: Hillshading (Mapterhorn)
+  description: High resolution elevation data (webp)
+  attribution: mapterhorn.com/attribution
+  archived: true
+  layer: true
+  layers: [hillshade]
+  updates:
+    styles.hillshade.shaders.defines.ELEVATION_FLOAT_TEX: false
+    sources.elevation:
+      type: Raster
+      filtering: nearest
+      url: https://tiles.mapterhorn.com/{z}/{x}/{y}.webp
+      # z17 available in some areas
+      max_zoom: 16
+      cache: mapterhorn
+
 hillshade:
     title: Hillshading
     layer: true

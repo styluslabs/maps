@@ -56,6 +56,18 @@ task generateNativeLib(type: Exec) {
     workingDir '../../..'
 }
 
+task printSdkVersions {
+  doLast {
+    println "Gradle: ${gradle.gradleVersion}"
+    println "JDK: ${System.getProperty("java.version")} (${System.getProperty("java.vendor")})"
+    def agp = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
+    println "AGP: ${agp}"
+    println "compileSdk: ${android.compileSdkVersion}"
+    println "buildTools: ${android.buildToolsVersion}"
+    println "ndkVersion: ${android.ndkVersion}"
+  }
+}
+
 preBuild.dependsOn generateNativeLib
 
 dependencies {

@@ -44,7 +44,7 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
     - name: Gradle Assemble
-      run: ./gww assembleRelease
+      run: ./gww printSdkVersions assembleRelease
       working-directory: maps/app/android
     - name: Upload release APK
       uses: actions/upload-artifact@v4
@@ -113,3 +113,9 @@ jobs:
       with:
         name: release-win64-zip
         path: maps/build/Release/*.zip
+    # extremely difficult to find .lib for MSVC, esp. static lib, even for common software like curl
+    - name: Upload curl lib
+      uses: actions/upload-artifact@v4
+      with:
+        name: curl-static-win64
+        path: curl/build/lib/Release
