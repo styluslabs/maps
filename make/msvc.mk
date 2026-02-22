@@ -39,6 +39,9 @@ ifneq ($(PROFILE), 0)
   CFLAGS += -fno-inline -g
 endif
 
+# allow overriding directory for compile_commands.json
+COMPILE_CMDS_DIR ?= $(PWD)
+
 # assumes *FLAGS variables use deferred evaluation
 CFLAGS += $(CFLAGS_PRIVATE)
 CCFLAGS += $(CCFLAGS_PRIVATE)
@@ -91,15 +94,15 @@ $(OBJDIR)/$(FORCECPP): CFLAGS += /TP
 #  it will get swallowed - we could add more matches, e.g., /C:"^[^N]" /C:"^N[^o] etc. if this is a problem.
 $(OBJDIR)/%.obj: %.cpp
 	@echo|set /p x="$@: " > $(basename $@).d
-	($(CXX) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
+	($(CXX) /showIncludes $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) /Fo:$@ /c $< || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
 
 $(OBJDIR)/%.obj: %.cc
 	@echo|set /p x="$@: " > $(basename $@).d
-	($(CXX) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
+	($(CXX) /showIncludes $(CFLAGS) $(CXXFLAGS) $(INCFLAGS) /Fo:$@ /c $< || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
 
 $(OBJDIR)/%.obj: %.c
 	@echo|set /p x="$@: " > $(basename $@).d
-	($(CC) /c $< /Fo:$@ /showIncludes $(CFLAGS) $(CCFLAGS) $(INCFLAGS) || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
+	($(CC) /showIncludes $(CFLAGS) $(CCFLAGS) $(INCFLAGS) /Fo:$@ /c $< || echo XXXDIE) | @FOR /F "tokens=1,2,3,*" %%A IN ('$(DEPENDFILT)') DO @IF "%%A"=="Note:" (echo|set /p x="%%D ">>$(basename $@).d) ELSE (@IF "%%A"=="XXXDIE" (exit 2) ELSE echo %%A %%B %%C %%D)
 
 $(OBJDIR)/%.res: %.rc
 	$(RC) $(RCFLAGS) /fo $@ $<
@@ -143,6 +146,10 @@ clean:
 
 distclean:
 	rd /s /q ./Debug ./Release
+
+# run `make COMPILE_CMDS_DIR="C:/<path to repo>" OS=Windows_NT compile_commands` from WSL bash
+compile_commands:
+	make CXX=clang-cl CC=clang-cl --always-make --dry-run | grep -oP '^\(\Kclang[^|]*(?= \|\|)' | jq -nR '[inputs | {directory: "$(COMPILE_CMDS_DIR)", command: ., file: (split(" ") | last)}]' > compile_commands.json
 
 # header dependency files
 -include $(DEPS)

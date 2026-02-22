@@ -245,7 +245,7 @@ terrain-exaggeration:
     archived: true
     layer: true
     updates:
-        application.gui_variables.terrain_3d_scale: { label: 3D Terrain Scale, min: 0, max: 100 }
+        application.gui_variables.terrain_3d_scale: { label: 3D Terrain Scale, min: 0, max: 100, step: 0.5 }
         global.terrain_3d_scale: 2.0
 
 mix-base-raster:

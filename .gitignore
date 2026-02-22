@@ -9,6 +9,7 @@
 /deps/easyexif
 /assets/old-scenes
 /valhalla/
+/.cache/
 
 *.apk
 *.jar
