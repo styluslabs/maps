@@ -1847,7 +1847,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   scaleBar = new ScaleBarWidget(map.get());
   scaleBar->node->setAttribute("box-anchor", revbtns ? "bottom right" : "bottom left");
   scaleBar->setMargins(6, 10);
-  scaleBar->showZoom = cfg()["ui"]["show_debug"].as<bool>(false);
+  scaleBar->showZoom = IS_DEBUG || cfg()["ui"]["show_debug"].as<bool>(false);
   mapsContent->addWidget(scaleBar);
 
   crossHair = new CrosshairWidget();

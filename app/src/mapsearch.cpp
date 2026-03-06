@@ -13,7 +13,6 @@
 #include "offlinemaps.h"
 #include "mapsources.h"
 
-#include <deque>
 #include "data/tileData.h"
 #include "data/formats/mvt.h"
 #include "scene/scene.h"
@@ -604,6 +603,11 @@ void MapsSearch::populateResults()
       app->setPickResult(listResults[ii].pos, "", listResults[ii].tags);
     };
 
+    // markers for list results
+    if(providerIdx > 0) {  // && !app->map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)
+      markers->createMarker(res.pos, item->onClicked, Properties(props));
+    }
+
     // show distance to search origin
     Widget* distWidget = new Widget(distProto->clone());
     distWidget->selectFirst(isCurrLocDistOrigin ? ".gps-location" : ".crosshair")->setVisible(true);
@@ -798,16 +802,19 @@ Button* MapsSearch::createPanel()
 
   // result sort order
   static const char* resultSortKeys[] = {"rank", "dist"};
+  static const char* sortIcons[] = {"sort", "bullseye"};
   std::string initSort = app->cfg()["search"]["sort"].as<std::string>("rank");
   size_t initSortIdx = 0;
-  while(initSortIdx < 2 && initSort != resultSortKeys[initSortIdx]) ++initSortIdx;
-  Menu* sortMenu = createRadioMenu({"Relevence", "Distance"}, [this](size_t ii){
+  while(initSortIdx < 2 && initSort != resultSortKeys[initSortIdx]) { ++initSortIdx; }
+  sortByDist = (initSortIdx == 1);
+  Button* sortBtn = createToolbutton(MapsApp::uiIcon(sortIcons[initSortIdx]), "Sort");
+  Menu* sortMenu = createRadioMenu({"Relevence", "Distance"}, [=](size_t ii){
     app->config["search"]["sort"] = resultSortKeys[ii];
-    sortByDist = ii == 1;
+    sortBtn->setIcon(MapsApp::uiIcon(sortIcons[ii]));
+    sortByDist = (ii == 1);
     if(!queryText->text().empty())
       searchText(queryText->text(), RETURN);
   }, initSortIdx);
-  Button* sortBtn = createToolbutton(MapsApp::uiIcon("sort"), "Sort");
   sortBtn->setMenu(sortMenu);
   searchTb->addWidget(sortBtn);
 
