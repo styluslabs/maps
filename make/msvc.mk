@@ -6,7 +6,7 @@
 # /MD to use dynamic C runtime (msvcrt DLL); /MT to statically link C runtime (libcmt)
 # if link complains about defaultlib ('LIBCMT' or 'MSVCRT'), try /verbose switch to which .lib is requesting
 #  LIBCMT vs. MSVCRT
-CFLAGS = /MT /Zc:preprocessor
+CFLAGS = /MT /Zc:preprocessor /utf-8
 # C++
 CXX = cl.exe /nologo
 CXXFLAGS = /std:c++14

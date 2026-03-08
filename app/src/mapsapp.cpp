@@ -864,7 +864,7 @@ void MapsApp::mapUpdate(double time)
   else {
     flyingToCurrLoc = false;
     if(followState == FOLLOW_PENDING)
-      followState = FOLLOW_ACTIVE;
+      followState = FOLLOW_ORIENT;
   }
 
   // update map center
@@ -946,7 +946,7 @@ void MapsApp::onResume()
 // Map::flyTo() zooms out and then back in, inappropriate for short flights
 void MapsApp::gotoCameraPos(const CameraPosition& campos)
 {
-  if(followState == FOLLOW_ACTIVE)
+  if(followState >= FOLLOW_POS)
     toggleFollow();
 
   Point scr;
@@ -990,7 +990,7 @@ void MapsApp::updateLocPlaceInfo()
   SvgText* coordnode = static_cast<SvgText*>(infoContent->containerNode()->selectFirst(".lnglat-text"));
   std::string locstr = lngLatToStr(currLocation.lngLat());
   if(currLocation.poserr > 0)
-    locstr += fstring(" (\u00B1%.0f m)", currLocation.poserr);
+    locstr += fstring(u8" (\u00B1%.0f m)", currLocation.poserr);
   // m/s -> kph or mph
   if(!std::isnan(currLocation.spd))
     locstr += metricUnits ? fstring(" %.1f km/h", currLocation.spd*3.6)
@@ -1019,7 +1019,7 @@ void MapsApp::updateLocation(const Location& _loc)
     return;
   }
 
-  if(lowPowerMode && dt < 1 && !mapsTracks->recordTrack && followState != FOLLOW_ACTIVE &&
+  if(lowPowerMode && dt < 1 && !mapsTracks->recordTrack && followState == NO_FOLLOW &&
       dh < 10 && dr < 5*MapProjection::metersPerPixelAtZoom(int(map->getZoom()))) {
     LOGD("Low Power mode - discarding location update: dt = %.3f s, dr = %.2f m, err = %.2f m", dt, dr, _loc.poserr);
     return;
@@ -1045,7 +1045,7 @@ void MapsApp::updateLocation(const Location& _loc)
 #endif
   //updateLocMarker();
 
-  if(followState == FOLLOW_ACTIVE) {
+  if(followState >= FOLLOW_POS) {
     map->setCameraPosition(map->getCameraPosition().setLngLat(_loc.lngLat()));  //, 0.1f);
   }
   if(currLocPlaceInfo) {
@@ -1077,13 +1077,13 @@ void MapsApp::updateGpsStatus(int satsVisible, int satsUsed)
 void MapsApp::updateOrientation(double time, float azimuth, float pitch, float roll)
 {
   float deg = azimuth - 360*std::floor(azimuth/360);
-  float threshold = followState == FOLLOW_ACTIVE ? 0.1f :
+  float threshold = followState == FOLLOW_ORIENT ? 0.1f :
       (lowPowerMode && time - orientationTime < 1 ? 5.0f : 1.0f);
   if(std::abs(deg - orientation) < threshold) { return; }
   orientation = deg;
   orientationTime = time;
   // we might have to add a low-pass for this
-  if(followState == FOLLOW_ACTIVE) {
+  if(followState == FOLLOW_ORIENT) {
     auto campos = map->getCameraPosition();
     campos.rotation = -deg*float(M_PI)/180;
     map->setCameraPosition(campos); //, 0.1f);
@@ -1174,8 +1174,7 @@ double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback, b
   using namespace Tangram;
   static Raster prevTex(NOT_A_TILE, nullptr);
 
-  // we should also check if cached tile zoom level is much lower then current zoom level
-  if(prevTex.texture && prevTex.texture->bufferData()) {
+  if(prevTex.texture && prevTex.texture->bufferData() && prevTex.tileID.z >= std::min(14, int(map->getZoom()))) {
     TileID tileId = lngLatTile(pos, prevTex.tileID.z);
     if(tileId == prevTex.tileID) {
       double elev = elevationLerp(prevTex, pos);
@@ -1750,7 +1749,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   reorientBtn = new Button(loadSVGFragment(reorientSVG));  //createToolbutton(MapsApp::uiIcon("compass"), "Reorient");
   reorientBtn->setMargins(0, 0, 6, 0);
   reorientBtn->onClicked = [this](){
-    if(followState != NO_FOLLOW) { toggleFollow(); }
+    if(followState == FOLLOW_ORIENT) { followState = FOLLOW_POS; }
     LngLat center = getMapCenter();
     CameraPosition campos = {center.longitude, center.latitude, map->getZoom(), 0, 0};
     map->setCameraPositionEased(campos, 1.0);

@@ -597,11 +597,11 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-speed", speedToStr(currSpeed));
 
   double slopeDeg = std::atan(currSlope)*180/M_PI;
-  setStatsText(".track-slope", fstring("%.*f%% (%.*f\u00B0)",
+  setStatsText(".track-slope", fstring(u8"%.*f%% (%.*f\u00B0)",
       std::abs(currSlope) < 0.1 ? 1 : 0, currSlope*100, std::abs(slopeDeg) < 10 ? 1 : 0, slopeDeg));
 
   float dir = app->currLocation.dir;
-  setStatsText(".track-direction", (dir >= 0 && dir <= 360) ? fstring("%.0f\u00B0", dir) : notime);
+  setStatsText(".track-direction", (dir >= 0 && dir <= 360) ? fstring(u8"%.0f\u00B0", dir) : notime);
 
   auto timeStr = durationToStr(totalTime);
   sparkStats->selectFirst(".spark-time")->setText(timeStr.c_str());
@@ -1146,13 +1146,13 @@ void MapsTracks::onMapEvent(MapEvent_t event)
       }
       // bearing and change in bearing from prev segment
       double bearing = 180*lngLatBearing(mappos, app->getMapCenter())/M_PI;
-      std::string detailstr = fstring("%.1f\u00B0", bearing < 0 ? bearing + 360 : bearing);
+      std::string detailstr = fstring(u8"%.1f\u00B0", bearing < 0 ? bearing + 360 : bearing);
       if(it != activeTrack->waypoints.begin() && distkm > 0) {
         LngLat prevpt = (--it)->lngLat();
         double bchange = bearing - 180*lngLatBearing(prevpt, mappos)/M_PI;
         if(bchange > 180) bchange -= 360;
         else if(bchange < -180) bchange += 360;
-        detailstr += fstring(" (%+.1f\u00B0)", bchange);
+        detailstr += fstring(u8" (%+.1f\u00B0)", bchange);
       }
       if(dz != 0 && distm > 0) {
         detailstr += fstring(" | %.1f%%", 100*dz/distm);

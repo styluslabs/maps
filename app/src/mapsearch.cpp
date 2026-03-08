@@ -405,7 +405,7 @@ void MapsSearch::resultsUpdated(int flags)
   }
 
   if(flags & LIST_SEARCH) {
-    populateResults();
+    populateResults(flags);
     int nresults = std::max(mapResults.size(), listResults.size());
     bool more = mapResults.size() > listResults.size() ? moreMapResultsAvail : moreListResultsAvail;
     resultCountText->setText(nresults == 1 ? "1 result" :
@@ -578,7 +578,7 @@ void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
   }
 }
 
-void MapsSearch::populateResults()
+void MapsSearch::populateResults(int flags)
 {
   static const char* distProtoSVG = R"#(
     <g margin="0 0" layout="flex" flex-direction="row">
@@ -604,7 +604,7 @@ void MapsSearch::populateResults()
     };
 
     // markers for list results
-    if(providerIdx > 0) {  // && !app->map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)
+    if(!(flags & AUTOCOMPLETE) && providerIdx > 0) {  // && !app->map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)
       markers->createMarker(res.pos, item->onClicked, Properties(props));
     }
 

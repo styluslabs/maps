@@ -97,7 +97,7 @@ public:
   float orientation = 0;
   float locMarkerAngle = 0;
   CameraPosition prevCamPos;
-  enum { NO_FOLLOW = 0, FOLLOW_PENDING, FOLLOW_ACTIVE } followState = NO_FOLLOW;
+  enum { NO_FOLLOW = 0, FOLLOW_PENDING, FOLLOW_POS, FOLLOW_ORIENT } followState = NO_FOLLOW;
   double orientationTime = 0;
 
   MarkerID pickResultMarker = 0;
