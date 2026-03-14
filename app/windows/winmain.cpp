@@ -6,9 +6,7 @@
 
 #include "mapsapp.h"
 #include "ugui/svggui.h"
-//#include "usvg/svgwriter.h"
 #include "windowsPlatform.h"
-#include "util/yamlPath.h"
 #include "util/elevationManager.h"
 #include "util.h"
 #include "nfd.h"
@@ -743,11 +741,14 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
 
   RECT winRect = { 0, 0, screenw/2, int(0.9f*screenh) };
   const YAML::Node& posYaml = MapsApp::cfg()["ui"]["position"];
-  if(posYaml.size() == 4) {
+  if(posYaml.size() >= 4) {
     winRect.left = posYaml[0].as<int>(0);
     winRect.top = posYaml[1].as<int>(0);
     winRect.right = posYaml[2].as<int>(winRect.right);
     winRect.bottom = posYaml[3].as<int>(winRect.bottom);
+    bool normalshow = nCmdShow == SW_SHOWDEFAULT || nCmdShow == SW_SHOW || nCmdShow == SW_NORMAL;
+    if(posYaml.size() > 4 && posYaml[4].as<int>(0) && normalshow)
+      nCmdShow = SW_MAXIMIZE;
   }
 
   auto winStyle = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
@@ -832,8 +833,11 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   }
 
   // save window size
-  if(GetWindowRect(mainWnd, &winRect)) {
-    app->config["ui"]["position"] = YAML::Array({winRect.left, winRect.top, winRect.right, winRect.bottom});  // YAML::Tag::YAML_FLOW
+  WINDOWPLACEMENT wp;
+  wp.length = sizeof(WINDOWPLACEMENT);
+  if(GetWindowPlacement(mainWnd, &wp)) {
+    const RECT& r = wp.rcNormalPosition;
+    app->config["ui"]["position"] = YAML::Array({r.left, r.top, r.right, r.bottom, IsZoomed(mainWnd) ? 1 : 0});  // YAML::Tag::YAML_FLOW
   }
 
   app->onSuspend();

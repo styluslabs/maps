@@ -1,8 +1,6 @@
 #include "bookmarks.h"
 #include "mapsapp.h"
 #include "util.h"
-#include "resources.h"
-
 #include "util/yamlPath.h"
 #include "exif.h"
 

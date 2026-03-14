@@ -311,14 +311,10 @@ static int addSearchResult(duk_context* ctx)
     ms->resultsUpdated(flags);
   }
   else {
-    if(flags & MapsSearch::MAP_SEARCH) {
+    if(flags & MapsSearch::MAP_SEARCH)
       ms->addMapResult(osm_id, lng, lat, score, json);
-      ms->moreMapResultsAvail = flags & MapsSearch::MORE_RESULTS;
-    }
-    if(flags & MapsSearch::LIST_SEARCH) {
+    if(flags & MapsSearch::LIST_SEARCH)
       ms->addListResult(osm_id, lng, lat, score, json);
-      ms->moreListResultsAvail = flags & MapsSearch::MORE_RESULTS;
-    }
   }
   return 0;
 }

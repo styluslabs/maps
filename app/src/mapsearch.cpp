@@ -7,7 +7,6 @@
 #include "mapsapp.h"
 #include "bookmarks.h"
 #include "plugins.h"
-#include "resources.h"
 #include "util.h"
 #include "mapwidgets.h"
 #include "offlinemaps.h"
@@ -215,6 +214,7 @@ void MapsSearch::clearSearchResults()
   markers->reset();
   flyingToResults = false;  // just in case event got dropped
   saveToBkmksBtn->setEnabled(false);
+  currSearchPhase = NO_SEARCH;
 }
 
 void MapsSearch::clearSearch()
@@ -278,7 +278,7 @@ void MapsSearch::offlineMapSearch(std::string queryStr, LngLat lnglat00, LngLat 
     MapsApp::runOnMainThread([this, res=std::move(res)]() mutable {
       mapResults = std::move(res);
       markers->reset();
-      resultsUpdated(MAP_SEARCH);
+      resultsUpdated(MAP_SEARCH | (mapResults.size() >= MAX_MAP_RESULTS ? MORE_RESULTS : 0));
     });
   });
 }
@@ -312,7 +312,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int fla
       return;
     }
     MapsApp::runOnMainThread([this, flags, limit, res=std::move(res)]() mutable {
-      moreListResultsAvail = int(res.size()) >= limit;
+      if(int(res.size()) >= limit) { flags |= MORE_RESULTS; }
       if(listResults.empty())
         listResults = std::move(res);
       else {
@@ -326,7 +326,7 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int fla
 
 void MapsSearch::onMapEvent(MapEvent_t event)
 {
-  if(!app->searchActive) return;
+  if(!app->searchActive) { return; }
   if(event == MARKER_PICKED) {
     if(app->pickedMarkerId > 0) {
       if(markers->onPicked(app->pickedMarkerId))
@@ -334,7 +334,7 @@ void MapsSearch::onMapEvent(MapEvent_t event)
     }
     return;
   }
-  if(event != MAP_CHANGE) return;
+  if(event != MAP_CHANGE) { return; }
 
   Map* map = app->map.get();
   LngLat lngLat00, lngLat11;
@@ -347,12 +347,18 @@ void MapsSearch::onMapEvent(MapEvent_t event)
     }
   }
   float zoom = map->getZoom();
+  // make sure extra labels still hidden if scene reloaded or source changed
+  map->getScene()->hideExtraLabels = zoom < app->cfg()["search"]["min_poi_zoom"].as<float>(19);
+
+  // no search on map move in editing phase
+  if(currSearchPhase < RETURN) { return; }
   bool zoomedin = zoom - prevZoom > 0.5f;
   bool zoomedout = zoom - prevZoom < -0.5f;
   bool mapmoved = lngLat00.longitude < dotBounds00.longitude || lngLat00.latitude < dotBounds00.latitude
       || lngLat11.longitude > dotBounds11.longitude || lngLat11.latitude > dotBounds11.latitude;
   // don't search until animation stops
-  if(!providerFlags.slow && !app->mapState.isAnimating() && (mapmoved || (moreMapResultsAvail && zoomedin))) {
+  if(app->mapState.isAnimating()) {}
+  else if(!providerFlags.slow && (mapmoved || (moreMapResultsAvail && zoomedin))) {
     updateMapResults(lngLat00, lngLat11, MAP_SEARCH);
     prevZoom = zoom;
   }
@@ -361,9 +367,6 @@ void MapsSearch::onMapEvent(MapEvent_t event)
   // any map pan or zoom can potentially affect ranking of list results
   if(mapmoved || zoomedin || zoomedout)
     retryBtn->setVisible(true);
-
-  // make sure extra labels still hidden if scene reloaded or source changed
-  map->getScene()->hideExtraLabels = zoom < app->cfg()["search"]["min_poi_zoom"].as<float>(19);
 }
 
 void MapsSearch::updateMapResultBounds(LngLat lngLat00, LngLat lngLat11)
@@ -391,7 +394,7 @@ void MapsSearch::resultsUpdated(int flags)
 {
   if(flags & MAP_SEARCH) {
     newMapSearch = false;  // be sure this is clear in case there were no results
-    moreMapResultsAvail = mapResults.size() >= MAX_MAP_RESULTS;
+    moreMapResultsAvail = flags & MORE_RESULTS;
     for(size_t idx = 0; idx < mapResults.size(); ++idx) {
       auto& mapres = mapResults[idx];
       auto onPicked = [this, idx](){
@@ -405,6 +408,7 @@ void MapsSearch::resultsUpdated(int flags)
   }
 
   if(flags & LIST_SEARCH) {
+    moreListResultsAvail = flags & MORE_RESULTS;
     populateResults(flags);
     int nresults = std::max(mapResults.size(), listResults.size());
     bool more = mapResults.size() > listResults.size() ? moreMapResultsAvail : moreListResultsAvail;
@@ -433,7 +437,19 @@ void MapsSearch::resultsUpdated(int flags)
     if(minLngLat.longitude != 180) {
       if(!map->lngLatToScreenPosition(minLngLat.longitude, minLngLat.latitude)
           || !map->lngLatToScreenPosition(maxLngLat.longitude, maxLngLat.latitude)) {
-        app->lookAt(minLngLat, maxLngLat, 16, map->getRotation(), map->getTilt());
+
+        auto campos = map->getEnclosingCameraPosition(minLngLat, maxLngLat);
+        campos.rotation = map->getRotation();
+        campos.tilt = map->getTilt();
+        if(campos.zoom < 10) {
+          campos.setLngLat(listResults[0].pos);
+          campos.zoom = 10;
+        }
+        else
+          campos.zoom = std::min(16.f, campos.zoom - 0.25f);
+        app->gotoCameraPos(campos);
+
+        //app->lookAt(minLngLat, maxLngLat, 16, map->getRotation(), map->getTilt());
         flyingToResults = true;  // has to be set after flyTo()
       }
     }
@@ -485,6 +501,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   else
     searchStr = query;
   clearSearchResults();
+  currSearchPhase = phase;
   map->markerSetVisible(app->pickResultMarker, false);
   app->showPanel(searchPanel);
   cancelBtn->setVisible(!searchStr.empty());
@@ -530,19 +547,18 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   //if(searchStr.empty()) { return; }  ... NO! This breaks no-query plugins!!!
   // we want to run map search before list search
   // set FLY_TO for map search because we now only fly when both map and list queries complete
-  int fly = phase == RETURN ? FLY_TO : 0;
+  int flags = (phase == RETURN ? FLY_TO : 0) | (sortByDist ? SORT_BY_DIST : 0);
   if(providerIdx == 0 || !providerFlags.unified)
-    updateMapResults(lngLat00, lngLat11, MAP_SEARCH | fly);
+    updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
 
   resultCountText->setText("Searching...");
   if(providerIdx == 0)
-    offlineListSearch(searchStr, lngLat00, lngLat11, fly);
+    offlineListSearch(searchStr, lngLat00, lngLat11, flags | LIST_SEARCH);
   else {
-    int flags = LIST_SEARCH | fly | (sortByDist ? SORT_BY_DIST : 0);
     if(providerFlags.unified)
-      updateMapResults(lngLat00, lngLat11, flags | MAP_SEARCH);
+      updateMapResults(lngLat00, lngLat11, flags | LIST_SEARCH | MAP_SEARCH);
     else
-      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags);
+      app->pluginManager->jsSearch(providerIdx - 1, searchStr, lngLat00, lngLat11, flags | LIST_SEARCH);
   }
 
   app->gui->setFocused(resultsContent);
@@ -602,12 +618,10 @@ void MapsSearch::populateResults(int flags)
     item->onClicked = [this, ii](){
       app->setPickResult(listResults[ii].pos, "", listResults[ii].tags);
     };
-
     // markers for list results
-    if(!(flags & AUTOCOMPLETE) && providerIdx > 0) {  // && !app->map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)
-      markers->createMarker(res.pos, item->onClicked, Properties(props));
-    }
-
+    // if(!(flags & AUTOCOMPLETE) && providerIdx > 0) {  // && !app->map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)
+    //   markers->createMarker(res.pos, item->onClicked, Properties(props));
+    // }
     // show distance to search origin
     Widget* distWidget = new Widget(distProto->clone());
     distWidget->selectFirst(isCurrLocDistOrigin ? ".gps-location" : ".crosshair")->setVisible(true);
@@ -813,7 +827,7 @@ Button* MapsSearch::createPanel()
     sortBtn->setIcon(MapsApp::uiIcon(sortIcons[ii]));
     sortByDist = (ii == 1);
     if(!queryText->text().empty())
-      searchText(queryText->text(), RETURN);
+      searchText(queryText->text(), currSearchPhase);
   }, initSortIdx);
   sortBtn->setMenu(sortMenu);
   searchTb->addWidget(sortBtn);

@@ -35,7 +35,7 @@ public:
   void addMapResult(int64_t id, double lng, double lat, float rank, const char* json);
   void searchPluginError(const char* err);
 
-  enum SearchPhase { EDITING, RETURN, REFRESH };
+  enum SearchPhase { NO_SEARCH = 0, EDITING, RETURN, REFRESH };
   void searchText(std::string query, SearchPhase phase);
   void onMapEvent(MapEvent_t event);
   void resultsUpdated(int flags);
@@ -47,6 +47,7 @@ public:
   int providerIdx = 0;
   bool moreMapResultsAvail = false;
   bool moreListResultsAvail = false;
+  SearchPhase currSearchPhase = NO_SEARCH;
   // search flags
   enum { MAP_SEARCH = 0x1, LIST_SEARCH = 0x2, SORT_BY_DIST = 0x4, FLY_TO = 0x8, NEXTPAGE = 0x10,
          AUTOCOMPLETE = 0x20, UPDATE_RESULTS = 0x4000, MORE_RESULTS = 0x8000 };
