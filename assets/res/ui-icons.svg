@@ -446,4 +446,9 @@ document.addEventListener('DOMContentLoaded', function(event) {
   <path d="M15 9l-3 3" />
 </svg>
 
+<svg id="thumbtack" class="icon-default icon-tabler-pin" width="1em" height="1em" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4" />
+  <path d="M9 15l-4.5 4.5" /><path d="M14.5 4l5.5 5.5" />
+</svg>
+
 </svg>

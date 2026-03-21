@@ -29,6 +29,9 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev mesa-common-dev libfontconfig1-dev libcurl4-openssl-dev libxi-dev libdbus-1-dev
     - name: Build tgz
       run: make real_tgz
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ failure() }}
 
   android-build:
     runs-on: ubuntu-latest

@@ -111,7 +111,8 @@ void MapsSearch::importPOIs(std::string srcuri, int offlineId)
 
 void MapsSearch::onDelOfflineMap(int mapId)
 {
-  //DELETE FROM tiles WHERE id IN (SELECT tile_id FROM offline_tiles WHERE offline_id = ? AND tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?));
+  //DELETE FROM tiles WHERE id IN (SELECT tile_id FROM offline_tiles WHERE offline_id = ? AND
+  //  tile_id NOT IN (SELECT tile_id FROM offline_tiles WHERE offline_id <> ?));
   // need to use sqlite3_exec for multiple statments in single string
   searchDB.stmt("DELETE FROM offline_tiles WHERE offline_id = ?;").bind(mapId).exec();
   searchDB.stmt("DELETE FROM pois WHERE tile_id NOT IN (SELECT tile_id FROM offline_tiles);").exec();
@@ -177,9 +178,9 @@ bool MapsSearch::initSearch()
 
     searchDB.exec(POI_SCHEMA);
     // search history - NOCASE causes comparisions to be case-insensitive but still stores case
-    searchDB.exec("CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+    //searchDB.exec("CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
   }
-  //sqlite3_exec(searchDB, "PRAGMA synchronous=OFF; PRAGMA count_changes=OFF; PRAGMA journal_mode=MEMORY; PRAGMA temp_store=MEMORY", NULL, NULL, &errorMessage);
+  //"PRAGMA synchronous=OFF; PRAGMA count_changes=OFF; PRAGMA journal_mode=MEMORY; PRAGMA temp_store=MEMORY"
 
   char const* stmtStr = "INSERT INTO pois (name,tags,props,lng,lat,tile_id) VALUES (?,?,?,?,?,?);";
   if(sqlite3_prepare_v2(searchDB.db, stmtStr, -1, &insertStmt, NULL) != SQLITE_OK) {
@@ -215,12 +216,16 @@ void MapsSearch::clearSearchResults()
   flyingToResults = false;  // just in case event got dropped
   saveToBkmksBtn->setEnabled(false);
   currSearchPhase = NO_SEARCH;
+  retryBtn->setVisible(false);
+  retryBtn->setIcon(MapsApp::uiIcon("refresh"));  // error cleared
 }
 
 void MapsSearch::clearSearch()
 {
   clearSearchResults();
   queryText->setText("");
+  searchStr.clear();
+  cancelBtn->setVisible(false);
   if(app->searchActive) {
     //app->map->updateGlobals({SceneUpdate{"global.search_active", "false"}});
     app->map->getScene()->hideExtraLabels = false;
@@ -480,8 +485,8 @@ void MapsSearch::doSearch(std::string query)
 void MapsSearch::searchText(std::string query, SearchPhase phase)
 {
   Map* map = app->map.get();
-  LngLat lngLat00, lngLat11;
-  app->getMapBounds(lngLat00, lngLat11);
+  clearSearchResults();
+  currSearchPhase = phase;
   query = trimStr(query);
   // transformQuery plugin fn can, e.g., add synonyms to query (e.g., add "fast food" to "restaurant" query)
   if(providerIdx == 0 && !query.empty()) {
@@ -500,25 +505,19 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   }
   else
     searchStr = query;
-  clearSearchResults();
-  currSearchPhase = phase;
-  map->markerSetVisible(app->pickResultMarker, false);
-  app->showPanel(searchPanel);
+  //map->markerSetVisible(app->pickResultMarker, false);  -- should be handled by MapsApp::clearPickResult()
+  //app->showPanel(searchPanel);
   cancelBtn->setVisible(!searchStr.empty());
-  retryBtn->setVisible(false);
-  retryBtn->setIcon(MapsApp::uiIcon("refresh"));  // error cleared
 
+  LngLat lngLat00, lngLat11;
+  app->getMapBounds(lngLat00, lngLat11);
   // use map center for origin if current location is offscreen
   LngLat loc = app->currLocation.lngLat();
   isCurrLocDistOrigin = map->lngLatToScreenPosition(loc.longitude, loc.latitude);
   searchRankOrigin = isCurrLocDistOrigin ? loc : app->getMapCenter();
 
   if(phase == EDITING) {
-    std::vector<std::string> autocomplete;
-    searchDB.stmt("SELECT query FROM history WHERE query LIKE ? ORDER BY timestamp DESC LIMIT ?;")
-        .bind(query + "%", query.size() > 1 && providerIdx == 0 ? 5 : 25) // LIMIT 5 to leave room for results
-        .exec([&](const char* q){ autocomplete.emplace_back(q); });
-    populateAutocomplete(autocomplete);
+    populateAutocomplete(query);
     if(query.size() > 1 && providerIdx == 0) {  // 2 chars for latin, 1-2 for non-latin (e.g. Chinese)
       offlineListSearch("name : " + searchStr, lngLat00, lngLat11);  // restrict live search to name
     }
@@ -530,7 +529,11 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   }
 
   if(phase == RETURN && query.size() > 1) {
-    searchDB.stmt("INSERT OR REPLACE INTO history (query) VALUES (?);").bind(query).exec();
+    // don't touch pinned queries
+    if(app->historyMaxAge != 0) {
+      app->placesDB.stmt("INSERT INTO history (type,key,title) VALUES (?,?,?) ON CONFLICT(type,key) DO UPDATE"
+          " SET timestamp = (CAST(strftime('%s') AS INTEGER)) WHERE timestamp < 2147483647;").bind(0, query, query).exec();
+    }
     // handle lat,lng string
     if(isDigit(query[0]) || query[0] == '-') {
       LngLat pos = parseLngLat(query.c_str());
@@ -572,26 +575,24 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
   }
 }
 
-void MapsSearch::populateAutocomplete(const std::vector<std::string>& history)
+void MapsSearch::populateAutocomplete(const std::string& query)  //const std::vector<std::string>& history)
 {
-  for(size_t ii = 0; ii < history.size(); ++ii) {
-    std::string query = history[ii];
-    Button* item = createListItem(MapsApp::uiIcon("clock"), history[ii].c_str());
-    Widget* container = item->selectFirst(".child-container");
-    item->onClicked = [=](){
-      queryText->setText(query.c_str());
-      searchText(query, RETURN);
-    };
-
-    Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
-    discardBtn->onClicked = [=](){
-      searchDB.stmt("DELETE FROM history WHERE query = ?;").bind(query).exec();
-      searchText(queryText->text(), EDITING);  // refresh
-    };
-    container->addWidget(discardBtn);
-    item->node->setAttribute("__querytext", history[ii].c_str());
-    resultsContent->addWidget(item);
+  if(!query.empty()) {
+    app->placesDB.stmt("SELECT rowid,title,timestamp FROM history WHERE type = 0 AND key LIKE ? ORDER BY timestamp DESC LIMIT ?;")
+        .bind(query + "%", query.size() > 1 ? 5 : 25) // LIMIT 5 to leave room for results
+        .exec([&](int64_t rowid, const char* q, int64_t ts){ listResults.push_back({rowid, {0, 0}, float(ts), q}); });
   }
+  else {
+    int offset = listResults.size();
+    const char* q = "SELECT rowid, type, title, props, lng, lat, timestamp FROM history ORDER BY timestamp DESC LIMIT 25 OFFSET ?;";
+    app->placesDB.stmt(q).bind(offset).exec(
+      [&](int64_t rowid, int type, std::string title, std::string propstr, double lng, double lat, int64_t ts){
+        if(type == 0) { listResults.push_back({rowid, {0, 0}, float(ts), title}); }
+        else { listResults.push_back({rowid, {lng, lat}, float(ts), propstr}); }
+      });
+    moreListResultsAvail = listResults.size() - offset >= 25;
+  }
+  populateResults(PLACE_HISTORY);
 }
 
 void MapsSearch::populateResults(int flags)
@@ -609,25 +610,46 @@ void MapsSearch::populateResults(int flags)
 
   for(size_t ii = listResultOffset; ii < listResults.size(); ++ii) {  //for(const auto& res : results)
     const SearchResult& res = listResults[ii];
-    Properties props = jsonToProps(res.tags.c_str());
-    std::string namestr = app->getPlaceTitle(props);
-    std::string placetype = !res.tags.empty() ? app->pluginManager->jsCallFn("getPlaceType", res.tags) : "";
-    if(namestr.empty()) namestr.swap(placetype);  // we can show type instead of name if present
-    if(namestr.empty()) continue;  // skip if nothing to show in list
-    Button* item = createListItem(MapsApp::uiIcon("search"), namestr.c_str(), placetype.c_str());
-    item->onClicked = [this, ii](){
-      app->setPickResult(listResults[ii].pos, "", listResults[ii].tags);
-    };
-    // markers for list results
-    // if(!(flags & AUTOCOMPLETE) && providerIdx > 0) {  // && !app->map->lngLatToScreenPosition(res.pos.longitude, res.pos.latitude)
-    //   markers->createMarker(res.pos, item->onClicked, Properties(props));
-    // }
-    // show distance to search origin
-    Widget* distWidget = new Widget(distProto->clone());
-    distWidget->selectFirst(isCurrLocDistOrigin ? ".gps-location" : ".crosshair")->setVisible(true);
-    double distkm = lngLatDist(searchRankOrigin, res.pos);
-    distWidget->setText(MapsApp::distKmToStr(distkm, 1, 3).c_str());  // 3 sig digits so no decimal over 100km
-    item->selectFirst(".child-container")->addWidget(distWidget);
+    bool queryhist = (flags & PLACE_HISTORY) && res.pos.latitude == 0 && res.pos.longitude == 0;
+    std::string namestr = queryhist ? res.tags : app->getPlaceTitle(jsonToProps(res.tags.c_str()));
+    std::string placetype = !res.tags.empty() && !queryhist ? app->pluginManager->jsCallFn("getPlaceType", res.tags) : "";
+    if(namestr.empty()) { namestr.swap(placetype); }  // we can show type instead of name if present
+    if(namestr.empty()) { continue; }  // skip if nothing to show in list
+    Button* item = createListItem(MapsApp::uiIcon(queryhist ? "clock" : "search"), namestr.c_str(), placetype.c_str());
+    Widget* container = item->selectFirst(".child-container");
+    if(queryhist) {
+      item->onClicked = [this, namestr](){
+        queryText->setText(namestr.c_str());
+        searchText(namestr, RETURN);
+      };
+      Button* pinHistBtn = createToolbutton(MapsApp::uiIcon("thumbtack"), "Pin");
+      pinHistBtn->setChecked(res.rank > INT_MAX);
+      pinHistBtn->onClicked = [this, rowid=res.id, ts=res.rank](){
+        int64_t dt = ts > INT_MAX ? -INT_MAX : INT_MAX;
+        app->placesDB.stmt("UPDATE history SET timestamp = timestamp + ? WHERE rowid = ?;").bind(dt, rowid).exec();
+        searchText(queryText->text(), EDITING);  // refresh (this will effectively toggle checked state)
+      };
+      container->addWidget(pinHistBtn);
+    }
+    else {
+      item->onClicked = [this, ii](){
+        app->setPickResult(listResults[ii].pos, "", listResults[ii].tags);
+      };
+      // show distance to search origin
+      Widget* distWidget = new Widget(distProto->clone());
+      distWidget->selectFirst(isCurrLocDistOrigin ? ".gps-location" : ".crosshair")->setVisible(true);
+      double distkm = lngLatDist(searchRankOrigin, res.pos);
+      distWidget->setText(MapsApp::distKmToStr(distkm, 1, 3).c_str());  // 3 sig digits so no decimal over 100km
+      container->addWidget(distWidget);
+    }
+    if(flags & PLACE_HISTORY) {
+      Button* discardBtn = createToolbutton(MapsApp::uiIcon("discard"), "Remove");
+      discardBtn->onClicked = [this, rowid=res.id](){
+        app->placesDB.stmt("DELETE FROM history WHERE rowid = ?;").bind(rowid).exec();
+        searchText(queryText->text(), EDITING);  // refresh
+      };
+      container->addWidget(discardBtn);
+    }
     item->node->setAttribute("__querytext", namestr.c_str());
     resultsContent->addWidget(item);
   }
@@ -852,10 +874,13 @@ Button* MapsSearch::createPanel()
       if(queryText->isEnabled()) {
         noDataMsg->setVisible(providerIdx == 0 && !hasSearchData);
         app->gui->setFocused(searchBox);
-        searchText("", EDITING);  // show history
+        //searchText("", EDITING);  // show history
       }
       else if(providerIdx > 0)  // && !queryText->isEnabled())
         searchText("", RETURN);
+    }
+    else if(event->type == SvgGui::VISIBLE) {
+      if(searchStr.empty() && queryText->isEnabled()) { searchText("", EDITING); }  // refresh history
     }
     else if(event->type == MapsApp::PANEL_CLOSED) {
       clearSearch();
@@ -871,6 +896,7 @@ Button* MapsSearch::createPanel()
   scrollWidget->onScroll = [=](){
     // get more list results
     if(moreListResultsAvail && scrollWidget->scrollY >= scrollWidget->scrollLimits.bottom) {
+      if(searchStr.empty() && queryText->isEnabled()) { populateAutocomplete(""); }
       if(providerIdx > 0 && !providerFlags.more) { return; }
       LngLat lngLat00, lngLat11;
       app->getMapBounds(lngLat00, lngLat11);
@@ -896,8 +922,8 @@ Button* MapsSearch::createPanel()
       gui->deleteContents(searchMenu->selectFirst(".child-container"));
       // TODO: pinned searches - timestamp column = INF?
       int uiWidth = app->getPanelWidth();
-      const char* sql = "SELECT query FROM history ORDER BY timestamp DESC LIMIT 8;";
-      searchDB.stmt(sql).exec([&](std::string s){
+      const char* sql = "SELECT title FROM history WHERE type = 0 ORDER BY timestamp DESC LIMIT 8;";
+      app->placesDB.stmt(sql).exec([&](std::string s){
         Button* item = searchMenu->addItem(s.c_str(), MapsApp::uiIcon("clock"), [=](){
           // clear existing search
           while(!app->panelHistory.empty()) { app->popPanel(); }

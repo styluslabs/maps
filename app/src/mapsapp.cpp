@@ -1,5 +1,4 @@
 #include "mapsapp.h"
-#include "tangram.h"
 #include "scene/scene.h"
 #include "debug/textDisplay.h"
 #include "util.h"
@@ -54,6 +53,7 @@ std::string MapsApp::configFile;
 bool MapsApp::metricUnits = true;
 bool MapsApp::terrain3D = true;
 sqlite3* MapsApp::bkmkDB = NULL;
+SQLiteDB MapsApp::placesDB;
 std::vector<Color> MapsApp::markerColors;
 SvgGui* MapsApp::gui = NULL;
 bool MapsApp::runApplication = true;
@@ -491,7 +491,11 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
     for(const auto& info : infos)
       addPlaceInfo(info["icon"].getCStr(), info["title"].getCStr(), info["value"].getCStr());
   }
-
+  // save to history
+  if(!osmid.empty() && historyMaxAge != 0) {
+    static const char* addPlaceSQL = "REPLACE INTO history (type,key,title,props,lng,lat) VALUES (?,?,?,?,?,?);";
+    placesDB.stmt(addPlaceSQL).bind(1, osmid, namestr, propstr, pos.longitude, pos.latitude).exec();
+  }
   // must be last (or we must copy props)
   props.set("name", namestr);
   map->markerSetStylingFromPath(pickResultMarker, "layers.pick-marker.draw.marker");
@@ -1773,7 +1777,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
       updateLocMarker();
     }
   };
-  enableGPSBtn->setChecked(true);
+  enableGPSBtn->setChecked(sensorsEnabled);
   recenterMenu->addItem(enableGPSBtn);
 
   followGPSBtn = createCheckBoxMenuItem("Follow");
@@ -1786,7 +1790,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
 
   //recenterBtn = createToolbutton(MapsApp::uiIcon("gps-location"), "Recenter");
   recenterBtn = new Button(widgetNode("#roundbutton"));
-  recenterBtn->setIcon(MapsApp::uiIcon("gps-location"));
+  recenterBtn->setIcon(MapsApp::uiIcon(sensorsEnabled ? "gps-location" : "gps-location-off"));
   recenterBtn->onClicked = [=](){
     if(!sensorsEnabled) {
       setSensorsEnabled(true);
@@ -1955,8 +1959,8 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
       panelHistory.erase(std::remove(panelHistory.begin(), panelHistory.end(), panel), panelHistory.end());
   }
   bool wasminimized = panelMinimized && !panelHistory.empty();  // preserve minimized state
-  panel->setVisible(true);
   panelHistory.push_back(panel);
+  panel->setVisible(true);
   showPanelContainer(true);
   panelMinimized = wasminimized;
   panel->sdlUserEvent(gui, PANEL_OPENED);
@@ -2368,8 +2372,27 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
     bkmkDB = NULL;
   }
   else {
+    placesDB.db = bkmkDB;
     if(sqlite3_create_function(bkmkDB, "osmSearchRank", 3, SQLITE_UTF8, 0, udf_osmSearchRank, 0, 0) != SQLITE_OK)
       LOGE("sqlite3_create_function: error creating osmSearchRank for places DB");
+
+    static const char* historySchema = R"SQL(BEGIN;
+      CREATE TABLE IF NOT EXISTS history(
+        type INTEGER,
+        key TEXT COLLATE NOCASE,
+        title TEXT,
+        props TEXT,
+        lng REAL,
+        lat REAL,
+        timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_history_type_key ON history(type, key);
+      CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp);
+      COMMIT;)SQL";
+    placesDB.exec(historySchema);
+    // remove old history
+    historyMaxAge = cfg()["search"]["history_max_age"].as<int64_t>(15552000);  // 6 months
+    placesDB.stmt("DELETE FROM history WHERE timestamp < CAST(strftime('%s') AS INTEGER) - ?;").bind(historyMaxAge).exec();
   }
 
   // create required folders
@@ -2435,10 +2458,10 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
 
 MapsApp::~MapsApp()
 {
-  while(sqlite3_stmt* stmt = sqlite3_next_stmt(bkmkDB, NULL))
-    LOGW("SQLite statement was not finalized: %s", sqlite3_sql(stmt));  //sqlite3_finalize(stmt);
-  sqlite3_close(bkmkDB);
-  bkmkDB = NULL;
+  // while(sqlite3_stmt* stmt = sqlite3_next_stmt(bkmkDB, NULL))
+  //   LOGW("SQLite statement was not finalized: %s", sqlite3_sql(stmt));  //sqlite3_finalize(stmt);
+  // sqlite3_close(bkmkDB);
+  bkmkDB = NULL;  // now managed by placesDB object
 
   gui->closeWindow(win.get());
   delete gui;  gui = NULL;

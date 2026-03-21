@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gpxfile.h"
 #include "tangram.h"
 #include <cmath>
 
@@ -13,6 +14,7 @@ class MapsOffline;
 class MapsSources;
 class MapsSearch;
 class PluginManager;
+class SQLiteDB;
 
 class SvgGui;
 class TextLabel;
@@ -119,6 +121,7 @@ public:
   bool drawOnMap = false;
   bool appSuspended = false;
   float topInset = 0, bottomInset = 0;
+  int64_t historyMaxAge = 0;
 
   std::vector<SceneUpdate> sceneUpdates;
   std::string sceneFile;
@@ -221,6 +224,7 @@ public:
   static SvgGui* gui;
   static YAML::Node config;
   static std::string configFile;
+  static SQLiteDB placesDB;
   static sqlite3* bkmkDB;
   static bool metricUnits;
   static bool terrain3D;
@@ -247,7 +251,7 @@ private:
   bool flyToPickResult = false;
   bool flyingToCurrLoc = false;
   bool initToCurrLoc = false;
-  bool sensorsEnabled = true;
+  bool sensorsEnabled = PLATFORM_MOBILE;
   bool panelMaximized = false;
   bool panelMinimized = false;
   bool locMarkerNeedsUpdate = true;
