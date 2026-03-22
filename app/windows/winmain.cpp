@@ -32,7 +32,6 @@ bool MapsApp::openURL(const char* url)
 }
 
 void MapsApp::notifyStatusBarBG(bool) {}
-void MapsApp::setSensorsEnabled(bool enabled) {}
 void MapsApp::setServiceState(int state, float intervalSec, float minDist) {}
 void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 0; *bottom = 0; }
 void MapsApp::extractAssets(const char*) {}
@@ -692,6 +691,254 @@ HGLRC createGLContext(HDC DC, HGLRC sharectx)
   return RC;
 }
 
+// Win32 location API
+//#define _WIN32_WINNT 0x0601
+// #include <windows.h>
+#include <locationapi.h>
+#include <propvarutil.h>
+#include <propkey.h>
+// #include <stdio.h>
+
+// #pragma comment(lib, "locationapi.lib")
+// #pragma comment(lib, "propsys.lib")
+
+class SensorEvents : public ILocationEvents
+{
+  LONG refs = 1;
+  ILocation* pLoc = nullptr;
+public:
+  // IUnknown
+  ULONG STDMETHODCALLTYPE AddRef() override { return InterlockedIncrement(&refs); }
+  ULONG STDMETHODCALLTYPE Release() override {
+    LONG n = InterlockedDecrement(&refs);
+    if (!n) delete this;
+    return n;
+  }
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+    if (riid == IID_IUnknown || riid == IID_ILocationEvents)
+        { *ppv = this; AddRef(); return S_OK; }
+    *ppv = nullptr; return E_NOINTERFACE;
+  }
+
+  // Called when a new location report arrives
+  HRESULT STDMETHODCALLTYPE OnLocationChanged(REFIID reportType, ILocationReport* pReport) override
+  {
+    if(reportType != IID_ILatLongReport) { return S_OK; }
+    ILatLongReport* pLL = nullptr;
+    if(FAILED(pReport->QueryInterface(IID_ILatLongReport, (void**)&pLL))) { return S_OK; }
+
+    SYSTEMTIME st = {};
+    pReport->GetTimestamp(&st);
+    FILETIME ft = {};
+    SystemTimeToFileTime(&st, &ft);
+    ULARGE_INTEGER uli;
+    uli.LowPart  = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+    int64_t unixMs = (int64_t)(uli.QuadPart / 10000) - 11644473600000LL;
+
+    double lat = 0, lon = 0, alt = 0, poserr = 0, alterr = 0;
+    pLL->GetLatitude(&lat);
+    pLL->GetLongitude(&lon);
+    pLL->GetAltitude(&alt);       // may fail if unavailable
+    pLL->GetErrorRadius(&poserr);
+    pLL->GetAltitudeError(&alterr);
+    MapsApp::inst->updateLocation(Location{unixMs/1000.0, lat, lon, float(poserr), alt, float(alterr), 0, 0, 0, 0});
+    pLL->Release();
+    return S_OK;
+  }
+
+  // Called when the status of a report type changes
+  HRESULT STDMETHODCALLTYPE OnStatusChanged(REFIID reportType, LOCATION_REPORT_STATUS status) override {
+    switch (status) {
+      case REPORT_NOT_SUPPORTED:  LOGW("GPS: Not Supported"); break;
+      case REPORT_ERROR:          LOGW("GPS: Error"); break;
+      case REPORT_ACCESS_DENIED:  LOGW("GPS: Access Denied"); break;
+      case REPORT_INITIALIZING:   LOGD("GPS: Initializing"); break;
+      case REPORT_RUNNING:        LOGD("GPS: Running"); break;
+    }
+    return S_OK;
+  }
+
+  void Setup() {
+    CoCreateInstance(CLSID_Location, nullptr, CLSCTX_INPROC_SERVER, IID_ILocation, (void**)&pLoc);
+    IID types[] = { IID_ILatLongReport };
+    pLoc->RequestPermissions(nullptr, types, 1, FALSE);
+  }
+
+  void Start(int ratemsec=1000) {
+    if(!pLoc) { return; }
+    pLoc->RegisterForReport(this, IID_ILatLongReport, ratemsec);
+  }
+
+  void Stop() { pLoc->UnregisterForReport(IID_ILatLongReport); }
+
+  void Cleanup() { pLoc->Release(); pLoc = NULL; }
+};
+/*
+
+// #define _WIN32_WINNT 0x0601
+// #include <windows.h>
+#include <sensorsapi.h>
+#include <sensors.h>
+// #include <stdio.h>
+
+// #pragma comment(lib, "sensorsapi.lib")
+// #pragma comment(lib, "ole32.lib")
+
+class SensorEvents : public ISensorEvents
+{
+  LONG              refs   = 1;
+  ISensorManager*   pMgr   = nullptr;
+  ISensorCollection* pColl = nullptr;
+
+public:
+  HRESULT Setup() {
+    HRESULT hr = CoCreateInstance(CLSID_SensorManager, nullptr, CLSCTX_INPROC_SERVER,
+                                  IID_ISensorManager, (void**)&pMgr);
+    if (FAILED(hr)) { LOGE("Failed to create SensorManager"); return hr; }
+
+    hr = pMgr->GetSensorsByCategory(SENSOR_CATEGORY_LOCATION, &pColl);
+    if (FAILED(hr) || !pColl) { LOGW("No location sensors found"); return E_FAIL; }
+
+    ULONG count = 0;
+    pColl->GetCount(&count);
+    LOGD("Found %lu location sensor(s)", count);
+    for (ULONG i = 0; i < count; i++) {
+      ISensor* pSensor = nullptr;
+      if (SUCCEEDED(pColl->GetAt(i, &pSensor))) {
+        ISensorCollection* pReq = nullptr;
+        CoCreateInstance(CLSID_SensorCollection, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_ISensorCollection, (void**)&pReq);
+        pReq->Add(pSensor);
+        pMgr->RequestPermissions(nullptr, pReq, FALSE);
+        pReq->Release();
+        //pSensor->SetEventSink(this);
+        pSensor->Release();
+      }
+    }
+    return S_OK;
+  }
+
+  void Cleanup() {
+    if (pColl) { pColl->Release(); pColl = nullptr; }
+    if (pMgr) { pMgr->Release(); pMgr = nullptr; }
+  }
+
+  HRESULT Start() {
+      if (!pColl) return E_FAIL;
+      ULONG count = 0;
+      pColl->GetCount(&count);
+      for (ULONG i = 0; i < count; i++) {
+          ISensor* pSensor = nullptr;
+          if (SUCCEEDED(pColl->GetAt(i, &pSensor))) {
+              pSensor->SetEventSink(this);
+              pSensor->Release();
+          }
+      }
+      return S_OK;
+  }
+
+  void Stop() {
+      if (!pColl) return;
+      ULONG count = 0;
+      pColl->GetCount(&count);
+      for (ULONG i = 0; i < count; i++) {
+          ISensor* pSensor = nullptr;
+          if (SUCCEEDED(pColl->GetAt(i, &pSensor))) {
+              pSensor->SetEventSink(nullptr);
+              pSensor->Release();
+          }
+      }
+  }
+
+  // IUnknown
+  ULONG STDMETHODCALLTYPE AddRef()  override { return InterlockedIncrement(&refs); }
+  ULONG STDMETHODCALLTYPE Release() override {
+      LONG n = InterlockedDecrement(&refs);
+      if (!n) delete this;
+      return n;
+  }
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+      if (riid == IID_IUnknown || riid == IID_ISensorEvents)
+          { *ppv = this; AddRef(); return S_OK; }
+      *ppv = nullptr; return E_NOINTERFACE;
+  }
+
+  // ISensorEvents
+  HRESULT STDMETHODCALLTYPE OnStateChanged(ISensor*, SensorState state) override {
+    switch (state) {
+      case SENSOR_STATE_NOT_AVAILABLE: LOGW("GPS: Not Available"); break;
+      case SENSOR_STATE_NO_DATA:       LOGD("GPS: No Data");       break;
+      case SENSOR_STATE_INITIALIZING:  LOGD("GPS: Initializing");  break;
+      case SENSOR_STATE_READY:         LOGD("GPS: Ready");         break;
+      case SENSOR_STATE_ACCESS_DENIED: LOGW("GPS: Access Denied"); break;
+      case SENSOR_STATE_ERROR:         LOGW("GPS: Error");         break;
+    }
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE OnDataUpdated(ISensor*, ISensorDataReport* pReport) override {
+      SYSTEMTIME st = {};
+      pReport->GetTimestamp(&st);
+      FILETIME ft = {};
+      SystemTimeToFileTime(&st, &ft);
+      ULARGE_INTEGER uli;
+      uli.LowPart  = ft.dwLowDateTime;
+      uli.HighPart = ft.dwHighDateTime;
+      long long unixMs = (long long)(uli.QuadPart / 10000) - 11644473600000LL;
+
+      auto getDbl = [&](const PROPERTYKEY& key, double& out) -> bool {
+          PROPVARIANT pv = {};
+          bool ok = SUCCEEDED(pReport->GetSensorValue(key, &pv)) && pv.vt == VT_R8;
+          if (ok) out = pv.dblVal;
+          PropVariantClear(&pv);
+          return ok;
+      };
+      auto getUint = [&](const PROPERTYKEY& key, UINT& out) -> bool {
+          PROPVARIANT pv = {};
+          bool ok = SUCCEEDED(pReport->GetSensorValue(key, &pv)) && pv.vt == VT_UI4;
+          if (ok) out = pv.uiVal;
+          PropVariantClear(&pv);
+          return ok;
+      };
+
+      double lat = 0, lon = 0, alt = 0, poserr = 0, alterr = 0, speed = 0, heading = 0;
+      UINT satsUsed = 0, satsVisible = 0, fixStatus = 0;
+
+      getDbl(SENSOR_DATA_TYPE_LATITUDE_DEGREES, lat);
+      getDbl(SENSOR_DATA_TYPE_LONGITUDE_DEGREES, lon);
+      getDbl(SENSOR_DATA_TYPE_ALTITUDE_SEALEVEL_METERS, alt);
+      getDbl(SENSOR_DATA_TYPE_ERROR_RADIUS_METERS, poserr);
+      getDbl(SENSOR_DATA_TYPE_ALTITUDE_SEALEVEL_ERROR_METERS, alterr);
+      getDbl(SENSOR_DATA_TYPE_SPEED_KNOTS, speed);
+      getDbl(SENSOR_DATA_TYPE_TRUE_HEADING_DEGREES, heading);
+      getUint(SENSOR_DATA_TYPE_SATELLITES_USED_COUNT, satsUsed);
+      getUint(SENSOR_DATA_TYPE_SATELLITES_IN_VIEW, satsVisible);
+      getUint(SENSOR_DATA_TYPE_GPS_STATUS, fixStatus);
+
+      MapsApp::inst->updateGpsStatus(satsVisible, satsUsed);
+      //if(fixStatus == 1)
+      MapsApp::inst->updateLocation(Location{unixMs/1000.0, lat, lon, float(poserr),
+          alt, float(alterr), float(heading), 0, float(speed)*0.514444f, 0});
+      return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE OnEvent(ISensor*, REFGUID, IPortableDeviceValues*) override
+      { return S_OK; }
+  HRESULT STDMETHODCALLTYPE OnLeave(REFSENSOR_ID) override
+      { return S_OK; }
+};
+*/
+
+static SensorEvents* locEvents = nullptr;
+
+void MapsApp::setSensorsEnabled(bool enabled)
+{
+  if(!locEvents) { return; }
+  if(enabled) { locEvents->Start(); }
+  else { locEvents->Stop(); }
+}
+
 // refs:
 // - https://github.com/blender/blender/blob/main/intern/ghost/intern/GHOST_SystemWin32.cc
 // - https://github.com/glfw/glfw/blob/master/src/wgl_context.c
@@ -776,6 +1023,11 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
 
   ShowWindow(mainWnd, nCmdShow);
 
+  // Location API setup
+  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  locEvents = new SensorEvents();
+  locEvents->Setup();
+
   // MapsApp setup
   MapsApp* app = new MapsApp(new Tangram::WindowsPlatform());
   app->setDpi(dpi);
@@ -802,12 +1054,10 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   });
 
   app->mapsOffline->resumeDownloads();
-
   app->mapsSources->rebuildSource(app->config["sources"]["last_source"].Scalar());
-
-  app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, NAN, 0, NAN, 0});
-  app->updateGpsStatus(10, 10);  // turn location maker blue
-  app->updateOrientation(0, M_PI/2, 0, 0);
+  // app->updateLocation(Location{0, 37.777, -122.434, 0, 100, 0, NAN, 0, NAN, 0});
+  // app->updateGpsStatus(10, 10);  // turn location maker blue
+  // app->updateOrientation(0, M_PI/2, 0, 0);
 
   // calling wglMakeCurrent() for other context on offscreen thread breaks rendering on main thread unless
   //  we call wglMakeCurrent again at least once, even though wglGetCurrentContext() reports no change.
@@ -839,6 +1089,13 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
     const RECT& r = wp.rcNormalPosition;
     app->config["ui"]["position"] = YAML::Array({r.left, r.top, r.right, r.bottom, IsZoomed(mainWnd) ? 1 : 0});  // YAML::Tag::YAML_FLOW
   }
+
+  // sensor API cleanup
+  locEvents->Stop();
+  locEvents->Cleanup();
+  locEvents->Release();
+  locEvents = nullptr;
+  CoUninitialize();
 
   app->onSuspend();
   delete app;

@@ -81,6 +81,7 @@ LIBS = \
   setupapi.lib \
   imm32.lib \
   version.lib \
+  locationapi.lib \
   $(CURL_BASE)\build\lib\Release\libcurl_imp.lib
 
 # distribution package

@@ -317,14 +317,14 @@ void MapsSearch::offlineListSearch(std::string queryStr, LngLat, LngLat, int fla
       return;
     }
     MapsApp::runOnMainThread([this, flags, limit, res=std::move(res)]() mutable {
-      if(int(res.size()) >= limit) { flags |= MORE_RESULTS; }
+      int f = int(res.size()) >= limit ? (flags | MORE_RESULTS) : flags;  // g++11 bug with mutable nested lambda
       if(listResults.empty())
         listResults = std::move(res);
       else {
         listResults.insert(listResults.end(),
             std::make_move_iterator(res.begin()), std::make_move_iterator(res.end()));
       }
-      resultsUpdated(LIST_SEARCH | flags);
+      resultsUpdated(LIST_SEARCH | f);
     });
   });
 }
