@@ -1,10 +1,8 @@
 #pragma once
 
-#include "gpxfile.h"
-#include "tangram.h"
-#include <cmath>
-
+//#include <cmath>
 #include "mapscomponent.h"
+#include "gpxfile.h"
 #include "ulib/threadutil.h"
 
 class TouchHandler;
@@ -247,6 +245,10 @@ private:
 
   void populateColorPickerMenu();
   void customizeColors(Color initialColor, std::function<void(Color)> callback);
+
+  // needs to be deleted before Map because texture deletion uses RenderState
+  // - weak_ptr<Texture> doesn't work when we load texture ourselves
+  std::unique_ptr<Tangram::Raster> cachedElevTex;
 
   bool flyToPickResult = false;
   bool flyingToCurrLoc = false;

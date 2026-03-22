@@ -693,6 +693,8 @@ HGLRC createGLContext(HDC DC, HGLRC sharectx)
 
 // Win32 location API
 // It seems Win32 Sensor API may not work for GPS on Windows 10+; code removed 22 March 2026
+// ublox u-center "Universal Gnss Driver" mode (worked at least once) uses DeviceIoControl to communicate
+//  directly with GNSS driver, e.g. sending IOCTL_GNSS_START_FIXSESSION
 #include <locationapi.h>
 #include <propvarutil.h>
 #include <propkey.h>
@@ -756,18 +758,18 @@ public:
 
   void Setup() {
     CoCreateInstance(CLSID_Location, nullptr, CLSCTX_INPROC_SERVER, IID_ILocation, (void**)&pLoc);
+    if(!pLoc) { return; }
     IID types[] = { IID_ILatLongReport };
     pLoc->RequestPermissions(nullptr, types, 1, FALSE);
   }
 
   void Start(int ratemsec=1000) {
-    if(!pLoc) { return; }
-    pLoc->RegisterForReport(this, IID_ILatLongReport, ratemsec);
+    if(pLoc) { pLoc->RegisterForReport(this, IID_ILatLongReport, ratemsec); }
   }
 
-  void Stop() { pLoc->UnregisterForReport(IID_ILatLongReport); }
+  void Stop() { if(pLoc) { pLoc->UnregisterForReport(IID_ILatLongReport); } }
 
-  void Cleanup() { pLoc->Release(); pLoc = NULL; }
+  void Cleanup() { if(pLoc) { pLoc->Release(); pLoc = NULL; } }
 };
 
 static LocationEvents* locEvents = nullptr;

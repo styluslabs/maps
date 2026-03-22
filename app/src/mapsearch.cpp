@@ -500,8 +500,7 @@ void MapsSearch::searchText(std::string query, SearchPhase phase)
       auto words = splitStr<std::vector>(query, " ", true);
       searchStr = "\"" + joinStr(words, "\" AND \"") + "\"*";
     }
-    //std::replace(searchStr.begin(), searchStr.end(), '\'', ' ');
-    LOGD("Search string: %s", searchStr.c_str());
+    //LOGD("Search string: %s", searchStr.c_str());
   }
   else
     searchStr = query;

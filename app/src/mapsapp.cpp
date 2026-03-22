@@ -1176,12 +1176,14 @@ static double elevationLerp(const Tangram::Raster& raster, LngLat pos)
 double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback, bool forcecall)
 {
   using namespace Tangram;
-  static Raster prevTex(NOT_A_TILE, nullptr);
+  //static Raster prevTex(NOT_A_TILE, nullptr);
+  if(!cachedElevTex) { cachedElevTex = std::make_unique<Raster>(NOT_A_TILE, nullptr); }
 
-  if(prevTex.texture && prevTex.texture->bufferData() && prevTex.tileID.z >= std::min(14, int(map->getZoom()))) {
-    TileID tileId = lngLatTile(pos, prevTex.tileID.z);
-    if(tileId == prevTex.tileID) {
-      double elev = elevationLerp(prevTex, pos);
+  if(cachedElevTex->texture && cachedElevTex->texture->bufferData()
+      && cachedElevTex->tileID.z >= std::min(14, int(map->getZoom()))) {
+    TileID tileId = lngLatTile(pos, cachedElevTex->tileID.z);
+    if(tileId == cachedElevTex->tileID) {
+      double elev = elevationLerp(*cachedElevTex, pos);
       if(callback) { callback(elev); }
       return elev;
     }
@@ -1191,9 +1193,9 @@ double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback, b
   if(!elevSrc) return 0;
   auto raster = elevSrc->getRaster(MapProjection::lngLatToProjectedMeters(pos));
   if(raster.texture && raster.texture->bufferData()) {
-    prevTex.texture = raster.texture;
-    prevTex.tileID = raster.tileID;
-    double elev = elevationLerp(prevTex, pos);
+    cachedElevTex->texture = raster.texture;
+    cachedElevTex->tileID = raster.tileID;
+    double elev = elevationLerp(*cachedElevTex, pos);
     if(callback) { callback(elev); }
     return elev;
   }
@@ -1209,9 +1211,9 @@ double MapsApp::getElevation(LngLat pos, std::function<void(double)> callback, b
         auto& data = *static_cast<BinaryTileTask*>(_task.get())->rawTileData;
         auto tex = std::make_unique<Texture>(TextureOptions(), false);
         if(tex->loadImageFromMemory((const uint8_t*)data.data(), data.size())) {
-          prevTex.texture = std::move(tex);
-          prevTex.tileID = tileId;
-          callback(elevationLerp(prevTex, pos));
+          cachedElevTex->texture = std::move(tex);
+          cachedElevTex->tileID = tileId;
+          callback(elevationLerp(*cachedElevTex, pos));
           return;
         }
       }
