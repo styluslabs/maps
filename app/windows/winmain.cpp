@@ -692,17 +692,12 @@ HGLRC createGLContext(HDC DC, HGLRC sharectx)
 }
 
 // Win32 location API
-//#define _WIN32_WINNT 0x0601
-// #include <windows.h>
+// It seems Win32 Sensor API may not work for GPS on Windows 10+; code removed 22 March 2026
 #include <locationapi.h>
 #include <propvarutil.h>
 #include <propkey.h>
-// #include <stdio.h>
 
-// #pragma comment(lib, "locationapi.lib")
-// #pragma comment(lib, "propsys.lib")
-
-class SensorEvents : public ILocationEvents
+class LocationEvents : public ILocationEvents
 {
   LONG refs = 1;
   ILocation* pLoc = nullptr;
@@ -774,163 +769,8 @@ public:
 
   void Cleanup() { pLoc->Release(); pLoc = NULL; }
 };
-/*
 
-// #define _WIN32_WINNT 0x0601
-// #include <windows.h>
-#include <sensorsapi.h>
-#include <sensors.h>
-// #include <stdio.h>
-
-// #pragma comment(lib, "sensorsapi.lib")
-// #pragma comment(lib, "ole32.lib")
-
-class SensorEvents : public ISensorEvents
-{
-  LONG              refs   = 1;
-  ISensorManager*   pMgr   = nullptr;
-  ISensorCollection* pColl = nullptr;
-
-public:
-  HRESULT Setup() {
-    HRESULT hr = CoCreateInstance(CLSID_SensorManager, nullptr, CLSCTX_INPROC_SERVER,
-                                  IID_ISensorManager, (void**)&pMgr);
-    if (FAILED(hr)) { LOGE("Failed to create SensorManager"); return hr; }
-
-    hr = pMgr->GetSensorsByCategory(SENSOR_CATEGORY_LOCATION, &pColl);
-    if (FAILED(hr) || !pColl) { LOGW("No location sensors found"); return E_FAIL; }
-
-    ULONG count = 0;
-    pColl->GetCount(&count);
-    LOGD("Found %lu location sensor(s)", count);
-    for (ULONG i = 0; i < count; i++) {
-      ISensor* pSensor = nullptr;
-      if (SUCCEEDED(pColl->GetAt(i, &pSensor))) {
-        ISensorCollection* pReq = nullptr;
-        CoCreateInstance(CLSID_SensorCollection, nullptr, CLSCTX_INPROC_SERVER,
-                          IID_ISensorCollection, (void**)&pReq);
-        pReq->Add(pSensor);
-        pMgr->RequestPermissions(nullptr, pReq, FALSE);
-        pReq->Release();
-        //pSensor->SetEventSink(this);
-        pSensor->Release();
-      }
-    }
-    return S_OK;
-  }
-
-  void Cleanup() {
-    if (pColl) { pColl->Release(); pColl = nullptr; }
-    if (pMgr) { pMgr->Release(); pMgr = nullptr; }
-  }
-
-  HRESULT Start() {
-      if (!pColl) return E_FAIL;
-      ULONG count = 0;
-      pColl->GetCount(&count);
-      for (ULONG i = 0; i < count; i++) {
-          ISensor* pSensor = nullptr;
-          if (SUCCEEDED(pColl->GetAt(i, &pSensor))) {
-              pSensor->SetEventSink(this);
-              pSensor->Release();
-          }
-      }
-      return S_OK;
-  }
-
-  void Stop() {
-      if (!pColl) return;
-      ULONG count = 0;
-      pColl->GetCount(&count);
-      for (ULONG i = 0; i < count; i++) {
-          ISensor* pSensor = nullptr;
-          if (SUCCEEDED(pColl->GetAt(i, &pSensor))) {
-              pSensor->SetEventSink(nullptr);
-              pSensor->Release();
-          }
-      }
-  }
-
-  // IUnknown
-  ULONG STDMETHODCALLTYPE AddRef()  override { return InterlockedIncrement(&refs); }
-  ULONG STDMETHODCALLTYPE Release() override {
-      LONG n = InterlockedDecrement(&refs);
-      if (!n) delete this;
-      return n;
-  }
-  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
-      if (riid == IID_IUnknown || riid == IID_ISensorEvents)
-          { *ppv = this; AddRef(); return S_OK; }
-      *ppv = nullptr; return E_NOINTERFACE;
-  }
-
-  // ISensorEvents
-  HRESULT STDMETHODCALLTYPE OnStateChanged(ISensor*, SensorState state) override {
-    switch (state) {
-      case SENSOR_STATE_NOT_AVAILABLE: LOGW("GPS: Not Available"); break;
-      case SENSOR_STATE_NO_DATA:       LOGD("GPS: No Data");       break;
-      case SENSOR_STATE_INITIALIZING:  LOGD("GPS: Initializing");  break;
-      case SENSOR_STATE_READY:         LOGD("GPS: Ready");         break;
-      case SENSOR_STATE_ACCESS_DENIED: LOGW("GPS: Access Denied"); break;
-      case SENSOR_STATE_ERROR:         LOGW("GPS: Error");         break;
-    }
-    return S_OK;
-  }
-
-  HRESULT STDMETHODCALLTYPE OnDataUpdated(ISensor*, ISensorDataReport* pReport) override {
-      SYSTEMTIME st = {};
-      pReport->GetTimestamp(&st);
-      FILETIME ft = {};
-      SystemTimeToFileTime(&st, &ft);
-      ULARGE_INTEGER uli;
-      uli.LowPart  = ft.dwLowDateTime;
-      uli.HighPart = ft.dwHighDateTime;
-      long long unixMs = (long long)(uli.QuadPart / 10000) - 11644473600000LL;
-
-      auto getDbl = [&](const PROPERTYKEY& key, double& out) -> bool {
-          PROPVARIANT pv = {};
-          bool ok = SUCCEEDED(pReport->GetSensorValue(key, &pv)) && pv.vt == VT_R8;
-          if (ok) out = pv.dblVal;
-          PropVariantClear(&pv);
-          return ok;
-      };
-      auto getUint = [&](const PROPERTYKEY& key, UINT& out) -> bool {
-          PROPVARIANT pv = {};
-          bool ok = SUCCEEDED(pReport->GetSensorValue(key, &pv)) && pv.vt == VT_UI4;
-          if (ok) out = pv.uiVal;
-          PropVariantClear(&pv);
-          return ok;
-      };
-
-      double lat = 0, lon = 0, alt = 0, poserr = 0, alterr = 0, speed = 0, heading = 0;
-      UINT satsUsed = 0, satsVisible = 0, fixStatus = 0;
-
-      getDbl(SENSOR_DATA_TYPE_LATITUDE_DEGREES, lat);
-      getDbl(SENSOR_DATA_TYPE_LONGITUDE_DEGREES, lon);
-      getDbl(SENSOR_DATA_TYPE_ALTITUDE_SEALEVEL_METERS, alt);
-      getDbl(SENSOR_DATA_TYPE_ERROR_RADIUS_METERS, poserr);
-      getDbl(SENSOR_DATA_TYPE_ALTITUDE_SEALEVEL_ERROR_METERS, alterr);
-      getDbl(SENSOR_DATA_TYPE_SPEED_KNOTS, speed);
-      getDbl(SENSOR_DATA_TYPE_TRUE_HEADING_DEGREES, heading);
-      getUint(SENSOR_DATA_TYPE_SATELLITES_USED_COUNT, satsUsed);
-      getUint(SENSOR_DATA_TYPE_SATELLITES_IN_VIEW, satsVisible);
-      getUint(SENSOR_DATA_TYPE_GPS_STATUS, fixStatus);
-
-      MapsApp::inst->updateGpsStatus(satsVisible, satsUsed);
-      //if(fixStatus == 1)
-      MapsApp::inst->updateLocation(Location{unixMs/1000.0, lat, lon, float(poserr),
-          alt, float(alterr), float(heading), 0, float(speed)*0.514444f, 0});
-      return S_OK;
-  }
-
-  HRESULT STDMETHODCALLTYPE OnEvent(ISensor*, REFGUID, IPortableDeviceValues*) override
-      { return S_OK; }
-  HRESULT STDMETHODCALLTYPE OnLeave(REFSENSOR_ID) override
-      { return S_OK; }
-};
-*/
-
-static SensorEvents* locEvents = nullptr;
+static LocationEvents* locEvents = nullptr;
 
 void MapsApp::setSensorsEnabled(bool enabled)
 {
@@ -1025,7 +865,7 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
 
   // Location API setup
   CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-  locEvents = new SensorEvents();
+  locEvents = new LocationEvents();
   locEvents->Setup();
 
   // MapsApp setup
