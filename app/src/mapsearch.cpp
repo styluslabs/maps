@@ -136,7 +136,7 @@ std::vector<SearchData> MapsSearch::parseSearchFields(const YAML::Node& node)
   return searchData;
 }
 
-static const char* POI_SCHEMA = R"#(BEGIN;
+static const char* POI_SCHEMA = R"SQL(BEGIN;
 --CREATE TABLE tiles(id INTEGER PRIMARY KEY, z INTEGER, x INTEGER, y INTEGER, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));
 --CREATE UNIQUE INDEX tiles_tile_id ON tiles (z, x, y);
 CREATE TABLE offline_tiles(tile_id INTEGER, offline_id INTEGER);
@@ -161,7 +161,7 @@ CREATE TRIGGER pois_update AFTER UPDATE ON pois BEGIN
   INSERT INTO pois_fts(pois_fts, rowid, name, tags) VALUES ('delete', OLD.rowid, OLD.name, OLD.tags);
   INSERT INTO pois_fts(rowid, name, tags) VALUES (NEW.rowid, NEW.name, NEW.tags);
 END;
-COMMIT;)#";
+COMMIT;)SQL";
 
 bool MapsSearch::initSearch()
 {
@@ -179,6 +179,15 @@ bool MapsSearch::initSearch()
     searchDB.exec(POI_SCHEMA);
     // search history - NOCASE causes comparisions to be case-insensitive but still stores case
     //searchDB.exec("CREATE TABLE history(query TEXT UNIQUE COLLATE NOCASE, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+  }
+  else if(searchDB.exec("SELECT 1 FROM history LIMIT 1")) {
+    // migration
+    auto getQuery = searchDB.stmt("SELECT query, timestamp FROM history ORDER BY timestamp;");
+    auto putQuery = app->placesDB.stmt("INSERT INTO history (type,key,title,timestamp) VALUES (?,?,?,?);");
+    bool ok = true;
+    if(getQuery.exec([&](const char* q, int64_t ts){ ok = putQuery.bind(0, q, q, ts).exec() && ok; }) && ok) {
+      searchDB.exec("DROP TABLE history;");
+    }
   }
   //"PRAGMA synchronous=OFF; PRAGMA count_changes=OFF; PRAGMA journal_mode=MEMORY; PRAGMA temp_store=MEMORY"
 
@@ -895,7 +904,7 @@ Button* MapsSearch::createPanel()
   scrollWidget->onScroll = [=](){
     // get more list results
     if(moreListResultsAvail && scrollWidget->scrollY >= scrollWidget->scrollLimits.bottom) {
-      if(searchStr.empty() && queryText->isEnabled()) { populateAutocomplete(""); }
+      if(searchStr.empty() && queryText->isEnabled()) { populateAutocomplete(""); return; }
       if(providerIdx > 0 && !providerFlags.more) { return; }
       LngLat lngLat00, lngLat11;
       app->getMapBounds(lngLat00, lngLat11);
