@@ -1,6 +1,6 @@
 #pragma once
 
-//#include <cmath>
+#include <cmath>  // for NAN
 #include "mapscomponent.h"
 #include "gpxfile.h"
 #include "ulib/threadutil.h"
