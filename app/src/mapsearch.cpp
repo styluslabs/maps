@@ -871,6 +871,15 @@ Button* MapsSearch::createPanel()
     app->mapsBookmarks->createFromSearch(query.empty() ? plugin : plugin + ": " + query, mapResults);
     app->showPanel(app->mapsBookmarks->listsPanel, false);
   });
+  auto clearHistoryFn = [this](std::string res){
+    if(res != "OK") { return; }
+    app->placesDB.exec("DELETE FROM history;");
+    searchText(queryText->text(), EDITING);  // refresh
+  };
+  overflowMenu->addItem("Clear all history", [=](){
+    MapsApp::messageBox("Clear all history", "Delete all place and search history? This action cannot be undone.",
+        {"OK", "Cancel"}, clearHistoryFn);
+  });
   searchTb->addWidget(overflowBtn);
 
   resultsContent = createColumn();
