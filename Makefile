@@ -211,7 +211,7 @@ include $(ADD_MODULE)
 PKGS = dbus-1 x11
 
 DEFS += TANGRAM_LINUX
-LIBS = -pthread -lOpenGL -lGLX -lXi -lfontconfig -lcurl -ldl
+LIBS += -pthread -lOpenGL -lGLX -lXi -lfontconfig -lcurl -ldl
 #CFLAGS = -pthread
 
 PROFILE ?= 0
