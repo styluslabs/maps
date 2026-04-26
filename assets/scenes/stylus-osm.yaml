@@ -629,6 +629,7 @@ layers:
             any: [ { $zoom: { min: 17 } }, { area: { min: 500px2 } } ]
         draw:
             text:
+                interactive: true
                 text_source: global.names_one_line
                 transition: { show: { time: 0s }, hide: { time: 1s } }
                 priority: global.priority.water

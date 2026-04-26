@@ -650,6 +650,9 @@ void MapsTracks::updateStats(GpxFile* track)
 
   if(isRecording) {
     recordedTrack.desc = "Recording | " + trackSummary;
+    Widget* item = tracksContent->getItem(std::to_string(recordedTrack.rowid));
+    if(item)
+      item->selectFirst(".detail-text")->setText(recordedTrack.desc.c_str());
     // set timer so as to update time as close to second boundary as possible
     int dt = std::max((std::floor(totalTime) + 1 - totalTime)*1000, 10.0);
     recordTimer = app->gui->setTimer(dt, trackPanel, recordTimer, [this](){
@@ -1503,8 +1506,10 @@ void MapsTracks::createEditDialog()
   auto saveTrackFn = [=](bool savecopy){
     auto title = trimStr(editTrackTitle->text());
     bool sametitle = title == activeTrack->title;
-    // add entry for original track if making copy
-    if(activeTrack->rowid >= 0 && savecopy) {
+    if(activeTrack->rowid < 0)
+      saveRouteBtn->onClicked();
+    else if(savecopy) {
+      // add entry for original track if making copy
       tracks.emplace_back(activeTrack->title, activeTrack->desc, activeTrack->filename,
           activeTrack->style, activeTrack->rowid, activeTrack->archived);
     }
