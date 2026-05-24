@@ -126,6 +126,7 @@ std::pair<LngLat, LngLat> tileCoveringBounds(LngLat minLngLat, LngLat maxLngLat,
 
 std::string yamlToStr(const YAML::Node& node, int flowLevel, int indent)
 {
+  if(node.IsScalar()) { return node.as<std::string>(); }
   YAML::Writer emitter;
   emitter.flowLevel = flowLevel;
   emitter.indent = indent;

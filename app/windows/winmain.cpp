@@ -570,6 +570,15 @@ LONG WINAPI WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     }
     return 0;
 
+  case WM_SETFOCUS:
+  case WM_KILLFOCUS: {
+    SDL_Event event = {0};
+    event.type = SDL_WINDOWEVENT;
+    event.window.event = uMsg == WM_SETFOCUS ? SDL_WINDOWEVENT_FOCUS_GAINED : SDL_WINDOWEVENT_FOCUS_LOST;
+    SDL_PushEvent(&event);
+    return 0;
+  }
+
   case WM_KEYDOWN:
   case WM_KEYUP:
   case WM_SYSKEYDOWN:
