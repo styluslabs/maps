@@ -156,8 +156,9 @@ global:
         runway: 655
         minor_road: 660
         piste: 665
-        major_road: 670
-        motorway: 680
+        medium_road: 670
+        major_road: 680
+        motorway: 690
         bridge_casing: 700
         bridge: 701
         bicycle: 720
@@ -752,38 +753,60 @@ layers:
             draw:
                 lines:
                     order: global.order.major_road
-                    width: [[8, 1px], [13, 2px], [14, 2px], [16, 12]]
-                    outline: { width: [[16, 0], [17, 1]] }
+                    width: [[8, 1px], [13, 2.5px], [14, 3px], [16, 14]]
+                    outline: { width: [[16, 0], [16, 1]] }
             link:
                 filter: [ { highway: trunk_link }, { ramp: true } ]
                 draw: { lines: { width: [[14, 0], [14, 1.5px], [16, 8]] } }
 
-        major_road:
-            filter: { highway: [primary, primary_link, secondary, secondary_link], $zoom: { min: 8 } }
+        primary_road:
+            filter: { highway: primary, $zoom: { min: 8 } }
             draw:
                 lines:
                     order: global.order.major_road
-                    width: [[10, 0], [10, 0.5px], [13, 2px], [14, 2px], [16, 12]]
-                    outline: { width: [[16, 0], [17, 1]] }
+                    width: [[10, 0], [10, 0.75px], [13, 2px], [14, 2.5px], [16, 12]]
+                    outline: { width: [[16, 0], [16, 1]] }
+            primary_ref:
+                filter: { ref: true }
+                draw: { lines: { width: [[8, 0.5px], [9, 1px], [13, 2px], [14, 2.5px], [16, 12]] } }
+
+        major_road:
+            filter: { highway: [primary_link, secondary, secondary_link], $zoom: { min: 10 } }
+            draw:
+                lines:
+                    order: global.order.major_road
+                    width: [[10, 0], [10, 0.5px], [13, 1.75px], [14, 2px], [16, 10]]
+                    outline: { width: [[16, 0], [16, 1]] }
             link:
                 filter: [ { highway: [primary_link, secondary_link] }, { ramp: true } ]
                 draw: { lines: { width: [[14, 0], [14, 1.5px], [16, 8]] } }
-            primary_ref:
-                filter: { highway: primary, ref: true }
-                draw: { lines: { width: [[8, 0.5px], [9, 1px], [13, 2px], [14, 2px], [16, 12]] } }
             secondary_ref:
                 filter: { highway: secondary, ref: true }
-                draw: { lines: { width: [[9, 0], [9, 0.5px], [10, 1px], [13, 2px], [14, 2px], [16, 12]] } }
+                draw: { lines: { width: [[9, 0], [9, 0.5px], [10, 1px], [13, 1.75px], [14, 2px], [16, 10]] } }
+
+        medium_road:
+            filter:
+                # unclassified is a specific type of road, does not mean unknown - see OSM wiki
+                highway: [tertiary, tertiary_link, unclassified]
+                $zoom: { min: 12 }
+            unpaved:
+                filter: { surface: unpaved }
+                draw: { lines: { style: dashed-track } }
+            draw:
+                lines:
+                    order: global.order.medium_road
+                    width: [[12, 0.75px], [13, 1.5px], [14, 1.75px], [15, 8]]
+                    outline: { width: [[17, 0], [17, 1]] }
 
         minor_road:
             filter:
-                highway: [tertiary, tertiary_link, unclassified, residential, road, living_street, service]
+                highway: [residential, road, living_street, service]
                 $zoom: { min: 13 }
             draw:
                 lines:
                     order: global.order.minor_road
                     width: [[13, 0.75px], [14, 1px], [15, 8]]
-                    outline: { width: [[17, 0], [18, 1]] }
+                    outline: { width: [[17, 0], [17, 1]] }
             service:
                 filter: { highway: service }
                 draw: { lines: { width: [[15, 0px], [15, 0.75px], [16, 4px], [17, 5]] } }
