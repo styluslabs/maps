@@ -150,6 +150,7 @@ typedef struct {
 #define MAX_TABLETS 32
 static TabletData tabletData[MAX_TABLETS];
 static size_t nTablets = 0;
+static TabletData* mouseData = NULL;
 
 static int xinput2_opcode;
 
@@ -327,6 +328,7 @@ static void initValInfo(ValInfo* val, XIValuatorClassInfo* vci)
 static void enumerateDevices(Display* xDisplay)
 {
   memset(tabletData, 0, sizeof(tabletData));
+  mouseData = NULL;
   nTablets = 0;
   int deviceCount = 0;
   XIDeviceInfo* devices = XIQueryDevice(xDisplay, XIAllDevices, &deviceCount);
@@ -369,6 +371,7 @@ static void enumerateDevices(Display* xDisplay)
     else
       devinfo->type = isTouch ? isTouch : XI2_MOUSE;
 
+    if(devinfo->type == XI2_MOUSE) { mouseData = devinfo; }
     //PLATFORM_LOG("Device %s is type %d\n", devices[ii].name, device->type);
     devinfo->deviceId = devices[ii].deviceid;
     ++nTablets;
@@ -409,7 +412,9 @@ static void processXinput2Event(XGenericEventCookie* cookie)
     }
     if(devinfo->type == XI2_DEP_TOUCH)
       return;
-    // we could maybe use xiDeviceEvent->buttons.mask >> 1 instead of tracking button state ourselves
+    // XWayland sends motion events and button events on different slave pointers, so force single state
+    if(devinfo->type == XI2_MOUSE && mouseData) { devinfo = mouseData; }
+    //devinfo->buttons = xiDeviceEvent->buttons.mask[0] >> 1;
     if(cookie->evtype == XI_ButtonPress)
       devinfo->buttons |= xiToSDLButton(xiDeviceEvent->detail);
     else if(cookie->evtype == XI_ButtonRelease)
@@ -1050,7 +1055,9 @@ int main(int argc, char* argv[])
   xContext.height = winAttrs.height;
 
   // MapsApp setup
-  MapsApp* app = new MapsApp(new Tangram::LinuxPlatform());
+  Tangram::UrlClient::Options urlOptions;
+  urlOptions.maxHttpVersion = MapsApp::cfg()["storage"]["http_version"].as<uint32_t>(urlOptions.maxHttpVersion);
+  MapsApp* app = new MapsApp(new Tangram::LinuxPlatform(urlOptions));
   app->setDpi(dpi);
   //app->map->setupGL();
   app->createGUI((SDL_Window*)xWin);

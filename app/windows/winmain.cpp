@@ -880,7 +880,9 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   locEvents->Setup();
 
   // MapsApp setup
-  MapsApp* app = new MapsApp(new Tangram::WindowsPlatform());
+  Tangram::UrlClient::Options urlOptions;
+  urlOptions.maxHttpVersion = MapsApp::cfg()["storage"]["http_version"].as<uint32_t>(urlOptions.maxHttpVersion);
+  MapsApp* app = new MapsApp(new Tangram::WindowsPlatform(urlOptions));
   app->setDpi(dpi);
   //app->map->setupGL();
   app->createGUI((SDL_Window*)mainWnd);
