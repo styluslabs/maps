@@ -197,6 +197,10 @@ bool saveGPX(GpxFile* track, const char* filename)
   // saving track
   pugi::xml_document doc;
   pugi::xml_node gpx = doc.append_child("gpx");
+  gpx.append_attribute("version").set_value("1.1");
+  gpx.append_attribute("creator").set_value("Ascend Maps");
+  gpx.append_attribute("xmlns").set_value("http://www.topografix.com/GPX/1/1");
+  gpx.append_attribute("xmlns:sl").set_value("http://www.styluslabs.com/xmlns/sl");
   pugi::xml_node metadata = gpx.append_child("metadata");
   metadata.append_child("name").append_child(pugi::node_pcdata).set_value(track->title.c_str());
   metadata.append_child("desc").append_child(pugi::node_pcdata).set_value(track->desc.c_str());

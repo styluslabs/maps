@@ -37,7 +37,7 @@ include module.mk
 
 ifeq ($(OS),Windows_NT)
 # Windows
-CURL_BASE := ../curl
+CURL_BASE ?= ../curl
 
 MODULE_BASE := .
 
@@ -82,7 +82,7 @@ LIBS = \
   imm32.lib \
   version.lib \
   locationapi.lib \
-  $(CURL_BASE)\build\lib\Release\libcurl_imp.lib
+  $(CURL_BASE)\lib\libcurl.lib
 
 # distribution package
 ZIPFILE = $(TARGET)-$(GIT_DESCRIBE)-$(GIT_REV).zip
@@ -94,7 +94,7 @@ DISTRES = \
   assets\res \
   assets\scenes \
   assets\shared \
-  $(CURL_BASE)\build\lib\Release\libcurl.dll
+  $(CURL_BASE)\bin\libcurl.dll
 # installer
 #WXS = windows/InstallWrite.wxs
 
