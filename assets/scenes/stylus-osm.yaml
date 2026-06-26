@@ -190,10 +190,11 @@ global:
             return global.order.transit + offset + (Number(feature.osm_id) & 65535)/65536;
         }
 
+    # OSM colors are supposed to be valid HTML or CSS colors, but invalid values are common
     transit_color_fn: |
         function() {
-            const c = feature.color;
-            return (!c || c == "white" || c == "#ffffff" || c == "#FFFFFF") ? global.color.transit : c;
+            const c = parseColor(feature.color || "");
+            return c && c != 0xFFFFFFFF ? c : global.color.transit;  // don't allow white
         }
 
     show_name_en: true

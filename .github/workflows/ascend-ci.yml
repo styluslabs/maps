@@ -64,57 +64,102 @@ jobs:
       with:
         submodules: recursive
         path: maps
+    # schannel doesn't support TLS 1.3 on Windows 10 (w/o registry hack), but building curl w/ openssl gives
+    #  a much bigger DLL; using libressl (used by curl.se/windows) is a bit better
     # use vcpkg for curl
-    - name: Setup vcpkg
-      uses: actions/checkout@v4
-      with:
-        repository: microsoft/vcpkg
-        path: vcpkg
-    - name: Bootstrap vcpkg
-      shell: pwsh
-      run: |
-        .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-    - name: Install curl with OpenSSL and zlib via vcpkg
-      shell: pwsh
-      run: |
-        .\vcpkg\vcpkg.exe install curl[openssl,zlib]:x64-windows --recurse
-    # - name: Download curl and zlib sources
-    #   shell: powershell
+    # - name: Setup vcpkg
+    #   uses: actions/checkout@v4
+    #   with:
+    #     repository: microsoft/vcpkg
+    #     path: vcpkg
+    # - name: Bootstrap vcpkg
+    #   shell: pwsh
     #   run: |
-    #     # Download and extract curl (latest version as of early 2026)
-    #     curl.exe -L -o curl.zip https://github.com/curl/curl/releases/download/curl-8_18_0/curl-8.18.0.zip
+    #     .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+    # - name: Create custom vcpkg triplet
+    #   shell: pwsh
+    #   run: |
+    #     @"
+    #     set(VCPKG_TARGET_ARCHITECTURE x64)
+    #     set(VCPKG_CRT_LINKAGE dynamic)
+    #     set(VCPKG_LIBRARY_LINKAGE static)
+    #     set(VCPKG_BUILD_TYPE release)
+    #     if(PORT STREQUAL "curl")
+    #         set(VCPKG_LIBRARY_LINKAGE dynamic)
+    #         set(VCPKG_CMAKE_CONFIGURE_OPTIONS
+    #             -DCURL_CA_NATIVE=ON
+    #         )
+    #     endif()
+    #     "@ | Set-Content .vcpkg\triplets\x64-windows-mixed.cmake
+    # # vcpkg option 1: 5MB libcurl DLL
+    # #- name: Build curl with OpenSSL and zlib via vcpkg
+    # #  shell: cmd
+    # #  run: |
+    # #    .\vcpkg\vcpkg.exe install curl[openssl,http2] --triplet=x64-windows-mixed
+    # # vcpkg option 2: build libcurl manually to use libressl (2MB libcurl dll)
+    # - name: Build curl deps via vcpkg
+    #   shell: cmd
+    #   run: |
+    #     .\vcpkg\vcpkg.exe install nghttp2 zlib libressl --triplet=x64-windows-mixed
+    #     cp .\vcpkg\installed\x64-windows-mixed\zs.lib .\vcpkg\installed\x64-windows-mixed\zlib.lib
+    # - name: Build libcurl with vcpkg deps
+    #   shell: pwsh
+    #   run: |
+    #     curl.exe -L -o curl.zip https://github.com/curl/curl/releases/download/curl-8_20_0/curl-8.20.0.zip
     #     Expand-Archive curl.zip -DestinationPath .
-    #     Rename-Item "curl-8.18.0" "curl"
-
-    #     # Download and extract zlib
-    #     curl.exe -L -o zlib.zip https://github.com/madler/zlib/archive/refs/tags/v1.3.1.zip
-    #     Expand-Archive zlib.zip -DestinationPath .
-    #     Rename-Item "zlib-1.3.1" "zlib"
-    # - name: Build zlib (Static)
-    #   shell: pwsh
-    #   run: |
-    #     cd zlib
-    #     cmake -B build -G "Visual Studio 17 2022" -A x64 `
-    #       -DCMAKE_BUILD_TYPE=Release `
-    #       -DBUILD_SHARED_LIBS=OFF
-    #     cmake --build build --config Release
-    # - name: Build libcurl
-    #   shell: pwsh
-    #   run: |
+    #     Rename-Item "curl-8.20.0" "curl"
     #     cd curl
     #     cmake -B build -G "Visual Studio 17 2022" -A x64 `
     #       -DCMAKE_BUILD_TYPE=Release `
     #       -DBUILD_SHARED_LIBS=ON `
-    #       -DBUILD_STATIC_LIBS=ON `
-    #       -DBUILD_CURL_EXE=ON `
+    #       -DBUILD_STATIC_LIBS=OFF `
+    #       -DBUILD_CURL_EXE=OFF `
+    #       -DCMAKE_PREFIX_PATH="$env:VCPKG_ROOT/installed/x64-windows-mixed" `
+    #       -DCURL_CA_NATIVE=ON `
+    #       -DCURL_USE_SCHANNEL=OFF `
+    #       -DCURL_USE_OPENSSL=ON `
     #       -DCURL_ZLIB=ON `
-    #       -DZLIB_INCLUDE_DIR="$pwd\..\zlib;$pwd\..\zlib\build" `
-    #       -DZLIB_LIBRARY="$pwd\..\zlib\build\Release\zlibstatic.lib" `
-    #       -DCURL_USE_SCHANNEL=ON `
-    #       -DCURL_WINDOWS_SSPI=ON `
+    #       -DUSE_NGHTTP2=ON `
     #       -DENABLE_IPV6=ON `
     #       -DCURL_USE_LIBPSL=OFF
     #     cmake --build build --config Release
+    - name: Download curl and zlib sources
+      shell: powershell
+      run: |
+        # Download and extract curl (latest version as of mid 2026)
+        curl.exe -L -o curl.zip https://github.com/curl/curl/releases/download/curl-8_20_0/curl-8.20.0.zip
+        Expand-Archive curl.zip -DestinationPath .
+        Rename-Item "curl-8.20.0" "curl"
+
+        # Download and extract zlib
+        curl.exe -L -o zlib.zip https://github.com/madler/zlib/archive/refs/tags/v1.3.1.zip
+        Expand-Archive zlib.zip -DestinationPath .
+        Rename-Item "zlib-1.3.1" "zlib"
+    - name: Build zlib (Static)
+      shell: pwsh
+      run: |
+        cd zlib
+        cmake -B build -G "Visual Studio 17 2022" -A x64 `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DBUILD_SHARED_LIBS=OFF
+        cmake --build build --config Release
+    - name: Build libcurl
+      shell: pwsh
+      run: |
+        cd curl
+        cmake -B build -G "Visual Studio 17 2022" -A x64 `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DBUILD_SHARED_LIBS=ON `
+          -DBUILD_STATIC_LIBS=ON `
+          -DBUILD_CURL_EXE=ON `
+          -DCURL_ZLIB=ON `
+          -DZLIB_INCLUDE_DIR="$pwd\..\zlib;$pwd\..\zlib\build" `
+          -DZLIB_LIBRARY="$pwd\..\zlib\build\Release\zlibstatic.lib" `
+          -DCURL_USE_SCHANNEL=ON `
+          -DCURL_WINDOWS_SSPI=ON `
+          -DENABLE_IPV6=ON `
+          -DCURL_USE_LIBPSL=OFF
+        cmake --build build --config Release
     - name: Download make.exe
       run: curl -L -o make.exe https://github.com/styluslabs/maps/releases/download/alpha-1/make.exe
     - name: MSVC command prompt
@@ -122,7 +167,8 @@ jobs:
     - name: Build Maps
       shell: cmd
       working-directory: maps
-      run: ..\make.exe SHELL=cmd.exe CURL_BASE=..\vcpkg\installed\x64-windows zip
+      run: ..\make.exe SHELL=cmd.exe zip
+    # CURL_BASE=..\vcpkg\installed\x64-windows
     # SSH session to debug workflow
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
