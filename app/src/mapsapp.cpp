@@ -363,7 +363,7 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   if(wasCurrLoc != currLocPlaceInfo)
     updateLocMarker();
   const YAML::Node& selid = sceneConfig()["global"]["selected_osm_id"];
-  if(!selid.Scalar().empty() && !selid.IsNull())
+  if(!selid.Scalar().empty() && !selid.IsNull() && !persistBounds)
     map->updateGlobals({ SceneUpdate{"global.selected_osm_id", "~"} });  // parsing "" value fails currently
 
   // allow pick result to be used as waypoint
@@ -401,9 +401,14 @@ void MapsApp::setPickResult(LngLat pos, std::string namestr, const std::string& 
   if(json["osm_id"] && json["osm_type"].Scalar() != "node") {
     Button* showBoundsBtn = createActionbutton(MapsApp::uiIcon("border-dashed"), "Show Border");
     showBoundsBtn->onClicked = [this, id = json["osm_id"].Scalar()](){
+      persistBounds = false;
       if(sceneConfig()["global"]["selected_osm_id"] != id)
         map->updateGlobals({ SceneUpdate{"global.selected_osm_id", id} });
     };
+    Menu* showBoundsMenu = createMenu(Menu::VERT, false);
+    showBoundsMenu->addItem("Show persistent", [=]() { showBoundsBtn->onClicked(); persistBounds = true; });
+    showBoundsBtn->addWidget(showBoundsMenu);
+    setupLongPressMenu(showBoundsBtn, showBoundsMenu);
     toolbar->addWidget(showBoundsBtn);
   }
 
@@ -699,7 +704,7 @@ void MapsApp::clearPickResult()
     updateLocMarker();
   }
   const YAML::Node& selid = sceneConfig()["global"]["selected_osm_id"];
-  if(!selid.Scalar().empty() && !selid.IsNull())
+  if(!selid.Scalar().empty() && !selid.IsNull() && !persistBounds)
     map->updateGlobals({ SceneUpdate{"global.selected_osm_id", "~"} });  // parsing "" value fails currently
 }
 
@@ -797,6 +802,7 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
   options.numTileWorkers = cfg()["tangram"]["num_tile_workers"].as<int>(2);
   dumpJSStats(NULL);  // reset stats
+  persistBounds = false;  // reset persistent bounds state
   map->loadScene(std::move(options), async);
 
   // max tile cache size
@@ -850,7 +856,7 @@ void MapsApp::mapUpdate(double time)
   else
     return;
 
-  // hide attribtion upon interaction
+  // hide attribution upon interaction
   if(attribText->isVisible() && !touchHandler->touchPoints.empty())
     attribText->setVisible(false);
 

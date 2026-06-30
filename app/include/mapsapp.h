@@ -257,6 +257,7 @@ private:
   bool panelMaximized = false;
   bool panelMinimized = false;
   bool locMarkerNeedsUpdate = true;
+  bool persistBounds = false;
   int shuffleSeed = 0;
 
   int mapsFBFlags = 0;
