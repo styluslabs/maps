@@ -5,7 +5,9 @@
 #   or smaller), so we have to set `filtering: nearest` and do interpolation ourselves
 #  - also, Tangram doesn't use GLSL #version statement (although shader block can request extensions), so we
 #   have to use texture2D instead of texelFetch (GLSL 1.30+)
-#  - see https://github.com/SableRaf/Processing-Experiments/blob/master/2013/Shaders/filtersAndBlendModes/Filters/Bicubic/data/shader.glsl and links therein for some alternative interpolation methods; also https://vec3.ca/bicubic-filtering-in-fewer-taps/
+#  - see https://github.com/SableRaf/Processing-Experiments/blob/master/2013/Shaders/filtersAndBlendModes/
+#   ... Filters/Bicubic/data/shader.glsl and links therein for some alternative interpolation methods;
+#   also https://vec3.ca/bicubic-filtering-in-fewer-taps/
 
 # - Many algorithms for computing hillshading (i.e., normals) from elevation
 #  - https://www.usna.edu/Users/oceano/pguth/md_help/html/demb1f3n.htm

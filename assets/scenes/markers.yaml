@@ -1,8 +1,4 @@
 global:
-    # layers require color and order to be set, so provide default values to be used for, e.g., hillshade
-    earth_color: '#E0E0E0'
-    earth_order: 1
-
     marker_font: Open Sans
     # native poi_sprite function relies on order of poi_icons (gaml preserves yaml map order)
     poi_icons:
@@ -61,10 +57,6 @@ global:
               || t.religion[feature.religion] || t.amenity[feature.amenity] || t.historic[feature.historic]
               || t.shop[feature.shop] || (feature.shop ? "shop" : "");
         }
-
-
-# this can be overridden by subsequent scene files
-scene: { background: { color: global.earth_color } }
 
 
 fonts:

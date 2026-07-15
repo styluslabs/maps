@@ -1150,7 +1150,7 @@ int main(int argc, char* argv[])
   glXMakeCurrent(xDpy, None, NULL);
   offscreenWorker = std::move(Tangram::ElevationManager::offscreenWorker);
   if(offscreenWorker) {
-    offscreenWorker->enqueue([=](){ glXMakeCurrent(xDpy, None, NULL); });
+    offscreenWorker->enqueue([=](){ Tangram::ElevationManager::shutdown(); glXMakeCurrent(xDpy, None, NULL); });
     offscreenWorker->waitForCompletion();
     offscreenWorker.reset();  // wait for thread exit
   }

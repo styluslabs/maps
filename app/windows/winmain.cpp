@@ -916,7 +916,8 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   //  we call wglMakeCurrent again at least once, even though wglGetCurrentContext() reports no change.
   // Happens even if other context is not shared! ... looks like it could be a VMware GL issue
   wglMakeCurrent(mainDC, mainCtx);
-  wglSwapIntervalEXT(app->cfg()["gl_swap_interval"].as<int>(-1));  // vsync
+  if(!wglSwapIntervalEXT(app->cfg()["gl_swap_interval"].as<int>(-1)))  // vsync
+    LOGW("wglSwapIntervalEXT failed - graphics driver adaptive sync enabled?");
 
   // main loop
   MSG msg;
@@ -957,8 +958,7 @@ int APIENTRY wWinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, PWSTR lps
   wglMakeCurrent(0, 0);
   offscreenWorker = std::move(Tangram::ElevationManager::offscreenWorker);
   if(offscreenWorker) {
-    // GLFW docs say a context must not be current on any other thread for glfwTerminate()
-    offscreenWorker->enqueue([=](){ wglMakeCurrent(0, 0); });
+    offscreenWorker->enqueue([=](){ Tangram::ElevationManager::shutdown(); wglMakeCurrent(0, 0); });
     offscreenWorker->waitForCompletion();
     offscreenWorker.reset();  // wait for thread exit
   }

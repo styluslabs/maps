@@ -1,0 +1,49 @@
+global:
+    # layers require color and order to be set, so provide default values to be used for, e.g., hillshade
+    earth_color: '#E0E0E0'
+    earth_order: 1
+
+    colorize_colormap: |
+        data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="1">
+            <defs>
+            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%"   stop-color="#00BFFF" stop-opacity="0"/>
+                <stop offset="10%"  stop-color="#00BFFF" stop-opacity="0.6"/>
+                <stop offset="50%"  stop-color="#3B4CC0" stop-opacity="1"/>
+                <stop offset="90%"  stop-color="#E5007E" stop-opacity="1"/>
+                <stop offset="100%" stop-color="#FF0000" stop-opacity="1"/>
+            </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="32" height="1" fill="url(#grad)" />
+        </svg>
+
+
+styles:
+    raster-common:
+        base: raster
+        mix: global.terrain_3d_mixin
+        raster: color
+        lighting: false
+        shaders:
+            defines: { ELEVATION_INDEX: 1 }
+
+    raster-opacity:
+        blend: nonopaque
+        shaders:
+        uniforms: { u_opacity: 1.0 }
+        blocks:
+            color: "color.a *= u_opacity;"
+
+    raster-colorize:
+        raster: custom
+        shaders:
+            uniforms:
+                u_color_map: global.colorize_colormap
+            blocks:
+                color: |
+                    float grey = sampleRaster(0).r;
+                    color = texture2D(u_color_map, vec2(grey, 0.5));
+
+
+# this can be overridden by subsequent scene files
+scene: { background: { color: global.earth_color } }

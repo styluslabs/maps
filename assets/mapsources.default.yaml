@@ -274,8 +274,7 @@ worldcover:
         ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium
     #filtering: nearest
     max_zoom: 14
-    url: 	https://services.terrascope.be/wmts/v2?layer=WORLDCOVER_2021_MAP&style=&tilematrixset=EPSG:3857&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image/png&TileMatrix=EPSG:3857:{z}&TileCol={x}&TileRow={y}
-    #url: https://worldcover2020.esa.int/geoserver/gwc/service/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=esa_worldcover2021:esa_worldcover2021&WIDTH=256&HEIGHT=256&SRS=EPSG:4326&tiled=true&STYLES=&BBOX=-64.6875,-14.0625,-61.875,-11.25
+    url: https://mapproxy.terrascope.be/mapproxy/wmts/esa-worldcover-map-10m-2021-v2_map/webmercator/{z}/{x}/{y}.png
     updates:
         global.earth_style: translucent-polygons
         #global.show_polygons: false

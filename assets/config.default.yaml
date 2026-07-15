@@ -4,8 +4,8 @@ sources:
   last_source: stylus-bike-hike
   elevation: ["elevation"]
   common_imports:
+    - scenes/common.yaml
     - scenes/markers.yaml
-    #- scenes/secrets.yaml
   list_order:
     - stylus-osm-terrain
     - stylus-bike-hike

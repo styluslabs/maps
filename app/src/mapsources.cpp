@@ -124,27 +124,9 @@ void SourceBuilder::addLayer(const std::string& key, float opacity)  //, const Y
 
 std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
 {
-  static const char* stylestr = R"(
-styles:
-  raster-opacity:
-    blend: nonopaque
-    shaders:
-      uniforms: { u_opacity: 1.0 }
-      blocks:
-        color: "color.a *= u_opacity;"
-
-  raster-common:
-    base: raster
-    mix: global.terrain_3d_mixin
-    raster: color
-    lighting: false
-    shaders:
-      defines: { ELEVATION_INDEX: 1 }
-)";
-
   // we'll probably want to skip curl for reading from filesystem in scene/importer.cpp - see tests/src/mockPlatform.cpp
   // or maybe add a Url getParent() method to Url class
-  std::string importstr;
+  std::string importstr = "import:\n";
   // before scene so scene can override things, but we can split into pre_imports and post_imports if needed
   for(const auto& imp : MapsApp::config["sources"]["common_imports"]) {
     std::string url = imp.Scalar();
@@ -157,9 +139,7 @@ styles:
   }
   for(auto& url : imports)
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
-  if(importstr.empty())
-    return stylestr;  //"global:\n\nsources:\n\nlayers:\n";
-  return "import:\n" + importstr + stylestr;
+  return importstr;
 }
 
 MapsSources::MapsSources(MapsApp* _app) : MapsComponent(_app) { reload(); }
