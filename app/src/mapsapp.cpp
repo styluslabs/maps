@@ -1968,10 +1968,10 @@ void MapsApp::showPanel(Widget* panel, bool isSubPanel)
   }
   bool wasminimized = panelMinimized && !panelHistory.empty();  // preserve minimized state
   panelHistory.push_back(panel);
+  panel->sdlUserEvent(gui, PANEL_OPENED);
   panel->setVisible(true);
   showPanelContainer(true);
   panelMinimized = wasminimized;
-  panel->sdlUserEvent(gui, PANEL_OPENED);
 }
 
 bool MapsApp::popPanel()

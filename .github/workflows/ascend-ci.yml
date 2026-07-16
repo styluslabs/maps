@@ -5,7 +5,12 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
-  #workflow_dispatch:  # for manual run
+  workflow_dispatch:  # for manual run
+    inputs:
+      tmate:
+        description: Setup tmate ssh access
+        type: boolean
+        default: false
 
 jobs:
   tangram-tests:
@@ -32,7 +37,8 @@ jobs:
       run: make real_tgz
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
-      if: ${{ failure() }}
+      if: github.event_name == 'workflow_dispatch' && inputs.tmate
+      #if: ${{ failure() }}
 
   android-build:
     runs-on: ubuntu-latest
@@ -57,7 +63,7 @@ jobs:
         path: maps/app/android/app/build/outputs/apk/release/app-release.apk
 
   windows-build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
     - name: Checkout maps
       uses: actions/checkout@v4
@@ -172,7 +178,8 @@ jobs:
     # SSH session to debug workflow
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
-      if: ${{ failure() }}
+      #if: ${{ failure() }}
+      if: github.event_name == 'workflow_dispatch' && inputs.tmate
     - name: Upload release ZIP
       uses: actions/upload-artifact@v4
       with:
