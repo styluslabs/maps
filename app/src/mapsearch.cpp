@@ -887,11 +887,16 @@ Button* MapsSearch::createPanel()
 
   searchPanel->addHandler([=](SvgGui* gui, SDL_Event* event) {
     if(event->type == MapsApp::PANEL_OPENED) {
+      bool wasenabled = queryText->isEnabled();
       onSetProvider(providerIdx);
       if(queryText->isEnabled()) {
         noDataMsg->setVisible(providerIdx == 0 && !hasSearchData);
         app->gui->setFocused(searchBox);
-        //searchText("", EDITING);  // show history
+        // visible event fired before PANEL_OPENED, so refresh history here if queryText was disabled
+        // - can't move PANEL_OPENED before VISIBLE because focusing search box maximizes panel, but if panel
+        //  is maximized before showPanelContainer(), toolbar won't be hidden; showPanelContainer() makes
+        //  current panel visible, so it can't be moved either
+        if(!wasenabled) { searchText("", EDITING); }
       }
       else if(providerIdx > 0)  // && !queryText->isEnabled())
         searchText("", RETURN);
