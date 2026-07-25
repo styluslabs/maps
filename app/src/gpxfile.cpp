@@ -316,6 +316,7 @@ void TrackMarker::setTrack(GpxWay* way, size_t nways)
 //TrackMarker::TrackMarker() { markerProps.set("visible", 1); }
 TrackMarker::~TrackMarker()
 {
+  if(!isValid()) { return; }
   // remove track by setting to empty geometry
   Tangram::ClientDataSource::PolylineBuilder builder;
   MapsApp::inst->tracksDataSource->addPolylineFeature(Properties(), std::move(builder), featureId);

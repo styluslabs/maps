@@ -128,12 +128,12 @@ std::string SourceBuilder::getSceneYaml(const std::string& baseUrl)
   // or maybe add a Url getParent() method to Url class
   std::string importstr = "import:\n";
   // before scene so scene can override things, but we can split into pre_imports and post_imports if needed
-  for(const auto& imp : MapsApp::config["sources"]["common_imports"]) {
+  for(const auto& imp : MapsApp::cfg()["sources"]["common_imports"]) {
     std::string url = imp.Scalar();
     importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   }
   if(MapsApp::terrain3D) {
-    std::string url = MapsApp::config["terrain_3d"]["import"].as<std::string>();
+    std::string url = MapsApp::cfg()["terrain_3d"]["import"].as<std::string>();
     if(!url.empty())
       importstr += "  - " + (url.find("://") == std::string::npos ? baseUrl : "") + url + "\n";
   }

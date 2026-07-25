@@ -2305,6 +2305,10 @@ bool MapsApp::loadConfig(const char* assetPath)
       Tangram::YamlUtil::mergeMapFields(newconfig, std::move(config));
       config = std::move(newconfig);
     }
+    // migrations; unfortunately array values in config are a mess
+    if(prevVersion < 13 && cfg()["sources"]["common_imports"][0] != "scenes/common.yaml") {
+      config["sources"]["common_imports"].insert(0, "scenes/common.yaml");
+    }
   }
 
   return prevVersion < versionCode;

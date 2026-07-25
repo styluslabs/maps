@@ -48,13 +48,22 @@ struct GpxWay
   GpxWay(const std::string& _title, const std::string& _desc) : title(_title), desc(_desc) {}
 };
 
+// this is pretty ugly - we just shouldn't have a non-copyable object as a member of GpxFile at all
 struct TrackMarker
 {
   Properties markerProps;
   uint64_t featureId = -1;
 
-  //TrackMarker();
+  TrackMarker() {}
+  TrackMarker(const TrackMarker& other) {}
+  TrackMarker(TrackMarker&& other) :
+      markerProps(std::move(other.markerProps)), featureId(std::exchange(other.featureId, -1)) {}
+  TrackMarker& operator=(TrackMarker&& other)
+      { std::swap(markerProps, other.markerProps); std::swap(featureId, other.featureId); return *this; }
+  TrackMarker& operator=(const TrackMarker& other) { return *this; }
+
   ~TrackMarker();
+  bool isValid() const { return featureId != uint64_t(-1); }
   void setProperties(Properties&& props, bool replace = false);
   void setTrack(GpxWay* way, size_t nways = 1);
 };
@@ -66,7 +75,7 @@ struct GpxFile
   std::string filename;
   std::string style;
   std::string routeMode;
-  std::unique_ptr<TrackMarker> marker;
+  TrackMarker marker;
 
   std::vector<Waypoint> waypoints;
   std::vector<GpxWay> routes;

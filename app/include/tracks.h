@@ -130,7 +130,7 @@ private:
   std::unique_ptr<FileStream> recordGPXStrm;
   Timer* recordTimer = NULL;
   int pluginFn = 0;
-  std::vector<Waypoint> origLocs;
+  std::unique_ptr<GpxFile> origTrack;
   std::string insertionWpt;
   std::string trackSummary;
   Timestamp lastTrackPtTime;

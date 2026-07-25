@@ -136,21 +136,21 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
     MapsApp::messageBox("File not found", fstring("Error opening %s", track->filename.c_str()), {"OK"});
 
   Properties props;
-  if(!track->marker)
-    track->marker = std::make_unique<TrackMarker>();  //app->map.get(), "layers.track.draw.track");
+  //if(!track->marker.isValid())
+  //  track->marker = std::make_unique<TrackMarker>();  //app->map.get(), "layers.track.draw.track");
   if(track->activeWay() && (track->activeWay()->pts.size() > 1 || track->routes.size() > 1)) {
     if(!track->routes.empty())
-      track->marker->setTrack(&track->routes.front(), track->routes.size());
+      track->marker.setTrack(&track->routes.front(), track->routes.size());
     else
-      track->marker->setTrack(&track->tracks.front(), track->tracks.size());
+      track->marker.setTrack(&track->tracks.front(), track->tracks.size());
     if(!track->style.empty())
       props.set("color", track->style);
     props.set("visible", 1);
   }
   else
     props.set("visible", 0);
-  props.set("track_feature_id", track->marker->featureId);
-  track->marker->setProperties(std::move(props));
+  if(track->marker.isValid()) { props.set("track_feature_id", track->marker.featureId); }
+  track->marker.setProperties(std::move(props));
 
   if(!track->routes.empty() && track->routeMode != "direct") {
     auto& pts = track->routes.back().pts;
@@ -174,12 +174,12 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
 
 void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
 {
-  if(!track->marker) {
+  if(!track->marker.isValid()) {
     if(!show) return;
     updateTrackMarker(track);
   }
   bool hasway = track->activeWay() && track->activeWay()->pts.size() > 1;
-  track->marker->setProperties({{{"visible", show && hasway ? 1 : 0}}});
+  track->marker.setProperties({{{"visible", show && hasway ? 1 : 0}}});
   for(Waypoint& wp : track->waypoints)
     app->map->markerSetVisible(wp.marker, show);
 
@@ -231,7 +231,7 @@ Widget* MapsTracks::createTrackEntry(GpxFile* track)
   colorBtn->onColor = [this, track](Color color){
     std::string colorstr = colorToStr(color);
     track->style = colorstr;
-    if(track->marker) {
+    if(track->marker.isValid()) {
       updateTrackMarker(track);
       showTrack(track, track->visible);
     }
@@ -373,8 +373,8 @@ void MapsTracks::closeActiveTrack()
 {
   if(!activeTrack) return;
   app->pluginManager->cancelRequests(PluginManager::ROUTE);
-  if(activeTrack != &recordedTrack && activeTrack->marker)
-    activeTrack->marker->setProperties({{{"selected", 0}}});  //setStylePath("layers.track.draw.track");
+  if(activeTrack != &recordedTrack && activeTrack->marker.isValid())
+    activeTrack->marker.setProperties({{{"selected", 0}}});  //setStylePath("layers.track.draw.track");
   if(!activeTrack->visible)
     showTrack(activeTrack, false);
   if(activeTrack->rowid >= 0) {
@@ -420,7 +420,7 @@ void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
     activeTrack = track;
     viewEntireTrack(track);
     if(!isRecTrack)
-      activeTrack->marker->setProperties({{{"selected", 1}}});  //track->marker->setStylePath("layers.selected-track.draw.track");
+      activeTrack->marker.setProperties({{{"selected", 1}}});  //track->marker->setStylePath("layers.selected-track.draw.track");
     insertionWpt.clear();
     retryBtn->setVisible(false);
     if(!istrack) {
@@ -548,7 +548,7 @@ void MapsTracks::updateStats(GpxFile* track)
       //  locs[prevDistLoc].dist = locs[prevDistLoc-1].dist + dd;
       prevDistLoc = ii;
     }
-    locs[ii].dist = trackDist;  //if(!origLocs.empty())
+    locs[ii].dist = trackDist;
     if(!track->hasSpeed)
       loc.spd = estSpeed;
     maxSpeed = std::max(double(loc.spd), maxSpeed);
@@ -1093,7 +1093,7 @@ bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
 {
   double id;
   if(result->properties->getNumber("track_feature_id", id)) {
-    if(activeTrack && activeTrack->marker && activeTrack->marker->featureId == id && trackPanel->isVisible() &&
+    if(activeTrack && activeTrack->marker.featureId == id && trackPanel->isVisible() &&
         !trackSliders->editMode && plotWidgets[0]->isVisible() && !std::isnan(app->tapLocation.longitude)) {
       // find the track point closest to chosen position; must be within 10 pixels
       double mindist = MapProjection::metersPerPixelAtZoom(app->map->getZoom())*10/1000.0;  // meters to km
@@ -1112,7 +1112,7 @@ bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
       }
     }
     for(GpxFile& track : tracks) {
-      if(track.visible && &track != activeTrack && track.marker->featureId == id) {
+      if(track.visible && &track != activeTrack && track.marker.featureId == id) {
         populateTrack(&track);
         return true;
       }
@@ -1453,8 +1453,8 @@ void MapsTracks::startRecording()
   //if(app->hasLocation)
   //  recordedTrack.tracks.back().pts.push_back(app->currLocation);
   recordedTrack.style = "#FF6030";  // use color in marker style instead?
-  recordedTrack.marker = std::make_unique<TrackMarker>();  //app->map.get(), "layers.recording-track.draw.track");
-  recordedTrack.marker->setProperties({{{"recording", 1}}});
+  //recordedTrack.marker = std::make_unique<TrackMarker>();  //app->map.get(), "layers.recording-track.draw.track");
+  recordedTrack.marker.setProperties({{{"recording", 1}}});
   tracksDirty = true;
   lastTrackPtTime = mSecSinceEpoch();
   // create GPX file (so track data is safely saved w/o additional user input after tapping record btn)
@@ -1477,13 +1477,16 @@ void MapsTracks::setTrackEdit(bool show)
   editTrackTb->setVisible(show);
   trackSliders->setEditMode(show);
   app->map->markerSetVisible(trackHoverMarker, !show);
-  if(show)
+  if(show) {
     trackSliders->setCropHandles(0, 1, SliderHandle::FORCE_UPDATE);
+    origTrack = std::make_unique<GpxFile>(*activeTrack);
+  }
   else {
     app->map->markerSetVisible(trackStartMarker, false);
     app->map->markerSetVisible(trackEndMarker, false);
-    if(!origLocs.empty()) {
-      activeTrack->activeWay()->pts = std::move(origLocs);
+    if(origTrack) {
+      *activeTrack = std::move(*origTrack);
+      origTrack.reset();
       updateTrackMarker(activeTrack);  // rebuild marker
       plotDirty = true;
       trackPlot->zoomScale = 1.0;
@@ -1530,7 +1533,7 @@ void MapsTracks::createEditDialog()
       }
       updateDB(activeTrack);
       activeTrack->modified = !saveTrack(activeTrack);
-      origLocs.clear();
+      origTrack.reset();
     }
     setTrackEdit(false);
   };
@@ -1543,7 +1546,7 @@ void MapsTracks::createEditDialog()
   Button* saveBtn = static_cast<Button*>(editTrackDialog->selectFirst(".accept-btn"));
   saveBtn->setIcon(uiIcon("save"));
   Button* saveCopyBtn = createToolbutton(uiIcon("save-copy"), "Save copy", true);
-  saveCopyBtn->onClicked = [=](){ editTrackDialog->finish(Dialog::CANCELLED); saveTrackFn(true); };
+  saveCopyBtn->onClicked = [=](){ saveTrackFn(true); editTrackDialog->finish(Dialog::CANCELLED); };
   saveBtn->parent()->containerNode()->addChild(saveCopyBtn->node, saveBtn->node);
 
   editTrackTitle->onChanged = [=](const char* s){ saveBtn->setEnabled(s[0]); saveCopyBtn->setEnabled(s[0]); };
@@ -1718,7 +1721,6 @@ void MapsTracks::createPlotContent()
 
   Button* cropTrackBtn = createToolbutton(MapsApp::uiIcon("crop-outer"), "Crop", true);
   cropTrackBtn->onClicked = [=](){
-    if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
     auto& locs = activeTrack->activeWay()->pts;
     std::vector<Waypoint> newlocs;
     size_t startidx, endidx;
@@ -1737,7 +1739,6 @@ void MapsTracks::createPlotContent()
 
   Button* deleteSegmentBtn = createToolbutton(MapsApp::uiIcon("crop-inner"), "Excise", true);
   deleteSegmentBtn->onClicked = [=](){
-    if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
     auto& locs = activeTrack->activeWay()->pts;
     std::vector<Waypoint> newlocs;
     size_t startidx, endidx;
@@ -1773,7 +1774,6 @@ void MapsTracks::createPlotContent()
         auto it = std::find_if(tracks.rbegin(), tracks.rend(), [=](const GpxFile& a){ return a.rowid == rowid; });
         GpxWay* way = it != tracks.rend() ? it->activeWay() : NULL;
         if(!way) return;
-        if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
         auto& locs = activeTrack->activeWay()->pts;
         locs.insert(locs.end(), way->pts.begin(), way->pts.end());
         updateTrackMarker(activeTrack);  // rebuild marker
@@ -1797,7 +1797,6 @@ void MapsTracks::createPlotContent()
   });
 
   trackPlotOverflow->addItem("Reverse", MapsApp::uiIcon("reverse-direction"), [this](){
-    if(origLocs.empty()) origLocs = activeTrack->activeWay()->pts;
     auto& locs = activeTrack->activeWay()->pts;
     std::reverse(locs.begin(), locs.end());
     updateTrackMarker(activeTrack);  // rebuild marker
@@ -1812,7 +1811,6 @@ void MapsTracks::createPlotContent()
           {"OK"}, [this](std::string) { nElevPending = 0; });  // prevent getting stuck w/ nElevPending > 0
       return;
     }
-    if(origLocs.empty()) { origLocs = activeTrack->activeWay()->pts; }
     GpxFile* track = activeTrack;
     GpxWay* way = activeTrack->activeWay();
     auto& locs = way->pts;
@@ -1833,6 +1831,14 @@ void MapsTracks::createPlotContent()
         }
       }, true);  // always call callback so nElevPending is updated
     }
+  });
+
+  trackPlotOverflow->addItem("Swap route and track", [this](){
+    std::swap(activeTrack->routes, activeTrack->tracks);
+    updateTrackMarker(activeTrack);  // rebuild marker
+    plotDirty = true;
+    trackPlot->zoomScale = 1.0;
+    updateStats(activeTrack);
   });
 
   editTrackTb = createToolbar({cancelPlotEdit, savePlotEdit, createStretch(), cropTrackBtn, deleteSegmentBtn, moreTrackOptionsBtn});
@@ -2078,7 +2084,7 @@ void MapsTracks::createTrackPanel()
     app->gui->removeTimer(recordTimer);
     recordTimer = NULL;
     recordedTrack.desc = ftimestr("%F") + " | " + trackSummary;
-    recordedTrack.marker->setProperties({{{"recording", 0}}});
+    recordedTrack.marker.setProperties({{{"recording", 0}}});
     recordedTrack.modified = !saveTrack(&recordedTrack);
     if(recordTrack)
       app->setServiceState(0);
