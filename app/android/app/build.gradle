@@ -72,6 +72,7 @@ preBuild.dependsOn generateNativeLib
 
 dependencies {
   api 'com.squareup.okhttp3:okhttp:3.12.13'
+  implementation 'com.squareup.okhttp3:okhttp-urlconnection:3.12.13'
   implementation 'androidx.annotation:annotation:1.1.0'
   implementation 'androidx.core:core:1.3.2'
 }
