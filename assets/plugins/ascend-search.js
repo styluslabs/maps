@@ -10,7 +10,7 @@ function ascendSearch(query, bounds, flags)
   const limit = listsearch ? 50 : 100;
   if(listsearch && !(flags & 0x10)) { g_AscendSearchOffset = 0; }  // MapsSearch::NEXTPAGE
   //tiles-b.styluslabs.com / localhost
-  const url = "http://tiles-b.styluslabs.com:8080/search?bounds=" + bndstr + "&autocomplete=" + acstr +
+  const url = "https://tiles.styluslabs.com/search?bounds=" + bndstr + "&autocomplete=" + acstr +
       "&bounded=" + (listsearch ? 0 : 1) + "&sort=" + sortstr + "&offset=" +
       (listsearch ? g_AscendSearchOffset : 0) + "&limit=" + limit + "&q=" + encodeURIComponent(query);
   httpRequest(url, "", function(_content, _error) {

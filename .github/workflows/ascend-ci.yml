@@ -13,17 +13,6 @@ on:
         default: false
 
 jobs:
-  tangram-tests:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev mesa-common-dev libfontconfig1-dev libcurl4-openssl-dev
-    - name: tangram tests
-      run: make -f tests.mk DEBUG=1
-
   linux-build:
     runs-on: ubuntu-22.04
     steps:
@@ -33,8 +22,15 @@ jobs:
         fetch-depth: 0
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev mesa-common-dev libfontconfig1-dev libcurl4-openssl-dev libxi-dev libdbus-1-dev
-    - name: Build tgz
+    - name: Tangram tests
+      run: make -f tests.mk DEBUG=1
+    - name: Build TGZ
       run: make real_tgz
+    - name: Upload release TGZ
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-linux-tgz
+        path: maps/build/Release/*.tar.gz
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
       if: github.event_name == 'workflow_dispatch' && inputs.tmate

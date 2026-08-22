@@ -30,9 +30,9 @@ styles:
     raster-opacity:
         blend: nonopaque
         shaders:
-        uniforms: { u_opacity: 1.0 }
-        blocks:
-            color: "color.a *= u_opacity;"
+            uniforms: { u_opacity: 1.0 }
+            blocks:
+                color: "color.a *= u_opacity;"
 
     raster-colorize:
         raster: custom
