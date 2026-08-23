@@ -823,7 +823,8 @@ Button* MapsSearch::createPanel()
   for(auto& fn : app->pluginManager->searchFns)
     cproviders.push_back(fn.title.c_str());
 
-  providerIdx = std::min(int(cproviders.size())-1, app->cfg()["search"]["plugin"].as<int>(0));
+  // default to online search (plugin #1)
+  providerIdx = std::min(int(cproviders.size())-1, app->cfg()["search"]["plugin"].as<int>(1));
   auto searchTb = app->createPanelHeader(MapsApp::uiIcon("search"), cproviders[providerIdx].c_str());
   Menu* searchPluginMenu = createMenu(Menu::VERT_LEFT, false);
   for(size_t ii = 0; ii < cproviders.size(); ++ii) {

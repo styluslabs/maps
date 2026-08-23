@@ -98,15 +98,14 @@ osm-gps-tracks:
     url_subdomains: [a, b, c]
     archived: true
 
-# or https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/...
 strava-all:
     title: Strava Heatmap
     layer: true
     archived: true
     max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/all/bluered/{z}/{x}/{y}.png'
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/all/hot/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://www.freemap.sk/'
+        Referer: 'https://nakarte.me/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 strava-run:
@@ -114,9 +113,9 @@ strava-run:
     layer: true
     archived: true
     max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/run/bluered/{z}/{x}/{y}.png'
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/run/hot/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://www.freemap.sk/'
+        Referer: 'https://nakarte.me/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 strava-bike:
@@ -124,9 +123,9 @@ strava-bike:
     layer: true
     archived: true
     max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/ride/bluered/{z}/{x}/{y}.png'
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/ride/hot/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://www.freemap.sk/'
+        Referer: 'https://nakarte.me/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 strava-ski:
@@ -134,9 +133,9 @@ strava-ski:
     layer: true
     archived: true
     max_zoom: 15
-    url: 'https://strava-heatmap.tiles.freemap.sk/winter/bluered/{z}/{x}/{y}.png'
+    url: 'https://proxy.nakarte.me/https/content-a.strava.com/identified/globalheat/winter/hot/{z}/{x}/{y}.png'
     headers:
-        Referer: 'https://www.freemap.sk/'
+        Referer: 'https://nakarte.me/'
         User-Agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
 
 # Bing uses quadkey tile index - supported in networkDataSource.cpp, but not documented
