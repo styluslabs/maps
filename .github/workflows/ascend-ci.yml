@@ -61,6 +61,8 @@ jobs:
   windows-build:
     runs-on: windows-2022
     steps:
+    - name: Disable autocrlf
+      run: git config --global core.autocrlf false
     - name: Checkout maps
       uses: actions/checkout@v4
       with:
