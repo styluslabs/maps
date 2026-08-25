@@ -702,7 +702,7 @@ void showModalCentered(Window* modal, SvgGui* gui)
 {
   Window* win = gui->windows.front()->modalOrSelf();
   Rect pbbox = win->winBounds();
-  modal->setWinBounds(Rect::centerwh(pbbox.center(), std::min(pbbox.width() - 20, real(500)), pbbox.height() - 60));
+  modal->setWinBounds(Rect::centerwh(pbbox.center(), std::min(pbbox.width() - 20, real(500)), pbbox.height() - 100));
   gui->showModal(modal, win);
 }
 
