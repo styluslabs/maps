@@ -174,12 +174,6 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
 
 void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
 {
-  if(!track->marker.isValid()) {
-    if(!show) return;
-    updateTrackMarker(track);
-  }
-  bool hasway = track->activeWay() && track->activeWay()->pts.size() > 1;
-  track->marker.setProperties({{{"visible", show && hasway ? 1 : 0}}});
   for(Waypoint& wp : track->waypoints)
     app->map->markerSetVisible(wp.marker, show);
 
@@ -189,6 +183,12 @@ void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
         app->map->markerSetVisible(wp.marker, show);
     }
   }
+  if(!track->marker.isValid()) {
+    if(!show) { return; }
+    updateTrackMarker(track);
+  }
+  bool hasway = track->activeWay() && track->activeWay()->pts.size() > 1;
+  track->marker.setProperties({{{"visible", show && hasway ? 1 : 0}}});
 }
 
 void MapsTracks::setTrackVisible(GpxFile* track, bool visible)
@@ -1277,8 +1277,9 @@ void MapsTracks::addPlaceActions(Toolbar* tb)
       std::string nm = app->currLocPlaceInfo ? "Location at " + ftimestr("%H:%M:%S %F") : app->pickResultName;
       Waypoint* wpt = addWaypoint(app->pickResultCoord == trackHoverLoc.lngLat() ?
           trackHoverLoc : Waypoint{app->pickResultCoord, nm, "", app->pickResultProps});
-      if(wpt)
-        setPlaceInfoSection(activeTrack, *wpt);
+      //if(wpt)
+      //  setPlaceInfoSection(activeTrack, *wpt);
+      populateTrack(activeTrack);  // go back to waypoint list
     };
 
     Menu* addWptMenu = createMenu(Menu::VERT, false);
