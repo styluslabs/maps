@@ -326,7 +326,7 @@ application:
 sources:
     osm:
         type: MVT
-        url: http://tiles.styluslabs.com:8080/v1/{z}/{x}/{y}
+        url: http://tiles.styluslabs.com/v1/{z}/{x}/{y}
         headers: { "X-Hide-Encoding": "yes" }  # don't set Content-Encoding so we can write gzipped tile directly to cache
         cache: stylus-osm
         attribution: |
