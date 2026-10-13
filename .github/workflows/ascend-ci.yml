@@ -16,6 +16,10 @@ on:
         description: Run reproducible build check
         type: boolean
         default: false
+      ios:
+        description: Build iOS (unsigned)
+        type: boolean
+        default: false
 
 jobs:
   linux-build:
@@ -107,6 +111,35 @@ jobs:
         path: |
           apk/
           result.json
+
+  # unsigned build - to install, re-sign w/ own Apple ID (e.g. AltStore, Sideloadly)
+  ios-build:
+    if: github.event_name == 'workflow_dispatch' && inputs.ios
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    # Xcode pre-build phase runs `cd $HOME/maps && make DEBUG=0 lib`
+    - name: Link checkout at $HOME/maps
+      run: ln -s "$GITHUB_WORKSPACE" "$HOME/maps"
+    - name: Build (unsigned)
+      run: |
+        xcodebuild -project app/ios/maps.xcodeproj -scheme Ascend \
+          -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+          -derivedDataPath build/xc LIBRARY_SEARCH_PATHS="$GITHUB_WORKSPACE/build/Release" \
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+          build
+    - name: Package IPA
+      run: |
+        mkdir -p Payload
+        cp -R build/xc/Build/Products/Release-iphoneos/*.app Payload/
+        zip -qr ascend-unsigned.ipa Payload
+    - name: Upload IPA
+      uses: actions/upload-artifact@v4
+      with:
+        name: ascend-unsigned-ipa
+        path: ascend-unsigned.ipa
 
   windows-build:
     runs-on: windows-2022

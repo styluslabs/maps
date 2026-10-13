@@ -105,8 +105,41 @@ DISTRES = \
 
 include make/msvc.mk
 
-else ifneq ($(XPC_FLAGS),)
-# iOS (XPC_FLAGS seems to be defined on macOS)
+else ifneq ($(ANDROID),)
+# ./gww assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.jks && mv signed_app-release.apk ascend.apk
+
+# System.loadLibrary("droidmaps") in MapsLib.java
+TARGET = libdroidmaps.so
+# pin NDK version for reproducible builds (ANDROID_NDK_HOME set by Github runner is ignored)
+ANDROID_NDK_VERSION ?= 27.3.13750724
+ANDROID_NDK_HOME := $(ANDROID_HOME)/ndk/$(ANDROID_NDK_VERSION)
+ifeq ($(wildcard $(ANDROID_NDK_HOME)/toolchains),)
+  $(error NDK not found at $(ANDROID_NDK_HOME); install with: sdkmanager 'ndk;$(ANDROID_NDK_VERSION)')
+endif
+
+# platform
+MODULE_BASE := .
+
+MODULE_SOURCES += \
+  app/android/app/src/main/cpp/androidApp.cpp \
+  tangram-es/platforms/common/platform_gl.cpp \
+  tangram-es/platforms/android/tangram/src/main/cpp/JniHelpers.cpp \
+  tangram-es/platforms/android/tangram/src/main/cpp/AndroidPlatform.cpp \
+  tangram-es/platforms/android/tangram/src/main/cpp/sqlite_fdvfs.c \
+  tangram-es/platforms/android/tangram/src/main/cpp/sqlite3ndk.cpp
+
+MODULE_INC_PRIVATE = app/include tangram-es/platforms/android/tangram/src/main/cpp $(STYLUSLABS_DEPS)
+MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
+
+include $(ADD_MODULE)
+
+DEFS += TANGRAM_ANDROID
+LIBS = android atomic GLESv3 EGL log z jnigraphics
+
+include make/android.mk
+
+else ifeq ($(shell uname -s),Darwin)
+# iOS (building on macOS)
 
 MODULE_BASE := .
 
@@ -162,39 +195,6 @@ DEFS += TANGRAM_IOS GLES_SILENCE_DEPRECATION
 #FRAMEWORKS = AVFoundation GameController CoreMotion Foundation UIKit CoreGraphics OpenGLES QuartzCore CoreAudio AudioToolbox Metal StoreKit
 
 include make/ios.mk
-
-else ifneq ($(ANDROID),)
-# ./gww assembleRelease && cp app/build/outputs/apk/release/app-release.apk . && ./resignapk.sh app-release.apk ~/styluslabs.jks && mv signed_app-release.apk ascend.apk
-
-# System.loadLibrary("droidmaps") in MapsLib.java
-TARGET = libdroidmaps.so
-# pin NDK version for reproducible builds (ANDROID_NDK_HOME set by Github runner is ignored)
-ANDROID_NDK_VERSION ?= 27.3.13750724
-ANDROID_NDK_HOME := $(ANDROID_HOME)/ndk/$(ANDROID_NDK_VERSION)
-ifeq ($(wildcard $(ANDROID_NDK_HOME)/toolchains),)
-  $(error NDK not found at $(ANDROID_NDK_HOME); install with: sdkmanager 'ndk;$(ANDROID_NDK_VERSION)')
-endif
-
-# platform
-MODULE_BASE := .
-
-MODULE_SOURCES += \
-  app/android/app/src/main/cpp/androidApp.cpp \
-  tangram-es/platforms/common/platform_gl.cpp \
-  tangram-es/platforms/android/tangram/src/main/cpp/JniHelpers.cpp \
-  tangram-es/platforms/android/tangram/src/main/cpp/AndroidPlatform.cpp \
-  tangram-es/platforms/android/tangram/src/main/cpp/sqlite_fdvfs.c \
-  tangram-es/platforms/android/tangram/src/main/cpp/sqlite3ndk.cpp
-
-MODULE_INC_PRIVATE = app/include tangram-es/platforms/android/tangram/src/main/cpp $(STYLUSLABS_DEPS)
-MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL
-
-include $(ADD_MODULE)
-
-DEFS += TANGRAM_ANDROID
-LIBS = android atomic GLESv3 EGL log z jnigraphics
-
-include make/android.mk
 
 else
 # Linux
