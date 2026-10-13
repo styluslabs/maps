@@ -800,7 +800,12 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
   for(const auto& font : cfg()["fallback_fonts"])
     options.fallbackFonts.push_back(Tangram::FontSourceHandle(Url(basePath.child(font.Scalar()).path)));
   // single worker much easier to debug (alternative is gdb scheduler-locking option)
-  options.numTileWorkers = cfg()["tangram"]["num_tile_workers"].as<int>(2);
+#if PLATFORM_DESKTOP
+  int defaultWorkers = std::min(6, std::max(2, int(std::thread::hardware_concurrency()) - 2));
+#else
+  int defaultWorkers = 2;
+#endif
+  options.numTileWorkers = cfg()["tangram"]["num_tile_workers"].as<int>(defaultWorkers);
   dumpJSStats(NULL);  // reset stats
   persistBounds = false;  // reset persistent bounds state
   map->loadScene(std::move(options), async);

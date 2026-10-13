@@ -18,12 +18,14 @@ endif
 
 include make/shared.mk
 
+# LOG_LEVEL can be overridden, e.g. make LOG_LEVEL=3 for verbose release build
 ifneq ($(DEBUG),0)
-  DEFS += LOG_LEVEL=3
+  LOG_LEVEL ?= 3
 else
-  DEFS += LOG_LEVEL=2
+  LOG_LEVEL ?= 2
   #DEFS += GLM_FORCE_INTRINSICS
 endif
+DEFS += LOG_LEVEL=$(LOG_LEVEL)
 
 # if deferred eval, make sure to only use for source that needs GIT_REV
 # refs: https://stackoverflow.com/questions/17097263

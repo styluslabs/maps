@@ -10,6 +10,11 @@
 /assets/old-scenes
 /valhalla/
 /.cache/
+# runtime state created when assets/ is used as base dir
+/assets/config.yaml
+/assets/mapsources.yaml
+/assets/cache/
+/assets/*.sqlite
 
 *.apk
 *.jar

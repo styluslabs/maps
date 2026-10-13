@@ -11,14 +11,19 @@ endif()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   add_definitions(-DDEBUG)
-  add_definitions(-DLOG_LEVEL=3)
+  set(DEFAULT_LOG_LEVEL 3)
 else()
   add_definitions(-DNDEBUG)
-  add_definitions(-DLOG_LEVEL=2)
+  set(DEFAULT_LOG_LEVEL 2)
   #add_definitions(-DGLM_FORCE_INTRINSICS)
   # print glm config to ensure SIMD is being used
   #add_definitions(-DGLM_FORCE_MESSAGES)
 endif()
+# LOG_LEVEL can be overridden, e.g. -DLOG_LEVEL=3 for verbose release build
+if(NOT DEFINED LOG_LEVEL)
+  set(LOG_LEVEL ${DEFAULT_LOG_LEVEL})
+endif()
+add_definitions(-DLOG_LEVEL=${LOG_LEVEL})
 
 option(MAPS_USE_ASAN "Enable Address Sanitizer." OFF)
 if (MAPS_USE_ASAN)
