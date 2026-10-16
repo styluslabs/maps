@@ -25,11 +25,11 @@ WIXLIGHT = "c:\Program Files (x86)\WiX Toolset v3.11\bin\light.exe"
 
 DEBUG ?= 0
 ifneq ($(DEBUG), 0)
-  CFLAGS += /Od /Zi /DDEBUG
+  CFLAGS += /Od /Z7 /DDEBUG
   LDFLAGS += /DEBUG
 else
   # /GL + /LTCG for dist?
-  CFLAGS += /O2 /Zi /DNDEBUG
+  CFLAGS += /O2 /Z7 /DNDEBUG
   LDFLAGS += /DEBUG /INCREMENTAL:NO /OPT:REF /OPT:ICF
 endif
 

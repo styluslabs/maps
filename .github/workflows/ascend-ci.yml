@@ -23,9 +23,9 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev mesa-common-dev libfontconfig1-dev libcurl4-openssl-dev libxi-dev libdbus-1-dev
     - name: Tangram tests
-      run: make -f tests.mk DEBUG=1
+      run: make -f tests.mk DEBUG=1 -j4
     - name: Build TGZ
-      run: make real_tgz
+      run: make real_tgz -j4
     - name: Upload release TGZ
       uses: actions/upload-artifact@v4
       with:
@@ -171,7 +171,7 @@ jobs:
     - name: Build Maps
       shell: cmd
       working-directory: maps
-      run: ..\make.exe SHELL=cmd.exe zip
+      run: ..\make.exe SHELL=cmd.exe zip -j4
     # CURL_BASE=..\vcpkg\installed\x64-windows
     # SSH session to debug workflow
     - name: Setup tmate session

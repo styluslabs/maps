@@ -215,13 +215,13 @@ void ScaleBarWidget::directDraw(Painter* p) const
   real y0 = bbox.height() - 4;
   real w = bbox.width() - 4;
   p->setFillBrush(Color::NONE);
-  p->setStroke(Color::WHITE, 4, Painter::RoundCap);
+  p->setStroke(Color::WHITE, 5, Painter::RoundCap);
   p->drawLine(Point(0, y0), Point(w*scaledist/dist, y0));
   p->setStroke(Color::BLACK, 2, Painter::RoundCap);
   p->drawLine(Point(0, y0), Point(w*scaledist/dist, y0));
   // render text
   p->setFontSize(12);
-  p->setStroke(Color::WHITE, 2);
+  p->setStroke(Color::WHITE, 3);
   p->setStrokeAlign(Painter::StrokeOuter);
   p->setFillBrush(Color::BLACK);
   p->drawText(0, y0-6, str.c_str());
@@ -1875,7 +1875,7 @@ void MapsApp::createGUI(SDL_Window* sdlWin)
   // attribution text
   static const char* attribSVG = R"#(
     <g class="attrib-container" box-anchor="hfill bottom" margin="6 100" layout="box">
-      <text class="attrib-text" font-size="12" stroke="white" stroke-width="2" stroke-alignment="outer" box-anchor="hfill"></text>
+      <text class="attrib-text" font-size="12" stroke="white" stroke-width="3" stroke-alignment="outer" box-anchor="hfill"></text>
     </g>
   )#";
   Button* attribBtn = new Button(loadSVGFragment(attribSVG));
