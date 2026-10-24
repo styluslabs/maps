@@ -1,0 +1,44 @@
+---
+# rbtlog (https://codeberg.org/IzzyOnDroid/rbtlog) recipe used by the repro-check CI job to verify that the
+#  APK built by Github Actions can be reproduced by IzzyOnDroid; build steps and provisioning should match the
+#  recipe used by IzzyOnDroid.  The CI job passes the commit and APK to check on the command line, so the tag and
+#  apk_url here are just placeholders.
+repository: https://github.com/styluslabs/maps.git
+updates: releases
+versions:
+  - tag: ci
+    apks:
+      - apk_pattern: ascend.*\.apk
+        apk_url: https://github.com/styluslabs/maps/releases/download/ci/ascend-android.apk
+        build:
+          - sdkmanager --sdk_root=/usr/local/lib/android/sdk --install 'platform-tools'
+          - sed -r '/signingConfigs.debug/d' -i app/android/app/build.gradle
+          - cd app/android
+          - git clone https://codeberg.org/IzzyOnDroid/gradlew.py
+          - gradlew.py/gradlew.py -v assembleRelease -Papp_versioncode=$(git tag -l | wc -l) -Papp_versionname=$(git describe --tags)
+          - find . -name '*.apk'
+          - mv app/build/outputs/apk/release/*unsigned.apk /outputs/unsigned.apk
+        build_cpus: 4
+        build_home_dir: /home/runner
+        build_repo_dir: /home/runner/work/maps/maps
+        build_timeout:
+        build_user: runner
+        provisioning:
+          android_home: /usr/local/lib/android/sdk
+          build_tools: 34.0.0
+          cmake: 3.18.1
+          cmdline_tools:
+            version: '19.0'
+            url: https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+            sha256: 7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee
+          extra_packages:
+            - build-essential
+            - curl
+            - python3
+          image: ubuntu:24.04
+          jdk: openjdk-17-jdk-headless
+          ndk: 27.3.13750724
+          platform: android-34
+          platform_tools:
+          tools:
+          verify_gradle_wrapper: false

@@ -3,12 +3,17 @@ name: Ascend Maps CI
 on:
   push:
     branches: [ "master" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "master" ]
   workflow_dispatch:  # for manual run
     inputs:
       tmate:
         description: Setup tmate ssh access
+        type: boolean
+        default: false
+      repro_check:
+        description: Run reproducible build check
         type: boolean
         default: false
 
@@ -59,6 +64,49 @@ jobs:
       with:
         name: app-release-apk
         path: app/android/app/build/outputs/apk/release/app-release.apk
+
+  # verify that APK can be reproduced by IzzyOnDroid's rbtlog (https://codeberg.org/IzzyOnDroid/rbtlog) using
+  #  the recipe in .github/rbtlog/; only run for tags and on demand since it takes a while
+  repro-check:
+    needs: android-build
+    if: startsWith(github.ref, 'refs/tags/') || inputs.repro_check
+    runs-on: ubuntu-24.04
+    env:
+      RBTLOG_COMMIT: 948cf481d55df8406e863ce00998b439291a2329  # "code" branch
+    steps:
+    - name: Checkout recipe
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: .github/rbtlog
+    - name: Setup rbtlog
+      run: |
+        git init rbtlog
+        git -C rbtlog fetch --depth 1 https://codeberg.org/IzzyOnDroid/rbtlog.git $RBTLOG_COMMIT
+        git -C rbtlog checkout FETCH_HEAD
+        cp .github/rbtlog/com.styluslabs.maps.yml rbtlog/recipes/
+        python3 -m venv venv
+        venv/bin/pip install -r rbtlog/requirements.txt
+    - name: Download APK
+      uses: actions/download-artifact@v4
+      with:
+        name: app-release-apk
+        path: apk
+    - name: Rebuild and compare
+      working-directory: rbtlog
+      run: |
+        mkdir -p ../apk/rbtlog
+        ../venv/bin/python3 scripts/build.py -v --local --keep-apks ../apk/rbtlog podman \
+          "com.styluslabs.maps:ci:$GITHUB_SHA:$GITHUB_WORKSPACE/apk/app-release.apk" > ../result.json || true
+        python3 -c "import json, sys; r = json.load(open('../result.json'))[0]; \
+          print('reproducible:', r['reproducible'], '| error:', r['error']); sys.exit(0 if r['reproducible'] else 1)"
+    - name: Upload APKs and build log
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: repro-check-failure
+        path: |
+          apk/
+          result.json
 
   windows-build:
     runs-on: windows-2022
