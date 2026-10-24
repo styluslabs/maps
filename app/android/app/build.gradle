@@ -16,6 +16,9 @@ android {
     release {
       signingConfig signingConfigs.debug
       debuggable false
+      // AGP only looks for .git in project root, so vcsInfo never works for us; disable to avoid
+      //  META-INF/version-control-info.textproto w/ error message
+      vcsInfo.include false
       minifyEnabled false
       proguardFiles getDefaultProguardFile('proguard-android.txt'),
                     'proguard-rules.pro'

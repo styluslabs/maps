@@ -63,7 +63,7 @@ ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;
 std::thread::id MapsApp::mainThreadId;
 static Tooltips tooltipsInst;
 
-std::string MapsApp::versionStr = PPVALUE_TO_STRING(MAPS_GIT_REV) + std::string("; ") + __DATE__;
+std::string MapsApp::versionStr = PPVALUE_TO_STRING(MAPS_GIT_REV) + std::string("; ") + PPVALUE_TO_STRING(MAPS_GIT_DATE);
 int MapsApp::versionCode = MAPS_GIT_COUNT;  // this is number of git tags, so rebuild after tagging release!
 int MapsApp::prevVersion = 0;
 

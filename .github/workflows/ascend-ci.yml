@@ -37,13 +37,15 @@ jobs:
       #if: ${{ failure() }}
 
   android-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout
-      run: git clone --recurse-submodules https://github.com/styluslabs/maps
-      #uses: actions/checkout@v4
-      #with:
-      #  submodules: recursive
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0  # need tags for versionCode and git describe
+    - name: Install NDK
+      run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install 'ndk;27.3.13750724'
     - name: Setup JDK
       uses: actions/setup-java@v4
       with:
@@ -51,12 +53,12 @@ jobs:
         java-version: '17'
     - name: Gradle Assemble
       run: ./gww printSdkVersions assembleRelease
-      working-directory: maps/app/android
+      working-directory: app/android
     - name: Upload release APK
       uses: actions/upload-artifact@v4
       with:
         name: app-release-apk
-        path: maps/app/android/app/build/outputs/apk/release/app-release.apk
+        path: app/android/app/build/outputs/apk/release/app-release.apk
 
   windows-build:
     runs-on: windows-2022

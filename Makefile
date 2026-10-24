@@ -27,9 +27,12 @@ endif
 
 # if deferred eval, make sure to only use for source that needs GIT_REV
 # refs: https://stackoverflow.com/questions/17097263
-GIT_REV := $(shell git rev-parse --short HEAD || wsl git rev-parse --short HEAD)
+# fixed length so hash in binary doesn't depend on number of objects in local repo
+GIT_REV := $(shell git rev-parse --short=8 HEAD || wsl git rev-parse --short=8 HEAD)
 GIT_TAGCOUNT := $(shell git rev-list --count --tags --no-walk || wsl git rev-list --count --tags --no-walk)
 GIT_DESCRIBE := $(shell git describe --tags --dirty || wsl git describe --tags --dirty)
+# use commit date instead of __DATE__ for reproducible builds
+GIT_DATE := $(shell git log -1 --format=%cs || wsl git log -1 --format=%cs)
 ## common modules
 include tangram-es/core/module.mk
 include module.mk
@@ -163,7 +166,12 @@ else ifneq ($(ANDROID),)
 
 # System.loadLibrary("droidmaps") in MapsLib.java
 TARGET = libdroidmaps.so
-ANDROID_NDK_HOME ?= $(lastword $(sort $(wildcard $(ANDROID_HOME)/ndk/*)))
+# pin NDK version for reproducible builds (ANDROID_NDK_HOME set by Github runner is ignored)
+ANDROID_NDK_VERSION ?= 27.3.13750724
+ANDROID_NDK_HOME := $(ANDROID_HOME)/ndk/$(ANDROID_NDK_VERSION)
+ifeq ($(wildcard $(ANDROID_NDK_HOME)/toolchains),)
+  $(error NDK not found at $(ANDROID_NDK_HOME); install with: sdkmanager 'ndk;$(ANDROID_NDK_VERSION)')
+endif
 
 # platform
 MODULE_BASE := .
