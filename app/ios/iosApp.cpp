@@ -282,7 +282,7 @@ public:
   IOSFile(std::string _path, std::string _url = "") : mPath(_path), securedURL(_url) {}
   ~IOSFile() override { if(!securedURL.empty()) iosPlatform_releaseSecuredURL(securedURL.c_str()); }
   std::string fsPath() const override { return mPath; }
-  std::string sqliteURI() const override { return "file://" + mPath + "?mode=ro"; }
+  std::string sqliteURI() const override { return sqliteFileURI(mPath); }
   std::vector<char> readAll() const override {
     std::vector<char> buff;
     readFile(&buff, mPath.c_str());

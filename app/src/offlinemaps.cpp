@@ -612,7 +612,7 @@ static void indexImportedTiles(SQLiteDB& tileDB, int offlineId, const YAML::Node
 
 static void exportPOIs(const char* dest, int offlineId)
 {
-  static const char* poiExportSQL = R"#(ATTACH DATABASE 'file://%s?mode=ro' AS searchdb;
+  static const char* poiExportSQL = R"#(ATTACH DATABASE '%s' AS searchdb;
     BEGIN;
     DROP TABLE IF EXISTS main.pois;
     CREATE TABLE main.pois AS SELECT * FROM searchdb.pois WHERE tile_id IN
@@ -626,7 +626,7 @@ static void exportPOIs(const char* dest, int offlineId)
     LOGE("Error opening %s for POI export", dest);
     return;
   }
-  if(poiOutDB.exec(fstring(poiExportSQL, searchDB.c_str(), offlineId))) {
+  if(poiOutDB.exec(fstring(poiExportSQL, PlatformFile::sqliteFileURI(searchDB.path).c_str(), offlineId))) {
     int nPois = 0;
     poiOutDB.stmt("SELECT count(1) FROM main.pois;").onerow(nPois);
     if(!nPois) {

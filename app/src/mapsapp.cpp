@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <fstream>
 #include <chrono>
+#include <algorithm>
 // for elevation
 #include "util/elevationManager.h"
 #include "data/rasterSource.h"
@@ -2205,6 +2206,23 @@ SvgNode* MapsApp::uiIcon(const char* id)
   return ::uiIcon(id);
 }
 
+std::string PlatformFile::sqliteFileURI(std::string path, const char* params)
+{
+  std::string uri = "file://";
+#ifdef _WIN32
+  std::replace(path.begin(), path.end(), '\\', '/');
+  // drive letter path (C:/...) needs leading '/' so it isn't parsed as URI authority
+  if(path.size() >= 2 && path[1] == ':') uri.push_back('/');
+#endif
+  for(char c : path) {
+    // '?' and '#' would end path; '%' would be decoded; quote would end SQL string literal
+    if(c == '%' || c == '?' || c == '#' || c == '\'') { uri += fstring("%%%02X", (unsigned char)c); }
+    else uri.push_back(c);
+  }
+  if(params && params[0]) { uri.push_back('?'); uri += params; }
+  return uri;
+}
+
 #if PLATFORM_DESKTOP
 class DesktopFile : public PlatformFile
 {
@@ -2212,7 +2230,7 @@ public:
   std::string mPath;
   DesktopFile(std::string _path) : mPath(_path) {}
   std::string fsPath() const override { return mPath; }
-  std::string sqliteURI() const override { return "file://" + mPath + "?mode=ro"; }
+  std::string sqliteURI() const override { return sqliteFileURI(mPath); }
   std::vector<char> readAll() const override {
     std::vector<char> buff;
     readFile(&buff, mPath.c_str());

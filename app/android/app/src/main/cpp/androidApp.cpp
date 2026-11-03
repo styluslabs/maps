@@ -852,7 +852,7 @@ public:
   std::string fsPath() const override { return mPath; }
   std::string sqliteURI() const override {
     return mFD >= 0 ? "file:///dev/fd/" + std::to_string(mFD) + "?vfs=fdvfs&immutable=1&mode=ro"
-        : "file://" + mPath + "?mode=ro";
+        : sqliteFileURI(mPath);
   }
   std::vector<char> readAll() const override {
     std::vector<char> buff;

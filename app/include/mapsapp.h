@@ -48,6 +48,9 @@ public:
   virtual std::string sqliteURI() const = 0;
   virtual std::string fsPath() const = 0;
   virtual std::vector<char> readAll() const = 0;
+  // build SQLite URI for local file path (escapes special chars, handles Windows paths); result is safe to
+  //  use inside single-quoted SQL string literal
+  static std::string sqliteFileURI(std::string path, const char* params = "mode=ro");
 };
 
 class MapsApp
