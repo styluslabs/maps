@@ -43,7 +43,7 @@ function wikipediaSearch(query, bounds, flags)
     const orderby = (flags & 0x4) ? 'ASC(?dist)' : 'DESC(?sitelinks) ASC(?dist)';
     // `?item wikibase:statements ?statements .` is a potential alternative to sitelinks
     const url = 'https://query.wikidata.org/sparql?query=' + encodeURIComponent(
-      'SELECT ?item ?itemLabel (SAMPLE(?wikiTitle) AS ?wikiTitle) (SAMPLE(?sitelinks) AS ?sitelinks)' +
+      'SELECT ?item ?itemLabel ?itemDescription (SAMPLE(?wikiTitle) AS ?wikiTitle) (SAMPLE(?sitelinks) AS ?sitelinks)' +
       '    (SAMPLE(?where) AS ?lnglat) (SAMPLE(?dists) AS ?dist) ?url WHERE {' +
       '  ?url schema:about ?item; schema:name ?wikiTitle; schema:inLanguage "en";' +
       '      schema:isPartOf <https://en.wikipedia.org/>.' +
@@ -55,7 +55,7 @@ function wikipediaSearch(query, bounds, flags)
       '      bd:serviceParam wikibase:distance ?dists.' +
       '  }' +
       '  SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }' +
-      '} GROUP BY ?item ?itemLabel ?url ORDER BY ' + orderby + ' LIMIT 1000');
+      '} GROUP BY ?item ?itemLabel ?itemDescription ?url ORDER BY ' + orderby + ' LIMIT 1000');
 
     httpRequest(url, "Accept: application/sparql-results+json", function(_content, _error) {
       if(!_content) { notifyError("search", "Wikipedia Search error: " + _error); return; }
@@ -68,6 +68,14 @@ function wikipediaSearch(query, bounds, flags)
             "value": "<a href='" + r.url.value + "'><text>" + r.itemLabel.value + "</text></a>"};
         const tags = {"name": r.itemLabel.value,
             "wiki": encodeURI(r.wikiTitle.value), "place_info": [url_info], "tourism": "wikipedia"};
+        // wikidata short description (e.g. "church in Strasbourg, France") - provided by label service
+        //  truncated at first comma or '('
+        if(r.itemDescription) {
+          const desc = r.itemDescription.value.split(/[,(]/)[0].trim();
+          // also drop location suffix (search is location specific), e.g. "church (located) in Strasbourg";
+          //  only cut before a capitalized word so that, e.g., "founded in 1992" is kept
+          tags["place_type"] = desc.replace(/\s+(?:(?:located|situated|based)\s+)?in\s+(?:the\s+)?[A-ZÀ-Þ].*$/, "");
+        }
         const lnglat = r.lnglat.value.substr(6, r.lnglat.value.length-7).split(" ");  // parse WKT "Point(<lng> <lat>)"
         const lng = Number(lnglat[0]), lat = Number(lnglat[1]);
         addSearchResult(ii, lat, lng, radkm - Number(r.dist.value), flags, tags);

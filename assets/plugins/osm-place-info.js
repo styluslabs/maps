@@ -10,6 +10,9 @@ function getPlaceType(_props)
 {
   if(!_props) return "";
   const props = JSON.parse(_props);
+  // explicit type provided by search plugin (e.g. wikidata description)
+  const ptype = props["place_type"];
+  if(ptype) { return ptype.charAt(0).toUpperCase() + ptype.slice(1); }
   var type = props["place"] || props["information"] || props["tourism"] || props["leisure"] || props["amenity"]
       || props["historic"] || props["shop"] || props["railway"] || props["water"] || props["natural"]
       || props["landuse"] || props["highway"] || props["office"] || props["building"] || props["waterway"] || "";
