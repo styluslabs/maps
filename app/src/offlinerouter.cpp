@@ -18,6 +18,8 @@
 #include <unordered_map>
 #include <queue>
 #include <algorithm>
+#include <mutex>
+#include <condition_variable>
 #include "pbf/pbf.hpp"
 #include "scene/sceneLoader.h"
 #include "scene/filters.h"
@@ -26,6 +28,10 @@
 #include "data/propertyItem.h"
 #include "tile/tileID.h"
 #include "util/imageLoader.h"
+#include "util/zlibHelper.h"
+#include "data/tileSource.h"
+#include "tile/tileTask.h"
+#include "scene/scene.h"
 
 namespace OfflineRouter {
 
@@ -35,8 +41,8 @@ struct RoutePt { double lng, lat, dist, time, elev; };  // dist in meters, time 
 struct RouteStep { int idx; std::string instr; };
 struct RouteResult { std::vector<RoutePt> pts; std::vector<RouteStep> steps; std::string error; };
 
-// returns decompressed MVT tiles for z/x/y from all candidate sources (empty if unavailable)
-using TileLoader = std::function<std::vector<std::string>(int x, int y, int z)>;
+// returns decompressed MVT tile for z/x/y (empty if unavailable)
+using TileLoader = std::function<std::string(int x, int y, int z)>;
 // returns encoded elevation tile (LERC, TIFF, or terrarium PNG) for z/x/y (empty if unavailable)
 using ElevLoader = std::function<std::string(int x, int y, int z)>;
 
@@ -486,12 +492,10 @@ bool Router::loadTile(int tx, int ty)
   if(tilesLoaded >= maxNewTiles) return false;
   tiles[tileKey(tx, ty)].loaded = true;
   ++tilesLoaded;
-  auto blobs = loader(tx, ty, zoom);
-  for(const std::string& data : blobs) {
-    if(decodeTile(data, tx, ty)) return true;
-  }
+  std::string data = loader(tx, ty, zoom);
+  if(!data.empty()) return decodeTile(data, tx, ty);
   // no data (e.g. not downloaded or no network): retry on next route request
-  if(blobs.empty()) tiles[tileKey(tx, ty)].missing = true;
+  tiles[tileKey(tx, ty)].missing = true;
   return false;
 }
 
@@ -943,102 +947,54 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
   return res;
 }
 
+// load tile through scene's TileSource (memory cache, mbtiles cache, network), blocking calling thread; TileSource
+//  calls back on failure too, except if task is canceled or Scene is deleted, so we also poll canceled()
+static std::string loadTileSync(Tangram::TileSource& src, const std::weak_ptr<Tangram::ScenePrana>& prana,
+    Tangram::TileID tileId, const std::function<bool()>& canceled)
+{
+  struct State { std::mutex mtx; std::condition_variable cv; bool done = false; };
+  auto state = std::make_shared<State>();
+  auto task = std::make_shared<Tangram::BinaryTileTask>(tileId, &src);
+  task->setScenePrana(prana);
+  src.loadTileData(task, {[state](std::shared_ptr<Tangram::TileTask>){
+    std::lock_guard<std::mutex> lock(state->mtx);
+    state->done = true;
+    state->cv.notify_all();
+  }});
+  std::unique_lock<std::mutex> lock(state->mtx);
+  while(!state->cv.wait_for(lock, std::chrono::milliseconds(100), [&]{ return state->done; })) {
+    if(canceled()) {
+      lock.unlock();
+      task->cancel();
+      src.cancelLoadingTile(*task);
+      return {};
+    }
+  }
+  if(!task->hasData()) return {};
+  const std::vector<char>& data = *task->rawTileData;
+  std::vector<char> out;
+  if(Tangram::zlib_inflate(data.data(), data.size(), out) == 0) return std::string(out.data(), out.size());
+  return std::string(data.data(), data.size());
+}
+
 }  // namespace OfflineRouter
 
 #ifndef OFFLINE_ROUTER_STANDALONE
 // app integration: called from MapsTracks::createRoute() when the "Offline" route provider is selected
 
 #include <thread>
-#include <mutex>
 #include <atomic>
-#include <condition_variable>
 #include "mapsapp.h"
 #include "tracks.h"
 #include "util.h"
-#include "sqlite3/sqlitepp.h"
-#include "util/zlibHelper.h"
-#include "data/networkDataSource.h"
 #include "offlinerouter.h"
-#include "scene/scene.h"
 
 using namespace Tangram;
-
-struct RouterTileSource {
-  std::string cacheFile;
-  std::string url;
-  UrlOptions urlOptions;
-};
 
 static std::mutex routerMutex;
 static std::atomic<int> routeSerial{0};
 static OfflineRouter::Router* routerInst = NULL;  // not freed, so a running worker never sees a destroyed graph
 static std::string routerSrcKey;
-
-static std::vector<char> fetchTileSync(const std::string& url, const UrlOptions& opts)
-{
-  std::mutex mtx;
-  std::condition_variable cv;
-  bool done = false;
-  auto result = std::make_shared<std::vector<char>>();
-  UrlRequestHandle hnd = MapsApp::platform->startUrlRequest(Url(url), opts.httpOptions,
-      [&mtx, &cv, &done, result](UrlResponse&& response) {
-    std::lock_guard<std::mutex> lock(mtx);
-    if(!response.error) *result = std::move(response.content);
-    done = true;
-    cv.notify_all();
-  });
-  std::unique_lock<std::mutex> lock(mtx);
-  if(!cv.wait_for(lock, std::chrono::seconds(20), [&]{ return done; })) {
-    lock.unlock();
-    MapsApp::platform->cancelUrlRequest(hnd);  // callback still runs, so wait for it
-    lock.lock();
-    cv.wait(lock, [&]{ return done; });
-  }
-  return std::move(*result);
-}
-
-static std::vector<std::string> loadRouterTile(std::vector<RouterTileSource>& srcs,
-    std::vector<std::unique_ptr<SQLiteDB>>& dbs, int x, int y, int z)
-{
-  std::vector<std::string> res;
-  auto addData = [&](const char* blob, size_t len){
-    std::vector<char> out;
-    if(zlib_inflate(blob, len, out) == 0) res.emplace_back(out.data(), out.size());
-    else res.emplace_back(blob, len);
-  };
-  for(size_t ii = 0; ii < srcs.size(); ++ii) {
-    if(!dbs[ii]) continue;
-    dbs[ii]->stmt("SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?;")
-        .bind(z, x, (1 << z) - 1 - y).exec([&](sqlite3_stmt* stmt){
-      addData((const char*)sqlite3_column_blob(stmt, 0), sqlite3_column_bytes(stmt, 0));
-    });
-  }
-  if(!res.empty()) return res;
-  for(auto& src : srcs) {
-    if(src.url.empty()) continue;
-    std::string url = NetworkDataSource::buildUrlForTile(TileID(x, y, z), src.url, src.urlOptions, 0);
-    std::vector<char> data = fetchTileSync(url, src.urlOptions);
-    if(!data.empty()) {
-      addData(data.data(), data.size());
-      break;
-    }
-  }
-  return res;
-}
-
-static std::vector<std::unique_ptr<SQLiteDB>> openRouterDBs(const std::vector<RouterTileSource>& srcs)
-{
-  std::vector<std::unique_ptr<SQLiteDB>> dbs;
-  for(auto& src : srcs) {
-    dbs.emplace_back();
-    if(src.cacheFile.empty()) continue;
-    auto db = std::make_unique<SQLiteDB>();
-    if(db->open(src.cacheFile, SQLITE_OPEN_READONLY) != SQLITE_OK) continue;
-    sqlite3_busy_timeout(db->db, 1000);
-    dbs.back() = std::move(db);
-  }
-  return dbs;
-}
 
 void cancelOfflineRoute() { ++routeSerial; }
 
@@ -1064,31 +1020,31 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
   auto cfg = std::make_shared<Config>();
   std::string err;
   if(!parseConfig(cfgNode, *cfg, err)) { onError(err); return; }
-  std::vector<RouterTileSource> srcs;
-  std::string srckey = yamlToStr(cfgNode);
-  for(auto& tilesrc : MapsApp::inst->map->getScene()->tileSources()) {
-    if(tilesrc->name() != cfg->source) continue;
-    auto& info = tilesrc->offlineInfo();
-    if(info.format != TileSource::Format::Mvt) continue;
-    srcs.push_back({info.cacheFile, info.url, info.urlOptions});
-    srckey += "\n" + info.cacheFile + "|" + info.url;
+  // tile sources are used from worker thread; srckey (cache file and URL) identifies their data, so graph is kept
+  //  across scene reloads
+  auto* scene = MapsApp::inst->map->getScene();
+  std::weak_ptr<ScenePrana> prana = scene->prana();
+  std::shared_ptr<TileSource> src;
+  for(auto& tilesrc : scene->tileSources()) {
+    if(tilesrc->name() == cfg->source && tilesrc->offlineInfo().format == TileSource::Format::Mvt) { src = tilesrc; break; }
   }
-  if(srcs.empty()) { onError("Tile source for routing not found: " + cfg->source); return; }
+  if(!src) { onError("Tile source for routing not found: " + cfg->source); return; }
+  if(cfg->zoom > src->maxZoom()) { onError("Routing zoom exceeds max zoom of tile source " + cfg->source); return; }
+  std::string srckey = yamlToStr(cfgNode) + "\n" + src->offlineInfo().cacheFile + "|" + src->offlineInfo().url;
   // elevation source used for map (if any)
-  std::vector<RouterTileSource> elevSrcs;
+  std::shared_ptr<TileSource> elevSrc = MapsApp::inst->getElevationSource();
   int elevZoom = 0;
-  if(auto esrc = MapsApp::inst->getElevationSource()) {
-    auto& info = esrc->offlineInfo();
-    elevSrcs.push_back({info.cacheFile, info.url, info.urlOptions});
-    elevZoom = std::min(cfg->elevZoom, int(esrc->maxZoom()));
+  if(elevSrc) {
+    auto& info = elevSrc->offlineInfo();
+    elevZoom = std::min(cfg->elevZoom, int(elevSrc->maxZoom()));
     srckey += "\nelev:" + info.cacheFile + "|" + info.url + "|" + std::to_string(elevZoom);
   }
 
   std::thread([=]() mutable {
     std::lock_guard<std::mutex> lock(routerMutex);
-    if(serial != routeSerial) return;
-    auto dbs = openRouterDBs(srcs);
-    auto elevDbs = openRouterDBs(elevSrcs);
+    // canceled by new request or scene reload
+    auto canceled = [serial, prana](){ return serial != routeSerial || prana.expired(); };
+    if(canceled()) return;
     // keep graph between requests (e.g. while editing waypoints), but not if source changed or too large
     if(routerInst && (routerSrcKey != srckey || routerInst->numTiles() > 600)) {
       delete routerInst;
@@ -1096,20 +1052,19 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
     }
     if(!routerInst) routerInst = new Router(cfg);
     routerSrcKey = srckey;
-    routerInst->setLoader([&](int x, int y, int z){ return loadRouterTile(srcs, dbs, x, y, z); });
-    if(!elevSrcs.empty()) {
+    routerInst->setLoader([&](int x, int y, int z){ return OfflineRouter::loadTileSync(*src, prana, TileID(x, y, z), canceled); });
+    if(elevSrc) {
       routerInst->setElevLoader([&](int x, int y, int z){
-        auto blobs = loadRouterTile(elevSrcs, elevDbs, x, y, z);
-        return blobs.empty() ? std::string() : std::move(blobs[0]);
+        return OfflineRouter::loadTileSync(*elevSrc, prana, TileID(x, y, z), canceled);
       }, elevZoom);
     }
     Timestamp t0 = mSecSinceEpoch(); (void)t0;
-    RouteResult res = routerInst->route(mode, waypts, [serial](){ return serial != routeSerial; });
+    RouteResult res = routerInst->route(mode, waypts, canceled);
     routerInst->setLoader(NULL);
     routerInst->setElevLoader(NULL, 0);
     LOGD("Offline route: %d pts, %d tiles in graph, %d ms", int(res.pts.size()),
         int(routerInst->numTiles()), int(mSecSinceEpoch() - t0));
-    if(serial != routeSerial) return;
+    if(canceled()) return;
     if(!res.error.empty()) { onError(res.error); return; }
     MapsApp::runOnMainThread([serial, res=std::move(res)](){
       if(serial != routeSerial) return;
