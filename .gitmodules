@@ -28,3 +28,7 @@
 	path = assets/shared
 	url = https://github.com/pbsurf/maps-res
 	ignore = untracked
+[submodule "testing"]
+	path = testing
+	url = https://github.com/pbsurf/maps-testing
+	ignore = untracked

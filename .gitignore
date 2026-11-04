@@ -1,4 +1,4 @@
-/build/
+build/
 /app/android/gradle
 /app/android/gradlew*
 /app/android/.gradle

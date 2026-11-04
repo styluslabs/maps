@@ -16,6 +16,7 @@ MODULE_SOURCES = \
   app/src/plugins.cpp      \
   app/src/mapwidgets.cpp   \
   app/src/stylefns.cpp     \
+  app/src/tangramfns.cpp   \
   $(STYLUSLABS_DEPS)/ugui/svggui.cpp         \
   $(STYLUSLABS_DEPS)/ugui/widgets.cpp        \
   $(STYLUSLABS_DEPS)/ugui/textedit.cpp       \
