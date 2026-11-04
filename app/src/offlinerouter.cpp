@@ -6,6 +6,8 @@
 // - meant for short and medium routes (walking, cycling, local driving), not long distance routing
 // - which features are routable, speeds and penalties per mode, oneway and street names for directions are set by
 //  application.routing in the scene (see assets/scenes/routing.yaml), using tangram filters
+// - if elevation tiles are available, profiles can add cost for climbing and descending, and route points get
+//  elevations
 // See ~/maps/HANDOFF-routing.md for background
 
 #include <cmath>
@@ -23,17 +25,20 @@
 #include "data/tileData.h"
 #include "data/propertyItem.h"
 #include "tile/tileID.h"
+#include "util/imageLoader.h"
 
 namespace OfflineRouter {
 
 enum Mode { FOOT = 0, BIKE, CAR };
 
-struct RoutePt { double lng, lat, dist, time; };  // dist in meters, time in seconds from start
+struct RoutePt { double lng, lat, dist, time, elev; };  // dist in meters, time in seconds from start; elev NAN if unknown
 struct RouteStep { int idx; std::string instr; };
 struct RouteResult { std::vector<RoutePt> pts; std::vector<RouteStep> steps; std::string error; };
 
 // returns decompressed MVT tiles for z/x/y from all candidate sources (empty if unavailable)
 using TileLoader = std::function<std::vector<std::string>(int x, int y, int z)>;
+// returns encoded elevation tile (LERC, TIFF, or terrarium PNG) for z/x/y (empty if unavailable)
+using ElevLoader = std::function<std::string(int x, int y, int z)>;
 
 static constexpr double EARTH_CIRC = 40075016.686;  // meters
 
@@ -48,6 +53,8 @@ struct Profile {
   std::string maxspeedKey;  // speed limit attribute, applied as min(scale*maxspeed, max_factor*speed)
   double maxspeedScale = 1, maxspeedMaxFactor = INFINITY;
   double maxSpeed = 0;  // km/h, upper bound of effective speed, for A* heuristic
+  double climbUp = 0, climbDown = 0;  // seconds added per meter of ascent and descent (down can be < 0)
+  double minSpm = 0;  // lower bound of seconds per meter, so edge costs stay consistent with heuristic
 };
 
 struct Config {
@@ -58,6 +65,9 @@ struct Config {
   std::vector<std::string> nameKeys;  // first non-empty is used as name in directions
   std::string labelKey;  // for unnamed ways, "the " + labels[value of labelKey]
   std::unordered_map<std::string, std::string> labels;
+  int elevZoom = 12;  // zoom of elevation tiles
+  double elevThreshold = 5;  // meters; smaller ups and downs along an edge are ignored as noise
+  Tangram::Filter elevLinear;  // ways (bridges, tunnels) where elevation is interpolated between endpoints
   Profile profiles[3];
 };
 
@@ -69,6 +79,7 @@ struct Way {
   float spm[3][2];  // seconds per meter for each mode, forward and reverse; < 0 if not allowed
   std::string name;  // for directions
   bool named;  // false if name is just the highway type
+  bool linearElev;  // ignore terrain between endpoints
 };
 
 struct Node {
@@ -85,6 +96,7 @@ struct Edge {
   int64_t tile;
   float len;  // meters
   std::vector<GPt> pts;
+  float up = NAN, down = 0;  // ascent and descent in forward direction (meters); NAN if not yet calculated
 };
 
 enum EdgeFlag : uint8_t { LEFT = 1, RIGHT = 2, TOP = 4, BOTTOM = 8 };
@@ -100,6 +112,8 @@ public:
   RouteResult route(Mode mode, const std::vector<std::pair<double,double>>& lngLats,
       const std::function<bool()>& canceled = NULL);
   void setLoader(TileLoader _loader) { loader = _loader; }
+  // zoom <= cfg->elevZoom, e.g. if source has lower max zoom; elevation tiles are cached with the graph
+  void setElevLoader(ElevLoader _loader, int zoom) { elevLoader = _loader; elevZoom = zoom; }
   size_t numTiles() const { return tiles.size(); }
 
   GPt lngLatToGlobal(double lng, double lat, double ext) const;
@@ -114,8 +128,13 @@ public:
 private:
   struct Tile { bool loaded = false; bool missing = false; std::vector<int> edges; };
   struct Snap { int edge = -1; size_t seg = 0; GPt p; double dist2 = INFINITY; };
+  // rows south to north; w == 0 if no data, missing if not available (retried on next request)
+  struct ElevTile { int w = 0, h = 0; bool missing = false; std::vector<float> z; };
 
   TileLoader loader;
+  ElevLoader elevLoader;
+  int elevZoom = 0;
+  std::unordered_map<int64_t, ElevTile> elevTiles;
   std::unique_ptr<Tangram::StyleContext> styleCtx;  // for filter evaluation
   std::vector<Node> nodes;
   std::vector<Edge> edges;
@@ -143,7 +162,10 @@ private:
   std::vector<int> astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err);
   double metersPerUnit(double gy) const;
   double edgeLength(const std::vector<GPt>& pts) const;
-  float edgeCost(int e, bool fwd, Mode mode) const;
+  float edgeCost(int e, bool fwd, Mode mode);
+  double elevAt(GPt p);
+  double elevSpacing() const;
+  void edgeClimb(int e);
   double headingFrom(int e, int u) const;
 };
 
@@ -200,6 +222,11 @@ static bool parseConfig(const YAML::Node& node, Config& cfg, std::string& err)
   cfg.labelKey = node["label_key"].as<std::string>("");
   for(const auto& kv : node["labels"].pairs())
     cfg.labels[kv.first.Scalar()] = kv.second.Scalar();
+  if(const YAML::Node& en = node["elevation"]) {
+    cfg.elevZoom = en["zoom"].as<int>(cfg.elevZoom);
+    cfg.elevThreshold = en["threshold"].as<double>(cfg.elevThreshold);
+    if(en["linear"]) cfg.elevLinear = filter(en["linear"]);
+  }
   bool anyProfile = false;
   for(int mode = FOOT; mode <= CAR; ++mode) {
     const YAML::Node& pn = node["profiles"][modeNames[mode]];
@@ -225,6 +252,13 @@ static bool parseConfig(const YAML::Node& node, Config& cfg, std::string& err)
     for(const Rule& r : p.factor)
       minFactor = std::min(minFactor, r.value);
     if(minFactor > 0) p.maxSpeed /= minFactor;  // keep heuristic admissible if factors < 1 are used
+    if(const YAML::Node& cn = pn["climb"]) {
+      p.climbUp = cn["up"].as<double>(0);
+      p.climbDown = cn["down"].as<double>(0);
+      // descents can make edges faster than maxSpeed (if climb.down < 0); limit to climb.max_speed
+      if(p.climbDown < 0) p.maxSpeed = std::max(p.maxSpeed, cn["max_speed"].as<double>(p.maxSpeed));
+    }
+    if(p.maxSpeed > 0) p.minSpm = 3.6/p.maxSpeed;
   }
   if(!fns.empty()) { err = "Routing filters do not support JS functions"; return false; }
   if(cfg.source.empty()) { err = "Routing configuration has no tile source"; return false; }
@@ -262,6 +296,7 @@ Way Router::makeWay(const Tangram::Feature& feat)
     if(feat.props.getAsString(key, way.name) && !way.name.empty()) break;
   }
   way.named = !way.name.empty();
+  way.linearElev = cfg->elevLinear.isValid() && cfg->elevLinear.eval(feat, *styleCtx);
   if(!way.named) {
     std::string label = "road";
     if(!cfg->labelKey.empty() && feat.props.getAsString(cfg->labelKey, str) && !str.empty()) {
@@ -482,10 +517,92 @@ bool Router::allowed(int e, Mode mode) const
   return w.spm[mode][0] > 0 || w.spm[mode][1] > 0;
 }
 
-float Router::edgeCost(int e, bool fwd, Mode mode) const
+float Router::edgeCost(int e, bool fwd, Mode mode)
 {
   float spm = ways[edges[e].way].spm[mode][fwd ? 0 : 1];
-  return spm > 0 ? edges[e].len*spm : -1;
+  if(spm <= 0) return -1;
+  const Profile& p = cfg->profiles[mode];
+  float c = edges[e].len*spm;
+  if(elevLoader && (p.climbUp != 0 || p.climbDown != 0)) {
+    edgeClimb(e);
+    const Edge& edge = edges[e];
+    double up = fwd ? edge.up : edge.down, down = fwd ? edge.down : edge.up;
+    c = std::max(float(c + up*p.climbUp + down*p.climbDown), float(edge.len*p.minSpm));
+  }
+  return c;
+}
+
+// elevation
+
+double Router::elevAt(GPt p)
+{
+  if(!elevLoader) return NAN;
+  double s = std::ldexp(1.0, elevZoom - zoom)/extent;  // global units to elevation tiles
+  double ex = p.x*s, ey = p.y*s;
+  int tx = int(std::floor(ex)), ty = int(std::floor(ey));
+  auto key = tileKey(tx, ty);
+  auto it = elevTiles.find(key);
+  if(it == elevTiles.end()) {
+    ElevTile& tile = elevTiles[key];
+    std::string data = elevLoader(tx, ty, elevZoom);
+    tile.missing = data.empty();
+    int w = 0, h = 0;
+    GLint fmt = 0;
+    uint8_t* img = data.empty() ? NULL : Tangram::loadImage((const uint8_t*)data.data(), data.size(), &w, &h, &fmt, 4);
+    if(img && w > 1 && h > 1 && (fmt == GL_R32F || fmt == GL_RGBA8 || fmt == GL_RGBA)) {
+      tile.w = w; tile.h = h;
+      tile.z.resize(size_t(w)*h);
+      for(size_t ii = 0; ii < tile.z.size(); ++ii) {
+        const uint8_t* px = img + 4*ii;  // see readElevTex() in mapsapp.cpp
+        tile.z[ii] = fmt == GL_R32F ? ((float*)img)[ii] : (px[0]*256 + px[1] + px[2]/256.0f) - 32768;
+      }
+    }
+    free(img);
+    it = elevTiles.find(key);
+  }
+  const ElevTile& t = it->second;
+  if(!t.w) return NAN;
+  // bilinear interpolation, pixel centers at +0.5 as in elevationLerp() in mapsapp.cpp
+  double x0 = (ex - tx)*t.w - 0.5, y0 = (1 - (ey - ty))*t.h - 0.5;
+  int ix0 = std::max(0, int(std::floor(x0))), iy0 = std::max(0, int(std::floor(y0)));
+  int ix1 = std::min(ix0 + 1, t.w - 1), iy1 = std::min(iy0 + 1, t.h - 1);
+  double fx = std::max(0.0, std::min(1.0, x0 - ix0)), fy = std::max(0.0, std::min(1.0, y0 - iy0));
+  auto z = [&](int ix, int iy){ return double(t.z[size_t(iy)*t.w + ix]); };
+  double z0 = z(ix0, iy0) + fx*(z(ix1, iy0) - z(ix0, iy0));
+  double z1 = z(ix0, iy1) + fx*(z(ix1, iy1) - z(ix0, iy1));
+  return z0 + fy*(z1 - z0);
+}
+
+// approx. elevation tile pixel size in global units (assuming 256 px tiles)
+double Router::elevSpacing() const { return std::ldexp(double(extent), zoom - elevZoom)/256; }
+
+// total ascent and descent along edge, ignoring ups and downs smaller than cfg->elevThreshold
+void Router::edgeClimb(int e)
+{
+  Edge& edge = edges[e];
+  if(!std::isnan(edge.up)) return;
+  edge.up = edge.down = 0;
+  const auto& pts = edge.pts;
+  double step = elevSpacing();
+  double ref = elevAt(pts[0]), z = ref;
+  if(std::isnan(ref)) return;
+  auto add = [&](double dz) { if(dz > 0) edge.up += dz; else edge.down -= dz; };
+  if(ways[edge.way].linearElev) {
+    z = elevAt(pts.back());
+    if(!std::isnan(z)) add(z - ref);
+    return;
+  }
+  for(size_t ii = 1; ii < pts.size(); ++ii) {
+    double d = std::hypot(pts[ii].x - pts[ii-1].x, pts[ii].y - pts[ii-1].y);
+    int n = std::max(1, int(std::ceil(d/step)));
+    for(int jj = 1; jj <= n; ++jj) {
+      double f = double(jj)/n;
+      z = elevAt(GPt{pts[ii-1].x + f*(pts[ii].x - pts[ii-1].x), pts[ii-1].y + f*(pts[ii].y - pts[ii-1].y)});
+      if(std::isnan(z)) { edge.up = edge.down = 0; return; }
+      if(std::abs(z - ref) > cfg->elevThreshold) { add(z - ref); ref = z; }
+    }
+  }
+  add(z - ref);  // so that up - down equals net change
 }
 
 static double distToSegment2(GPt p, GPt a, GPt b, GPt& proj)
@@ -552,6 +669,7 @@ int Router::snapToGraph(GPt p, Mode mode)
   int b = edges[e].b;
   edges[e].b = n;
   edges[e].len = float(edgeLength(edges[e].pts));
+  edges[e].up = NAN;
   int e2 = int(edges.size());
   edges.push_back(Edge{n, b, edges[e].way, edges[e].tile, float(edgeLength(pts2)), std::move(pts2)});
   auto& bedges = nodes[b].edges;
@@ -676,6 +794,8 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
   tilesLoaded = 0;
   for(auto it = tiles.begin(); it != tiles.end();)
     it = it->second.missing ? tiles.erase(it) : ++it;
+  for(auto it = elevTiles.begin(); it != elevTiles.end();)
+    it = it->second.missing ? elevTiles.erase(it) : ++it;
   // limit search to tiles around waypoints; first use coordinates in units of tiles (extent = 1)
   std::vector<GPt> waypts;
   double minx = INFINITY, miny = INFINITY, maxx = -INFINITY, maxy = -INFINITY;
@@ -704,8 +824,9 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
   }
 
   double dist = 0, time = 0;
-  auto addPt = [&](GPt p, bool first) {
+  auto addPt = [&](GPt p, bool first, double elev) {
     RoutePt rp;
+    rp.elev = elev;
     globalToLngLat(p, rp.lng, rp.lat);
     if(!first && !res.pts.empty()) {
       const RoutePt& prev = res.pts.back();
@@ -738,7 +859,7 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
       bool stepped = false;
       if(pi == 0) {
         if(leg == 0) {
-          addPt(pts[0], true);
+          addPt(pts[0], true, elevAt(pts[0]));
           res.steps.push_back({0, "Start on " + name});
         }
       }
@@ -780,11 +901,27 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
       }
       double spm = ways[edge.way].spm[mode][fwd ? 0 : 1];
       double mpu = metersPerUnit(pts[pts.size()/2].y);
+      // edge cost includes climbing, so scale time of each segment
+      double base = edge.len*spm;
+      if(base > 0) spm *= edgeCost(path[pi], fwd, mode)/base;
+      // with elevation, add points along long segments (at elevation pixel spacing) for elevation profile;
+      //  for bridges and tunnels, interpolate between endpoints
+      bool linear = ways[edge.way].linearElev;
+      double z0 = elevAt(pts.front()), z1 = linear ? elevAt(pts.back()) : NAN;
+      double unitsTotal = 0, units = 0, step = elevLoader && !linear ? elevSpacing() : INFINITY;
+      for(size_t ii = 1; ii < pts.size(); ++ii)
+        unitsTotal += std::hypot(pts[ii].x - pts[ii-1].x, pts[ii].y - pts[ii-1].y);
       for(size_t ii = 1; ii < pts.size(); ++ii) {
-        double d = std::hypot(pts[ii].x - pts[ii-1].x, pts[ii].y - pts[ii-1].y)*mpu;
-        dist += d;
-        time += d*spm;
-        addPt(pts[ii], false);
+        double du = std::hypot(pts[ii].x - pts[ii-1].x, pts[ii].y - pts[ii-1].y);
+        int n = std::isinf(step) ? 1 : std::max(1, int(std::ceil(du/step)));
+        for(int jj = 1; jj <= n; ++jj) {
+          double f = double(jj)/n;
+          GPt p = jj == n ? pts[ii] : GPt{pts[ii-1].x + f*(pts[ii].x - pts[ii-1].x), pts[ii-1].y + f*(pts[ii].y - pts[ii-1].y)};
+          units += du/n;
+          dist += du*mpu/n;
+          time += du*mpu*spm/n;
+          addPt(p, false, linear ? z0 + (z1 - z0)*units/std::max(unitsTotal, 1E-9) : elevAt(p));
+        }
       }
       // heading near end of edge
       size_t lo = pts.size() - 2;
@@ -799,6 +936,10 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
         leg + 2 < snapped.size() ? "Arrive at waypoint " + std::to_string(leg + 2) : std::string("Arrive at destination")});
   }
   if(res.pts.empty()) res.error = "Waypoints are too close together";
+  // fill gaps in elevation (e.g. missing tiles) with nearest known value
+  double z = NAN;
+  for(auto it = res.pts.rbegin(); it != res.pts.rend(); ++it) { if(std::isnan(it->elev)) it->elev = z; else z = it->elev; }
+  for(RoutePt& p : res.pts) { if(std::isnan(p.elev)) p.elev = z; else z = p.elev; }
   return res;
 }
 
@@ -885,6 +1026,20 @@ static std::vector<std::string> loadRouterTile(std::vector<RouterTileSource>& sr
   return res;
 }
 
+static std::vector<std::unique_ptr<SQLiteDB>> openRouterDBs(const std::vector<RouterTileSource>& srcs)
+{
+  std::vector<std::unique_ptr<SQLiteDB>> dbs;
+  for(auto& src : srcs) {
+    dbs.emplace_back();
+    if(src.cacheFile.empty()) continue;
+    auto db = std::make_unique<SQLiteDB>();
+    if(db->open(src.cacheFile, SQLITE_OPEN_READONLY) != SQLITE_OK) continue;
+    sqlite3_busy_timeout(db->db, 1000);
+    dbs.back() = std::move(db);
+  }
+  return dbs;
+}
+
 void cancelOfflineRoute() { ++routeSerial; }
 
 void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLats)
@@ -919,19 +1074,21 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
     srckey += "\n" + info.cacheFile + "|" + info.url;
   }
   if(srcs.empty()) { onError("Tile source for routing not found: " + cfg->source); return; }
+  // elevation source used for map (if any)
+  std::vector<RouterTileSource> elevSrcs;
+  int elevZoom = 0;
+  if(auto esrc = MapsApp::inst->getElevationSource()) {
+    auto& info = esrc->offlineInfo();
+    elevSrcs.push_back({info.cacheFile, info.url, info.urlOptions});
+    elevZoom = std::min(cfg->elevZoom, int(esrc->maxZoom()));
+    srckey += "\nelev:" + info.cacheFile + "|" + info.url + "|" + std::to_string(elevZoom);
+  }
 
   std::thread([=]() mutable {
     std::lock_guard<std::mutex> lock(routerMutex);
     if(serial != routeSerial) return;
-    std::vector<std::unique_ptr<SQLiteDB>> dbs;
-    for(auto& src : srcs) {
-      dbs.emplace_back();
-      if(src.cacheFile.empty()) continue;
-      auto db = std::make_unique<SQLiteDB>();
-      if(db->open(src.cacheFile, SQLITE_OPEN_READONLY) != SQLITE_OK) continue;
-      sqlite3_busy_timeout(db->db, 1000);
-      dbs.back() = std::move(db);
-    }
+    auto dbs = openRouterDBs(srcs);
+    auto elevDbs = openRouterDBs(elevSrcs);
     // keep graph between requests (e.g. while editing waypoints), but not if source changed or too large
     if(routerInst && (routerSrcKey != srckey || routerInst->numTiles() > 600)) {
       delete routerInst;
@@ -940,9 +1097,16 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
     if(!routerInst) routerInst = new Router(cfg);
     routerSrcKey = srckey;
     routerInst->setLoader([&](int x, int y, int z){ return loadRouterTile(srcs, dbs, x, y, z); });
+    if(!elevSrcs.empty()) {
+      routerInst->setElevLoader([&](int x, int y, int z){
+        auto blobs = loadRouterTile(elevSrcs, elevDbs, x, y, z);
+        return blobs.empty() ? std::string() : std::move(blobs[0]);
+      }, elevZoom);
+    }
     Timestamp t0 = mSecSinceEpoch(); (void)t0;
     RouteResult res = routerInst->route(mode, waypts, [serial](){ return serial != routeSerial; });
     routerInst->setLoader(NULL);
+    routerInst->setElevLoader(NULL, 0);
     LOGD("Offline route: %d pts, %d tiles in graph, %d ms", int(res.pts.size()),
         int(routerInst->numTiles()), int(mSecSinceEpoch() - t0));
     if(serial != routeSerial) return;
@@ -951,7 +1115,7 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
       if(serial != routeSerial) return;
       std::vector<Waypoint> route;
       for(const RoutePt& p : res.pts) {
-        route.emplace_back(Location{p.time, p.lat, p.lng, 0, 0, 0, 0, 0, 0, 0}, p.dist);
+        route.emplace_back(Location{p.time, p.lat, p.lng, 0, std::isnan(p.elev) ? 0 : p.elev, 0, 0, 0, 0, 0}, p.dist);
       }
       auto* tracks = MapsApp::inst->mapsTracks.get();
       tracks->addRoute(std::move(route));

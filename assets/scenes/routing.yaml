@@ -6,6 +6,11 @@
 # - maxspeed: speed = min(scale*maxspeed, max_factor*speed) if attribute is present (before factors)
 # - name: attributes used for way name in directions; unnamed ways are "the " + labels[label_key value]
 #  (label_key value with '_' replaced by ' ' if not in labels)
+# - elevation: if the map has an elevation source, route points get elevations and profiles can set
+#  climb: { up: seconds per meter of ascent, down: seconds per meter of descent }; down < 0 makes descents faster,
+#  but not faster than max_speed (km/h; higher values make search slower).  Ascent and descent along a way ignore
+#  ups and downs smaller than elevation.threshold (meters), and ways matching elevation.linear (bridges, tunnels)
+#  only use elevation at their endpoints.  elevation.zoom is the zoom of elevation tiles used.
 
 application:
     routing:
@@ -25,9 +30,15 @@ application:
             living_street: street
             service: service road
             pedestrian: pedestrian street
+        elevation:
+            zoom: 12
+            threshold: 5
+            linear: { brunnel: [bridge, tunnel] }
 
         profiles:
             walk:
+                # Naismith's rule: +1 hour per 600 m of ascent; steep descents are slower too
+                climb: { up: 6, down: 1 }
                 speed:
                     - { filter: { highway: [motorway, trunk] }, value: 0 }
                     - { value: 5 }
@@ -42,6 +53,8 @@ application:
                     - { filter: { trail_visibility: [bad, horrible, no] }, value: 1.5 }
 
             bike:
+                # ~3 s/m: about 9 km/h at 6% grade; descents up to 30 km/h
+                climb: { up: 3, down: -1.5, max_speed: 30 }
                 oneway:
                     filter: { oneway: 1 }
                     except:
