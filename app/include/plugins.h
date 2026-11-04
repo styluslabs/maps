@@ -1,9 +1,12 @@
 #pragma once
 
 #include <list>
+#include <map>
 #include "mapscomponent.h"
 //#include "js/JavaScript.h"
 #include "duktape/duktape.h"
+
+struct Timer;
 
 struct PluginFn
 {
@@ -63,6 +66,9 @@ public:
   struct UrlRequest { UrlReqType type; UrlRequestHandle handle; int serial; };
   std::list<UrlRequest> pendingRequests;
   std::string onMapEventFn;
+  std::map<int, Timer*> jsTimers;  // setInterval id -> timer
+  int runningTimerId = 0;  // id of interval whose callback is currently executing
+  void clearTimers();
 
   static PluginManager* inst;
 };

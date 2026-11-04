@@ -41,6 +41,7 @@ PluginManager::PluginManager(MapsApp* _app) : MapsComponent(_app)
 void PluginManager::reload()
 {
   cancelRequests(NONE);
+  clearTimers();
   searchFns.clear();
   routeFns.clear();
   placeFns.clear();
@@ -76,6 +77,7 @@ void PluginManager::reload()
 PluginManager::~PluginManager()
 {
   inst = NULL;
+  clearTimers();
   duk_destroy_heap(jsContext);
 }
 
@@ -511,6 +513,79 @@ static int lookAt(duk_context* ctx)
   return 0;
 }
 
+// timers - callbacks are stored in global stash under "_intervals" keyed by id
+
+void PluginManager::clearTimers()
+{
+  // gui is deleted (and timers removed by closeWindow) in ~MapsApp before PluginManager is destroyed
+  if(MapsApp::gui) {
+    for(auto& t : jsTimers) {
+      if(t.first != runningTimerId)  // timer callback will return 0 to remove itself
+        MapsApp::gui->removeTimer(t.second);
+    }
+  }
+  jsTimers.clear();
+  if(jsContext) {
+    duk_push_global_stash(jsContext);
+    duk_del_prop_string(jsContext, -1, "_intervals");
+    duk_pop(jsContext);
+  }
+}
+
+static int setInterval(duk_context* ctx)
+{
+  static int timerCounter = 0;
+  duk_require_function(ctx, 0);
+  int msec = std::max(1, duk_require_int(ctx, 1));
+  int id = ++timerCounter;
+  // stash[_intervals][id] = fn
+  duk_push_global_stash(ctx);
+  if(!duk_get_prop_string(ctx, -1, "_intervals")) {
+    duk_pop(ctx);
+    duk_push_object(ctx);
+    duk_dup(ctx, -1);
+    duk_put_prop_string(ctx, -3, "_intervals");
+  }
+  duk_dup(ctx, 0);
+  duk_put_prop_index(ctx, -2, id);
+  duk_pop_2(ctx);
+
+  auto* pm = PluginManager::inst;
+  pm->jsTimers[id] = MapsApp::gui->setTimer(msec, MapsApp::inst->win.get(), [ctx, id, msec](){
+    auto* pm = PluginManager::inst;
+    if(!pm || !pm->jsTimers.count(id)) return 0;
+    duk_push_global_stash(ctx);
+    duk_get_prop_string(ctx, -1, "_intervals");
+    if(duk_get_prop_index(ctx, -1, id)) {
+      pm->runningTimerId = id;
+      PluginManager::dukTryCall(ctx, 0);
+      pm->runningTimerId = 0;
+    }
+    duk_pop_3(ctx);
+    // clearInterval (or plugin reload) may have been called from callback
+    return PluginManager::inst == pm && pm->jsTimers.count(id) ? msec : 0;
+  });
+  duk_push_int(ctx, id);
+  return 1;
+}
+
+static int clearInterval(duk_context* ctx)
+{
+  int id = duk_to_int(ctx, 0);
+  auto* pm = PluginManager::inst;
+  auto it = pm->jsTimers.find(id);
+  if(it == pm->jsTimers.end()) return 0;
+  // can't remove timer from inside its own callback; callback will return 0 instead
+  if(id != pm->runningTimerId)
+    MapsApp::gui->removeTimer(it->second);
+  pm->jsTimers.erase(it);
+  duk_push_global_stash(ctx);
+  if(duk_get_prop_string(ctx, -1, "_intervals"))
+    duk_del_prop_index(ctx, -1, id);
+  duk_pop_2(ctx);
+  return 0;
+}
+
 static int consoleLog(duk_context* ctx)
 {
   const char* msg = duk_require_string(ctx, 0);
@@ -551,6 +626,10 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "getCameraPosition");
   duk_push_c_function(ctx, lookAt, 5);
   duk_put_global_string(ctx, "lookAt");
+  duk_push_c_function(ctx, setInterval, 2);
+  duk_put_global_string(ctx, "setInterval");
+  duk_push_c_function(ctx, clearInterval, 1);
+  duk_put_global_string(ctx, "clearInterval");
   // console.log
   duk_idx_t consoleObj = duk_push_object(ctx);
   duk_push_c_function(ctx, consoleLog, 1);
