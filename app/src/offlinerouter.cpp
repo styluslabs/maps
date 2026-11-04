@@ -4,6 +4,8 @@
 // - lines are clipped at tile edges; endpoints on an edge are matched to the neighbouring tile with +/-2 units
 // - tiles are loaded lazily as the A* search reaches a tile edge, restricted to a corridor around the endpoints
 // - meant for short and medium routes (walking, cycling, local driving), not long distance routing
+// - which features are routable, speeds and penalties per mode, oneway and street names for directions are set by
+//  application.routing in the scene (see assets/scenes/routing.yaml), using tangram filters
 // See ~/maps/HANDOFF-routing.md for background
 
 #include <cmath>
@@ -15,6 +17,12 @@
 #include <queue>
 #include <algorithm>
 #include "pbf/pbf.hpp"
+#include "scene/sceneLoader.h"
+#include "scene/filters.h"
+#include "scene/styleContext.h"
+#include "data/tileData.h"
+#include "data/propertyItem.h"
+#include "tile/tileID.h"
 
 namespace OfflineRouter {
 
@@ -27,20 +35,33 @@ struct RouteResult { std::vector<RoutePt> pts; std::vector<RouteStep> steps; std
 // returns decompressed MVT tiles for z/x/y from all candidate sources (empty if unavailable)
 using TileLoader = std::function<std::vector<std::string>(int x, int y, int z)>;
 
-static constexpr int ZOOM = 14;
 static constexpr double EARTH_CIRC = 40075016.686;  // meters
 
-enum Highway : uint8_t { HW_NONE = 0, MOTORWAY, TRUNK, PRIMARY, SECONDARY, TERTIARY, UNCLASSIFIED, RESIDENTIAL,
-    LIVING_STREET, ROAD, SERVICE, TRACK, CYCLEWAY, BRIDLEWAY, BYWAY, FOOTWAY, PATH, STEPS, PEDESTRIAN };
+// routing configuration from scene
+struct Rule { Tangram::Filter filter; double value; };
 
-static const char* hwNames[] = { "", "motorway", "trunk", "primary", "secondary", "tertiary", "unclassified",
-    "residential", "living_street", "road", "service", "track", "cycleway", "bridleway", "byway", "footway",
-    "path", "steps", "pedestrian" };
+struct Profile {
+  bool valid = false;
+  std::vector<Rule> speed;  // first matching rule sets speed in km/h; 0 = not allowed
+  std::vector<Rule> factor;  // cost multiplied by all matching factors
+  Tangram::Filter oneway, onewayExcept;
+  std::string maxspeedKey;  // speed limit attribute, applied as min(scale*maxspeed, max_factor*speed)
+  double maxspeedScale = 1, maxspeedMaxFactor = INFINITY;
+  double maxSpeed = 0;  // km/h, upper bound of effective speed, for A* heuristic
+};
 
-// text used in directions for unnamed ways
-static const char* hwLabels[] = { "road", "motorway", "trunk road", "road", "road", "road", "road", "road",
-    "street", "road", "service road", "track", "cycleway", "bridleway", "byway", "footway", "path", "steps",
-    "pedestrian street" };
+struct Config {
+  std::string source;  // tile source name
+  std::string layer = "transportation";
+  int zoom = 14;
+  Tangram::Filter filter;  // routable features
+  std::vector<std::string> nameKeys;  // first non-empty is used as name in directions
+  std::string labelKey;  // for unnamed ways, "the " + labels[value of labelKey]
+  std::unordered_map<std::string, std::string> labels;
+  Profile profiles[3];
+};
+
+static const char* modeNames[] = { "walk", "bike", "drive" };
 
 struct GPt { double x, y; };  // global coordinates: z14 tile index * extent + tile coordinate
 
@@ -73,16 +94,19 @@ static int64_t tileKey(int x, int y) { return (int64_t(x) << 32) | uint32_t(y); 
 class Router
 {
 public:
-  Router(TileLoader _loader = NULL) : loader(_loader) {}
+  Router(std::shared_ptr<const Config> _cfg, TileLoader _loader = NULL)
+      : cfg(_cfg), zoom(_cfg->zoom), loader(_loader), styleCtx(std::make_unique<Tangram::StyleContext>()) {}
   // waypoints as (longitude, latitude)
   RouteResult route(Mode mode, const std::vector<std::pair<double,double>>& lngLats,
       const std::function<bool()>& canceled = NULL);
   void setLoader(TileLoader _loader) { loader = _loader; }
   size_t numTiles() const { return tiles.size(); }
 
-  static GPt lngLatToGlobal(double lng, double lat, int extent = 4096);
-  static void globalToLngLat(GPt p, double& lng, double& lat, int extent = 4096);
+  GPt lngLatToGlobal(double lng, double lat, double ext) const;
+  void globalToLngLat(GPt p, double& lng, double& lat) const;
 
+  std::shared_ptr<const Config> cfg;
+  int zoom;
   int extent = 4096;  // all tiles must have the same extent; set from first tile
   bool extentSet = false;
   int maxNewTiles = 1500;  // per route request
@@ -92,6 +116,7 @@ private:
   struct Snap { int edge = -1; size_t seg = 0; GPt p; double dist2 = INFINITY; };
 
   TileLoader loader;
+  std::unique_ptr<Tangram::StyleContext> styleCtx;  // for filter evaluation
   std::vector<Node> nodes;
   std::vector<Edge> edges;
   std::vector<Way> ways;
@@ -108,7 +133,7 @@ private:
 
   bool loadTile(int tx, int ty);
   bool decodeTile(const std::string& data, int tx, int ty);
-  int addWay(const std::vector<GPt>& pts, const Way& way, int tx, int ty);
+  Way makeWay(const Tangram::Feature& feat);
   int nodeAt(int64_t gx, int64_t gy, int tx, int ty);
   void addEdge(int a, int b, int way, int tx, int ty, std::vector<GPt>&& pts);
   void expandNode(int n);
@@ -124,23 +149,23 @@ private:
 
 // coordinate conversion
 
-GPt Router::lngLatToGlobal(double lng, double lat, int extent)
+GPt Router::lngLatToGlobal(double lng, double lat, double ext) const
 {
-  double n = double(1 << ZOOM) * extent;
+  double n = double(1 << zoom) * ext;
   double latrad = lat * M_PI/180.0;
   return { (lng + 180.0)/360.0 * n, (1.0 - std::asinh(std::tan(latrad))/M_PI)/2.0 * n };
 }
 
-void Router::globalToLngLat(GPt p, double& lng, double& lat, int extent)
+void Router::globalToLngLat(GPt p, double& lng, double& lat) const
 {
-  double n = double(1 << ZOOM) * extent;
+  double n = double(1 << zoom) * extent;
   lng = p.x/n * 360.0 - 180.0;
   lat = std::atan(std::sinh(M_PI*(1.0 - 2.0*p.y/n))) * 180.0/M_PI;
 }
 
 double Router::metersPerUnit(double gy) const
 {
-  double n = double(1 << ZOOM) * extent;
+  double n = double(1 << zoom) * extent;
   double lat = std::atan(std::sinh(M_PI*(1.0 - 2.0*gy/n)));
   return EARTH_CIRC*std::cos(lat)/n;
 }
@@ -155,120 +180,117 @@ double Router::edgeLength(const std::vector<GPt>& pts) const
 
 // profiles
 
-struct WayTags {
-  std::string highway, surface, sac_scale, bicycle, cycleway, service, trail_visibility, mtb_scale, maxspeed;
-  std::string name, ref;
-  bool oneway = false, ramp = false;
-};
-
-static Highway parseHighway(const std::string& s)
+static bool parseConfig(const YAML::Node& node, Config& cfg, std::string& err)
 {
-  for(int ii = 1; ii < int(sizeof(hwNames)/sizeof(hwNames[0])); ++ii) {
-    if(s == hwNames[ii]) return Highway(ii);
-  }
-  return HW_NONE;
-}
-
-// returns speed in km/h for mode, or 0 if not allowed; penalty factors are folded into the speed
-static double waySpeed(const WayTags& t, Highway hw, Mode mode)
-{
-  bool unpaved = t.surface == "unpaved";
-  bool paved = t.surface == "paved";
-  bool bikeOK = t.bicycle == "yes" || t.bicycle == "designated" || t.bicycle == "permissive";
-  if(mode == FOOT) {
-    if(hw == MOTORWAY || hw == TRUNK) return 0;
-    double v = 5;
-    if(hw == PRIMARY) v /= 1.3;
-    else if(hw == SECONDARY) v /= 1.2;
-    else if(hw == STEPS) v /= 1.4;
-    if(t.sac_scale == "demanding_mountain_hiking") v /= 1.5;
-    else if(t.sac_scale == "alpine_hiking") v /= 2.5;
-    else if(!t.sac_scale.empty()) v /= 4;
-    if(t.trail_visibility == "bad" || t.trail_visibility == "horrible" || t.trail_visibility == "no") v /= 1.5;
-    return v;
-  }
-  if(mode == BIKE) {
-    if(hw == MOTORWAY || hw == TRUNK) return 0;
-    double v = 16;
-    switch(hw) {
-      case CYCLEWAY: v = 18; break;
-      case PRIMARY: v = t.cycleway.empty() ? 8 : 14; break;
-      case SECONDARY: v = t.cycleway.empty() ? 11 : 15; break;
-      case TERTIARY: v = 14; break;
-      case LIVING_STREET: v = 12; break;
-      case SERVICE: v = 13; break;
-      case TRACK: v = paved ? 15 : 11; break;
-      case BRIDLEWAY: v = 8; break;
-      case PATH: v = bikeOK ? 14 : 8; break;
-      case FOOTWAY: case PEDESTRIAN: v = bikeOK ? 13 : 5; break;  // otherwise push the bike
-      case STEPS: v = 2; break;
-      default: break;
+  if(!node || !node.IsMap()) { err = "Map style has no routing configuration"; return false; }
+  Tangram::SceneFunctions fns;
+  auto filter = [&](const YAML::Node& n) {
+    return n ? Tangram::SceneLoader::generateFilter(fns, n) : Tangram::Filter::BooleanValue(true);
+  };
+  auto rules = [&](const YAML::Node& n, std::vector<Rule>& out) {
+    for(const auto& r : n)
+      out.push_back({filter(r["filter"]), r["value"].as<double>(0)});
+  };
+  cfg.source = node["source"].as<std::string>("");
+  cfg.layer = node["layer"].as<std::string>(cfg.layer);
+  cfg.zoom = node["zoom"].as<int>(cfg.zoom);
+  cfg.filter = filter(node["filter"]);
+  for(const auto& n : node["name"])
+    cfg.nameKeys.push_back(n.Scalar());
+  cfg.labelKey = node["label_key"].as<std::string>("");
+  for(const auto& kv : node["labels"].pairs())
+    cfg.labels[kv.first.Scalar()] = kv.second.Scalar();
+  bool anyProfile = false;
+  for(int mode = FOOT; mode <= CAR; ++mode) {
+    const YAML::Node& pn = node["profiles"][modeNames[mode]];
+    if(!pn) continue;
+    Profile& p = cfg.profiles[mode];
+    p.valid = anyProfile = true;
+    rules(pn["speed"], p.speed);
+    rules(pn["factor"], p.factor);
+    if(const YAML::Node& ow = pn["oneway"]) {
+      p.oneway = filter(ow["filter"]);
+      if(ow["except"]) p.onewayExcept = filter(ow["except"]);
     }
-    if(unpaved && hw != TRACK && hw != PATH) v /= 1.3;
-    if(!t.sac_scale.empty()) v = std::min(v, 2.0);
-    if(!t.mtb_scale.empty() && std::atoi(t.mtb_scale.c_str()) >= 3) v = std::min(v, 4.0);
-    return v;
+    if(const YAML::Node& ms = pn["maxspeed"]) {
+      p.maxspeedKey = ms["key"].as<std::string>("maxspeed");
+      p.maxspeedScale = ms["scale"].as<double>(1);
+      p.maxspeedMaxFactor = ms["max_factor"].as<double>(INFINITY);
+    }
+    for(const Rule& r : p.speed)
+      p.maxSpeed = std::max(p.maxSpeed, r.value);
+    if(!p.maxspeedKey.empty())
+      p.maxSpeed = std::max(p.maxSpeed, std::min(150*p.maxspeedScale, p.maxSpeed*p.maxspeedMaxFactor));
+    double minFactor = 1;
+    for(const Rule& r : p.factor)
+      minFactor = std::min(minFactor, r.value);
+    if(minFactor > 0) p.maxSpeed /= minFactor;  // keep heuristic admissible if factors < 1 are used
   }
-  // CAR
-  double v = 0;
-  switch(hw) {
-    case MOTORWAY: v = 105; break;
-    case TRUNK: v = 85; break;
-    case PRIMARY: v = 65; break;
-    case SECONDARY: v = 55; break;
-    case TERTIARY: v = 45; break;
-    case UNCLASSIFIED: v = 35; break;
-    case ROAD: case RESIDENTIAL: v = 25; break;
-    case LIVING_STREET: v = 10; break;
-    case SERVICE: v = (t.service == "parking_aisle" || t.service == "driveway") ? 8 : 15; break;
-    case TRACK: v = paved ? 15 : 6; break;  // tracks are often closed to cars, but we don't have access tags
-    default: return 0;
-  }
-  if(!t.maxspeed.empty()) {
-    double ms = std::atof(t.maxspeed.c_str());
-    if(t.maxspeed.find("mph") != std::string::npos) ms *= 1.609;
-    if(ms >= 5 && ms <= 150) v = std::min(0.85*ms, v*1.5);
-  }
-  if(t.ramp) v *= 0.7;
-  if(unpaved && hw != TRACK) v *= 0.6;
-  return v;
+  if(!fns.empty()) { err = "Routing filters do not support JS functions"; return false; }
+  if(cfg.source.empty()) { err = "Routing configuration has no tile source"; return false; }
+  if(!anyProfile) { err = "Routing configuration has no profiles"; return false; }
+  return true;
 }
 
-static Way makeWay(const WayTags& t, Highway hw)
+Way Router::makeWay(const Tangram::Feature& feat)
 {
   Way way;
+  std::string str;
   for(int mode = FOOT; mode <= CAR; ++mode) {
-    double v = waySpeed(t, hw, Mode(mode));
+    const Profile& p = cfg->profiles[mode];
+    double v = 0;
+    if(p.valid) {
+      for(const Rule& r : p.speed) {
+        if(r.filter.eval(feat, *styleCtx)) { v = r.value; break; }
+      }
+      if(v > 0 && !p.maxspeedKey.empty() && feat.props.getAsString(p.maxspeedKey, str)) {
+        double ms = std::atof(str.c_str());
+        if(str.find("mph") != std::string::npos) ms *= 1.609;
+        if(ms >= 5 && ms <= 150) v = std::min(p.maxspeedScale*ms, p.maxspeedMaxFactor*v);
+      }
+      for(size_t ii = 0; v > 0 && ii < p.factor.size(); ++ii) {
+        if(p.factor[ii].value > 0 && p.factor[ii].filter.eval(feat, *styleCtx)) v /= p.factor[ii].value;
+      }
+    }
     float spm = v > 0 ? float(3.6/v) : -1;
     way.spm[mode][0] = spm;
-    // oneway=-1 and implied oneway (roundabouts) are not in tiles yet
-    bool oneway = t.oneway && mode != FOOT
-        && !(mode == BIKE && (t.cycleway.find("opposite") == 0 || t.bicycle == "both"));
+    bool oneway = spm > 0 && p.oneway.isValid() && p.oneway.eval(feat, *styleCtx)
+        && !(p.onewayExcept.isValid() && p.onewayExcept.eval(feat, *styleCtx));
     way.spm[mode][1] = oneway ? -1 : spm;
   }
-  way.name = !t.name.empty() ? t.name : !t.ref.empty() ? t.ref : "";
+  for(const std::string& key : cfg->nameKeys) {
+    if(feat.props.getAsString(key, way.name) && !way.name.empty()) break;
+  }
   way.named = !way.name.empty();
-  if(!way.named) way.name = std::string("the ") + hwLabels[hw];
+  if(!way.named) {
+    std::string label = "road";
+    if(!cfg->labelKey.empty() && feat.props.getAsString(cfg->labelKey, str) && !str.empty()) {
+      auto it = cfg->labels.find(str);
+      if(it != cfg->labels.end()) label = it->second;
+      else {
+        std::replace(str.begin(), str.end(), '_', ' ');
+        label = str;
+      }
+    }
+    way.name = "the " + label;
+  }
   return way;
 }
 
 // tile decoding
 
-struct MvtValue { std::string s; };
-
-static MvtValue readValue(protobuf::message msg)
+static Tangram::Value readValue(protobuf::message msg)
 {
-  MvtValue val;
-  char buf[32];
+  Tangram::Value val;
   while(msg.next()) {
     switch(msg.tag) {
-      case 1: val.s = msg.string(); break;
-      case 2: snprintf(buf, sizeof(buf), "%g", msg.float32()); val.s = buf; break;
-      case 3: snprintf(buf, sizeof(buf), "%g", msg.float64()); val.s = buf; break;
-      case 4: val.s = std::to_string(msg.int64()); break;
-      case 5: val.s = std::to_string(msg.varint()); break;
-      case 6: val.s = std::to_string(msg.svarint()); break;
-      case 7: val.s = msg.boolean() ? "1" : "0"; break;
+      case 1: val = Tangram::Value(msg.string()); break;
+      case 2: val = Tangram::Value(double(msg.float32())); break;
+      case 3: val = Tangram::Value(msg.float64()); break;
+      case 4: val = Tangram::Value(double(msg.int64())); break;
+      case 5: val = Tangram::Value(double(msg.varint())); break;
+      case 6: val = Tangram::Value(double(msg.svarint())); break;
+      case 7: val = Tangram::Value(msg.boolean() ? 1.0 : 0.0); break;
       default: msg.skip(); break;
     }
   }
@@ -287,10 +309,10 @@ bool Router::decodeTile(const std::string& data, int tx, int ty)
       if(probe.tag == 1) { name = probe.string(); break; }
       probe.skip();
     }
-    if(name != "transportation") continue;
+    if(name != cfg->layer) continue;
 
     std::vector<std::string> keys;
-    std::vector<MvtValue> values;
+    std::vector<Tangram::Value> values;
     std::vector<protobuf::message> features;
     int lyrExtent = 4096;
     while(layerMsg.next()) {
@@ -308,8 +330,10 @@ bool Router::decodeTile(const std::string& data, int tx, int ty)
     std::vector<std::vector<GPt>> lines;
     std::vector<Way> lineWays;
     std::unordered_map<int64_t, int> vertCount;
+    styleCtx->setTileID(Tangram::TileID(tx, ty, zoom));
     for(protobuf::message featMsg : features) {
-      WayTags t;
+      Tangram::Feature feat;
+      feat.geometryType = Tangram::GeometryType::lines;
       int geomType = 0;
       protobuf::message geomMsg;
       while(featMsg.next()) {
@@ -320,31 +344,17 @@ bool Router::decodeTile(const std::string& data, int tx, int ty)
             if(!tagsMsg) break;
             size_t vi = tagsMsg.varint();
             if(ki >= keys.size() || vi >= values.size()) continue;
-            const std::string& k = keys[ki];
-            const std::string& v = values[vi].s;
-            if(k == "highway") t.highway = v;
-            else if(k == "surface") t.surface = v;
-            else if(k == "oneway") t.oneway = v == "1";
-            else if(k == "ramp") t.ramp = v == "1";
-            else if(k == "sac_scale") t.sac_scale = v;
-            else if(k == "bicycle") t.bicycle = v;
-            else if(k == "cycleway" || k == "cycleway_left" || k == "cycleway_right") {
-              if(t.cycleway.empty() || v.find("opposite") == 0) t.cycleway = v; }
-            else if(k == "service") t.service = v;
-            else if(k == "trail_visibility") t.trail_visibility = v;
-            else if(k == "mtb_scale") t.mtb_scale = v;
-            else if(k == "maxspeed") t.maxspeed = v;
-            else if(k == "name") t.name = v;
-            else if(k == "ref") t.ref = v;
+            feat.props.setValue(keys[ki], values[vi]);
           }
         }
         else if(featMsg.tag == 3) geomType = int(featMsg.varint());
         else if(featMsg.tag == 4) geomMsg = featMsg.getMessage();
         else featMsg.skip();
       }
-      Highway hw = parseHighway(t.highway);
-      if(geomType != 2 || hw == HW_NONE) continue;
-      Way way = makeWay(t, hw);
+      if(geomType != 2) continue;
+      styleCtx->setFeature(feat);
+      if(!cfg->filter.eval(feat, *styleCtx)) continue;
+      Way way = makeWay(feat);
       bool usable = false;
       for(int m = FOOT; m <= CAR; ++m) usable = usable || way.spm[m][0] > 0 || way.spm[m][1] > 0;
       if(!usable) continue;
@@ -441,7 +451,7 @@ bool Router::loadTile(int tx, int ty)
   if(tilesLoaded >= maxNewTiles) return false;
   tiles[tileKey(tx, ty)].loaded = true;
   ++tilesLoaded;
-  auto blobs = loader(tx, ty, ZOOM);
+  auto blobs = loader(tx, ty, zoom);
   for(const std::string& data : blobs) {
     if(decodeTile(data, tx, ty)) return true;
   }
@@ -555,12 +565,12 @@ int Router::snapToGraph(GPt p, Mode mode)
 
 std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err)
 {
-  static const float maxSpeed[] = { 5/3.6f, 18/3.6f, 130/3.6f };  // m/s, for heuristic
+  const float maxSpeed = float(cfg->profiles[mode].maxSpeed/3.6);  // m/s, for heuristic
   ++searchId;
   GPt target = nodes[dst].p;
   double mpu = std::min(metersPerUnit(target.y), metersPerUnit(nodes[src].p.y));
   auto heuristic = [&](int n) {
-    return float(std::hypot(nodes[n].p.x - target.x, nodes[n].p.y - target.y)*mpu/maxSpeed[mode]);
+    return float(std::hypot(nodes[n].p.x - target.x, nodes[n].p.y - target.y)*mpu/maxSpeed);
   };
   auto ensureSize = [&](){
     if(stamp.size() < nodes.size()) {
@@ -659,6 +669,10 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
 {
   RouteResult res;
   if(lngLats.size() < 2) { res.error = "Not enough waypoints"; return res; }
+  if(!cfg->profiles[mode].valid) {
+    res.error = std::string("Routing configuration has no ") + modeNames[mode] + " profile";
+    return res;
+  }
   tilesLoaded = 0;
   for(auto it = tiles.begin(); it != tiles.end();)
     it = it->second.missing ? tiles.erase(it) : ++it;
@@ -692,7 +706,7 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
   double dist = 0, time = 0;
   auto addPt = [&](GPt p, bool first) {
     RoutePt rp;
-    globalToLngLat(p, rp.lng, rp.lat, extent);
+    globalToLngLat(p, rp.lng, rp.lat);
     if(!first && !res.pts.empty()) {
       const RoutePt& prev = res.pts.back();
       if(prev.lng == rp.lng && prev.lat == rp.lat) return;
@@ -882,16 +896,6 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
   for(const LngLat& ll : lngLats)
     waypts.emplace_back(ll.longitude, ll.latitude);
 
-  std::vector<RouterTileSource> srcs;
-  std::string srckey;
-  for(auto& tilesrc : MapsApp::inst->map->getScene()->tileSources()) {
-    auto& info = tilesrc->offlineInfo();
-    if(info.format != TileSource::Format::Mvt || tilesrc->maxZoom() < ZOOM) continue;
-    if(info.cacheFile.empty() && info.url.empty()) continue;
-    srcs.push_back({info.cacheFile, info.url, info.urlOptions});
-    srckey += info.cacheFile + "|" + info.url + "\n";
-  }
-
   int serial = ++routeSerial;
   auto onError = [serial](std::string msg){
     LOGW("Offline router: %s", msg.c_str());
@@ -899,7 +903,22 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
       if(serial == routeSerial) MapsApp::inst->mapsTracks->routePluginError(msg.c_str());
     });
   };
-  if(srcs.empty()) { onError("No vector tile source available for offline routing"); return; }
+
+  // routing config from scene; graph is rebuilt if config or tile source changes
+  const YAML::Node& cfgNode = MapsApp::inst->sceneConfig()["application"]["routing"];
+  auto cfg = std::make_shared<Config>();
+  std::string err;
+  if(!parseConfig(cfgNode, *cfg, err)) { onError(err); return; }
+  std::vector<RouterTileSource> srcs;
+  std::string srckey = yamlToStr(cfgNode);
+  for(auto& tilesrc : MapsApp::inst->map->getScene()->tileSources()) {
+    if(tilesrc->name() != cfg->source) continue;
+    auto& info = tilesrc->offlineInfo();
+    if(info.format != TileSource::Format::Mvt) continue;
+    srcs.push_back({info.cacheFile, info.url, info.urlOptions});
+    srckey += "\n" + info.cacheFile + "|" + info.url;
+  }
+  if(srcs.empty()) { onError("Tile source for routing not found: " + cfg->source); return; }
 
   std::thread([=]() mutable {
     std::lock_guard<std::mutex> lock(routerMutex);
@@ -918,7 +937,7 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
       delete routerInst;
       routerInst = NULL;
     }
-    if(!routerInst) routerInst = new Router();
+    if(!routerInst) routerInst = new Router(cfg);
     routerSrcKey = srckey;
     routerInst->setLoader([&](int x, int y, int z){ return loadRouterTile(srcs, dbs, x, y, z); });
     Timestamp t0 = mSecSinceEpoch(); (void)t0;

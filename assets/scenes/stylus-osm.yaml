@@ -6,6 +6,9 @@
 # - no one uses mapbox schema except mapbox?
 # - trying to create scene file that works for multiple schema isn't practical (either w/ globals or stacking yaml files)
 
+import:
+    - routing.yaml  # offline routing profiles
+
 global:
     #camera_settings: { type: isometric, axis: [-.2, .2] }
     camera_settings: { type: perspective }
