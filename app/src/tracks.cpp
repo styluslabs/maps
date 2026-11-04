@@ -6,6 +6,7 @@
 #include "mapsearch.h"
 #include "bookmarks.h"
 #include "trackwidgets.h"
+#include "offlinerouter.h"
 
 #include "gaml/src/yaml.h"
 #include "util/yamlPath.h"
@@ -773,8 +774,15 @@ void MapsTracks::createRoute(GpxFile* track)
       if(wp.routed)
         pts.push_back(wp.loc.lngLat());
     }
-    if(pts.size() > 1)
-      app->pluginManager->jsRoute(pluginFn, track->routeMode, pts);
+    if(pts.size() < 2) {}
+    else if(pluginFn == 0) {
+      app->pluginManager->cancelRequests(PluginManager::ROUTE);
+      offlineRoute(track->routeMode, pts);
+    }
+    else {
+      cancelOfflineRoute();
+      app->pluginManager->jsRoute(pluginFn - 1, track->routeMode, pts);
+    }
   }
 }
 
@@ -1929,22 +1937,19 @@ void MapsTracks::createWayptContent()
       activeTrack->modified = !saveTrack(activeTrack);
   };
 
-  bool hasPlugins = !app->pluginManager->routeFns.empty();
-  routePluginBtn = createToolbutton(MapsApp::uiIcon(hasPlugins ? "plugin" : "no-plugin"), "Plugin");
-  routePluginBtn->setEnabled(hasPlugins);
-  if(hasPlugins) {
-    std::vector<std::string> pluginTitles;
-    for(auto& fn : app->pluginManager->routeFns)
-      pluginTitles.push_back(fn.title.c_str());
-    // default to the last plugin (hack to pick valhalla)
-    pluginFn = std::min(pluginTitles.size()-1, app->config["tracks"]["plugin"].as<size_t>(INT_MAX));
-    Menu* routePluginMenu = createRadioMenu(pluginTitles, [=](size_t idx){
-      app->config["tracks"]["plugin"] = pluginFn = idx;
-      if(activeTrack && activeTrack->routeMode != "direct")
-        createRoute(activeTrack);
-    }, pluginFn);
-    routePluginBtn->setMenu(routePluginMenu);
-  }
+  // route provider 0 is the built-in offline router, followed by plugins
+  routePluginBtn = createToolbutton(MapsApp::uiIcon("plugin"), "Plugin");
+  std::vector<std::string> pluginTitles = {"Offline"};
+  for(auto& fn : app->pluginManager->routeFns)
+    pluginTitles.push_back(fn.title.c_str());
+  // default to the last plugin (hack to pick valhalla)
+  pluginFn = std::min(pluginTitles.size()-1, app->config["tracks"]["plugin"].as<size_t>(INT_MAX));
+  Menu* routePluginMenu = createRadioMenu(pluginTitles, [=](size_t idx){
+    app->config["tracks"]["plugin"] = pluginFn = idx;
+    if(activeTrack && activeTrack->routeMode != "direct")
+      createRoute(activeTrack);
+  }, pluginFn);
+  routePluginBtn->setMenu(routePluginMenu);
 
   routeModeBtn = createToolbutton(MapsApp::uiIcon("segment"), "Routing");
   Menu* routeModeMenu = createMenu(Menu::VERT_LEFT);
@@ -1954,7 +1959,6 @@ void MapsTracks::createWayptContent()
   routeModeMenu->addItem("Cycle", MapsApp::uiIcon("bike"), [=](){ setRouteMode("bike"); });
   routeModeMenu->addItem("Drive", MapsApp::uiIcon("car"), [=](){ setRouteMode("drive"); });
   routeModeBtn->setMenu(routeModeMenu);
-  routeModeBtn->setEnabled(hasPlugins);
 
   Button* showAllWptsBtn = createCheckBoxMenuItem("Show untitled waypoints");
   showAllWptsBtn->onClicked = [=](){

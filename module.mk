@@ -14,6 +14,7 @@ MODULE_SOURCES = \
   app/src/gpxfile.cpp      \
   app/src/util.cpp         \
   app/src/plugins.cpp      \
+  app/src/offlinerouter.cpp \
   app/src/mapwidgets.cpp   \
   app/src/stylefns.cpp     \
   app/src/tangramfns.cpp   \
