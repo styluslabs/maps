@@ -1,7 +1,10 @@
 # Offline routing configuration (app/src/offlinerouter.cpp), for the Ascend tile schema (geodesk ascendtiles.cpp)
 # - filters use the same syntax as draw rules; JS function filters are not supported
-# - speed: first matching rule sets speed in km/h; value 0 (or no matching rule) means not allowed
-# - factor: cost (time) is multiplied by value of every matching rule; > 1 to avoid
+# - speed: first matching rule sets travel speed in km/h, used for route time; value 0 (or no matching rule) means
+#  not allowed.  Order rules from specific to general (if / else if), with a default last.
+# - factor: route cost (travel time incl. climbing) is multiplied by value of every matching rule; > 1 to avoid,
+#  < 1 to prefer.  Factors only affect route choice, not route time, so use them for preferences (busy roads) and
+#  speed rules for real slowdowns.  Large factors (e.g. 4) avoid a way unless there is no reasonable alternative.
 # - oneway: ways matching filter (and not except) can only be traversed forward
 # - maxspeed: speed = min(scale*maxspeed, max_factor*speed) if attribute is present (before factors)
 # - name: attributes used for way name in directions; unnamed ways are "the " + labels[label_key value]
@@ -40,16 +43,17 @@ application:
                 # Naismith's rule: +1 hour per 600 m of ascent; steep descents are slower too
                 climb: { up: 6, down: 1 }
                 speed:
-                    - { filter: { highway: [motorway, trunk] }, value: 0 }
+                    - { filter: { highway: motorway }, value: 0 }
+                    # tiles only include the more difficult sac_scale grades
+                    - { filter: { sac_scale: demanding_mountain_hiking }, value: 3.3 }
+                    - { filter: { sac_scale: alpine_hiking }, value: 2 }
+                    - { filter: { sac_scale: [demanding_alpine_hiking, difficult_alpine_hiking] }, value: 1.25 }
+                    - { filter: { highway: steps }, value: 3.5 }
                     - { value: 5 }
                 factor:
+                    - { filter: { highway: trunk }, value: 4 }
                     - { filter: { highway: primary }, value: 1.3 }
                     - { filter: { highway: secondary }, value: 1.2 }
-                    - { filter: { highway: steps }, value: 1.4 }
-                    # tiles only include the more difficult sac_scale grades
-                    - { filter: { sac_scale: demanding_mountain_hiking }, value: 1.5 }
-                    - { filter: { sac_scale: alpine_hiking }, value: 2.5 }
-                    - { filter: { sac_scale: [demanding_alpine_hiking, difficult_alpine_hiking] }, value: 4 }
                     - { filter: { trail_visibility: [bad, horrible, no] }, value: 1.5 }
 
             bike:
@@ -62,42 +66,50 @@ application:
                         - { cycleway_left: [opposite, opposite_lane, opposite_track] }
                         - { cycleway_right: [opposite, opposite_lane, opposite_track] }
                 speed:
-                    - { filter: { highway: [motorway, trunk] }, value: 0 }
+                    - { filter: { highway: motorway }, value: 0 }
                     - { filter: { sac_scale: true }, value: 2 }
                     - { filter: { highway: steps }, value: 2 }
                     - { filter: { mtb_scale: ["3", "3+", "4", "4+", "5", "6"] }, value: 4 }
-                    - { filter: { highway: cycleway }, value: 18 }
+                    - { filter: { highway: [footway, pedestrian], bicycle: [yes, designated, permissive] }, value: 14 }
+                    - { filter: { highway: [footway, pedestrian] }, value: 5 }  # push the bike
+                    - { filter: { highway: path, bicycle: [yes, designated, permissive] }, value: 15 }
+                    - { filter: { highway: [path, bridleway] }, value: 10 }
+                    - { filter: { highway: track, surface: paved }, value: 17 }
+                    - { filter: { highway: track }, value: 12 }
+                    - { filter: { surface: unpaved }, value: 14 }
+                    - { filter: { highway: living_street }, value: 15 }
+                    - { filter: { highway: service }, value: 16 }
+                    - { value: 18 }
+                factor:
+                    # busy roads: allowed (trunk is often the only connection), but avoided
+                    - { filter: { highway: trunk }, value: 4 }
+                    - { filter: { highway: [primary, tertiary] }, value: 1.15 }
+                    - { filter: { highway: secondary }, value: 1.05 }
+                    # extra factor without cycle lanes
                     - filter:
                           highway: primary
-                          any: [{ cycleway: true }, { cycleway_left: true }, { cycleway_right: true }]
-                      value: 14
-                    - { filter: { highway: primary }, value: 8 }
+                          not: { any: [{ cycleway: true }, { cycleway_left: true }, { cycleway_right: true }] }
+                      value: 1.75
                     - filter:
                           highway: secondary
-                          any: [{ cycleway: true }, { cycleway_left: true }, { cycleway_right: true }]
-                      value: 15
-                    - { filter: { highway: secondary }, value: 11 }
-                    - { filter: { highway: tertiary }, value: 14 }
-                    - { filter: { highway: living_street }, value: 12 }
-                    - { filter: { highway: service }, value: 13 }
-                    - { filter: { highway: track, surface: paved }, value: 15 }
-                    - { filter: { highway: track }, value: 11 }
-                    - { filter: { highway: bridleway }, value: 8 }
-                    - { filter: { highway: path, bicycle: [yes, designated, permissive] }, value: 14 }
-                    - { filter: { highway: path }, value: 8 }
-                    - { filter: { highway: [footway, pedestrian], bicycle: [yes, designated, permissive] }, value: 13 }
-                    - { filter: { highway: [footway, pedestrian] }, value: 5 }  # push the bike
-                    - { value: 16 }
-                factor:
-                    - { filter: { surface: unpaved, not: { highway: [track, path] } }, value: 1.3 }
+                          not: { any: [{ cycleway: true }, { cycleway_left: true }, { cycleway_right: true }] }
+                      value: 1.4
+                    - { filter: { highway: [living_street, service, bridleway] }, value: 1.1 }
+                    - { filter: { highway: path, not: { bicycle: [yes, designated, permissive] } }, value: 1.1 }
+                    - { filter: { highway: cycleway }, value: 0.9 }
 
             drive:
                 oneway:
                     filter: { oneway: 1 }
                 maxspeed: { key: maxspeed, scale: 0.85, max_factor: 1.5 }
                 speed:
+                    - { filter: { ramp: 1, highway: motorway }, value: 75 }
+                    - { filter: { ramp: 1, highway: trunk }, value: 60 }
+                    - { filter: { ramp: 1, highway: primary }, value: 45 }
+                    - { filter: { ramp: 1 }, value: 35 }
                     - { filter: { highway: motorway }, value: 105 }
                     - { filter: { highway: trunk }, value: 85 }
+                    - { filter: { surface: unpaved, highway: [primary, secondary, tertiary, unclassified, residential, road] }, value: 20 }
                     - { filter: { highway: primary }, value: 65 }
                     - { filter: { highway: secondary }, value: 55 }
                     - { filter: { highway: tertiary }, value: 45 }
@@ -109,6 +121,4 @@ application:
                     # tracks are often closed to cars, but tiles don't have access tags
                     - { filter: { highway: track, surface: paved }, value: 15 }
                     - { filter: { highway: track }, value: 6 }
-                factor:
-                    - { filter: { ramp: 1 }, value: 1.43 }
-                    - { filter: { surface: unpaved, not: { highway: track } }, value: 1.67 }
+

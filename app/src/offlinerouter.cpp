@@ -53,12 +53,13 @@ struct Rule { Tangram::Filter filter; double value; };
 
 struct Profile {
   bool valid = false;
-  std::vector<Rule> speed;  // first matching rule sets speed in km/h; 0 = not allowed
-  std::vector<Rule> factor;  // cost multiplied by all matching factors
+  std::vector<Rule> speed;  // first matching rule sets travel speed in km/h; 0 = not allowed
+  std::vector<Rule> factor;  // cost (not travel time) multiplied by all matching factors
   Tangram::Filter oneway, onewayExcept;
   std::string maxspeedKey;  // speed limit attribute, applied as min(scale*maxspeed, max_factor*speed)
   double maxspeedScale = 1, maxspeedMaxFactor = INFINITY;
-  double maxSpeed = 0;  // km/h, upper bound of effective speed, for A* heuristic
+  double maxSpeed = 0;  // km/h, upper bound of travel speed
+  double minFactor = 1;  // lower bound of cost factor; A* heuristic assumes maxSpeed/minFactor
   double climbUp = 0, climbDown = 0;  // seconds added per meter of ascent and descent (down can be < 0)
   double minSpm = 0;  // lower bound of seconds per meter, so edge costs stay consistent with heuristic
 };
@@ -82,7 +83,8 @@ static const char* modeNames[] = { "walk", "bike", "drive" };
 struct GPt { double x, y; };  // global coordinates: z14 tile index * extent + tile coordinate
 
 struct Way {
-  float spm[3][2];  // seconds per meter for each mode, forward and reverse; < 0 if not allowed
+  float spm[3][2];  // travel time in seconds per meter for each mode, forward and reverse; < 0 if not allowed
+  float factor[3];  // cost = travel time * factor
   std::string name;  // for directions
   bool named;  // false if name is just the highway type
   bool linearElev;  // ignore terrain between endpoints
@@ -168,6 +170,7 @@ private:
   std::vector<int> astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err);
   double metersPerUnit(double gy) const;
   double edgeLength(const std::vector<GPt>& pts) const;
+  float edgeTime(int e, bool fwd, Mode mode);
   float edgeCost(int e, bool fwd, Mode mode);
   double elevAt(GPt p);
   double elevSpacing() const;
@@ -254,10 +257,8 @@ static bool parseConfig(const YAML::Node& node, Config& cfg, std::string& err)
       p.maxSpeed = std::max(p.maxSpeed, r.value);
     if(!p.maxspeedKey.empty())
       p.maxSpeed = std::max(p.maxSpeed, std::min(150*p.maxspeedScale, p.maxSpeed*p.maxspeedMaxFactor));
-    double minFactor = 1;
     for(const Rule& r : p.factor)
-      minFactor = std::min(minFactor, r.value);
-    if(minFactor > 0) p.maxSpeed /= minFactor;  // keep heuristic admissible if factors < 1 are used
+      if(r.value > 0) p.minFactor = std::min(p.minFactor, r.value);  // keep heuristic admissible if factors < 1
     if(const YAML::Node& cn = pn["climb"]) {
       p.climbUp = cn["up"].as<double>(0);
       p.climbDown = cn["down"].as<double>(0);
@@ -288,11 +289,13 @@ Way Router::makeWay(const Tangram::Feature& feat)
         if(str.find("mph") != std::string::npos) ms *= 1.609;
         if(ms >= 5 && ms <= 150) v = std::min(p.maxspeedScale*ms, p.maxspeedMaxFactor*v);
       }
-      for(size_t ii = 0; v > 0 && ii < p.factor.size(); ++ii) {
-        if(p.factor[ii].value > 0 && p.factor[ii].filter.eval(feat, *styleCtx)) v /= p.factor[ii].value;
-      }
+    }
+    double f = 1;
+    for(size_t ii = 0; v > 0 && ii < p.factor.size(); ++ii) {
+      if(p.factor[ii].value > 0 && p.factor[ii].filter.eval(feat, *styleCtx)) f *= p.factor[ii].value;
     }
     float spm = v > 0 ? float(3.6/v) : -1;
+    way.factor[mode] = float(f);
     way.spm[mode][0] = spm;
     bool oneway = spm > 0 && p.oneway.isValid() && p.oneway.eval(feat, *styleCtx)
         && !(p.onewayExcept.isValid() && p.onewayExcept.eval(feat, *styleCtx));
@@ -521,7 +524,8 @@ bool Router::allowed(int e, Mode mode) const
   return w.spm[mode][0] > 0 || w.spm[mode][1] > 0;
 }
 
-float Router::edgeCost(int e, bool fwd, Mode mode)
+// travel time in seconds (incl. climbing); < 0 if not allowed
+float Router::edgeTime(int e, bool fwd, Mode mode)
 {
   float spm = ways[edges[e].way].spm[mode][fwd ? 0 : 1];
   if(spm <= 0) return -1;
@@ -534,6 +538,13 @@ float Router::edgeCost(int e, bool fwd, Mode mode)
     c = std::max(float(c + up*p.climbUp + down*p.climbDown), float(edge.len*p.minSpm));
   }
   return c;
+}
+
+// search cost: travel time * way's cost factor
+float Router::edgeCost(int e, bool fwd, Mode mode)
+{
+  float t = edgeTime(e, fwd, mode);
+  return t < 0 ? t : t*ways[edges[e].way].factor[mode];
 }
 
 // elevation
@@ -687,7 +698,8 @@ int Router::snapToGraph(GPt p, Mode mode)
 
 std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err)
 {
-  const float maxSpeed = float(cfg->profiles[mode].maxSpeed/3.6);  // m/s, for heuristic
+  const Profile& prof = cfg->profiles[mode];
+  const float maxSpeed = float(prof.maxSpeed/prof.minFactor/3.6);  // m/s, for heuristic (cost = time * factor)
   ++searchId;
   GPt target = nodes[dst].p;
   double mpu = std::min(metersPerUnit(target.y), metersPerUnit(nodes[src].p.y));
@@ -905,9 +917,9 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
       }
       double spm = ways[edge.way].spm[mode][fwd ? 0 : 1];
       double mpu = metersPerUnit(pts[pts.size()/2].y);
-      // edge cost includes climbing, so scale time of each segment
+      // edge time includes climbing, so scale time of each segment
       double base = edge.len*spm;
-      if(base > 0) spm *= edgeCost(path[pi], fwd, mode)/base;
+      if(base > 0) spm *= edgeTime(path[pi], fwd, mode)/base;
       // with elevation, add points along long segments (at elevation pixel spacing) for elevation profile;
       //  for bridges and tunnels, interpolate between endpoints
       bool linear = ways[edge.way].linearElev;
