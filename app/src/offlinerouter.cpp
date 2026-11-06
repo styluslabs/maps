@@ -326,19 +326,12 @@ Way Router::makeWay(const Tangram::Feature& feat)
 bool Router::decodeTile(const std::string& data, int tx, int ty)
 {
   protobuf::message tileMsg(data.data(), data.size());
+  Tangram::Mvt::ParserContext ctx(0);
+  ctx.layers = {cfg->layer};  // other layers are skipped without decoding features
   while(tileMsg.next()) {
-    if(tileMsg.tag != 3) { tileMsg.skip(); continue; }
-    protobuf::message layerMsg = tileMsg.getMessage();
-    protobuf::message probe = layerMsg;  // check name first so only the routing layer is decoded
-    std::string name;
-    while(probe.next()) {
-      if(probe.tag == 1) { name = probe.string(); break; }
-      probe.skip();
-    }
-    if(name != cfg->layer) continue;
-
-    Tangram::Mvt::ParserContext ctx(0);
-    Tangram::Layer layer = Tangram::Mvt::getLayer(ctx, layerMsg);
+    if(tileMsg.tag != Tangram::Mvt::LAYER) { tileMsg.skip(); continue; }
+    Tangram::Layer layer = Tangram::Mvt::getLayer(ctx, tileMsg.getMessage());
+    if(layer.name != cfg->layer) continue;
     if(!extentSet) { extent = ctx.tileExtent; extentSet = true; }
     if(ctx.tileExtent != extent) return false;
 
