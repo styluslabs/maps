@@ -76,6 +76,7 @@ struct Config {
   double elevThreshold = 5;  // meters; smaller ups and downs along an edge are ignored as noise
   Tangram::Filter elevLinear;  // ways (bridges, tunnels) where elevation is interpolated between endpoints
   Profile profiles[3];
+  int32_t sceneId = -1;  // set by app: scene the config was read from (not used by router core)
 };
 
 static const char* modeNames[] = { "walk", "bike", "drive" };
@@ -943,7 +944,8 @@ using namespace Tangram;
 static std::mutex routerMutex;
 static std::atomic<int> routeSerial{0};
 static OfflineRouter::Router* routerInst = NULL;  // not freed, so a running worker never sees a destroyed graph
-static std::string routerSrcKey;
+// routing config parsed once per scene; main thread only
+static std::shared_ptr<const OfflineRouter::Config> sceneCfg;
 
 void cancelOfflineRoute() { ++routeSerial; }
 
@@ -964,14 +966,19 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
     });
   };
 
-  // routing config from scene; graph is rebuilt if config or tile source changes
-  const YAML::Node& cfgNode = MapsApp::inst->sceneConfig()["application"]["routing"];
-  auto cfg = std::make_shared<Config>();
-  std::string err;
-  if(!parseConfig(cfgNode, *cfg, err)) { onError(err); return; }
-  // tile sources are used from worker thread; srckey (cache file and URL) identifies their data, so graph is kept
-  //  across scene reloads
+  // routing config, tile source and elevation source all come from the scene (app config is fixed after
+  //  startup), so config is parsed and graph is built once per scene; rebuilding after a scene reload is cheap
+  //  since tiles fetched for routing are kept in the tile cache
   auto* scene = MapsApp::inst->map->getScene();
+  if(!sceneCfg || sceneCfg->sceneId != scene->id) {
+    auto newcfg = std::make_shared<Config>();
+    std::string err;
+    if(!parseConfig(MapsApp::inst->sceneConfig()["application"]["routing"], *newcfg, err)) { onError(err); return; }
+    newcfg->sceneId = scene->id;
+    sceneCfg = newcfg;
+  }
+  std::shared_ptr<const Config> cfg = sceneCfg;
+  // tile sources are used from worker thread
   std::weak_ptr<ScenePrana> prana = scene->prana();
   std::shared_ptr<TileSource> src;
   for(auto& tilesrc : scene->tileSources()) {
@@ -979,28 +986,24 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
   }
   if(!src) { onError("Tile source for routing not found: " + cfg->source); return; }
   if(cfg->zoom > src->maxZoom()) { onError("Routing zoom exceeds max zoom of tile source " + cfg->source); return; }
-  std::string srckey = yamlToStr(cfgNode) + "\n" + src->offlineInfo().cacheFile + "|" + src->offlineInfo().url;
   // elevation source used for map (if any)
   std::shared_ptr<TileSource> elevSrc = MapsApp::inst->getElevationSource();
   int elevZoom = 0;
-  if(elevSrc) {
-    auto& info = elevSrc->offlineInfo();
+  if(elevSrc)
     elevZoom = std::min(cfg->elevZoom, int(elevSrc->maxZoom()));
-    srckey += "\nelev:" + info.cacheFile + "|" + info.url + "|" + std::to_string(elevZoom);
-  }
 
   std::thread([=]() mutable {
     std::lock_guard<std::mutex> lock(routerMutex);
     // canceled by new request or scene reload
     auto canceled = [serial, prana](){ return serial != routeSerial || prana.expired(); };
     if(canceled()) return;
-    // keep graph between requests (e.g. while editing waypoints), but not if source changed or too large
-    if(routerInst && (routerSrcKey != srckey || routerInst->numTiles() > 600)) {
+    // keep graph between requests (e.g. while editing waypoints), but not if scene (and so config) changed or too
+    //  large; each scene gets a new Config object
+    if(routerInst && (routerInst->cfg != cfg || routerInst->numTiles() > 600)) {
       delete routerInst;
       routerInst = NULL;
     }
     if(!routerInst) routerInst = new Router(cfg);
-    routerSrcKey = srckey;
     routerInst->setLoader([&](int x, int y, int z){ return OfflineRouter::loadTileSync(*src, prana, TileID(x, y, z), canceled); });
     if(elevSrc) {
       routerInst->setElevLoader([&](int x, int y, int z){
