@@ -20,7 +20,7 @@
 #include <algorithm>
 #include <mutex>
 #include <condition_variable>
-#include "pbf/pbf.hpp"
+#include "data/formats/mvt.h"
 #include "scene/sceneLoader.h"
 #include "scene/filters.h"
 #include "scene/styleContext.h"
@@ -323,31 +323,13 @@ Way Router::makeWay(const Tangram::Feature& feat)
 
 // tile decoding
 
-static Tangram::Value readValue(protobuf::message msg)
-{
-  Tangram::Value val;
-  while(msg.next()) {
-    switch(msg.tag) {
-      case 1: val = Tangram::Value(msg.string()); break;
-      case 2: val = Tangram::Value(double(msg.float32())); break;
-      case 3: val = Tangram::Value(msg.float64()); break;
-      case 4: val = Tangram::Value(double(msg.int64())); break;
-      case 5: val = Tangram::Value(double(msg.varint())); break;
-      case 6: val = Tangram::Value(double(msg.svarint())); break;
-      case 7: val = Tangram::Value(msg.boolean() ? 1.0 : 0.0); break;
-      default: msg.skip(); break;
-    }
-  }
-  return val;
-}
-
 bool Router::decodeTile(const std::string& data, int tx, int ty)
 {
   protobuf::message tileMsg(data.data(), data.size());
   while(tileMsg.next()) {
     if(tileMsg.tag != 3) { tileMsg.skip(); continue; }
     protobuf::message layerMsg = tileMsg.getMessage();
-    protobuf::message probe = layerMsg;
+    protobuf::message probe = layerMsg;  // check name first so only the routing layer is decoded
     std::string name;
     while(probe.next()) {
       if(probe.tag == 1) { name = probe.string(); break; }
@@ -355,47 +337,18 @@ bool Router::decodeTile(const std::string& data, int tx, int ty)
     }
     if(name != cfg->layer) continue;
 
-    std::vector<std::string> keys;
-    std::vector<Tangram::Value> values;
-    std::vector<protobuf::message> features;
-    int lyrExtent = 4096;
-    while(layerMsg.next()) {
-      switch(layerMsg.tag) {
-        case 2: features.push_back(layerMsg.getMessage()); break;
-        case 3: keys.push_back(layerMsg.string()); break;
-        case 4: values.push_back(readValue(layerMsg.getMessage())); break;
-        case 5: lyrExtent = int(layerMsg.varint()); break;
-        default: layerMsg.skip(); break;
-      }
-    }
-    if(!extentSet) { extent = lyrExtent; extentSet = true; }
-    if(lyrExtent != extent) return false;
+    Tangram::Mvt::ParserContext ctx(0);
+    Tangram::Layer layer = Tangram::Mvt::getLayer(ctx, layerMsg);
+    if(!extentSet) { extent = ctx.tileExtent; extentSet = true; }
+    if(ctx.tileExtent != extent) return false;
 
     std::vector<std::vector<GPt>> lines;
     std::vector<Way> lineWays;
     std::unordered_map<int64_t, int> vertCount;
+    int64_t x0 = int64_t(tx)*extent, y0 = int64_t(ty)*extent;
     styleCtx->setTileID(Tangram::TileID(tx, ty, zoom));
-    for(protobuf::message featMsg : features) {
-      Tangram::Feature feat;
-      feat.geometryType = Tangram::GeometryType::lines;
-      int geomType = 0;
-      protobuf::message geomMsg;
-      while(featMsg.next()) {
-        if(featMsg.tag == 2) {
-          protobuf::message tagsMsg = featMsg.getMessage();
-          while(tagsMsg) {
-            size_t ki = tagsMsg.varint();
-            if(!tagsMsg) break;
-            size_t vi = tagsMsg.varint();
-            if(ki >= keys.size() || vi >= values.size()) continue;
-            feat.props.setValue(keys[ki], values[vi]);
-          }
-        }
-        else if(featMsg.tag == 3) geomType = int(featMsg.varint());
-        else if(featMsg.tag == 4) geomMsg = featMsg.getMessage();
-        else featMsg.skip();
-      }
-      if(geomType != 2) continue;
+    for(const Tangram::Feature& feat : layer.features) {
+      if(feat.geometryType != Tangram::GeometryType::lines) continue;
       styleCtx->setFeature(feat);
       if(!cfg->filter.eval(feat, *styleCtx)) continue;
       Way way = makeWay(feat);
@@ -403,26 +356,18 @@ bool Router::decodeTile(const std::string& data, int tx, int ty)
       for(int m = FOOT; m <= CAR; ++m) usable = usable || way.spm[m][0] > 0 || way.spm[m][1] > 0;
       if(!usable) continue;
 
-      // decode geometry; MultiLineString gives multiple lines
-      int64_t cx = 0, cy = 0;
-      std::vector<GPt>* line = NULL;
-      while(geomMsg) {
-        uint32_t cmdlen = uint32_t(geomMsg.varint());
-        uint32_t cmd = cmdlen & 0x7, count = cmdlen >> 3;
-        if(cmd == 7) continue;  // closePath not expected for lines
-        for(uint32_t ii = 0; ii < count && geomMsg; ++ii) {
-          cx += geomMsg.svarint();
-          cy += geomMsg.svarint();
-          if(cmd == 1) {
-            lines.emplace_back();
-            lineWays.push_back(way);
-            line = &lines.back();
-          }
-          if(!line) continue;
-          GPt p = { double(int64_t(tx)*extent + cx), double(int64_t(ty)*extent + cy) };
-          if(!line->empty() && line->back().x == p.x && line->back().y == p.y) continue;
-          line->push_back(p);
-          vertCount[(int64_t(p.x) << 32) | uint32_t(int64_t(p.y))] += 1;
+      // Mvt scales tile coords to 0-1 (x/extent, 1 - y/extent) and drops repeated points; recover the exact
+      //  integers (scaling is exact for power of two extents, rounding covers others); MultiLineString gives
+      //  multiple lines
+      for(const Tangram::Line& tline : feat.lines) {
+        lines.emplace_back();
+        lineWays.push_back(way);
+        std::vector<GPt>& line = lines.back();
+        line.reserve(tline.size());
+        for(const Tangram::Point& tp : tline) {
+          int64_t gx = x0 + std::lround(double(tp.x)*extent), gy = y0 + extent - std::lround(double(tp.y)*extent);
+          line.push_back(GPt{double(gx), double(gy)});
+          vertCount[(gx << 32) | uint32_t(gy)] += 1;
         }
       }
     }
@@ -433,7 +378,6 @@ bool Router::decodeTile(const std::string& data, int tx, int ty)
       if(pts.size() < 2) continue;
       ways.push_back(lineWays[li]);
       int wayIdx = int(ways.size()) - 1;
-      int64_t x0 = int64_t(tx)*extent, y0 = int64_t(ty)*extent;
       size_t start = 0;
       int startNode = nodeAt(int64_t(pts[0].x), int64_t(pts[0].y), tx, ty);
       for(size_t ii = 1; ii < pts.size(); ++ii) {
