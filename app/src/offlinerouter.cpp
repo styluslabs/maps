@@ -116,7 +116,8 @@ class Router
 {
 public:
   Router(std::shared_ptr<const Config> _cfg, TileLoader _loader = NULL)
-      : cfg(_cfg), zoom(_cfg->zoom), loader(_loader), styleCtx(std::make_unique<Tangram::StyleContext>()) {}
+      : cfg(_cfg), zoom(_cfg->zoom), loader(_loader), styleCtx(std::make_unique<Tangram::StyleContext>())
+  { nodes.resize(TMP_NODES); edges.resize(TMP_EDGES); }
   // waypoints as (longitude, latitude)
   RouteResult route(Mode mode, const std::vector<std::pair<double,double>>& lngLats,
       const std::function<bool()>& canceled = NULL);
@@ -136,7 +137,10 @@ public:
 
 private:
   struct Tile { bool loaded = false; bool missing = false; std::vector<int> edges; };
-  struct Snap { int edge = -1; size_t seg = 0; GPt p; double dist2 = INFINITY; };
+  // waypoint on graph: point p on segment seg of edge; node >= 0 if p is an endpoint of the edge
+  struct Snap { int edge = -1; size_t seg = 0; GPt p; double dist2 = INFINITY; int node = -1; };
+  // at node, the current leg's temporary edge tmp takes the place of edge (two entries for a split loop edge)
+  struct Repl { int node, edge, tmp; };
   // rows south to north; w == 0 if no data, missing if not available (retried on next request)
   struct ElevTile { int w = 0, h = 0; bool missing = false; std::vector<float> z; };
 
@@ -148,6 +152,11 @@ private:
   std::vector<Node> nodes;
   std::vector<Edge> edges;
   std::vector<Way> ways;
+  // the endpoints of the current leg are temporary nodes when inside an edge; the first TMP_NODES nodes (source,
+  //  destination) and TMP_EDGES edges (pieces of the split edges) are reserved for them, so the graph itself is
+  //  never split
+  static constexpr int TMP_NODES = 2, TMP_EDGES = 4;
+  std::vector<Repl> repls;  // for the current leg; applied to node lists until the next leg (any route) is set up
   std::unordered_map<int64_t, int> nodeMap;  // global coord -> node
   std::unordered_map<int64_t, Tile> tiles;
   int tilesLoaded = 0;
@@ -167,7 +176,11 @@ private:
   void expandNode(int n);
   bool allowed(int e, Mode mode) const;
   Snap findNearest(GPt p, Mode mode, int tx, int ty) const;
-  int snapToGraph(GPt p, Mode mode);
+  Snap snapToGraph(GPt p, Mode mode);
+  bool sameSnap(const Snap& s0, const Snap& s1) const;
+  void setLegEnds(const Snap& s0, const Snap& s1, int& src, int& dst);
+  void applyRepls();
+  void undoRepls();
   std::vector<int> astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err);
   double metersPerUnit(double gy) const;
   double edgeLength(const std::vector<GPt>& pts) const;
@@ -558,6 +571,9 @@ void Router::edgeClimb(int e)
   add(z - ref);  // so that up - down equals net change
 }
 
+static double dist2(GPt a, GPt b) { return (a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y); }
+static bool nearPt(GPt a, GPt b) { return dist2(a, b) < 1E-4; }
+
 static double distToSegment2(GPt p, GPt a, GPt b, GPt& proj)
 {
   double dx = b.x - a.x, dy = b.y - a.y;
@@ -584,11 +600,11 @@ Router::Snap Router::findNearest(GPt p, Mode mode, int tx, int ty) const
   return best;
 }
 
-// find nearest edge and split it, returning new node (or existing node if snapped point is an endpoint)
-int Router::snapToGraph(GPt p, Mode mode)
+// find nearest point on graph (edge < 0 if none)
+Router::Snap Router::snapToGraph(GPt p, Mode mode)
 {
   int tx = int(std::floor(p.x/extent)), ty = int(std::floor(p.y/extent));
-  if(!loadTile(tx, ty)) return -1;
+  if(!loadTile(tx, ty)) return Snap{};
   Snap best = findNearest(p, mode, tx, ty);
   // check neighbouring tiles if they could contain a closer edge
   double fx = p.x - double(tx)*extent, fy = p.y - double(ty)*extent;
@@ -604,34 +620,100 @@ int Router::snapToGraph(GPt p, Mode mode)
     }
   }
   // limit snapping distance to ~1 km
-  if(best.edge < 0 || std::sqrt(best.dist2)*metersPerUnit(p.y) > 1000) return -1;
+  if(best.edge < 0 || std::sqrt(best.dist2)*metersPerUnit(p.y) > 1000) return Snap{};
 
-  Edge& edge = edges[best.edge];
-  const double eps2 = 1E-4;
-  auto near = [&](GPt a, GPt b){ return (a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y) < eps2; };
-  if(near(best.p, edge.pts.front())) return edge.a;
-  if(near(best.p, edge.pts.back())) return edge.b;
+  const Edge& edge = edges[best.edge];
+  if(nearPt(best.p, edge.pts.front())) best.node = edge.a;
+  else if(nearPt(best.p, edge.pts.back())) best.node = edge.b;
+  return best;
+}
 
-  int e = best.edge;
-  int n = int(nodes.size());
-  nodes.push_back(Node{best.p, edge.tile, 0, true, {}});
-  std::vector<GPt> pts2 = {best.p};
-  pts2.insert(pts2.end(), edges[e].pts.begin() + best.seg + 1, edges[e].pts.end());
-  edges[e].pts.resize(best.seg + 1);
-  edges[e].pts.push_back(best.p);
-  int b = edges[e].b;
-  edges[e].b = n;
-  edges[e].len = float(edgeLength(edges[e].pts));
-  edges[e].up = NAN;
-  int e2 = int(edges.size());
-  edges.push_back(Edge{n, b, edges[e].way, edges[e].tile, float(edgeLength(pts2)), std::move(pts2)});
-  auto& bedges = nodes[b].edges;
-  // for a loop edge (a == b), node lists e once; it now needs both e and e2
-  if(edges[e].a == b) bedges.push_back(e2);
-  else std::replace(bedges.begin(), bedges.end(), e, e2);
-  nodes[n].edges = {e, e2};
-  tiles[edges[e].tile].edges.push_back(e2);
-  return n;
+bool Router::sameSnap(const Snap& s0, const Snap& s1) const
+{
+  if(s0.node >= 0 || s1.node >= 0) return s0.node == s1.node;
+  return s0.edge == s1.edge && nearPt(s0.p, s1.p);
+}
+
+// set src and dst nodes for a leg; an endpoint inside an edge goes in a temporary node slot (0 = source,
+//  1 = destination), and the edge is split into pieces stored in temporary edge slots; repls lists where the pieces
+//  replace the split edge in the lists of real nodes
+void Router::setLegEnds(const Snap& s0, const Snap& s1, int& src, int& dst)
+{
+  const Snap* snaps[2] = {&s0, &s1};
+  int ids[2];
+  for(int kk = 0; kk < 2; ++kk) {
+    ids[kk] = snaps[kk]->node;
+    if(ids[kk] < 0) {
+      ids[kk] = kk;
+      nodes[kk] = Node{snaps[kk]->p, edges[snaps[kk]->edge].tile, 0, true, {}};
+    }
+  }
+  src = ids[0];
+  dst = ids[1];
+  undoRepls();
+  int nextTmp = 0;
+  for(int kk = 0; kk < 2; ++kk) {
+    if(ids[kk] != kk) continue;
+    int e = snaps[kk]->edge;
+    std::vector<int> on = {kk};  // temporary nodes on edge e, ordered from edge.a to edge.b
+    if(kk == 0 && ids[1] == 1 && s1.edge == e) {
+      on.push_back(1);
+      const GPt& v = edges[e].pts[s0.seg];
+      if(s1.seg < s0.seg || (s1.seg == s0.seg && dist2(v, s1.p) < dist2(v, s0.p)))
+        std::swap(on[0], on[1]);
+    }
+    else if(kk == 1 && ids[0] == 0 && s0.edge == e)
+      continue;  // done with source
+    const Edge& edge = edges[e];
+    int prev = edge.a;
+    size_t next = 1;  // next vertex of edge to add
+    std::vector<GPt> pts = {edge.pts.front()};
+    for(size_t ii = 0; ii <= on.size(); ++ii) {
+      bool last = ii == on.size();
+      int n = last ? edge.b : on[ii];
+      size_t end = last ? edge.pts.size() - 1 : snaps[n]->seg;
+      for(; next <= end; ++next)
+        pts.push_back(edge.pts[next]);
+      if(!last) pts.push_back(snaps[n]->p);
+      int t = nextTmp++;
+      float len = float(edgeLength(pts));
+      GPt endPt = pts.back();
+      edges[t] = Edge{prev, n, edge.way, edge.tile, len, std::move(pts)};
+      if(ii == 0) repls.push_back({prev, e, t});
+      else nodes[prev].edges.push_back(t);
+      if(last) repls.push_back({n, e, t});
+      else nodes[n].edges.push_back(t);
+      prev = n;
+      pts = {endPt};
+    }
+  }
+  applyRepls();
+}
+
+// put temporary edges in place of the edges they split in the lists of real nodes
+void Router::applyRepls()
+{
+  for(size_t ii = 0; ii < repls.size(); ++ii) {
+    auto& adj = nodes[repls[ii].node].edges;
+    auto it = std::find(adj.begin(), adj.end(), repls[ii].edge);
+    if(it != adj.end())
+      *it = repls[ii].tmp;
+    else  // second piece of a split loop edge, added after the first (previous entry)
+      adj.insert(std::find(adj.begin(), adj.end(), repls[ii-1].tmp) + 1, repls[ii].tmp);
+  }
+}
+
+// restore lists by value, not from a copy, since loading tiles can add edges to these nodes
+void Router::undoRepls()
+{
+  for(const Repl& r : repls) {
+    auto& adj = nodes[r.node].edges;
+    auto it = std::find(adj.begin(), adj.end(), r.tmp);
+    if(it == adj.end()) continue;
+    if(std::find(adj.begin(), adj.end(), r.edge) != adj.end()) adj.erase(it);
+    else *it = r.edge;
+  }
+  repls.clear();
 }
 
 std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err)
@@ -767,10 +849,10 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
   for(GPt& p : waypts)
     p = GPt{p.x*extent, p.y*extent};
 
-  std::vector<int> snapped;
+  std::vector<Snap> snapped;
   for(size_t ii = 0; ii < waypts.size(); ++ii) {
-    int n = snapToGraph(waypts[ii], mode);
-    if(n < 0) {
+    Snap n = snapToGraph(waypts[ii], mode);
+    if(n.edge < 0) {
       res.error = "No road or path found near waypoint " + std::to_string(ii + 1);
       return res;
     }
@@ -792,14 +874,16 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
   };
 
   for(size_t leg = 0; leg + 1 < snapped.size(); ++leg) {
-    if(snapped[leg] == snapped[leg+1]) continue;
-    std::vector<int> path = astar(snapped[leg], snapped[leg+1], mode, canceled, res.error);
+    if(sameSnap(snapped[leg], snapped[leg+1])) continue;
+    int src, dst;
+    setLegEnds(snapped[leg], snapped[leg+1], src, dst);
+    std::vector<int> path = astar(src, dst, mode, canceled, res.error);
     if(path.empty()) {
       if(res.error.empty()) res.error = "No route found";
       res.pts.clear();
       return res;
     }
-    int u = snapped[leg];
+    int u = src;
     double prevHeading = 0, stepHeading = 0;  // stepHeading: incoming heading at last turn step
     std::string prevName, stepName;
     bool lastIsTurn = false;
