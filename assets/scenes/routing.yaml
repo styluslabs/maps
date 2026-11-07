@@ -60,7 +60,7 @@ application:
                 # ~3 s/m: about 9 km/h at 6% grade; descents up to 30 km/h
                 climb: { up: 3, down: -1.5, max_speed: 30 }
                 oneway:
-                    filter: { oneway: 1 }
+                    filter: [{ oneway: 1 }, { junction: true }]  # roundabouts are implicitly oneway
                     except:
                         - { cycleway: [opposite, opposite_lane, opposite_track] }
                         - { cycleway_left: [opposite, opposite_lane, opposite_track] }
@@ -100,7 +100,7 @@ application:
 
             drive:
                 oneway:
-                    filter: { oneway: 1 }
+                    filter: [{ oneway: 1 }, { junction: true }]  # roundabouts are implicitly oneway
                 maxspeed: { key: maxspeed, scale: 0.85, max_factor: 1.5 }
                 speed:
                     - { filter: { ramp: 1, highway: motorway }, value: 75 }
