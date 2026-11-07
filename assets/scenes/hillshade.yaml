@@ -226,7 +226,10 @@ styles:
                     }
                     #endif
                     // apply lighting to get final color
-                    #ifdef HILLSHADE_BLEND_OVER
+                    // mixin can replace lighting by defining HILLSHADE_LIGHTING_FN
+                    #if defined(HILLSHADE_LIGHTING_FN)
+                    color = HILLSHADE_LIGHTING_FN(base_color, normal, elev, slope_degs);
+                    #elif defined(HILLSHADE_BLEND_OVER)
                     // for blending over background and opaque polygons; scale by 1/(1-light_accumulator_ambient) instead?
                     color = vec4(4.0*shading.rgb - 3.0, 0.25);
                     color = mix(color, base_color, base_color.a);
