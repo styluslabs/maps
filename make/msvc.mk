@@ -74,16 +74,13 @@ ZIP = $(BUILDDIR)/$(ZIPFILE)
 WIXBASE=$(basename $(WXS))
 MSI = $(BUILDDIR)/$(WIXBASE).msi
 
-.PHONY: all zip msi clean distclean rebuild_version_info
+.PHONY: all zip msi clean distclean
 
 all: $(TGT)
 
-zip: rebuild_version_info $(ZIP)
+zip: $(ZIP)
 
-msi: rebuild_version_info $(MSI)
-
-rebuild_version_info:
-	powershell -Command "(Get-Item '$(SRC_WITH_VERSION_INFO)').LastWriteTime = Get-Date"
+msi: $(MSI)
 
 # force C/C++
 $(OBJDIR)/$(FORCECPP): CFLAGS += /TP

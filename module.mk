@@ -43,5 +43,10 @@ include $(ADD_MODULE)
 
 $(OBJDIR)/$(MODULE_BASE)/app/src/mapsapp.$(OBJEXT): DEFS_PRIVATE += MAPS_GIT_REV=$(GIT_REV) MAPS_GIT_DATE=$(GIT_DATE) MAPS_GIT_COUNT=$(GIT_TAGCOUNT) MAPS_GIT_TAG=$(GIT_DESCRIBE)
 
-# source will be `touch`ed before building distribution package
-SRC_WITH_VERSION_INFO=$(MODULE_BASE)/app/src/mapsapp.cpp
+# always rebuild source w/ version info for distribution packages (FORCE is never up to date; goal is always
+#  given explicitly for packages, so FORCE can't become the default goal)
+ifneq ($(PACKAGE_BUILD),)
+$(OBJDIR)/$(MODULE_BASE)/app/src/mapsapp.$(OBJEXT): FORCE
+.PHONY: FORCE
+FORCE:
+endif

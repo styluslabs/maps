@@ -8,6 +8,11 @@ else
   OBJDIR=$(BUILDDIR)
 endif
 
+# release package goals: sources w/ version info are always rebuilt (FORCE prerequisite, see module.mk), so
+#  package never has stale version info; unlike touching the source, this is safe w/ -j and doesn't modify files
+PACKAGE_GOALS = tgz real_tgz zip msi ipa
+PACKAGE_BUILD = $(filter $(PACKAGE_GOALS),$(MAKECMDGOALS))
+
 ifeq ($(OS),Windows_NT)
   OBJEXT=obj
 else
