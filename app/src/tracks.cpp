@@ -995,13 +995,8 @@ bool MapsTracks::tapEvent(LngLat location)
 
 void MapsTracks::fingerEvent(int action, LngLat pos)
 {
-  if(!activeTrack) return;
-  if(action < -1) {
-    if(!activeTrack->routes.empty())
-      activeTrack->routes.pop_back();
-  }
-
-  else if(dragWaypt) {
+  if(!activeTrack) { return; }
+  if(dragWaypt) {
     // TODO: autopan when drag nears edge; right button drag (or shift + drag)
     // moving marker should have collide = false
     // UX on desktop: right click to insert waypoint , then only allow dragging waypoints (left drag ... right drag difficult or impossible on touchpad, unless you want to require shift+drag)
@@ -1023,21 +1018,25 @@ void MapsTracks::fingerEvent(int action, LngLat pos)
       // if pos too close to screen edge, autoscroll map
     }
     else if(action < 0) {
-      if(action == -1) {
+      if(action == -1)
         dragWaypt->loc = Location{0, pos.latitude, pos.longitude, 0,0,0,0,0,0,0};
-        dragWaypt->routed = true;
-        //waypointsDirty = true;
-        populateTrack(activeTrack);
-        createRoute(activeTrack);
-      }
       else
         app->map->markerSetPoint(dragWaypt->marker, dragWaypt->loc.lngLat());
+      // re-route even if canceled in case this was newly inserted waypoint; user is free to delete
+      dragWaypt->routed = true;
+      waypointsDirty = true;
+      populateTrack(activeTrack);
+      createRoute(activeTrack);
       dragWaypt = NULL;
       app->drawOnMap = false;
     }
-
+    return;
   }
-
+  // track drawing
+  if(action < -1) {
+    if(!activeTrack->routes.empty())
+      activeTrack->routes.pop_back();
+  }
   else {
     activeTrack->modified = true;
     if(action > 0 || activeTrack->routes.empty())
@@ -1234,6 +1233,7 @@ void MapsTracks::onMapEvent(MapEvent_t event)
   }
 
   else if(event == MARKER_LONGPRESS) {
+    if(!activeTrack) { return; }
     for(auto& wpt : activeTrack->waypoints) {
       if(app->pickedMarkerId == wpt.marker) {
         app->drawOnMap = app->touchHandler->touchPoints.size() == 1;

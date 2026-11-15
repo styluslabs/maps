@@ -723,7 +723,7 @@ void MapsApp::tapEvent(float x, float y)
 #endif
 
   map->pickLabelAt(x, y, [this](const Tangram::LabelPickResult* result) {
-    if(!result) return;
+    if(!result || tapIsLongPress) { return; }
     auto& props = result->touchItem.properties;
     LOGD("Picked label: %s", result ? props->getAsString("name").c_str() : "none");
     // we'll clear history iff panel is minimized
