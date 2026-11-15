@@ -39,6 +39,8 @@ bool TouchHandler::sdlEvent(SvgGui* gui, SDL_Event* event)
       tapState = ((!ismouse && gui->fingerClicks == 2) || (mods & KMOD_CTRL)) ? DBL_TAP_DRAG_PENDING : TAP_NONE;
       if(altDragMode)
         rotOrigin = (mods & KMOD_ALT) ? TOUCHPT_NAN : initCOM;  //app->map->getTilt() > tiltThresholdRad
+      else if(ismouse && (mods & KMOD_ALT))
+        app->longPressEvent(event->tfinger.x*xyScale, event->tfinger.y*xyScale);
     }
     else if(event->type == SDL_FINGERMOTION) {
       if(tapState == DBL_TAP_DRAG_PENDING && gui->fingerClicks == 0)

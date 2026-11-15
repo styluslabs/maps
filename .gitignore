@@ -19,3 +19,5 @@ build/
 *.apk
 *.jar
 .DS_Store
+# generated
+compile_commands.json

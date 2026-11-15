@@ -113,6 +113,7 @@ public:
   LngLat pickResultCoord = {NAN, NAN};
   PickResultStepper pickResultStepper;
   LngLat tapLocation = {NAN, NAN};
+  bool tapIsLongPress = false;
   bool searchActive = false;
   int placeInfoProviderIdx = 0;
   //int gpsSatsUsed = 0;

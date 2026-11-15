@@ -159,4 +159,5 @@ private:
 
   isect2d::ISect2D<glm::vec2> routeCollider;
   glm::dvec2 routeOrigin;
+  Waypoint* dragWaypt = NULL;
 };

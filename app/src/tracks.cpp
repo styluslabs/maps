@@ -7,9 +7,9 @@
 #include "bookmarks.h"
 #include "trackwidgets.h"
 #include "offlinerouter.h"
+#include "touchhandler.h"
 
 #include "gaml/src/yaml.h"
-#include "util/yamlPath.h"
 #include "util/mapProjection.h"
 
 #include "ugui/svggui.h"
@@ -17,7 +17,6 @@
 #include "ugui/textedit.h"
 #include "usvg/svgpainter.h"
 #include "usvg/svgparser.h"  // for parseColor
-#include "usvg/svgwriter.h"  // for serializeColor
 
 
 void MapsTracks::updateLocation(const Location& loc)
@@ -1001,6 +1000,44 @@ void MapsTracks::fingerEvent(int action, LngLat pos)
     if(!activeTrack->routes.empty())
       activeTrack->routes.pop_back();
   }
+
+  else if(dragWaypt) {
+    // TODO: autopan when drag nears edge; right button drag (or shift + drag)
+    // moving marker should have collide = false
+    // UX on desktop: right click to insert waypoint , then only allow dragging waypoints (left drag ... right drag difficult or impossible on touchpad, unless you want to require shift+drag)
+    // - right click on waypoint deletes
+    // ... but how would we capture right (or left) drag without interfering with pan/tilt?
+
+    // ... let's use alt+drag so we can move forward
+
+    // dragging with finger is a problem because marker and desired position will be under finger
+    // - offset above finger (only for touch, not mouse)? offset then drag map not marker?
+
+    // showing route steps? tooltips on map?
+
+    // undo/redo (save last N sets of waypoints)
+
+    // waypoint dragging
+    if(action == 0) {
+      app->map->markerSetPoint(dragWaypt->marker, pos);
+      // if pos too close to screen edge, autoscroll map
+    }
+    else if(action < 0) {
+      if(action == -1) {
+        dragWaypt->loc = Location{0, pos.latitude, pos.longitude, 0,0,0,0,0,0,0};
+        dragWaypt->routed = true;
+        //waypointsDirty = true;
+        populateTrack(activeTrack);
+        createRoute(activeTrack);
+      }
+      else
+        app->map->markerSetPoint(dragWaypt->marker, dragWaypt->loc.lngLat());
+      dragWaypt = NULL;
+      app->drawOnMap = false;
+    }
+
+  }
+
   else {
     activeTrack->modified = true;
     if(action > 0 || activeTrack->routes.empty())
@@ -1102,7 +1139,22 @@ bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
   double id;
   if(result->properties->getNumber("track_feature_id", id)) {
     if(activeTrack && activeTrack->marker.featureId == id && trackPanel->isVisible() &&
-        !trackSliders->editMode && plotWidgets[0]->isVisible() && !std::isnan(app->tapLocation.longitude)) {
+        !trackSliders->editMode && (plotWidgets[0]->isVisible() || app->tapIsLongPress) && !std::isnan(app->tapLocation.longitude)) {
+
+      if(app->tapIsLongPress) {
+        Waypoint wp{app->tapLocation, ""};
+        wp.routed = false;
+        auto prev = std::exchange(autoInsertWaypt, true);
+        dragWaypt = addWaypoint(wp);
+        autoInsertWaypt = prev;
+
+        app->drawOnMap = app->touchHandler->touchPoints.size() == 1;
+        if(!app->drawOnMap) { dragWaypt = NULL; }
+
+        //app->drawOnMap = true;
+        return true;
+      }
+
       // find the track point closest to chosen position; must be within 10 pixels
       double mindist = MapProjection::metersPerPixelAtZoom(app->map->getZoom())*10/1000.0;  // meters to km
       const Waypoint* closestWpt = NULL;
@@ -1180,6 +1232,20 @@ void MapsTracks::onMapEvent(MapEvent_t event)
   else if(event == LOC_UPDATE) {
     updateLocation(app->currLocation);
   }
+
+  else if(event == MARKER_LONGPRESS) {
+    for(auto& wpt : activeTrack->waypoints) {
+      if(app->pickedMarkerId == wpt.marker) {
+        app->drawOnMap = app->touchHandler->touchPoints.size() == 1;
+        if(app->drawOnMap) { dragWaypt = &wpt; }
+
+        //dragWaypt = &wpt;
+        //app->drawOnMap = true;
+        break;
+      }
+    }
+  }
+
   else if(event == MARKER_PICKED) {
     if(app->pickedMarkerId <= 0) return;
     if(app->pickedMarkerId == trackHoverMarker) {

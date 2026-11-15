@@ -668,13 +668,16 @@ void MapsApp::addPlaceInfo(const char* icon, const char* title, const char* valu
 
 void MapsApp::longPressEvent(float x, float y)
 {
-  double lng, lat;
-  if(!map->screenPositionToLngLat(x, y, &lng, &lat))
-    return;
-  // clear panel history unless editing track/route
-  if(!mapsTracks->activeTrack)
-    showPanel(infoPanel);
-  setPickResult(LngLat(lng, lat), "", "");
+  tapIsLongPress = true;
+  tapEvent(x, y);
+
+  // double lng, lat;
+  // if(!map->screenPositionToLngLat(x, y, &lng, &lat))
+  //   return;
+  // // clear panel history unless editing track/route
+  // if(!mapsTracks->activeTrack)
+  //   showPanel(infoPanel);
+  // setPickResult(LngLat(lng, lat), "", "");
 }
 
 void MapsApp::doubleTapEvent(float x, float y)
@@ -2592,15 +2595,27 @@ bool MapsApp::drawFrame(int fbWidth, int fbHeight)
       setPickResult(currLocation.lngLat(), "Current location", "");
     }
     else
-      sendMapEvent(MARKER_PICKED);
-    pickedMarkerId = 0;
+      sendMapEvent(tapIsLongPress ? MARKER_LONGPRESS : MARKER_PICKED);
   }
   else if(!std::isnan(tapLocation.longitude)) {
-    if(!panelHistory.empty() && panelHistory.back() == infoPanel)
-      popPanel();  // closing info panel will clear pick result
-    mapsTracks->tapEvent(tapLocation);
-    tapLocation = {NAN, NAN};
+
+    if(tapIsLongPress) {
+      // clear panel history unless editing track/route
+      if(!mapsTracks->activeTrack)
+        showPanel(infoPanel);
+      setPickResult(tapLocation, "", "");
+    }
+
+    else {
+      if(!panelHistory.empty() && panelHistory.back() == infoPanel)
+        popPanel();  // closing info panel will clear pick result
+      mapsTracks->tapEvent(tapLocation);
+    }
   }
+  // cleanup
+  pickedMarkerId = 0;
+  tapLocation = {NAN, NAN};
+  tapIsLongPress = false;
 
   FrameInfo::begin("UI render");
   if(painter->usesGPU()) {
