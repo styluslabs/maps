@@ -345,16 +345,20 @@ layers:
                         miter_limit: 1.5
                         #join: round
             # POC: invisible point labels along route so route step labels (and other lower priority labels) avoid
-            #  the route; squares since sprite collision boxes are axis-aligned; size < 8px route-step circle
+            #  the route; flat + angle: auto gives boxes aligned with route (OBB fit to projected corners); flat
+            #  sprites scale with map, so size grows up to 2x until next integer zoom; angle: auto aligns sprite y axis
+            #  with line, so size is [width, length]; spacing < length so boxes overlap; width < 8px route-step circle
             blockers:
                 filter: { $zoom: { min: 15 } }
                 draw:
                     route-blockers:
                         style: points
+                        flat: true
+                        angle: auto
                         placement: spaced
-                        placement_spacing: 5px
+                        placement_spacing: 11px
                         placement_min_length_ratio: 0
-                        size: 5px
+                        size: [4px, 14px]
                         color: [0, 0, 0, 0]
                         collide: true
                         priority: 2.5
