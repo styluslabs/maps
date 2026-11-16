@@ -344,6 +344,20 @@ layers:
                         color: white
                         miter_limit: 1.5
                         #join: round
+            # POC: invisible point labels along route so route step labels (and other lower priority labels) avoid
+            #  the route; squares since sprite collision boxes are axis-aligned; size < 8px route-step circle
+            blockers:
+                filter: { $zoom: { min: 15 } }
+                draw:
+                    route-blockers:
+                        style: points
+                        placement: spaced
+                        placement_spacing: 5px
+                        placement_min_length_ratio: 0
+                        size: 5px
+                        color: [0, 0, 0, 0]
+                        collide: true
+                        priority: 2.5
 
     route-step:
         draw:
@@ -355,6 +369,21 @@ layers:
                 outline:
                     width: 1px
                     color: black
+                # POC: full instruction text (name = wp.desc, e.g. "Turn left onto Main Street")
+                text:
+                    visible: function() { return $zoom >= 15; }
+                    text_source: name
+                    anchor: [right, left, top, bottom, top-right, top-left, bottom-right, bottom-left]
+                    collide: true
+                    optional: true
+                    priority: 3
+                    max_lines: 3
+                    text_wrap: 25
+                    font:
+                        family: global.marker_font
+                        size: 11px
+                        fill: black
+                        stroke: { color: white, width: 2px }
 
     offline-region:
         draw:
