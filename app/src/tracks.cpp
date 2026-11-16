@@ -118,6 +118,14 @@ bool MapsTracks::saveTrack(GpxFile* track)
   return saveGPX(track);
 }
 
+static void setMarkerProps(Map* map, Waypoint& wp, const std::string& name, const std::string& color, bool dragging = false)
+{
+  // use marker number as unique id for priority
+  Properties props{{{"name", name}, {"color", color}, {"priority", wp.marker}}};
+  if(dragging) { props.set("dragging", 1); }
+  map->markerSetProperties(wp.marker, std::move(props));
+}
+
 static void addRouteStepMarker(Map* map, Waypoint& wp, GpxFile* track)
 {
   if(wp.marker <= 0) {
@@ -126,8 +134,7 @@ static void addRouteStepMarker(Map* map, Waypoint& wp, GpxFile* track)
     map->markerSetPoint(wp.marker, wp.loc.lngLat());
   }
   // use marker number as unique id for priority
-  map->markerSetProperties(wp.marker,
-      {{{"name", wp.desc}, {"color", track->style}, {"priority", wp.marker}}});
+  setMarkerProps(map, wp, wp.desc, track->style);
 }
 
 void MapsTracks::updateTrackMarker(GpxFile* track)
@@ -166,9 +173,7 @@ void MapsTracks::updateTrackMarker(GpxFile* track)
       app->map->markerSetStylingFromPath(wp.marker, "layers.waypoint.draw.marker");
       app->map->markerSetPoint(wp.marker, wp.loc.lngLat());
     }
-    // use marker number as unique id for priority
-    app->map->markerSetProperties(wp.marker,
-        {{{"name", wp.name}, {"color", track->style}, {"priority", wp.marker}}});
+    setMarkerProps(app->map.get(), wp, wp.name, track->style, &wp == dragWaypt);
   }
 }
 
@@ -847,10 +852,7 @@ void MapsTracks::editWaypoint(GpxFile* track, const Waypoint& wpt, std::function
     auto it = track->findWaypoint(uid);
     it->name = trimStr(titleEdit->text());
     it->desc = noteEdit->text();
-    if(it->marker) {
-      app->map->markerSetProperties(it->marker,
-          {{{"name", it->name}, {"color", track->style}, {"priority", it->marker}}});
-    }
+    if(it->marker) { setMarkerProps(app->map.get(), *it, it->name, track->style); }
     waypointsDirty = true;
     // hack around problem of setPickResult destroying this closure
     //refreshWayptPlaceInfo(track, *it);
@@ -1025,10 +1027,10 @@ void MapsTracks::fingerEvent(int action, LngLat pos)
       // re-route even if canceled in case this was newly inserted waypoint; user is free to delete
       dragWaypt->routed = true;
       waypointsDirty = true;
-      populateTrack(activeTrack);
-      createRoute(activeTrack);
       dragWaypt = NULL;
       app->drawOnMap = false;
+      populateTrack(activeTrack);
+      createRoute(activeTrack);
     }
     return;
   }
@@ -1144,13 +1146,14 @@ bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
         Waypoint wp{app->tapLocation, ""};
         wp.routed = false;
         auto prev = std::exchange(autoInsertWaypt, true);
-        dragWaypt = addWaypoint(wp);
+        Waypoint* pwp = addWaypoint(wp);
         autoInsertWaypt = prev;
-
-        app->drawOnMap = app->touchHandler->touchPoints.size() == 1;
-        if(!app->drawOnMap) { dragWaypt = NULL; }
-
-        //app->drawOnMap = true;
+        if(!pwp) { return true; }
+        app->drawOnMap = true;
+        dragWaypt = pwp;
+        setMarkerProps(app->map.get(), *pwp, pwp->name, activeTrack->style, true);
+        if(app->touchHandler->touchPoints.size() != 1)   // finger already lifted
+          fingerEvent(-2, pwp->loc.lngLat());
         return true;
       }
 
@@ -1236,11 +1239,12 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     if(!activeTrack) { return; }
     for(auto& wpt : activeTrack->waypoints) {
       if(app->pickedMarkerId == wpt.marker) {
-        app->drawOnMap = app->touchHandler->touchPoints.size() == 1;
-        if(app->drawOnMap) { dragWaypt = &wpt; }
-
-        //dragWaypt = &wpt;
-        //app->drawOnMap = true;
+        app->pickedMarkerId = 0;
+        if(app->touchHandler->touchPoints.size() == 1) {  // finger still down?
+          app->drawOnMap = true;
+          dragWaypt = &wpt;
+          setMarkerProps(app->map.get(), wpt, wpt.name, activeTrack->style, true);
+        }
         break;
       }
     }

@@ -283,12 +283,13 @@ layers:
                 texture: pin-marker
                 size: [16px, 24px]
                 interactive: true
-                collide: true
+                collide: 'function() { return !feature.dragging; }'
                 color: function() { return feature.color || '#12B5CB'; }
                 outline: { color: black }
                 priority: 'function() { return 2 + (1+feature.priority)/65536; }'
                 offset: [0px, -11px]
                 text:
+                    visible: 'function() { return !feature.dragging; }'
                     text_source: name
                     anchor: [right, left, bottom, top]
                     collide: true
