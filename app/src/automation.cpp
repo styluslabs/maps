@@ -23,6 +23,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <sys/stat.h>
 
 // provided by platform main (linuxmain.cpp): save frame just drawn (called before buffer swap) as PNG; w <= 0
 //  for whole window
@@ -284,6 +286,11 @@ void MapAutomation::start(const std::string& path)
   if(path == "-")
     replyOut = stdout;
   else {
+    struct stat st;
+    if(stat(path.c_str(), &st) != 0 && mkfifo(path.c_str(), 0600) != 0) {
+      PLATFORM_LOG("Unable to create FIFO %s\n", path.c_str());
+      return;
+    }
     replyOut = fopen((path + ".out").c_str(), "w");
     if(!replyOut) {
       PLATFORM_LOG("Unable to open %s.out\n", path.c_str());
@@ -332,13 +339,43 @@ static bool startAutomation(const std::string& path)
   if(automation) return false;  // already started
   automation = new MapAutomation;
   automation->start(path);
-  return bool(automation->driver);
+  if(automation->driver) { return true; }
+  delete automation;
+  automation = NULL;
+  return false;
 }
+
+// start automation in a running app (normal mode, not test mode), e.g. from gdb, from any thread and at any
+//  stop point: `call (int)ascendStartAutomation("/tmp/a")`, then continue.  Only copies the path and sets a
+//  flag (no locks, no allocation), so it can't deadlock w/ other stopped threads; automation starts on the
+//  main thread after the next main loop iteration, which needs an event (e.g. move the mouse over the window).
+//  Creates the FIFO if needed.  Returns 1 if accepted
+static char pendingPath[1024];
+static std::atomic<bool> pendingStart{false};
+
+extern "C" int ascendStartAutomation(const char* path)
+{
+  if(!path || !path[0] || strlen(path) >= sizeof(pendingPath) || pendingStart || automation) { return 0; }
+  strcpy(pendingPath, path);
+  pendingStart = true;
+  return 1;
+}
+
+// referenced from the static initializer so the linker keeps ascendStartAutomation (release builds link w/
+//  --gc-sections, which removes unreferenced functions; the used attribute doesn't prevent that)
+static int (* volatile ascendStartAutomationRef)(const char*) = NULL;
 
 // MapsApp's hook pointers are constant initialized (NULL), so setting them from a static initializer is safe
 static struct AutomationInit {
   AutomationInit() {
+    ascendStartAutomationRef = ascendStartAutomation;
     MapsApp::startAutomationFn = startAutomation;
-    MapsApp::automationPoll = [](bool frameDrawn){ if(automation) { automation->poll(frameDrawn); } };
+    MapsApp::automationPoll = [](bool frameDrawn){
+      if(pendingStart) {
+        startAutomation(pendingPath);
+        pendingStart = false;
+      }
+      if(automation) { automation->poll(frameDrawn); }
+    };
   }
 } automationInit;
