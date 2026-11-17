@@ -7,6 +7,7 @@
 #include "linuxPlatform.h"
 #include "util/yamlPath.h"
 #include "util/elevationManager.h"
+#include "gl.h"  // Tangram::GL::bindFramebuffer
 #include "util.h"
 #include "nfd.h"
 #include "stb_image.h"
@@ -820,25 +821,61 @@ static void processX11Event(XEvent* xevent)
 }
 
 // spent more time trying to get xwd, maim, scrot, etc. working than it took to write this
-static void screenshotPng(int width, int height)
+// save frame (or region w/ top left x, y; w <= 0 for whole window) as PNG from back buffer (before swap; used by
+//  automation) or front buffer (after swap; not supported by all drivers, e.g. black image w/ Xvfb + llvmpipe)
+static bool screenshotPng(const char* path, int x, int y, int w, int h, bool front)
 {
-  Image img(width, height);
-  glReadBuffer(GL_FRONT);  // to get MSAA resolve ... in general reading front buffer not guaranteed to work
+  if(w <= 0 || h <= 0) { x = 0; y = 0; w = xContext.width; h = xContext.height; }
+  if(x < 0 || y < 0 || x + w > xContext.width || y + h > xContext.height) { return false; }
+  int stride = (3*w + 0x3) & ~0x3;  // initial value of GL_PACK_ALIGNMENT is 4
+  std::vector<unsigned char> pixels(stride*h);
+  GLint prevReadFB = 0;
+  glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFB);
+  Tangram::GL::bindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+  // reading front buffer gets MSAA resolve ... in general reading front buffer not guaranteed to work
+  glReadBuffer(front ? GL_FRONT : GL_BACK);
   // GL_RGB, not GL_RGBA (alpha channel not allowed in screenshots)
-  glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, img.pixels());
+  glReadPixels(x, xContext.height - y - h, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
   glReadBuffer(GL_BACK);
-  auto pngname = std::to_string(mSecSinceEpoch()/1000) + ".png";
+  Tangram::GL::bindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFB);
   stbi_flip_vertically_on_write(1);
-  // initial value of GL_PACK_ALIGNMENT is 4
-  stbi_write_png(pngname.c_str(), width, height, 3, img.pixels(), (3*width + 0x3) & ~0x3);
+  bool ok = stbi_write_png(path, w, h, 3, pixels.data(), stride) != 0;
   stbi_flip_vertically_on_write(0);
-  //FileStream fstrm(pngname.c_str(), "wb");
-  //auto encoded = img.encodePNG();
-  //fstrm.write((char*)encoded.data(), encoded.size());
-  PLATFORM_LOG("Screenshot written to %s\n", pngname.c_str());
+  if(ok) { PLATFORM_LOG("Screenshot written to %s\n", path); }
+  return ok;
 }
 
-static void initBaseDir(const char* exepath)
+// for automation: called from MapsApp::automationPoll() before buffer swap, after frame is drawn
+bool screenshotPng(const char* path, int x, int y, int w, int h)
+{
+  return screenshotPng(path, x, y, w, h, false);
+}
+
+// test mode (w/ --automation): private folder for config, sources, cache, etc. w/ symlinks to resources, so
+//  nothing is shared w/ normal setup; temp folder (deleted on exit) unless --test-dir given
+static std::string tempTestDir;
+
+// rm -r w/o following symlinks (unlike removeDir(), which would recurse into linked resource folders)
+static bool removeTree(const std::string& path)
+{
+  struct stat st;
+  if(lstat(path.c_str(), &st) != 0) { return false; }
+  if(S_ISDIR(st.st_mode)) {
+    for(std::string child : lsDirectory(FSPath(path))) {
+      // lsDirectory() appends '/' to dirs (incl. symlinks to dirs), and lstat("link/") follows the link
+      while(!child.empty() && child.back() == '/') { child.pop_back(); }
+      removeTree(path + "/" + child);
+    }
+    return rmdir(path.c_str()) == 0;
+  }
+  return unlink(path.c_str()) == 0;
+}
+
+// hardcoding resources to symlink is obviously not ideal...
+static const char* linkedResources[] =
+    {"config.default.yaml", "mapsources.default.yaml", "plugins", "res", "scenes", "shared"};
+
+static void initBaseDir(const char* exepath, const std::string* testDir)
 {
   MapsApp::baseDir = canonicalPath("./");
   if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists()) {
@@ -846,6 +883,29 @@ static void initBaseDir(const char* exepath)
       MapsApp::baseDir = canonicalPath(FSPath(exepath).parentPath());
     if(!FSPath(MapsApp::baseDir, "config.default.yaml").exists())
       MapsApp::baseDir = canonicalPath(FSPath(MapsApp::baseDir, "../../assets/"));
+  }
+
+  if(testDir) {
+    std::string dir = *testDir;
+    if(dir.empty()) {
+      const char* tmp = getenv("TMPDIR");
+      std::string tmpl = std::string(tmp && tmp[0] ? tmp : "/tmp") + "/ascend-test-XXXXXX";
+      if(!mkdtemp(&tmpl[0])) { LOGE("Unable to create test folder %s", tmpl.c_str()); exit(1); }
+      dir = tempTestDir = tmpl;
+    }
+    else if(!createPath(FSPath(dir, ""))) { LOGE("Unable to create test folder %s", dir.c_str()); exit(1); }
+    FSPath base(MapsApp::baseDir), test(canonicalPath(FSPath(dir, "")));
+    for(const char* l : linkedResources) {
+      struct stat st;
+      if(lstat(test.child(l).c_str(), &st) == 0) { continue; }  // existing test folder
+      if(symlink(base.child(l).c_str(), test.child(l).c_str()) != 0) {
+        LOGE("Unable to create symlink %s", test.child(l).c_str());
+        exit(1);
+      }
+    }
+    MapsApp::baseDir = FSPath(test.path, "").path;
+    PLATFORM_LOG("Test mode: using %s\n", MapsApp::baseDir.c_str());
+    return;
   }
 
   // if config.yaml already exists in base dir, use that
@@ -859,9 +919,7 @@ static void initBaseDir(const char* exepath)
   if(!createPath(xdgcfg)) { return; }
   if(!xdgcfg.child("config.default.yaml").exists()) {
     FSPath base(MapsApp::baseDir);
-    // hardcoding resources to symlink is obviously not ideal...
-    const char* tolink[] = {"config.default.yaml", "mapsources.default.yaml", "plugins", "res", "scenes", "shared"};
-    for(const char* l : tolink) {
+    for(const char* l : linkedResources) {
       if(symlink(base.child(l).c_str(), xdgcfg.child(l).c_str()) != 0) { return; }  // abort on error
     }
   }
@@ -919,19 +977,31 @@ static int glxCtxAttribs[] = {
 
 int main(int argc, char* argv[])
 {
-  initBaseDir(argc > 0 ? argv[0] : NULL);
+  // --automation <path> (UI automation, see automation.cpp; implies test mode) and --test-dir <dir> (folder for
+  //  test mode instead of temp folder) must be handled before config is loaded
+  std::string automationPath, testDir;
+  std::vector<const char*> args;
+  for(int argi = 1; argi < argc; ++argi) {
+    if(argi + 1 < argc && strcmp(argv[argi], "--automation") == 0) { automationPath = argv[++argi]; }
+    else if(argi + 1 < argc && strcmp(argv[argi], "--test-dir") == 0) { testDir = argv[++argi]; }
+    else { args.push_back(argv[argi]); }
+  }
+  if(!automationPath.empty() && !MapsApp::startAutomationFn) {
+    PLATFORM_LOG("UI automation not included in this build\n");
+    automationPath.clear();
+  }
+  initBaseDir(argc > 0 ? argv[0] : NULL, automationPath.empty() ? NULL : &testDir);
   MapsApp::loadConfig("");
 
-  // command line args
-  std::string sceneFile, importFile;  // -f scenes/scene-omt.yaml
-  for(int argi = 1; argi < argc-1; argi += 2) {
+  // command line args: --<config path> <value>, e.g. --view.zoom 12
+  for(size_t argi = 0; argi + 1 < args.size(); argi += 2) {
     YAML::Node* node = NULL;
-    if(strncmp(argv[argi], "--", 2) == 0 &&
-        (node = Tangram::YamlPath(std::string("+") + (argv[argi] + 2)).get(MapsApp::config))) {
-      *node = argv[argi+1];
+    if(strncmp(args[argi], "--", 2) == 0 &&
+        (node = Tangram::YamlPath(std::string("+") + (args[argi] + 2)).get(MapsApp::config))) {
+      *node = args[argi+1];
     }
     else
-      LOGE("Unknown command line argument: %s", argv[argi]);
+      LOGE("Unknown command line argument: %s", args[argi]);
   }
 
   XInitThreads();  // seems this might be required due to glXMakeCurrent for offscreen worker
@@ -1087,7 +1157,7 @@ int main(int argc, char* argv[])
         //else if(event->key.keysym.mod & KMOD_ALT)
         //  debugHovered = true;
         else if(event->key.keysym.mod & KMOD_SHIFT) {
-          takeScreenshot = true;
+          takeScreenshot = true;  // after next frame
           MapsApp::platform->requestRender();
         }
         else
@@ -1113,6 +1183,8 @@ int main(int argc, char* argv[])
 #endif
   app->updateGpsStatus(10, 10);  // turn location maker blue
 
+  if(!automationPath.empty()) { MapsApp::startAutomationFn(automationPath); }
+
   // main loop
   while(MapsApp::runApplication) {
 
@@ -1122,11 +1194,16 @@ int main(int argc, char* argv[])
       processX11Event(&xevent);
     } while(XPending(xDpy));
 
-    if(app->drawFrame(xContext.width, xContext.height))
+    bool frameDrawn = app->drawFrame(xContext.width, xContext.height);
+    // after drawFrame() so view complete check sees new map state, and before swap so screenshot can read the
+    //  new frame from back buffer
+    if(MapsApp::automationPoll)
+      MapsApp::automationPoll(frameDrawn);
+    if(frameDrawn)
       glXSwapBuffers(xDpy, xWin);
 
     if(takeScreenshot) {
-      screenshotPng(xContext.width, xContext.height);
+      screenshotPng((std::to_string(mSecSinceEpoch()/1000) + ".png").c_str(), 0, 0, 0, 0, true);
       takeScreenshot = false;
     }
     if(SvgGui::debugLayout) {
@@ -1154,4 +1231,6 @@ int main(int argc, char* argv[])
     offscreenWorker->waitForCompletion();
     offscreenWorker.reset();  // wait for thread exit
   }
+
+  if(!tempTestDir.empty()) { removeTree(tempTestDir); }
 }

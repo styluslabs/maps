@@ -58,6 +58,8 @@ SQLiteDB MapsApp::placesDB;
 std::vector<Color> MapsApp::markerColors;
 SvgGui* MapsApp::gui = NULL;
 bool MapsApp::runApplication = true;
+bool (*MapsApp::startAutomationFn)(const std::string& path) = NULL;
+void (*MapsApp::automationPoll)(bool frameDrawn) = NULL;
 bool MapsApp::simulateTouch = false;
 bool MapsApp::lowPowerMode = false;
 ThreadSafeQueue< std::function<void()> > MapsApp::taskQueue;

@@ -212,6 +212,17 @@ MODULE_SOURCES += \
   deps/nfd/src/nfd_portal.cpp \
   app/linux/linuxmain.cpp
 
+# UI automation (`ascend --automation <path>`, see app/src/automation.cpp): dev builds only (pass AUTOMATION=0
+#  to exclude); never in release packages, and package recipe fails if executable includes it
+AUTOMATION ?= 1
+ifneq ($(PACKAGE_BUILD),)
+  AUTOMATION = 0
+endif
+ifneq ($(AUTOMATION),0)
+  MODULE_SOURCES += app/src/automation.cpp $(STYLUSLABS_DEPS)/ugui/uidriver.cpp
+endif
+PACKAGE_CHECK = if grep -q "UI automation: reading commands" $(TGT); then echo "error: $(TGT) includes UI automation"; exit 1; fi
+
 MODULE_INC_PUBLIC = tangram-es/platforms/linux/src
 MODULE_INC_PRIVATE = app/include tangram-es/platforms/common deps/nfd/src/include $(STYLUSLABS_DEPS) $(STYLUSLABS_DEPS)/nanovgXC
 MODULE_DEFS_PRIVATE = SVGGUI_NO_SDL

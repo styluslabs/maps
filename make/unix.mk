@@ -114,6 +114,7 @@ $(TGT): $(OBJ)
 
 # strip $(TGT) -- remove symbols to get smaller exe
 $(TGZ): $(TGT) $(DISTRES)
+	$(PACKAGE_CHECK)
 	strings $(TGT) | grep "^GLIBC_"
 	mkdir -p $(BUILDDIR)/.dist
 	strip -s -o $(BUILDDIR)/.dist/$(TARGET) $(TGT)

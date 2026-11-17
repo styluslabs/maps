@@ -234,6 +234,9 @@ public:
   static ThreadSafeQueue< std::function<void()> > taskQueue;
   static std::thread::id mainThreadId;
   static bool runApplication;
+  // UI automation hooks, set by automation.cpp (only linked into desktop dev builds); NULL otherwise
+  static bool (*startAutomationFn)(const std::string& path);
+  static void (*automationPoll)(bool frameDrawn);  // call after each iteration of main loop
   static bool simulateTouch;
   static bool lowPowerMode;
   static int prevVersion;
