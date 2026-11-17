@@ -207,6 +207,27 @@ void MapAutomation::addCommands()
     return UiDriver::CMD_DONE;
   });
 
+  d->addCommand("debug", "debug <flag> on|off - Tangram debug flag: freeze_tiles, proxy_colors, tile_bounds,"
+      " labels, tangram_infos, draw_all_labels, tangram_stats, selection_buffer, depth_buffer",
+      [=](const Args& args, std::string& status, std::string& out) {
+    static const char* flags[] = {"freeze_tiles", "proxy_colors", "tile_bounds", "labels", "tangram_infos",
+        "draw_all_labels", "tangram_stats", "selection_buffer", "depth_buffer"};
+    if(args.size() != 3 || (args[2] != "on" && args[2] != "off")) {
+      status = "error: wrong arguments";
+      return UiDriver::CMD_DONE;
+    }
+    for(int ii = 0; ii < int(sizeof(flags)/sizeof(flags[0])); ++ii) {
+      if(args[1] != flags[ii]) { continue; }
+      Tangram::setDebugFlag(Tangram::DebugFlags(ii), args[2] == "on");
+      // tile bounds are drawn w/ debug styles added at scene load
+      if(ii == Tangram::DebugFlags::tile_bounds) { app->loadSceneFile(); }
+      MapsApp::platform->requestRender();
+      return UiDriver::CMD_DONE;
+    }
+    status = "error: unknown flag " + args[1];
+    return UiDriver::CMD_DONE;
+  });
+
   // `wait complete`; other wait commands are passed on to UiDriver
   d->addCommand("wait", "wait complete [secs] - until map view is complete (tiles and labels loaded)"
       " after at least one frame (default timeout 60 s)",
