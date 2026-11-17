@@ -107,6 +107,13 @@ bool MapAutomation::viewComplete()
   return *workersIdle >= 0;
 }
 
+// StyledMesh::numVertices()/numIndices() are recent; detect them so automation builds w/ older tangram (e.g.
+//  baseline builds for testing/shots/shots.py)
+template<class M> auto meshVertices(const M& m, int) -> decltype(m.numVertices()) { return m.numVertices(); }
+template<class M> size_t meshVertices(const M&, long) { return 0; }
+template<class M> auto meshIndices(const M& m, int) -> decltype(m.numIndices()) { return m.numIndices(); }
+template<class M> size_t meshIndices(const M&, long) { return 0; }
+
 std::string MapAutomation::dumpMap()
 {
   MapsApp* app = MapsApp::inst;
@@ -132,8 +139,8 @@ std::string MapAutomation::dumpMap()
       Stats& s = styleStats[style->getName()];
       for(Stats* st : {&s, &total}) {
         st->meshes++;
-        st->vertices += mesh->numVertices();
-        st->indices += mesh->numIndices();
+        st->vertices += meshVertices(*mesh, 0);
+        st->indices += meshIndices(*mesh, 0);
         st->bytes += mesh->bufferSize();
       }
     }
