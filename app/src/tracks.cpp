@@ -135,6 +135,16 @@ static void addRouteStepMarker(Map* map, Waypoint& wp, GpxFile* track)
   }
   // use marker number as unique id for priority
   setMarkerProps(map, wp, wp.desc, track->style);
+  // label: maneuver icon (sprite) w/ street as attached text, beside the step circle; only for steps with maneuver
+  //  keyword (sym), not e.g. route pts w/ desc from imported GPX
+  if(wp.sym.empty()) { return; }
+  if(wp.labelMarker <= 0) {
+    wp.labelMarker = map->markerAdd();
+    map->markerSetStylingFromPath(wp.labelMarker, "layers.route-step-label.draw.marker");
+    map->markerSetPoint(wp.labelMarker, wp.loc.lngLat());
+  }
+  Properties props{{{"turn", wp.sym}, {"street", wp.name}, {"color", track->style}, {"priority", wp.labelMarker}}};
+  map->markerSetProperties(wp.labelMarker, std::move(props));
 }
 
 void MapsTracks::updateTrackMarker(GpxFile* track)
@@ -186,6 +196,8 @@ void MapsTracks::showTrack(GpxFile* track, bool show)  //, const char* styling)
     for(Waypoint& wp : route.pts) {
       if(wp.marker > 0)
         app->map->markerSetVisible(wp.marker, show);
+      if(wp.labelMarker > 0)
+        app->map->markerSetVisible(wp.labelMarker, show);
     }
   }
   if(!track->marker.isValid()) {
@@ -803,12 +815,33 @@ void MapsTracks::addRoute(std::vector<Waypoint>&& route)
   updateTrackMarker(activeTrack);
 }
 
+// instruction text from maneuver keyword and street
+static std::string routeStepInstr(const std::string& turn, const std::string& street)
+{
+  std::string side = turn.size() > 4 && turn.compare(turn.size() - 5, 5, "right") == 0 ? "right" : "left";
+  std::string s;
+  const char* prep = " onto ";
+  if(turn == "start") { s = "Start"; prep = " on "; }
+  else if(turn == "arrive") { s = "Arrive"; prep = " at "; }
+  else if(turn == "continue") s = "Continue";
+  else if(turn == "uturn") s = "Make a U-turn";
+  else if(turn == "roundabout") { s = "Take the roundabout"; prep = ", "; }  // street is e.g. "Exit 2: X"
+  else if(turn.compare(0, 5, "keep_") == 0) s = "Keep " + side;
+  else if(turn.compare(0, 6, "slight") == 0) s = "Turn slight " + side;
+  else if(turn.compare(0, 5, "sharp") == 0) s = "Turn sharp " + side;
+  else if(turn == "left" || turn == "right") s = "Turn " + side;
+  else s = "Continue";
+  return street.empty() ? s : s + prep + street;
+}
+
 // in the future, we can add support for lat,lng instead of wayptidx and find the nearest route pt
-void MapsTracks::addRouteStep(const char* instr, int rteptidx)
+void MapsTracks::addRouteStep(const char* instr, int rteptidx, const char* turn, const char* street)
 {
   if(!activeTrack || activeTrack->routes.empty() || activeTrack->routes[0].pts.size() <= rteptidx || rteptidx < 0) return;
   Waypoint& wp = activeTrack->routes[0].pts[rteptidx];
-  wp.desc = instr;
+  wp.sym = turn;
+  wp.name = street;
+  wp.desc = instr[0] ? std::string(instr) : routeStepInstr(wp.sym, wp.name);
   addRouteStepMarker(app->map.get(), wp, activeTrack);
 }
 

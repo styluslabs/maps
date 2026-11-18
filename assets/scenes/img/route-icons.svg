@@ -1,0 +1,94 @@
+<svg class="reflow-icons" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+<!-- route step maneuver icons for poi-points style: red channel = background (point color), green = icon
+  (outline color); icons are #FFFF00 (drawn over red, as in pois.svg, so edges keep full alpha); #FF8000 =
+  half icon color (secondary branches).  Icons are 24 units with 1 unit transparent
+  margin (for antialiasing; gap to step circle is the radial offset in markers.yaml).  Right variants are mirrored left ones. -->
+<defs>
+  <rect id="bg" x="-12" y="-12" width="24" height="24" rx="5" fill="#FF0000"/>
+</defs>
+
+<svg id="start" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <path d="M0 -8 L6.5 7 L0 3.5 L-6.5 7Z" fill="#FFFF00"/>
+</svg>
+
+<svg id="continue" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <path d="M0 8 V-3" stroke="#FFFF00" stroke-width="3" fill="none"/>
+  <path d="M-5 -2.5 L5 -2.5 L0 -8.5Z" fill="#FFFF00"/>
+</svg>
+
+<svg id="left" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <path d="M3.5 8.5 V-1 Q3.5 -3 1.5 -3 H-3" stroke="#FFFF00" stroke-width="3" fill="none"/>
+  <path d="M-2.5 -8 L-2.5 2 L-8.5 -3Z" fill="#FFFF00"/>
+</svg>
+<svg id="right" width="26" height="26" viewBox="-13 -13 26 26">
+  <g transform="scale(-1,1)">
+    <use href="#bg"/>
+    <path d="M3.5 8.5 V-1 Q3.5 -3 1.5 -3 H-3" stroke="#FFFF00" stroke-width="3" fill="none"/>
+    <path d="M-2.5 -8 L-2.5 2 L-8.5 -3Z" fill="#FFFF00"/>
+  </g>
+</svg>
+
+<svg id="slight_left" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <path d="M2.5 8.5 V2.5 L-3 -3" stroke="#FFFF00" stroke-width="3" fill="none" stroke-linejoin="round"/>
+  <path d="M-7.5 -7.5 L-0.4 -5.4 L-5.4 -0.4Z" fill="#FFFF00"/>
+</svg>
+<svg id="slight_right" width="26" height="26" viewBox="-13 -13 26 26">
+  <g transform="scale(-1,1)">
+    <use href="#bg"/>
+    <path d="M2.5 8.5 V2.5 L-3 -3" stroke="#FFFF00" stroke-width="3" fill="none" stroke-linejoin="round"/>
+    <path d="M-7.5 -7.5 L-0.4 -5.4 L-5.4 -0.4Z" fill="#FFFF00"/>
+  </g>
+</svg>
+
+<svg id="sharp_left" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <path d="M4 8.5 V-4 L-3 3" stroke="#FFFF00" stroke-width="3" fill="none" stroke-linejoin="round"/>
+  <path d="M-7 7 L-0.4 5.4 L-5.4 0.4Z" fill="#FFFF00"/>
+</svg>
+<svg id="sharp_right" width="26" height="26" viewBox="-13 -13 26 26">
+  <g transform="scale(-1,1)">
+    <use href="#bg"/>
+    <path d="M4 8.5 V-4 L-3 3" stroke="#FFFF00" stroke-width="3" fill="none" stroke-linejoin="round"/>
+    <path d="M-7 7 L-0.4 5.4 L-5.4 0.4Z" fill="#FFFF00"/>
+  </g>
+</svg>
+
+<svg id="keep_left" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <path d="M2.5 3 V-8.5" stroke="#FF8000" stroke-width="2" fill="none"/>
+  <path d="M2.5 8.5 V3 L-3 -2.5 V-3.5" stroke="#FFFF00" stroke-width="3" fill="none" stroke-linejoin="round"/>
+  <path d="M-8 -2.5 L2 -2.5 L-3 -8.5Z" fill="#FFFF00"/>
+</svg>
+<svg id="keep_right" width="26" height="26" viewBox="-13 -13 26 26">
+  <g transform="scale(-1,1)">
+    <use href="#bg"/>
+    <path d="M2.5 3 V-8.5" stroke="#FF8000" stroke-width="2" fill="none"/>
+    <path d="M2.5 8.5 V3 L-3 -2.5 V-3.5" stroke="#FFFF00" stroke-width="3" fill="none" stroke-linejoin="round"/>
+    <path d="M-8 -2.5 L2 -2.5 L-3 -8.5Z" fill="#FFFF00"/>
+  </g>
+</svg>
+
+<svg id="uturn" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <path d="M4.5 8.5 V-2 A4.5 4.5 0 0 0 -4.5 -2 V2" stroke="#FFFF00" stroke-width="3" fill="none"/>
+  <path d="M-9 1.5 L0 1.5 L-4.5 7.5Z" fill="#FFFF00"/>
+</svg>
+
+<svg id="roundabout" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <circle cx="0" cy="0" r="4.5" stroke="#FF8000" stroke-width="2" fill="none"/>
+  <path d="M0 9 V4.5 A4.5 4.5 0 0 0 3.2 -3.2 L5 -5" stroke="#FFFF00" stroke-width="3" fill="none"/>
+  <path d="M8.5 -8.5 L1.6 -6.6 L6.6 -1.6Z" fill="#FFFF00"/>
+</svg>
+
+<svg id="arrive" width="26" height="26" viewBox="-13 -13 26 26">
+  <use href="#bg"/>
+  <circle cx="0" cy="0" r="6" stroke="#FFFF00" stroke-width="2.5" fill="none"/>
+  <circle cx="0" cy="0" r="2.5" fill="#FFFF00"/>
+</svg>
+
+</svg>

@@ -38,7 +38,8 @@ namespace OfflineRouter {
 enum Mode { FOOT = 0, BIKE, CAR };
 
 struct RoutePt { double lng, lat, dist, time, elev; };  // dist in meters, time in seconds from start; elev NAN if unknown
-struct RouteStep { int idx; std::string instr; };
+// turn: maneuver keyword (see MapsTracks::addRouteStep), street: road name
+struct RouteStep { int idx; std::string turn; std::string street; };
 struct RouteResult { std::vector<RoutePt> pts; std::vector<RouteStep> steps; std::string error; };
 
 // returns decompressed MVT tile for z/x/y (empty if unavailable)
@@ -804,18 +805,16 @@ double Router::headingFrom(int e, int u) const
 
 static double turnAngle(double h1, double h0) { return std::fmod(h1 - h0 + 540.0, 360.0) - 180.0; }
 
-static std::string turnInstr(double turn, const std::string& name, bool keep = false)
+static std::string turnKey(double turn, bool keep = false)
 {
   double a = std::abs(turn);
-  const char* side = turn > 0 ? "right" : "left";
-  std::string s;
-  if(keep && a < 30) s = std::string("Keep ") + side;
-  else if(a < 30) s = "Continue";
-  else if(a < 60) s = std::string("Turn slight ") + side;
-  else if(a < 120) s = std::string("Turn ") + side;
-  else if(a < 165) s = std::string("Turn sharp ") + side;
-  else s = "Make a U-turn";
-  return s + " onto " + name;
+  std::string side = turn > 0 ? "right" : "left";
+  if(keep && a < 30) return "keep_" + side;
+  if(a < 30) return "continue";
+  if(a < 60) return "slight_" + side;
+  if(a < 120) return side;
+  if(a < 165) return "sharp_" + side;
+  return "uturn";
 }
 
 RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>& lngLats,
@@ -898,7 +897,7 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
       if(pi == 0) {
         if(leg == 0) {
           addPt(pts[0], true, elevAt(pts[0]));
-          res.steps.push_back({0, "Start on " + name});
+          res.steps.push_back({0, "start", name});
         }
       }
       else {
@@ -926,11 +925,13 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
               res.steps.pop_back();  // no net change
               lastIsTurn = false;
             }
-            else
-              res.steps.back().instr = turnInstr(mturn, name);
+            else {
+              res.steps.back().turn = turnKey(mturn);
+              res.steps.back().street = name;
+            }
           }
           else {
-            res.steps.push_back({idx, turnInstr(turn, name, straighter != 0)});
+            res.steps.push_back({idx, turnKey(turn, straighter != 0), name});
             stepHeading = prevHeading;
             stepName = prevName;
             lastIsTurn = true;
@@ -970,8 +971,8 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
         prevName = name;
       u = fwd ? edge.b : edge.a;
     }
-    res.steps.push_back({int(res.pts.size()) - 1,
-        leg + 2 < snapped.size() ? "Arrive at waypoint " + std::to_string(leg + 2) : std::string("Arrive at destination")});
+    res.steps.push_back({int(res.pts.size()) - 1, "arrive",
+        leg + 2 < snapped.size() ? "waypoint " + std::to_string(leg + 2) : std::string("destination")});
   }
   if(res.pts.empty()) res.error = "Waypoints are too close together";
   // fill gaps in elevation (e.g. missing tiles) with nearest known value
@@ -1109,9 +1110,16 @@ void offlineRoute(const std::string& routeMode, const std::vector<LngLat>& lngLa
         route.emplace_back(Location{p.time, p.lat, p.lng, 0, std::isnan(p.elev) ? 0 : p.elev, 0, 0, 0, 0, 0}, p.dist);
       }
       auto* tracks = MapsApp::inst->mapsTracks.get();
+      if(!tracks->activeTrack) return;
       tracks->addRoute(std::move(route));
-      for(const RouteStep& step : res.steps)
-        tracks->addRouteStep(step.instr.c_str(), step.idx);
+      std::vector<const Waypoint*> wpts;  // waypoints passed to router
+      for(const Waypoint& wp : tracks->activeTrack->waypoints) { if(wp.routed) wpts.push_back(&wp); }
+      size_t leg = 0;
+      for(const RouteStep& step : res.steps) {
+        // no step for arrival at untitled intermediate waypoint
+        if(step.turn == "arrive" && ++leg < wpts.size() - 1 && wpts[leg]->name.empty()) continue;
+        tracks->addRouteStep("", step.idx, step.turn.c_str(), step.street.c_str());
+      }
     });
   }).detach();
 }

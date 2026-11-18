@@ -21,7 +21,10 @@ public:
   void updateLocation(const Location& loc);
   void onMapEvent(MapEvent_t event);
   void addRoute(std::vector<Waypoint>&& route);
-  void addRouteStep(const char* instr, int rteptidx);
+  // route step at route pt rteptidx; turn = maneuver keyword: start, continue, slight_left, left, sharp_left,
+  //  keep_left, slight_right, right, sharp_right, keep_right, uturn, roundabout, arrive; street, turn optional; if
+  //  instr is empty, it's generated from turn and street
+  void addRouteStep(const char* instr, int rteptidx, const char* turn = "", const char* street = "");
   bool onPickResult();
   bool tapEvent(LngLat location);
   void fingerEvent(int action, LngLat pos);

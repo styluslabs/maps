@@ -421,11 +421,45 @@ static int addRoutePolyline(duk_context* ctx)
   return 0;
 }
 
+// addRoutePoints(coords, times): coords = [[lng, lat, (elev)], ...] (e.g. GeoJSON LineString coordinates);
+//  optional times = array of seconds from start, one per point
+static int addRoutePoints(duk_context* ctx)
+{
+  std::vector<Waypoint> route;
+  duk_size_t npts = duk_get_length(ctx, 0);
+  bool hasTimes = duk_is_array(ctx, 1) && duk_get_length(ctx, 1) == npts;
+  route.reserve(npts);
+  for(duk_size_t ii = 0; ii < npts; ++ii) {
+    duk_get_prop_index(ctx, 0, ii);
+    duk_get_prop_index(ctx, -1, 0);
+    duk_get_prop_index(ctx, -2, 1);
+    duk_get_prop_index(ctx, -3, 2);
+    double lng = duk_to_number(ctx, -3), lat = duk_to_number(ctx, -2);
+    double elev = duk_is_number(ctx, -1) ? duk_get_number(ctx, -1) : 0;
+    duk_pop_n(ctx, 4);
+    double t = 0;
+    if(hasTimes) {
+      duk_get_prop_index(ctx, 1, ii);
+      t = duk_to_number(ctx, -1);
+      duk_pop(ctx);
+    }
+    route.emplace_back(Location{t, lat, lng, 0, elev, 0, 0, 0, 0, 0}, 0.0);
+  }
+  for(size_t ii = 1; ii < route.size(); ++ii)
+    route[ii].dist = route[ii-1].dist + 1000*lngLatDist(route[ii].lngLat(), route[ii-1].lngLat());
+  MapsApp::inst->mapsTracks->addRoute(std::move(route));
+  return 0;
+}
+
+// addRouteStep(instr, idx, turn, street): turn (maneuver keyword, e.g. "slight_left"; see MapsTracks::addRouteStep)
+//  and street are optional; if instr is empty, it is generated from turn and street
 static int addRouteStep(duk_context* ctx)
 {
   const char* instr = duk_require_string(ctx, 0);
   int rteptidx = duk_to_int(ctx, 1);
-  MapsApp::inst->mapsTracks->addRouteStep(instr, rteptidx);
+  const char* turn = duk_is_string(ctx, 2) ? duk_get_string(ctx, 2) : "";
+  const char* street = duk_is_string(ctx, 3) ? duk_get_string(ctx, 3) : "";
+  MapsApp::inst->mapsTracks->addRouteStep(instr, rteptidx, turn, street);
   return 0;
 }
 
@@ -614,7 +648,9 @@ void PluginManager::createFns(duk_context* ctx)
   duk_put_global_string(ctx, "addRouteGPX");
   duk_push_c_function(ctx, addRoutePolyline, 3);
   duk_put_global_string(ctx, "addRoutePolyline");
-  duk_push_c_function(ctx, addRouteStep, 2);
+  duk_push_c_function(ctx, addRoutePoints, 2);
+  duk_put_global_string(ctx, "addRoutePoints");
+  duk_push_c_function(ctx, addRouteStep, 4);
   duk_put_global_string(ctx, "addRouteStep");
   duk_push_c_function(ctx, readSceneValue, 1);
   duk_put_global_string(ctx, "readSceneValue");

@@ -24,8 +24,10 @@ struct Waypoint
   std::string name;
   std::string desc;
   std::string props;
+  std::string sym;  // GPX <sym>; for route steps, maneuver keyword (see MapsTracks::addRouteStep) and name = street
   std::string uid;  // id for DragDropList
   UniqueMarkerID marker = 0;
+  UniqueMarkerID labelMarker = 0;  // route step label (maneuver icon + street)
   //bool visible = true;  // <extensions><sl:route visible="true" routed="true"/>
   bool routed = true;
 

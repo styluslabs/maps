@@ -78,6 +78,33 @@ const valhalla_options = {
   }
 };
 
+// maneuver type (valhalla repo docs/docs/api/route/api-reference.md, "kNone = 0") -> route step
+//  maneuver keyword (see MapsTracks::addRouteStep); null: no step (continue along same road, roundabout exit, transit)
+const valhalla_turns = [
+  null, "start", "start", "start", "arrive", "arrive", "arrive", "continue", null,  // 0 - 8
+  "slight_right", "right", "sharp_right", "uturn", "uturn", "sharp_left", "left", "slight_left",  // 9 - 16
+  "continue", "slight_right", "slight_left", "slight_right", "slight_left",  // 17 - 21: ramps, exits
+  "continue", "keep_right", "keep_left", "continue", "roundabout", null, "continue", "continue",  // 22 - 29
+  null, null, null, null, null, null, null,  // 30 - 36: transit
+  "keep_right", "keep_left", "continue", "continue", "continue", "continue", "continue"  // 37 - 43
+];
+
+function valhallaStep(steps, ii)
+{
+  const step = steps[ii];
+  const turn = step.type < valhalla_turns.length ? valhalla_turns[step.type] : "continue";
+  if(!turn) { return; }
+  // for roundabout, use street of the following roundabout exit maneuver
+  const names = turn == "roundabout" && ii + 1 < steps.length && steps[ii+1].type == 27 ?
+      steps[ii+1].street_names : step.street_names;
+  var street = names && names.length ? names[0] : "";
+  if(turn == "roundabout" && step.roundabout_exit_count)
+    street = "Exit " + step.roundabout_exit_count + (street ? ": " + street : "");
+  else if(turn == "arrive" && !street)
+    street = "destination";
+  addRouteStep(step.instruction || "", step.begin_shape_index, turn, street);
+}
+
 function valhallaOsmde(mode, waypoints)
 {
   const mode0 = mode.split("-")[0];
@@ -109,10 +136,8 @@ function valhallaOsmde(mode, waypoints)
       const leg = content.trip.legs[0];
       addRoutePolyline(leg.shape, leg.elevation, leg.summary.time);
       const steps = leg.maneuvers;
-      for(var ii = 0; ii < steps.length; ii++) {
-        if(!steps[ii].instruction || steps[ii].type == 0 || steps[ii].type == 8) continue;
-        addRouteStep(steps[ii].instruction, steps[ii].begin_shape_index);
-      }
+      for(var ii = 0; ii < steps.length; ii++)
+        valhallaStep(steps, ii);
     }
   });
 }

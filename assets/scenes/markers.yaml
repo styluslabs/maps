@@ -83,6 +83,10 @@ textures:
         density: 2
         # sprites set from svg ids
 
+    route-icons:
+        url: img/route-icons.svg
+        density: 2
+
     loc-marker:
         density: 2
         url: |
@@ -344,10 +348,7 @@ layers:
                         color: white
                         miter_limit: 1.5
                         #join: round
-            # POC: invisible point labels along route so route step labels (and other lower priority labels) avoid
-            #  the route; flat + angle: auto gives boxes aligned with route (OBB fit to projected corners); flat
-            #  sprites scale with map, so size grows up to 2x until next integer zoom; angle: auto aligns sprite y axis
-            #  with line, so size is [width, length]; spacing < length so boxes overlap; width < 8px route-step circle
+            # invisible point labels along route so route step labels (and other lower priority) avoid it
             blockers:
                 filter: { $zoom: { min: 15 } }
                 draw:
@@ -373,18 +374,34 @@ layers:
                 outline:
                     width: 1px
                     color: black
-                # POC: full instruction text (name = wp.desc, e.g. "Turn left onto Main Street")
+
+    # route maneuver icon sprite w/ street name as attached text
+    route-step-label:
+        draw:
+            marker:
+                style: poi-points
+                texture: route-icons
+                # turn: maneuver keyword from router; route-icons sprites are named after the keywords
+                sprite: function() { return feature.turn; }
+                size: 22px
+                # scalar offset = radial offset (along current anchor): gap between icon and route point
+                offset: 7px
+                color: '#2C3E50'
+                outline: { color: white }
+                anchor: [right, left, top, bottom, top-right, top-left, bottom-right, bottom-left]
+                collide: true
+                priority: 3
+                visible: function() { return $zoom >= 15; }
                 text:
-                    visible: function() { return $zoom >= 15; }
-                    text_source: name
-                    anchor: [right, left, top, bottom, top-right, top-left, bottom-right, bottom-left]
-                    collide: true
-                    optional: true
-                    priority: 3
-                    max_lines: 3
-                    text_wrap: 25
+                    text_source: street  # empty for BRouter (no street names): icon only
+                    anchor: [right, left]
+                    offset: 2.5px  # radial: gap between text and icon
+                    optional: false
+                    max_lines: 2
+                    text_wrap: 16
                     font:
                         family: global.marker_font
+                        weight: 600
                         size: 11px
                         fill: black
                         stroke: { color: white, width: 2px }

@@ -40,6 +40,7 @@ static Waypoint loadWaypoint(const pugi::xml_node& trkpt)
   float course = atof(trkpt.child_value("course"));
   double time = parseGpxTime(trkpt.child_value("time"));
   Waypoint wpt({time, lat, lng, 0, ele, 0, course, 0, speed, 0}, trkpt.child_value("name"), trkpt.child_value("desc"));
+  wpt.sym = trkpt.child_value("sym");
   pugi::xml_node extnode = trkpt.child("extensions");
   if(extnode) {
     //wpt.visible = extnode.attribute("visible").as_bool(wpt.visible);
@@ -178,6 +179,8 @@ void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd, bool 
     trkpt.append_child("name").append_child(pugi::node_pcdata).set_value(wpt.name.c_str());
   if(!wpt.desc.empty())
     trkpt.append_child("desc").append_child(pugi::node_pcdata).set_value(wpt.desc.c_str());
+  if(!wpt.sym.empty())  // GPX schema order: name, cmt, desc, src, link, sym, type
+    trkpt.append_child("sym").append_child(pugi::node_pcdata).set_value(wpt.sym.c_str());
 
   savedist = savedist && wpt.dist > 0;
   if(!wpt.routed || !wpt.props.empty() || savedist) {
