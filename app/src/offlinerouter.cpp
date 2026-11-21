@@ -177,6 +177,9 @@ private:
   std::vector<float> gcost;
   std::vector<int> parentEdge;  // previous directed edge
   std::vector<int> stamp;
+  // backward search state, indexed by node: cost to destination without turn costs; dstamp: reached, dset: settled
+  std::vector<float> dcost;
+  std::vector<int> dstamp, dset;
   int searchId = 0;
 
   bool loadTile(int tx, int ty);
@@ -743,16 +746,70 @@ void Router::undoRepls()
   repls.clear();
 }
 
-// A* over directed edges, so that search cost can depend on the turn from one edge to the next
+// A* over directed edges, so that search cost can depend on the turn from one edge to the next, guided by a
+//  node-based search without turn costs
 std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err)
 {
   const Profile& prof = cfg->profiles[mode];
   const float maxSpeed = float(prof.maxSpeed/prof.minFactor/3.6);  // m/s, for heuristic (cost = time * factor)
   ++searchId;
-  GPt target = nodes[dst].p;
-  double mpu = std::min(metersPerUnit(target.y), metersPerUnit(nodes[src].p.y));
+  GPt target = nodes[dst].p, start = nodes[src].p;
+  double mpu = std::min(metersPerUnit(target.y), metersPerUnit(start.y));
+  auto toDst = [&](int n) { return float(std::sqrt(dist2(nodes[n].p, target))*mpu/maxSpeed); };
+  auto toSrc = [&](int n) { return float(std::sqrt(dist2(nodes[n].p, start))*mpu/maxSpeed); };
+  using QItem = std::pair<float, int>;
+  // pass 1: node-based A* backward from dst until src is reached, without turn costs; settled nodes get their exact
+  //  cost to dst without turn costs (a nearly exact lower bound, so the edge-based search below barely spreads); for
+  //  unsettled nodes, cost to dst + toSrc() >= K, the key of src
+  float K = -1;
+  {
+    std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>> queue;
+    auto ensureNodes = [&](){
+      if(dstamp.size() < nodes.size()) {
+        size_t sz = nodes.size() + nodes.size()/2;
+        dstamp.resize(sz, 0);
+        dset.resize(sz, 0);
+        dcost.resize(sz);
+      }
+    };
+    ensureNodes();
+    dstamp[dst] = searchId;
+    dcost[dst] = 0;
+    queue.push({toSrc(dst), dst});
+    size_t iter = 0;
+    while(!queue.empty()) {
+      float f = queue.top().first;
+      int v = queue.top().second;
+      queue.pop();
+      if(dset[v] == searchId) continue;  // stale entry
+      dset[v] = searchId;
+      if(v == src) { K = f; break; }
+      if((++iter & 0xFFF) == 0 && canceled && canceled()) { err = "canceled"; return {}; }
+      expandNode(v);
+      ensureNodes();
+      for(int e : nodes[v].edges) {
+        bool fwd = edges[e].b == v;  // direction of travel along e to reach v
+        int u = fwd ? edges[e].a : edges[e].b;
+        float c = u == v ? -1 : edgeCost(e, fwd, mode);
+        if(c < 0) continue;
+        float g = dcost[v] + c;
+        if(dstamp[u] != searchId || g < dcost[u]) {
+          dstamp[u] = searchId;
+          dcost[u] = g;
+          queue.push({g + toSrc(u), u});
+        }
+      }
+    }
+  }
+  if(K < 0) {
+    err = tilesLoaded >= maxNewTiles ? "Route too long for offline routing" : "No route found";
+    return {};
+  }
+  // pass 2: edge-based A* with turn costs; heuristic is the pass 1 cost to dst for settled nodes, else the bound from
+  //  K; admissible but not consistent (states are reopened if reached with lower cost)
   auto heuristic = [&](int n) {
-    return float(std::sqrt(dist2(nodes[n].p, target))*mpu/maxSpeed);
+    if(size_t(n) < dset.size() && dset[n] == searchId) return dcost[n];
+    return std::max(toDst(n), K - toSrc(n));
   };
   auto ensureSize = [&](){
     if(stamp.size() < 2*edges.size()) {
@@ -762,7 +819,6 @@ std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<
       parentEdge.resize(sz);
     }
   };
-  using QItem = std::pair<float, int>;
   std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>> queue;
   // leave node u on edge e, having arrived on directed edge pd (-1 at source) with cost g
   auto relax = [&](int u, int e, int pd, float g) {
