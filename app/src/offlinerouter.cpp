@@ -52,11 +52,19 @@ static constexpr double EARTH_CIRC = 40075016.686;  // meters
 // routing configuration from scene
 struct Rule { Tangram::Filter filter; double value; };
 
+// route step (maneuver) types, for directions and step_cost
+enum TurnType { NO_STEP = 0, CONTINUE, KEEP, SLIGHT, TURN, SHARP, UTURN, NUM_TURN_TYPES };
+static const char* turnTypeNames[] = {"", "continue", "keep", "slight", "turn", "sharp", "uturn"};
+
 struct Profile {
   bool valid = false;
   std::vector<Rule> speed;  // first matching rule sets travel speed in km/h; 0 = not allowed
   std::vector<Rule> factor;  // cost (not travel time) multiplied by all matching factors
   Tangram::Filter oneway, onewayReverse, onewayExcept;  // reverse: ways that can only be traversed backward
+  std::vector<Rule> crossing;  // first matching rule sets search cost of crossing the way at a junction
+  float stepCost[NUM_TURN_TYPES] = {};  // search cost of route steps by TurnType; leftCost added for left turns
+  float leftCost = 0;
+  bool turnCosts = false;  // any step or crossing costs
   std::string maxspeedKey;  // speed limit attribute, applied as min(scale*maxspeed, max_factor*speed)
   double maxspeedScale = 1, maxspeedMaxFactor = INFINITY;
   double maxSpeed = 0;  // km/h, upper bound of travel speed
@@ -87,6 +95,7 @@ struct GPt { double x, y; };  // global coordinates: z14 tile index * extent + t
 struct Way {
   float spm[3][2];  // travel time in seconds per meter for each mode, forward and reverse; < 0 if not allowed
   float factor[3];  // cost = travel time * factor
+  float cross[3];  // search cost of crossing this way at a junction
   std::string name;  // for directions
   bool named;  // false if name is just the highway type
   bool linearElev;  // ignore terrain between endpoints
@@ -107,6 +116,7 @@ struct Edge {
   float len;  // meters
   std::vector<GPt> pts;
   float up = NAN, down = 0;  // ascent and descent in forward direction (meters); NAN if not yet calculated
+  mutable float heading[2] = {NAN, NAN};  // cached headingFrom() at a and b
 };
 
 enum EdgeFlag : uint8_t { LEFT = 1, RIGHT = 2, TOP = 4, BOTTOM = 8 };
@@ -163,9 +173,9 @@ private:
   int tilesLoaded = 0;
   int bx0, by0, bx1, by1;  // tile corridor for current search
 
-  // A* state
+  // A* state, indexed by directed edge (2*edge + 1 if traversed from b to a)
   std::vector<float> gcost;
-  std::vector<int> parentEdge;
+  std::vector<int> parentEdge;  // previous directed edge
   std::vector<int> stamp;
   int searchId = 0;
 
@@ -187,6 +197,8 @@ private:
   double edgeLength(const std::vector<GPt>& pts) const;
   float edgeTime(int e, bool fwd, Mode mode);
   float edgeCost(int e, bool fwd, Mode mode);
+  float turnCost(int e0, int u, int e1, Mode mode) const;
+  int stepAt(int e0, int u, int e1, Mode mode, const std::string& name0, double& turn) const;
   double elevAt(GPt p);
   double elevSpacing() const;
   void edgeClimb(int e);
@@ -264,6 +276,14 @@ static bool parseConfig(const YAML::Node& node, Config& cfg, std::string& err)
       if(ow["reverse"]) p.onewayReverse = filter(ow["reverse"]);
       if(ow["except"]) p.onewayExcept = filter(ow["except"]);
     }
+    if(const YAML::Node& sc = pn["step_cost"]) {
+      for(int t = CONTINUE; t < NUM_TURN_TYPES; ++t)
+        p.stepCost[t] = float(sc[turnTypeNames[t]].as<double>(0));
+      p.leftCost = float(sc["left"].as<double>(0));
+    }
+    rules(pn["crossing"], p.crossing);
+    p.turnCosts = p.leftCost > 0 || !p.crossing.empty();
+    for(float c : p.stepCost) p.turnCosts = p.turnCosts || c > 0;
     if(const YAML::Node& ms = pn["maxspeed"]) {
       p.maxspeedKey = ms["key"].as<std::string>("maxspeed");
       p.maxspeedScale = ms["scale"].as<double>(1);
@@ -312,6 +332,10 @@ Way Router::makeWay(const Tangram::Feature& feat)
     }
     float spm = v > 0 ? float(3.6/v) : -1;
     way.factor[mode] = float(f);
+    way.cross[mode] = 0;
+    for(const Rule& r : p.crossing) {
+      if(r.filter.eval(feat, *styleCtx)) { way.cross[mode] = float(r.value); break; }
+    }
     bool except = p.onewayExcept.isValid() && p.onewayExcept.eval(feat, *styleCtx);
     bool reverse = spm > 0 && !except && p.onewayReverse.isValid() && p.onewayReverse.eval(feat, *styleCtx);
     bool oneway = spm > 0 && !except && !reverse && p.oneway.isValid() && p.oneway.eval(feat, *styleCtx);
@@ -719,6 +743,7 @@ void Router::undoRepls()
   repls.clear();
 }
 
+// A* over directed edges, so that search cost can depend on the turn from one edge to the next
 std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<bool()>& canceled, std::string& err)
 {
   const Profile& prof = cfg->profiles[mode];
@@ -730,59 +755,56 @@ std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<
     return float(std::hypot(nodes[n].p.x - target.x, nodes[n].p.y - target.y)*mpu/maxSpeed);
   };
   auto ensureSize = [&](){
-    if(stamp.size() < nodes.size()) {
-      size_t sz = nodes.size() + nodes.size()/2;
+    if(stamp.size() < 2*edges.size()) {
+      size_t sz = 3*edges.size();
       stamp.resize(sz, 0);
       gcost.resize(sz);
       parentEdge.resize(sz);
     }
   };
-  ensureSize();
-
   using QItem = std::pair<float, int>;
   std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>> queue;
-  stamp[src] = searchId;
-  gcost[src] = 0;
-  parentEdge[src] = -1;
-  queue.push({heuristic(src), src});
+  // leave node u on edge e, having arrived on directed edge pd (-1 at source) with cost g
+  auto relax = [&](int u, int e, int pd, float g) {
+    bool fwd = edges[e].a == u;
+    int v = fwd ? edges[e].b : edges[e].a;
+    float c = v == u ? -1 : edgeCost(e, fwd, mode);
+    if(c < 0) return;
+    g += c + (pd < 0 ? 0 : turnCost(pd/2, u, e, mode));
+    int d = 2*e + (fwd ? 0 : 1);
+    if(stamp[d] != searchId || g < gcost[d]) {
+      stamp[d] = searchId;
+      gcost[d] = g;
+      parentEdge[d] = pd;
+      queue.push({g + heuristic(v), d});
+    }
+  };
+  expandNode(src);
+  ensureSize();
+  for(int e : nodes[src].edges)
+    relax(src, e, -1, 0);
+  int last = -1;  // directed edge arriving at dst
   size_t iter = 0;
   while(!queue.empty()) {
     float f = queue.top().first;
-    int u = queue.top().second;
+    int d = queue.top().second;
     queue.pop();
-    if(u == dst) break;
-    float gu = gcost[u];
-    if(f - heuristic(u) > gu + 1E-3f) continue;  // stale entry
+    int v = (d & 1) ? edges[d/2].a : edges[d/2].b;
+    if(f - heuristic(v) > gcost[d] + 1E-3f) continue;  // stale entry
+    if(v == dst) { last = d; break; }
     if((++iter & 0xFFF) == 0 && canceled && canceled()) { err = "canceled"; return {}; }
-    expandNode(u);
+    expandNode(v);
     ensureSize();
-    for(size_t ii = 0; ii < nodes[u].edges.size(); ++ii) {
-      int e = nodes[u].edges[ii];
-      const Edge& edge = edges[e];
-      bool fwd = edge.a == u;
-      int v = fwd ? edge.b : edge.a;
-      if(v == u) continue;
-      float c = edgeCost(e, fwd, mode);
-      if(c < 0) continue;
-      float gv = gu + c;
-      if(stamp[v] != searchId || gv < gcost[v]) {
-        stamp[v] = searchId;
-        gcost[v] = gv;
-        parentEdge[v] = e;
-        queue.push({gv + heuristic(v), v});
-      }
-    }
+    for(size_t ii = 0; ii < nodes[v].edges.size(); ++ii)
+      relax(v, nodes[v].edges[ii], d, gcost[d]);
   }
-  if(stamp[dst] != searchId) {
+  if(last < 0) {
     err = tilesLoaded >= maxNewTiles ? "Route too long for offline routing" : "No route found";
     return {};
   }
   std::vector<int> path;
-  for(int n = dst; parentEdge[n] >= 0; ) {
-    int e = parentEdge[n];
-    path.push_back(e);
-    n = edges[e].a == n ? edges[e].b : edges[e].a;
-  }
+  for(int d = last; d >= 0; d = parentEdge[d])
+    path.push_back(d/2);
   std::reverse(path.begin(), path.end());
   return path;
 }
@@ -796,27 +818,78 @@ double Router::headingFrom(int e, int u) const
 {
   const auto& pts = edges[e].pts;
   bool fwd = edges[e].a == u;
+  float& cached = edges[e].heading[fwd ? 0 : 1];
+  if(!std::isnan(cached)) return cached;
   size_t n = pts.size();
   auto pt = [&](size_t ii){ return fwd ? pts[ii] : pts[n - 1 - ii]; };
   double mpu = metersPerUnit(pts[0].y);
   size_t hi = 1;
   while(hi + 1 < n && std::hypot(pt(hi).x - pt(0).x, pt(hi).y - pt(0).y)*mpu < 10)
     ++hi;
-  return heading(pt(0), pt(hi));
+  return cached = float(heading(pt(0), pt(hi)));
 }
 
 static double turnAngle(double h1, double h0) { return std::fmod(h1 - h0 + 540.0, 360.0) - 180.0; }
 
-static std::string turnKey(double turn, bool keep = false)
+static int turnType(double turn, bool keep)
 {
   double a = std::abs(turn);
+  return a < 30 ? (keep ? KEEP : CONTINUE) : a < 60 ? SLIGHT : a < 120 ? TURN : a < 165 ? SHARP : UTURN;
+}
+
+// maneuver keyword for MapsTracks::addRouteStep
+static std::string turnKey(int type, double turn)
+{
   std::string side = turn > 0 ? "right" : "left";
-  if(keep && a < 30) return "keep_" + side;
-  if(a < 30) return "continue";
-  if(a < 60) return "slight_" + side;
-  if(a < 120) return side;
-  if(a < 165) return "sharp_" + side;
-  return "uturn";
+  if(type == CONTINUE || type == UTURN) return turnTypeNames[type];
+  return type == TURN ? side : std::string(turnTypeNames[type]) + "_" + side;
+}
+
+// turn at node u from edge e0 onto edge e1 (degrees, > 0 = right), and its type if it is a route step: there are
+//  other usable options at u, and the road name changes (name0: current road), a straighter option exists ("keep"),
+//  or the turn is >= 60 deg; NO_STEP otherwise
+int Router::stepAt(int e0, int u, int e1, Mode mode, const std::string& name0, double& turn) const
+{
+  double h0 = headingFrom(e0, u) + 180;  // heading arriving at u
+  turn = turnAngle(headingFrom(e1, u), h0);
+  int nother = 0, straighter = 0;
+  for(int e2 : nodes[u].edges) {
+    if(e2 == e0 || e2 == e1) continue;
+    bool fwd2 = edges[e2].a == u;
+    if((fwd2 ? edges[e2].b : edges[e2].a) == u || ways[edges[e2].way].spm[mode][fwd2 ? 0 : 1] <= 0) continue;
+    ++nother;
+    double t2 = turnAngle(headingFrom(e2, u), h0);
+    if(std::abs(t2) < std::abs(turn)) straighter = t2 < turn ? 1 : -1;
+  }
+  const Way& w1 = ways[edges[e1].way];
+  // ignore name change for small turns onto unnamed ways (e.g. missing ref on part of a road)
+  bool sameName = w1.name == name0 || (std::abs(turn) < 30 && !w1.named);
+  // no step if following the straightest option along the same road
+  if(nother == 0 || (sameName && !straighter && std::abs(turn) < 60)) return NO_STEP;
+  return turnType(turn, straighter != 0);
+}
+
+// search cost (not travel time) of going from edge e0 onto e1 at node u: step_cost of the route step, if any (U-turn
+//  cost even if there is no other option), plus crossing cost if the route crosses a way at u, i.e., there are
+//  matching edges on both sides of the route (not for turning onto the way or passing a way on one side)
+float Router::turnCost(int e0, int u, int e1, Mode mode) const
+{
+  const Profile& p = cfg->profiles[mode];
+  if(!p.turnCosts) return 0;
+  double turn;
+  int type = stepAt(e0, u, e1, mode, ways[edges[e0].way].name, turn);
+  if(std::abs(turn) >= 165) type = UTURN;
+  float c = p.stepCost[type] + (turn < 0 && type >= SLIGHT && type <= SHARP ? p.leftCost : 0);
+  if(p.crossing.empty()) return c;
+  double h0 = headingFrom(e0, u) + 180;
+  float left = 0, right = 0;
+  for(int e2 : nodes[u].edges) {
+    float x = ways[edges[e2].way].cross[mode];
+    if(e2 == e0 || e2 == e1 || x <= 0) continue;
+    float& side = turnAngle(headingFrom(e2, u), h0) > turn ? right : left;
+    side = std::max(side, x);
+  }
+  return c + std::min(left, right);
 }
 
 RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>& lngLats,
@@ -885,7 +958,7 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
       return res;
     }
     int u = src;
-    double prevHeading = 0, stepHeading = 0;  // stepHeading: incoming heading at last turn step
+    double stepHeading = 0;  // incoming heading at last turn step
     std::string prevName, stepName;
     bool lastIsTurn = false;
     for(size_t pi = 0; pi < path.size(); ++pi) {
@@ -894,7 +967,6 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
       std::vector<GPt> pts = edge.pts;
       if(!fwd) std::reverse(pts.begin(), pts.end());
       const std::string& name = ways[edge.way].name;
-      double inHeading = headingFrom(path[pi], u);
       bool stepped = false;
       if(pi == 0) {
         if(leg == 0) {
@@ -903,21 +975,9 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
         }
       }
       else {
-        double turn = turnAngle(inHeading, prevHeading);
-        // other options at this node
-        int nother = 0, straighter = 0;
-        for(int e2 : nodes[u].edges) {
-          if(e2 == path[pi] || e2 == path[pi-1]) continue;
-          bool fwd2 = edges[e2].a == u;
-          if((fwd2 ? edges[e2].b : edges[e2].a) == u || edgeCost(e2, fwd2, mode) < 0) continue;
-          ++nother;
-          double t2 = turnAngle(headingFrom(e2, u), prevHeading);
-          if(std::abs(t2) < std::abs(turn)) straighter = t2 < turn ? 1 : -1;
-        }
-        // ignore name change for small turns onto unnamed ways (e.g. missing ref on part of a road)
-        bool sameName = name == prevName || (std::abs(turn) < 30 && !ways[edge.way].named);
-        // no instruction if following the straightest option along the same road
-        if(nother > 0 && (!sameName || straighter || std::abs(turn) >= 60)) {
+        double turn, prevHeading = headingFrom(path[pi-1], u) + 180, inHeading = headingFrom(path[pi], u);
+        int type = stepAt(path[pi-1], u, path[pi], mode, prevName, turn);
+        if(type != NO_STEP) {
           int idx = int(res.pts.size()) - 1;
           stepped = true;
           // merge with previous turn if very close (e.g., roundabouts, dual carriageways, short connectors)
@@ -928,12 +988,12 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
               lastIsTurn = false;
             }
             else {
-              res.steps.back().turn = turnKey(mturn);
+              res.steps.back().turn = turnKey(turnType(mturn, false), mturn);
               res.steps.back().street = name;
             }
           }
           else {
-            res.steps.push_back({idx, turnKey(turn, straighter != 0), name});
+            res.steps.push_back({idx, turnKey(type, turn), name});
             stepHeading = prevHeading;
             stepName = prevName;
             lastIsTurn = true;
@@ -964,11 +1024,6 @@ RouteResult Router::route(Mode mode, const std::vector<std::pair<double,double>>
           addPt(p, false, linear ? z0 + (z1 - z0)*units/std::max(unitsTotal, 1E-9) : elevAt(p));
         }
       }
-      // heading near end of edge
-      size_t lo = pts.size() - 2;
-      while(lo > 0 && std::hypot(pts.back().x - pts[lo].x, pts.back().y - pts[lo].y)*mpu < 10)
-        --lo;
-      prevHeading = heading(pts[lo], pts.back());
       if(ways[edge.way].named || stepped || pi == 0)
         prevName = name;
       u = fwd ? edge.b : edge.a;

@@ -7,6 +7,11 @@
 #  speed rules for real slowdowns.  Large factors (e.g. 4) avoid a way unless there is no reasonable alternative.
 # - oneway: ways matching filter (and not except) can only be traversed forward, ways matching reverse (and not
 #  except) only backward; reverse takes precedence if both match
+# - step_cost: search cost (seconds, not added to route time) of each route step (instruction in directions), by type:
+#  continue (name change only), keep, slight, turn, sharp, uturn (also charged where a U-turn is the only option);
+#  left is added to slight, normal and sharp left turns.  Unlike directions, steps close together are not merged, so
+#  a roundabout or a left turn across a dual carriageway counts twice.
+# - crossing: search cost of passing through a junction with a way the route doesn't follow; first matching rule
 # - maxspeed: speed = min(scale*maxspeed, max_factor*speed) if attribute is present (before factors)
 # - name: attributes used for way name in directions; unnamed ways are "the " + labels[label_key value]
 #  (label_key value with '_' replaced by ' ' if not in labels)
@@ -56,6 +61,11 @@ application:
                     - { filter: { highway: primary }, value: 1.3 }
                     - { filter: { highway: secondary }, value: 1.2 }
                     - { filter: { trail_visibility: [bad, horrible, no] }, value: 1.5 }
+                step_cost: { continue: 1, keep: 1, slight: 2, turn: 3, sharp: 4, uturn: 10 }
+                crossing:
+                    - { filter: { highway: [trunk, primary] }, value: 30 }
+                    - { filter: { highway: secondary }, value: 20 }
+                    - { filter: { highway: tertiary }, value: 8 }
 
             bike:
                 # ~3 s/m: about 9 km/h at 6% grade; descents up to 30 km/h
@@ -99,12 +109,18 @@ application:
                     - { filter: { highway: [living_street, service, bridleway] }, value: 1.1 }
                     - { filter: { highway: path, not: { bicycle: [yes, designated, permissive] } }, value: 1.1 }
                     - { filter: { highway: cycleway }, value: 0.9 }
+                step_cost: { continue: 2, keep: 2, slight: 3, turn: 6, sharp: 10, uturn: 30, left: 4 }
+                crossing:
+                    - { filter: { highway: [trunk, primary] }, value: 30 }
+                    - { filter: { highway: secondary }, value: 20 }
+                    - { filter: { highway: tertiary }, value: 8 }
 
             drive:
                 oneway:
                     filter: [{ oneway: 1 }, { junction: true }]  # roundabouts are implicitly oneway
                     reverse: { oneway: -1 }
                 maxspeed: { key: maxspeed, scale: 0.85, max_factor: 1.5 }
+                step_cost: { continue: 2, keep: 2, slight: 4, turn: 10, sharp: 15, uturn: 60, left: 5 }
                 speed:
                     - { filter: { ramp: 1, highway: motorway }, value: 75 }
                     - { filter: { ramp: 1, highway: trunk }, value: 60 }
