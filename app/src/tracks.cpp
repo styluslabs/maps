@@ -11,6 +11,7 @@
 
 #include "gaml/src/yaml.h"
 #include "util/mapProjection.h"
+#include "glm/glm.hpp"
 
 #include "ugui/svggui.h"
 #include "ugui/widgets.h"
@@ -1034,33 +1035,84 @@ bool MapsTracks::tapEvent(LngLat location)
   return true;
 }
 
+void MapsTracks::startWayptDrag(Waypoint* wp)
+{
+  app->drawOnMap = true;
+  dragWaypt = wp;
+  setMarkerProps(app->map.get(), *wp, wp->name, activeTrack->style, true);
+  glm::dvec2 scr;
+  app->map->lngLatToScreenPosition(wp->loc.lng, wp->loc.lat, &scr.x, &scr.y);
+  dragOffset = glm::vec2(scr) - glm::vec2(app->gui->prevFingerPos.x, app->gui->prevFingerPos.y)*float(app->gui->paintScale);
+  dragPos = wp->loc.lngLat();
+  dragPanArmed = false;
+}
+
+// move dragged marker to current finger position
+void MapsTracks::updateWayptDrag()
+{
+  float s = app->gui->paintScale;
+  glm::vec2 finger = glm::vec2(app->gui->prevFingerPos.x, app->gui->prevFingerPos.y)*s;
+  glm::vec2 p = finger + dragOffset;
+  // for touch, move marker above finger so it isn't hidden; gradually, so it doesn't jump when drag starts
+  const SDL_TouchFingerEvent& press = app->gui->pressEvent.tfinger;
+  if(press.touchId != SDL_TOUCH_MOUSEID && press.touchId != PenPointerPen)
+    p.y -= std::min(40*s, glm::distance(finger, glm::vec2(press.x, press.y)*s));
+  LngLat r;
+  if(!app->map->screenPositionToLngLat(p.x, p.y, &r.longitude, &r.latitude)) return;
+  dragPos = r;
+  app->map->markerSetPoint(dragWaypt->marker, r);
+}
+
+// auto-pan velocity (pixels/sec) for drag at screen pos p, nonzero if p is near edge of visible part of map
+glm::vec2 MapsTracks::dragEdgeVel(glm::vec2 p)
+{
+  float s = app->gui->paintScale;
+  float margin = 40*s, maxv = 800*s;
+  Rect vis = app->getMapViewport();  // excludes panel in narrow layout
+  vis.top += app->topInset*s;
+  if(!app->currLayout->node->hasClass("window-layout-narrow")) {
+    // wide layout: panel (or just main toolbar) floats over top left of map
+    Rect pb = app->currLayout->selectFirst(".panel-layout")->node->bounds()*s;
+    if(p.y < pb.bottom)
+      vis.left = pb.right;
+  }
+  glm::vec2 v(0, 0);
+  if(p.x < vis.left + margin) v.x = p.x - (vis.left + margin);
+  else if(p.x > vis.right - margin) v.x = p.x - (vis.right - margin);
+  if(p.y < vis.top + margin) v.y = p.y - (vis.top + margin);
+  else if(p.y > vis.bottom - margin) v.y = p.y - (vis.bottom - margin);
+  return glm::clamp(v/margin, -1.0f, 1.0f)*maxv;
+}
+
+// called each frame; pans map if dragged waypoint is near edge; returns true if another frame is needed
+bool MapsTracks::dragAutoPan(double dt)
+{
+  if(!dragWaypt) return false;
+  glm::vec2 p = glm::vec2(app->gui->prevFingerPos.x, app->gui->prevFingerPos.y)*float(app->gui->paintScale);
+  glm::vec2 v = dragEdgeVel(p);
+  // don't auto-pan until finger has been outside edge zone (e.g. if drag starts near edge)
+  if(v == glm::vec2(0, 0) || !dragPanArmed) {
+    dragPanArmed = dragPanArmed || v == glm::vec2(0, 0);
+    return false;
+  }
+  glm::vec2 d = v*float(std::min(dt, 0.05));  // limit step after idle period
+  app->map->handlePanGesture(p.x, p.y, p.x - d.x, p.y - d.y);
+  updateWayptDrag();
+  return true;
+}
+
 void MapsTracks::fingerEvent(int action, LngLat pos)
 {
   if(!activeTrack) { return; }
   if(dragWaypt) {
-    // TODO: autopan when drag nears edge; right button drag (or shift + drag)
-    // moving marker should have collide = false
-    // UX on desktop: right click to insert waypoint , then only allow dragging waypoints (left drag ... right drag difficult or impossible on touchpad, unless you want to require shift+drag)
-    // - right click on waypoint deletes
-    // ... but how would we capture right (or left) drag without interfering with pan/tilt?
-
-    // ... let's use alt+drag so we can move forward
-
-    // dragging with finger is a problem because marker and desired position will be under finger
-    // - offset above finger (only for touch, not mouse)? offset then drag map not marker?
-
-    // showing route steps? tooltips on map?
-
-    // undo/redo (save last N sets of waypoints)
-
-    // waypoint dragging
-    if(action == 0) {
-      app->map->markerSetPoint(dragWaypt->marker, pos);
-      // if pos too close to screen edge, autoscroll map
-    }
+    // waypoint dragging - marker position is calculated from finger screen pos instead of pos
+    if(action == 0)
+      updateWayptDrag();  // auto-pan near edge is handled by dragAutoPan()
     else if(action < 0) {
-      if(action == -1)
-        dragWaypt->loc = Location{0, pos.latitude, pos.longitude, 0,0,0,0,0,0,0};
+      if(action == -1) {
+        updateWayptDrag();
+        dragWaypt->loc = Location{0, dragPos.latitude, dragPos.longitude, 0,0,0,0,0,0,0};
+      }
       else
         app->map->markerSetPoint(dragWaypt->marker, dragWaypt->loc.lngLat());
       // re-route even if canceled in case this was newly inserted waypoint; user is free to delete
@@ -1191,10 +1243,8 @@ bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
         Waypoint* pwp = addWaypoint(wp);
         autoInsertWaypt = prev;
         if(!pwp) { return true; }
-        app->drawOnMap = true;
-        dragWaypt = pwp;
+        startWayptDrag(pwp);
         dragInserted = true;
-        setMarkerProps(app->map.get(), *pwp, pwp->name, activeTrack->style, true);
         if(app->touchHandler->touchPoints.size() != 1)   // finger already lifted
           fingerEvent(-2, pwp->loc.lngLat());
         return true;
@@ -1283,11 +1333,8 @@ void MapsTracks::onMapEvent(MapEvent_t event)
     for(auto& wpt : activeTrack->waypoints) {
       if(app->pickedMarkerId == wpt.marker) {
         app->pickedMarkerId = 0;
-        if(app->touchHandler->touchPoints.size() == 1) {  // finger still down?
-          app->drawOnMap = true;
-          dragWaypt = &wpt;
-          setMarkerProps(app->map.get(), wpt, wpt.name, activeTrack->style, true);
-        }
+        if(app->touchHandler->touchPoints.size() == 1)  // finger still down?
+          startWayptDrag(&wpt);
         break;
       }
     }

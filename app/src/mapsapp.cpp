@@ -877,12 +877,15 @@ void MapsApp::mapUpdate(double time)
     locMarkerNeedsUpdate = false;
   }
 
+  // auto-pan map when dragged waypoint nears edge of map
+  bool dragpan = mapsTracks->dragAutoPan(time - lastFrameTime);
+
   mapState = map->update(time - lastFrameTime);
   lastFrameTime = time;
   //LOG("MapState: %X", mapState.flags);
-  if(mapState.isAnimating())  // !mapState.viewComplete() - TileWorker requests rendering when new tiles ready
+  if(dragpan || mapState.isAnimating())  // !mapState.viewComplete() - TileWorker requests rendering when new tiles ready
     platform->requestRender();
-  else {
+  if(!mapState.isAnimating()) {
     flyingToCurrLoc = false;
     if(followState == FOLLOW_PENDING)
       followState = FOLLOW_ORIENT;

@@ -28,6 +28,7 @@ public:
   bool onPickResult();
   bool tapEvent(LngLat location);
   void fingerEvent(int action, LngLat pos);
+  bool dragAutoPan(double dt);
   void routePluginError(const char* err);
   bool onFeaturePicked(const Tangram::FeaturePickResult* result);
   void loadTrackGPX(std::unique_ptr<PlatformFile> file);
@@ -96,6 +97,9 @@ private:
   void createWayptContent();
   void createTrackListPanel();
   void createTrackPanel();
+  void startWayptDrag(Waypoint* wp);
+  void updateWayptDrag();
+  glm::vec2 dragEdgeVel(glm::vec2 p);
 
   Toolbar* trackToolbar = NULL;
   Widget* trackContainer = NULL;
@@ -171,6 +175,9 @@ private:
   glm::dvec2 routeOrigin;
   Waypoint* dragWaypt = NULL;
   bool dragInserted = false;  // dragWaypt was just inserted (long press on route), so drag is same undo step
+  glm::vec2 dragOffset;  // marker screen pos - finger pos at drag start
+  LngLat dragPos;  // current position of dragged marker
+  bool dragPanArmed = false;  // finger has been outside edge zone, so auto-pan is allowed
   std::vector<std::vector<Waypoint>> wayptHistory;  // [histPos] is current state; empty if no active track
   size_t histPos = 0;
 };
