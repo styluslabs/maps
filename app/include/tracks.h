@@ -85,6 +85,11 @@ private:
   void startRecording();
   void closeActiveTrack();
   void hideDirectRoutePreview();
+  // undo/redo for waypoint edits: history of active track's waypoint lists, saved after each edit
+  void resetHistory();
+  void saveHistory(bool replaceLast = false);
+  void restoreHistory(size_t pos);
+  void updateUndoBtns();
   // UI setup
   void createStatsContent();
   void createPlotContent();
@@ -117,7 +122,7 @@ private:
   TrackSparkline* trackSpark = NULL;
   Button* retryBtn = NULL;
   Button* routeEditBtn = NULL;
-  Toolbar* routeEditTb = NULL;
+  Widget* routeEditTb = NULL;  // AutoAdjContainer w/ route edit toolbar
   Button* plotVsTimeBtn = NULL;
   Widget* liveStatsRow = NULL;
   Widget* nonliveStatsRow = NULL;
@@ -129,6 +134,8 @@ private:
   Button* recordTrackBtn = NULL;
   Button* plotEditBtn = NULL;
   Button* insertWayptBtn = NULL;
+  Button* undoBtn = NULL;
+  Button* redoBtn = NULL;
 
   std::unique_ptr<FileStream> recordGPXStrm;
   Timer* recordTimer = NULL;
@@ -163,4 +170,7 @@ private:
   isect2d::ISect2D<glm::vec2> routeCollider;
   glm::dvec2 routeOrigin;
   Waypoint* dragWaypt = NULL;
+  bool dragInserted = false;  // dragWaypt was just inserted (long press on route), so drag is same undo step
+  std::vector<std::vector<Waypoint>> wayptHistory;  // [histPos] is current state; empty if no active track
+  size_t histPos = 0;
 };

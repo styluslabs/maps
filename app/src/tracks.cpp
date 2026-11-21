@@ -402,6 +402,7 @@ void MapsTracks::closeActiveTrack()
       item->selectFirst(".detail-text")->setText(activeTrack->desc.c_str());
   }
   activeTrack = NULL;
+  resetHistory();
   waypointsDirty = false; plotDirty = false;
 }
 
@@ -435,6 +436,7 @@ void MapsTracks::populateTrack(GpxFile* track)  //TrackView_t view)
   if(activeTrack != track) {
     closeActiveTrack();
     activeTrack = track;
+    resetHistory();
     viewEntireTrack(track);
     if(!isRecTrack)
       activeTrack->marker.setProperties({{{"selected", 1}}});  //track->marker->setStylePath("layers.selected-track.draw.track");
@@ -864,13 +866,14 @@ void MapsTracks::removeWaypoint(GpxFile* track, const std::string& uid)
     insertionWpt.clear();
   track->waypoints.erase(it);
   track->modified = true;
-  if(track->waypoints.empty()) {
-    track->wayPtSerial = 0;  // we'll have to remove this if we add undo/redo functionality
+  // wayPtSerial isn't reset when last waypoint is removed: it gives uids, and undo can restore waypoints
+  if(track->waypoints.empty())
     hideDirectRoutePreview();  //app->crossHair->setRoutePreviewOrigin();
-  }
   if(routed)
     createRoute(track);
   updateWayptCount(wayptTabLabel, track);
+  if(track == activeTrack)
+    saveHistory();
 }
 
 void MapsTracks::editWaypoint(GpxFile* track, const Waypoint& wpt, std::function<void()> callback)
@@ -887,6 +890,8 @@ void MapsTracks::editWaypoint(GpxFile* track, const Waypoint& wpt, std::function
     it->desc = noteEdit->text();
     if(it->marker) { setMarkerProps(app->map.get(), *it, it->name, track->style); }
     waypointsDirty = true;
+    if(track == activeTrack)
+      saveHistory();
     // hack around problem of setPickResult destroying this closure
     //refreshWayptPlaceInfo(track, *it);
     if(callback) callback();  //track, *it);
@@ -1006,6 +1011,7 @@ Waypoint* MapsTracks::addWaypoint(Waypoint wpt)
   if(it->marker <= 0)
     updateTrackMarker(activeTrack);  // create marker for waypoint if it hasn't been yet
   updateWayptCount(wayptTabLabel, activeTrack);
+  saveHistory();
   return &(*it);
 }
 
@@ -1064,6 +1070,7 @@ void MapsTracks::fingerEvent(int action, LngLat pos)
       app->drawOnMap = false;
       populateTrack(activeTrack);
       createRoute(activeTrack);
+      saveHistory(std::exchange(dragInserted, false));
     }
     return;
   }
@@ -1124,6 +1131,7 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
       it->routed = !it->routed;
       routeBtn->setChecked(it->routed);
       createRoute(activeTrack);
+      saveHistory();
     };
   }
 
@@ -1150,6 +1158,7 @@ void MapsTracks::addWaypointItem(Waypoint& wp, const std::string& nextuid)
       std::rotate(itnext, itsrc, itsrc+1);
     if(routed)
       createRoute(activeTrack);
+    saveHistory();
   };
 }
 
@@ -1184,6 +1193,7 @@ bool MapsTracks::onFeaturePicked(const Tangram::FeaturePickResult* result)
         if(!pwp) { return true; }
         app->drawOnMap = true;
         dragWaypt = pwp;
+        dragInserted = true;
         setMarkerProps(app->map.get(), *pwp, pwp->name, activeTrack->style, true);
         if(app->touchHandler->touchPoints.size() != 1)   // finger already lifted
           fingerEvent(-2, pwp->loc.lngLat());
@@ -1331,8 +1341,10 @@ void MapsTracks::setRouteMode(const std::string& mode)
   else
     hideDirectRoutePreview();  //app->crossHair->setRoutePreviewOrigin();
   app->drawOnMap = routeEditTb->isVisible() && mode == "draw";
+  routeEditTb->node->invalidate(true);  // toolbar layout depends on mode (see adjFn)
   if(!activeTrack || activeTrack->routeMode == mode) return;
   activeTrack->routeMode = mode;
+  updateUndoBtns();
   app->config["tracks"]["routemode"] = mode;
   createRoute(activeTrack);
 }
@@ -1341,6 +1353,75 @@ void MapsTracks::hideDirectRoutePreview()
 {
   previewDistText->setVisible(false);
   app->crossHair->setRoutePreviewOrigin();
+}
+
+static bool sameWaypoints(const std::vector<Waypoint>& a, const std::vector<Waypoint>& b)
+{
+  if(a.size() != b.size()) return false;
+  for(size_t ii = 0; ii < a.size(); ++ii) {
+    const Waypoint& wa = a[ii];
+    const Waypoint& wb = b[ii];
+    if(wa.uid != wb.uid || wa.loc.lat != wb.loc.lat || wa.loc.lng != wb.loc.lng || wa.routed != wb.routed
+        || wa.name != wb.name || wa.desc != wb.desc || wa.props != wb.props)
+      return false;
+  }
+  return true;
+}
+
+void MapsTracks::resetHistory()
+{
+  wayptHistory.clear();
+  histPos = 0;
+  if(activeTrack)
+    wayptHistory.push_back(activeTrack->waypoints);  // copies w/o markers (UniqueMarkerID copy is 0)
+  updateUndoBtns();
+}
+
+// call after each edit of active track's waypoints; replaceLast to merge w/ previous edit (e.g. insert + drag)
+void MapsTracks::saveHistory(bool replaceLast)
+{
+  static constexpr size_t maxHistory = 50;
+  if(!activeTrack || wayptHistory.empty()) return;
+  if(sameWaypoints(activeTrack->waypoints, wayptHistory[histPos])) return;  // e.g. drag canceled
+  if(replaceLast && histPos > 0) --histPos;
+  wayptHistory.resize(histPos + 1);  // discard redo states
+  wayptHistory.push_back(activeTrack->waypoints);
+  if(wayptHistory.size() > maxHistory)
+    wayptHistory.erase(wayptHistory.begin(), wayptHistory.begin() + (wayptHistory.size() - maxHistory));
+  histPos = wayptHistory.size() - 1;
+  updateUndoBtns();
+}
+
+void MapsTracks::restoreHistory(size_t pos)
+{
+  if(!activeTrack || pos >= wayptHistory.size()) return;
+  histPos = pos;
+  // move assign a copy so old waypoints (and their markers) are destroyed: copy assignment of UniqueMarkerID
+  //  keeps existing handle, which would leave markers on the wrong waypoints
+  activeTrack->waypoints = std::vector<Waypoint>(wayptHistory[pos]);
+  activeTrack->modified = true;
+  dragWaypt = NULL;
+  insertionWpt.clear();
+  waypointsDirty = true;
+  populateTrack(activeTrack);  // rebuild waypoint list
+  updateTrackMarker(activeTrack);  // create markers
+  createRoute(activeTrack);
+  updateWayptCount(wayptTabLabel, activeTrack);
+  // as for removeWaypoint() and setRouteMode(): preview line from last waypoint to crosshair
+  if(activeTrack->waypoints.empty())
+    hideDirectRoutePreview();
+  else if(directRoutePreview && activeTrack->routeMode == "direct")
+    onMapEvent(MAP_CHANGE);
+  updateUndoBtns();
+}
+
+void MapsTracks::updateUndoBtns()
+{
+  if(!undoBtn) return;
+  // drawn route isn't computed from waypoints, so undo would do nothing useful
+  bool draw = activeTrack && activeTrack->routeMode == "draw";
+  undoBtn->setEnabled(!draw && histPos > 0);
+  redoBtn->setEnabled(!draw && histPos + 1 < wayptHistory.size());
 }
 
 void MapsTracks::toggleRouteEdit(bool show)
@@ -1374,6 +1455,7 @@ void MapsTracks::newRoute(std::string mode)
   app->showPanel(tracksPanel);
   app->panelToSkip = tracksPanel;
   populateTrack(&navRoute);
+  resetHistory();  // navRoute may already have been active track
   toggleRouteEdit(measure);  // should we also show route edit for navigation?
   if(!measure && app->hasLocation && km > 0.01)
     addWaypoint(wp1);  //"Current location"
@@ -2094,6 +2176,14 @@ void MapsTracks::createWayptContent()
   Menu* rteEditOverflow = createMenu(Menu::VERT_LEFT);
   rteEditOverflowBtn->setMenu(rteEditOverflow);
 
+  // search and bookmark buttons move here if there isn't room on toolbar (see adjFn below)
+  Button* searchWayptItem = rteEditOverflow->addItem("Add from search", MapsApp::uiIcon("search"),
+      [=](){ searchWayptBtn->onClicked(); });
+  Button* bkmkWayptItem = rteEditOverflow->addItem("Add from bookmarks", MapsApp::uiIcon("pin"),
+      [=](){ bkmkWayptBtn->onClicked(); });
+  searchWayptItem->setVisible(false);
+  bkmkWayptItem->setVisible(false);
+
   rteEditOverflow->addItem("Clear route", [this](){
     if(!activeTrack->routes.empty())
       activeTrack->routes.pop_back();
@@ -2107,6 +2197,7 @@ void MapsTracks::createWayptContent()
     waypointsDirty = true;
     populateTrack(activeTrack);
     createRoute(activeTrack);
+    saveHistory();
   });
 
   Button* tapToAddWayptBtn = createCheckBoxMenuItem("Tap to add waypoint");
@@ -2126,8 +2217,34 @@ void MapsTracks::createWayptContent()
   insertWayptBtn->setChecked(autoInsertWaypt);
   rteEditOverflow->addItem(insertWayptBtn);
 
-  routeEditTb = createToolbar({ previewDistText, createStretch(),
-      retryBtn, mapCenterWayptBtn, searchWayptBtn, bkmkWayptBtn, rteEditOverflowBtn });
+  undoBtn = createToolbutton(MapsApp::uiIcon("undo"), "Undo");
+  undoBtn->onClicked = [this](){ if(histPos > 0) restoreHistory(histPos - 1); };
+  redoBtn = createToolbutton(MapsApp::uiIcon("redo"), "Redo");
+  redoBtn->onClicked = [this](){ restoreHistory(histPos + 1); };
+  updateUndoBtns();
+
+  Toolbar* rteEditToolbar = createToolbar({ previewDistText, createStretch(),
+      retryBtn, undoBtn, redoBtn, mapCenterWayptBtn, searchWayptBtn, bkmkWayptBtn, rteEditOverflowBtn });
+  // direct mode shows distance etc. to crosshair (previewDistText) on left; if there isn't room for it, move
+  //  search and bookmark buttons (less likely to be used in direct mode) to overflow menu.  Decision depends
+  //  only on width and mode, not on current width of previewDistText (changes as map moves) or visibility of
+  //  retry btn (shown only for routing errors, i.e. never in direct mode), so buttons don't jump around
+  AutoAdjContainer* rteEditAdj = new AutoAdjContainer(new SvgG(), rteEditToolbar);
+  rteEditAdj->node->setAttribute("box-anchor", "hfill");
+  rteEditAdj->adjFn = [=, btnw = real(0)](const Rect& src, const Rect& dest) mutable {
+    static constexpr real previewTextWidth = 140;  // room for usual distance | elev, bearing | slope text
+    // buttons shrink if toolbar is too narrow, so use largest width seen
+    btnw = std::max(btnw, mapCenterWayptBtn->node->bounds().width());
+    // undo, redo, map center, search, bookmarks, overflow
+    bool narrow = activeTrack && activeTrack->routeMode == "direct" && dest.width() < previewTextWidth + 6*btnw;
+    if(searchWayptBtn->isVisible() != narrow) return;  // no change
+    searchWayptBtn->setVisible(!narrow);
+    bkmkWayptBtn->setVisible(!narrow);
+    searchWayptItem->setVisible(narrow);
+    bkmkWayptItem->setVisible(narrow);
+    rteEditAdj->repeatLayout(dest);
+  };
+  routeEditTb = rteEditAdj;
 
   auto wayptContainer = createColumn({ routeEditTb, wayptContent }, "", "", "fill");
   trackContainer->addWidget(wayptContainer);
