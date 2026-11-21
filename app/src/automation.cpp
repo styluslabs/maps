@@ -302,6 +302,15 @@ void MapAutomation::start(const std::string& path)
   FILE* out = replyOut;
   driver->replyFn = [out](const std::string& r){ fputs(r.c_str(), out); fflush(out); };
   driver->onQuit = [](){ MapsApp::runApplication = false; };
+  // points for mouse/tap/longpress/drag: geo:<lng>,<lat> -> window coords (map viewport is whole window, in px)
+  driver->resolvePoint = [](const std::string& spec, Point* p){
+    double lng, lat, x, y;
+    char extra;
+    if(sscanf(spec.c_str(), "geo:%lf,%lf%c", &lng, &lat, &extra) != 2) { return false; }
+    MapsApp::inst->map->lngLatToScreenPosition(lng, lat, &x, &y);
+    *p = Point(x, y)/MapsApp::gui->paintScale;
+    return true;
+  };
   addCommands();
   UiDriver* d = driver.get();
   // reader thread blocks in open/read, so it is detached (process exit ends it)
