@@ -56,7 +56,7 @@ struct Profile {
   bool valid = false;
   std::vector<Rule> speed;  // first matching rule sets travel speed in km/h; 0 = not allowed
   std::vector<Rule> factor;  // cost (not travel time) multiplied by all matching factors
-  Tangram::Filter oneway, onewayExcept;
+  Tangram::Filter oneway, onewayReverse, onewayExcept;  // reverse: ways that can only be traversed backward
   std::string maxspeedKey;  // speed limit attribute, applied as min(scale*maxspeed, max_factor*speed)
   double maxspeedScale = 1, maxspeedMaxFactor = INFINITY;
   double maxSpeed = 0;  // km/h, upper bound of travel speed
@@ -260,7 +260,8 @@ static bool parseConfig(const YAML::Node& node, Config& cfg, std::string& err)
     rules(pn["speed"], p.speed);
     rules(pn["factor"], p.factor);
     if(const YAML::Node& ow = pn["oneway"]) {
-      p.oneway = filter(ow["filter"]);
+      if(ow["filter"]) p.oneway = filter(ow["filter"]);
+      if(ow["reverse"]) p.onewayReverse = filter(ow["reverse"]);
       if(ow["except"]) p.onewayExcept = filter(ow["except"]);
     }
     if(const YAML::Node& ms = pn["maxspeed"]) {
@@ -311,9 +312,10 @@ Way Router::makeWay(const Tangram::Feature& feat)
     }
     float spm = v > 0 ? float(3.6/v) : -1;
     way.factor[mode] = float(f);
-    way.spm[mode][0] = spm;
-    bool oneway = spm > 0 && p.oneway.isValid() && p.oneway.eval(feat, *styleCtx)
-        && !(p.onewayExcept.isValid() && p.onewayExcept.eval(feat, *styleCtx));
+    bool except = p.onewayExcept.isValid() && p.onewayExcept.eval(feat, *styleCtx);
+    bool reverse = spm > 0 && !except && p.onewayReverse.isValid() && p.onewayReverse.eval(feat, *styleCtx);
+    bool oneway = spm > 0 && !except && !reverse && p.oneway.isValid() && p.oneway.eval(feat, *styleCtx);
+    way.spm[mode][0] = reverse ? -1 : spm;
     way.spm[mode][1] = oneway ? -1 : spm;
   }
   for(const std::string& key : cfg->nameKeys) {

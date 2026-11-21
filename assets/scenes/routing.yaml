@@ -5,7 +5,8 @@
 # - factor: route cost (travel time incl. climbing) is multiplied by value of every matching rule; > 1 to avoid,
 #  < 1 to prefer.  Factors only affect route choice, not route time, so use them for preferences (busy roads) and
 #  speed rules for real slowdowns.  Large factors (e.g. 4) avoid a way unless there is no reasonable alternative.
-# - oneway: ways matching filter (and not except) can only be traversed forward
+# - oneway: ways matching filter (and not except) can only be traversed forward, ways matching reverse (and not
+#  except) only backward; reverse takes precedence if both match
 # - maxspeed: speed = min(scale*maxspeed, max_factor*speed) if attribute is present (before factors)
 # - name: attributes used for way name in directions; unnamed ways are "the " + labels[label_key value]
 #  (label_key value with '_' replaced by ' ' if not in labels)
@@ -61,6 +62,7 @@ application:
                 climb: { up: 3, down: -1.5, max_speed: 30 }
                 oneway:
                     filter: [{ oneway: 1 }, { junction: true }]  # roundabouts are implicitly oneway
+                    reverse: { oneway: -1 }
                     except:
                         - { cycleway: [opposite, opposite_lane, opposite_track] }
                         - { cycleway_left: [opposite, opposite_lane, opposite_track] }
@@ -101,6 +103,7 @@ application:
             drive:
                 oneway:
                     filter: [{ oneway: 1 }, { junction: true }]  # roundabouts are implicitly oneway
+                    reverse: { oneway: -1 }
                 maxspeed: { key: maxspeed, scale: 0.85, max_factor: 1.5 }
                 speed:
                     - { filter: { ramp: 1, highway: motorway }, value: 75 }
