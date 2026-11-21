@@ -752,7 +752,7 @@ std::vector<int> Router::astar(int src, int dst, Mode mode, const std::function<
   GPt target = nodes[dst].p;
   double mpu = std::min(metersPerUnit(target.y), metersPerUnit(nodes[src].p.y));
   auto heuristic = [&](int n) {
-    return float(std::hypot(nodes[n].p.x - target.x, nodes[n].p.y - target.y)*mpu/maxSpeed);
+    return float(std::sqrt(dist2(nodes[n].p, target))*mpu/maxSpeed);
   };
   auto ensureSize = [&](){
     if(stamp.size() < 2*edges.size()) {
@@ -829,7 +829,14 @@ double Router::headingFrom(int e, int u) const
   return cached = float(heading(pt(0), pt(hi)));
 }
 
-static double turnAngle(double h1, double h0) { return std::fmod(h1 - h0 + 540.0, 360.0) - 180.0; }
+// h1 - h0 in [-180, 180)
+static double turnAngle(double h1, double h0)
+{
+  double d = h1 - h0;
+  while(d >= 180) d -= 360;
+  while(d < -180) d += 360;
+  return d;
+}
 
 static int turnType(double turn, bool keep)
 {
