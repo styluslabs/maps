@@ -223,65 +223,68 @@ global:
 
     shuffle_seed: 58987
     # priorities for colliding objects (points and text; lower value wins) - fractional part now orders within
-    #  group defined by integer part, after ordering by visible state and camera space z coord
+    #  group defined by integer part (floor), after ordering by visible state and camera space z coord; groups are
+    #  multiples of 10 to leave room for groups in between (e.g. 65 between 60 and 70); note that between marker and
+    #  tile labels, only the group counts (tile labels win ties)
     priority:
-        national_park: 7.5
-        campus: 10
-        forest: 11  # only one label for potentially large map feature, and only shown up to zoom 11 or 12
-        special_culture: 11
-        peak: 14
-        saddle: 15
-        cave: 16
-        spring: 17
-        airport: 18
-        boundary: 19  # boundaries often follow mountain ridges, so don't let them hide peaks or saddles
-        park: 20
-        golf: 21
-        cemetery: 22
+        national_park: 75
+        campus: 100
+        forest: 110  # only one label for potentially large map feature, and only shown up to zoom 11 or 12
+        special_culture: 110
+        peak: 140
+        saddle: 150
+        cave: 160
+        spring: 170
+        airport: 180
+        boundary: 190  # boundaries often follow mountain ridges, so don't let them hide peaks or saddles
+        park: 200
+        golf: 210
+        cemetery: 220
         # road labels
-        oneway_arrow: 23
-        motorway_ref: 24
-        highway_ref: 25
-        road_primary: 30
-        road_secondary: 40
-        motorway_name: 45  # shield generally more important than name for motorway
-        road_tertiary: 50
-        road_residential: 55
-        road_minor: 60
-        route_minor: 65
-        zoomed_ref: 70
+        oneway_arrow: 230
+        motorway_ref: 240
+        highway_ref: 250
+        road_primary: 300
+        road_secondary: 400
+        motorway_name: 450  # shield generally more important than name for motorway
+        road_tertiary: 500
+        road_residential: 550
+        road_minor: 600
+        route_minor: 650
+        zoomed_ref: 700
         # rivers have many possible label positions w/ limited conflict, whereas lakes have only one label
-        water: 22
-        waterway: 99
+        water: 220
+        waterway: 990
         # transit line labels
-        transit_ref: 19
-        transit_ref_tram: 24
-        transit_ref_bus: 29
+        transit_ref: 190
+        transit_ref_tram: 240
+        transit_ref_bus: 290
         # transit stops
-        bus_stop: 20  # bus stops only shown when show_transit = true
-        station_transit: 5 # transit station priority when show_transit = true
-        station_default: 29  # transit station priority when show_transit = false
+        bus_stop: 200  # bus stops only shown when show_transit = true
+        station_transit: 50 # transit station priority when show_transit = true
+        station_default: 290  # transit station priority when show_transit = false
         #station_tram: 6  # only shown when show_transit = true
         # we want to show every traffic light if showing any
-        traffic_light: 4
+        traffic_light: 40
         # housenumbers only shown at high zoom and unlikely to collide
-        housenumber: 350
+        housenumber: 3500
         # cities, states, countries
-        district_CN: 9
-        place: { continent: 5, country: 6, state: 7, province: 7, island: 8, city: 9, town: 10, village: 11, hamlet: 12, borough: 12, suburb: 13 }  # neighborhood: 14, quarter: 14
+        district_CN: 90
+        place: { continent: 50, country: 60, state: 70, province: 70, island: 80, city: 90, town: 100, village: 110, hamlet: 120, borough: 120, suburb: 130 }  # neighborhood: 140, quarter: 140
+        # base - fraction lands in group base - 1, i.e., just ahead of everything else at base
         place_fn: |
             function() {
-                return (global.priority.place[feature.place] || 14) - Math.round(Math.sqrt(feature.population || 1))/65536;
-                //return (global.priority.place[feature.place] || 14) + 100.0/(100 + (feature.population || 1));
+                return (global.priority.place[feature.place] || 140) - Math.round(Math.sqrt(feature.population || 1))/65536;
+                //return (global.priority.place[feature.place] || 140) + 100.0/(100 + (feature.population || 1));
             }
 
-    poi_priority: { "heritage": 30, "viewpoint": 31, "campground": 31, "trailhead": 31, "information": 99, "parking": 102, "toilet": 32, "drinking_water": 32, "marina": 41, "ranger_station": 40, "artwork": 42, "museum": 35, "theme_park": 40, "attraction": 42, "university": 33, "school": 52, "library": 41, "theatre": 41, "religious": 101, "shop": 101, "bike_shop": 101, "pharmacy": 101, "fuel": 101, "grocery": 38, "convenience": 51, "liquor": 101, "clothes": 101, "hardware": 101, "gym": 101, "bank": 101, "dentist": 101, "auto_repair": 101, "laundry": 101, "scissor": 101, "post_office": 100, "restaurant": 43, "cafe": 44, "bar": 44, "bakery": 44, "hospital": 101, "doctor": 101, "hotel": 101, "tree": 20, "golf": 21, "christian": 90, "muslim": 90, "buddhist": 90, "hindu": 90, "shinto": 90, "jewish": 90, "ruins": 41, "stadium": 40, "default": 101 }
+    poi_priority: { "heritage": 300, "viewpoint": 310, "campground": 310, "trailhead": 310, "information": 990, "parking": 1020, "toilet": 320, "drinking_water": 320, "marina": 410, "ranger_station": 400, "artwork": 420, "museum": 350, "theme_park": 400, "attraction": 420, "university": 330, "school": 520, "library": 410, "theatre": 410, "religious": 1010, "shop": 1010, "bike_shop": 1010, "pharmacy": 1010, "fuel": 1010, "grocery": 380, "convenience": 510, "liquor": 1010, "clothes": 1010, "hardware": 1010, "gym": 1010, "bank": 1010, "dentist": 1010, "auto_repair": 1010, "laundry": 1010, "scissor": 1010, "post_office": 1000, "restaurant": 430, "cafe": 440, "bar": 440, "bakery": 440, "hospital": 1010, "doctor": 1010, "hotel": 1010, "tree": 200, "golf": 210, "christian": 900, "muslim": 900, "buddhist": 900, "hindu": 900, "shinto": 900, "jewish": 900, "ruins": 410, "stadium": 400, "default": 1010 }
 
     # - use osm_id to provide well-defined ordering so POIs don't get replaced by nearby ones when zooming in
     poi_priority_fn: |
         function() /*@poi_priority*/ {
           const shuffle = ((global.shuffle_seed ^ Number(feature.osm_id)) & 65535)/65536.0;
-          return shuffle + (global.poi_priority[global.poi_sprite_fn()] || 101);
+          return shuffle + (global.poi_priority[global.poi_sprite_fn()] || 1010);
         }
 
     is_selected_fn: |
@@ -1730,8 +1733,8 @@ layers:
                             sprite: tram
                             priority: |
                                 function() {
-                                    if(global.show_transit) { return 1 + global.priority.station_transit; }
-                                    return 1 + global.priority.station_default;
+                                    if(global.show_transit) { return 10 + global.priority.station_transit; }
+                                    return 10 + global.priority.station_default;
                                 }
                             size: [[13, 10px], [15, 16px]]
                             visible: 'function() { return $zoom >= (global.show_transit ? 15 : 17); }'
@@ -1979,7 +1982,7 @@ layers:
                             size: [[8, 10px], [12, 16px]]
             capital:
                 filter: { capital: "yes" }
-                draw: { points: { size: 10px, texture: pois, sprite: capital, priority: 6.5, text: { priority: 6.5 } } }
+                draw: { points: { size: 10px, texture: pois, sprite: capital, priority: 65, text: { priority: 65 } } }
             city-1m:
                 filter: { population: { min: 1000000 } }
                 draw: { points: { text: { font: { weight: global.bold_weight } } } }
@@ -1994,7 +1997,7 @@ layers:
                 draw: { points: { visible: true } }
             special:  # San Jose has higher population than SF
                 filter: { name: "San Francisco" }
-                draw: { points: { priority: 8, text: { priority: 8 } } }
+                draw: { points: { priority: 80, text: { priority: 80 } } }
 
 
         # places w/text-only labels (not accompanying point)

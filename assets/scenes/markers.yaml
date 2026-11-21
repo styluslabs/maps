@@ -171,7 +171,7 @@ layers:
                 #collide: false
                 # this indicates all colliding labels should be hidden immediately (see labelManager.cpp)
                 transition: { selected: { time: 1s } }
-                priority: -1  #'function() { return feature.priority; }'
+                priority: -10  #'function() { return feature.priority; }'
                 offset: [0px, -14px]
                 text:
                     text_source: name
@@ -198,14 +198,14 @@ layers:
                 collide: true
                 color: function() { return feature.color || '#12B5CB'; }
                 outline: { color: black }
-                priority: 'function() { return 1 + (1+feature.priority)/65536; }'
+                priority: 'function() { return 10 + (1+feature.priority)/65536; }'
                 offset: [0px, -11px]
                 text:
                     text_source: name
                     anchor: [right, left, bottom, top]
                     collide: true
                     optional: true
-                    priority: 'function() { return 2 + (1+feature.priority)/65536; }'
+                    priority: 'function() { return 20 + (1+feature.priority)/65536; }'
                     max_lines: 2
                     offset: [0px, -11px]
                     font:
@@ -275,7 +275,7 @@ layers:
                 angle: 'function() { return feature.orientation; }'
                 color: |
                     function() { return feature.selected ? '#CF513D' : (feature.hasfix ? '#0000FF' : '#909090'); }
-                priority: -1000
+                priority: -10000
                 outline:
                     width: 2px
                     color: "#FFFFFF"
@@ -290,7 +290,7 @@ layers:
                 collide: 'function() { return !feature.dragging; }'
                 color: function() { return feature.color || '#12B5CB'; }
                 outline: { color: black }
-                priority: 'function() { return 2 + (1+feature.priority)/65536; }'
+                priority: 'function() { return 20 + (1+feature.priority)/65536; }'
                 offset: [0px, -11px]
                 text:
                     visible: 'function() { return !feature.dragging; }'
@@ -362,7 +362,8 @@ layers:
                         size: [4px, 14px]
                         color: [0, 0, 0, 0]
                         collide: true
-                        priority: 2.5
+                        # between waypoints (20) and route step labels (30)
+                        priority: 25
 
     route-step:
         draw:
@@ -390,7 +391,7 @@ layers:
                 outline: { color: white }
                 anchor: [right, left, top, bottom, top-right, top-left, bottom-right, bottom-left]
                 collide: true
-                priority: 3
+                priority: 30
                 visible: function() { return $zoom >= 15; }
                 text:
                     text_source: street  # empty for BRouter (no street names): icon only
