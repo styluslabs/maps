@@ -1111,7 +1111,22 @@ void MapsTracks::fingerEvent(int action, LngLat pos)
     else if(action < 0) {
       if(action == -1) {
         updateWayptDrag();
-        dragWaypt->loc = Location{0, dragPos.latitude, dragPos.longitude, 0,0,0,0,0,0,0};
+        if(dragPos != dragWaypt->lngLat()) {
+          // waypoint is no longer at picked place, so clear name if from pick result or current location
+          if(!dragWaypt->props.empty() || dragWaypt->name == "Start" ||
+              dragWaypt->name == lngLatToStr(dragWaypt->lngLat())) {
+            dragWaypt->name.clear();
+            dragWaypt->props.clear();
+          }
+          dragWaypt->loc = Location{0, dragPos.latitude, dragPos.longitude, 0,0,0,0,0,0,0};
+          std::string uid = dragWaypt->uid;
+          app->getElevation(dragPos, [this, uid, track = activeTrack](double ele){
+            if(activeTrack != track) return;
+            auto it = track->findWaypoint(uid);
+            if(it != track->waypoints.end())
+              it->loc.alt = ele;
+          });
+        }
       }
       else
         app->map->markerSetPoint(dragWaypt->marker, dragWaypt->loc.lngLat());
