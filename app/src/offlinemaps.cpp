@@ -296,11 +296,17 @@ static bool removeCacheFileIfUnused(const std::string& path)
   return removeFile(path);
 }
 
+// Scans of images table: tile_id (and created_at) are stored after tile_data, so reading tile_id from a table
+//  row means following the tile_data overflow page chain - i.e., reading most of the file.  So queries scanning
+//  images are written to get tile_id from the images_id index: DELETE ... WHERE rowid IN (SELECT rowid ...) for
+//  deletes (subquery uses covering index), ORDER BY images.tile_id for SELECTs needing other columns
+
 // delete all cached (non-offline) tiles from cache file, and delete the file if empty and not in use
 void MapsOffline::clearCacheFile(std::string path)
 {
   if(!FSPath(path).exists()) { return; }
-  if(runSQL(path, "DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM offline_tiles);")
+  if(runSQL(path, "DELETE FROM images WHERE rowid IN"
+      " (SELECT rowid FROM images WHERE tile_id NOT IN (SELECT tile_id FROM offline_tiles));")
       && !removeCacheFileIfUnused(path))
     runSQL(path, "VACUUM;");
 }
@@ -341,8 +347,10 @@ void MapsOffline::shrinkCache(int64_t maxbytes)
     std::vector< std::pair<int64_t, int64_t> > tiles;  // (last access time, size)
     int64_t total = 0;
     for(auto& src : dbsources) {
+      // ORDER BY images.tile_id so tile_id is read from images_id index (see note above clearCacheFile())
       if(!src.stmt("SELECT tla.last_access, length(tile_data) FROM images LEFT JOIN tile_last_access AS tla"
-          " ON images.tile_id = tla.tile_id WHERE images.tile_id NOT IN (SELECT tile_id FROM offline_tiles);")
+          " ON images.tile_id = tla.tile_id WHERE images.tile_id NOT IN (SELECT tile_id FROM offline_tiles)"
+          " ORDER BY images.tile_id;")
           .exec([&](int64_t t, int64_t size){ tiles.emplace_back(t, size);  total += size; }))
         LOGW("shrinkCache: error getting tile sizes: %s", src.errMsg());
     }
@@ -358,8 +366,9 @@ void MapsOffline::shrinkCache(int64_t maxbytes)
       // delete all tiles last accessed at or before cutoff (including tiles w/o last access)
       for(auto& src : dbsources) {
         const char* dbname = sqlite3_db_filename(src.db, "main");
-        if(src.stmt("DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM tile_last_access WHERE"
-            " last_access > ?) AND tile_id NOT IN (SELECT tile_id FROM offline_tiles);").bind(it->first).exec())
+        if(src.stmt("DELETE FROM images WHERE rowid IN (SELECT rowid FROM images WHERE tile_id NOT IN"
+            " (SELECT tile_id FROM tile_last_access WHERE last_access > ?) AND tile_id NOT IN"
+            " (SELECT tile_id FROM offline_tiles));").bind(it->first).exec())
           LOG("shrinkCache: deleted %d tiles from %s", sqlite3_changes(src.db), dbname);
         else
           LOGE("shrinkCache: error deleting tiles from %s: %s", dbname, src.errMsg());
@@ -607,7 +616,8 @@ static bool mbtilesImport(SQLiteDB& tileDB, int offlineId)
     //  uncompressed (but should mostly be gzip), so set compression=unknown
     importSql = R"#(BEGIN;
       REPLACE INTO map SELECT zoom_level, tile_column, tile_row, md5(tile_data) FROM src.tiles;
-      DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM map);  -- delete orphaned tiles
+      DELETE FROM images WHERE rowid IN
+        (SELECT rowid FROM images WHERE tile_id NOT IN (SELECT tile_id FROM map));  -- delete orphaned tiles
       REPLACE INTO images (tile_data, tile_id) SELECT s.tile_data, map.tile_id FROM src.tiles AS s JOIN map ON
         s.zoom_level = map.zoom_level AND s.tile_column = map.tile_column AND s.tile_row = map.tile_row;
       REPLACE INTO offline_tiles (tile_id, offline_id) SELECT map.tile_id, %d FROM src.tiles AS s JOIN map ON
@@ -617,9 +627,11 @@ static bool mbtilesImport(SQLiteDB& tileDB, int offlineId)
   }
   else if(hasMap && hasImages) {
     importSql = R"#(BEGIN;
-      REPLACE INTO main.map SELECT * FROM src.map;
-      DELETE FROM main.images WHERE tile_id NOT IN (SELECT tile_id FROM main.map);  -- delete orphaned tiles
-      REPLACE INTO main.images (tile_data, tile_id) SELECT * FROM src.images;
+      REPLACE INTO main.map (zoom_level, tile_column, tile_row, tile_id)
+        SELECT zoom_level, tile_column, tile_row, tile_id FROM src.map;
+      DELETE FROM main.images WHERE rowid IN
+        (SELECT rowid FROM main.images WHERE tile_id NOT IN (SELECT tile_id FROM main.map));  -- delete orphaned tiles
+      REPLACE INTO main.images (tile_data, tile_id) SELECT tile_data, tile_id FROM src.images;
       REPLACE INTO main.offline_tiles (tile_id, offline_id) SELECT tile_id, %d FROM src.map;
       REPLACE INTO main.metadata (name, value) VALUES ('compression', 'unknown');
       COMMIT;)#";
