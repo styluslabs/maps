@@ -130,7 +130,7 @@ $(MSI): $(TGT) $(DISTRES)
 $(OBJ): | $(BUILDDIRSMADE)
 
 # files that need to be generated, downloaded, etc.
-$(OBJ): $(GENERATED)
+$(OBJ): | $(GENERATED)
 
 # use quoted arg so that mkdir doesn't think '/' path separators are option switches
 # || VER>NUL suppresses errors thrown if folders already exist

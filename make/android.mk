@@ -73,7 +73,7 @@ $(TGT): $(OBJ)
 	$(LD) -o $@ $^ $(LDFLAGS) $(LIBS:%=-l%)
 
 # files that need to be generated, downloaded, etc.
-$(OBJ): $(GENERATED)
+$(OBJ): | $(GENERATED)
 
 # | (pipe) operator causes make to just check for existence instead of timestamp
 $(OBJ): | $(BUILDDIRS)

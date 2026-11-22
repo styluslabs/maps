@@ -121,8 +121,9 @@ $(TGZ): $(TGT) $(DISTRES)
 	rsync -Lvr --exclude .git $(DISTRES) $(BUILDDIR)/.dist
 	(cd $(BUILDDIR) && mv .dist $(TGZ_FOLDER) && tar --remove-files -czvf $@ $(TGZ_FOLDER))
 
-# files that need to be generated, downloaded, etc.
-$(OBJ): $(GENERATED)
+# files that need to be generated, downloaded, etc. (order-only: existence needed before first build; after
+#  that, .d files and source prerequisites give actual dependencies, so changing them doesn't rebuild everything)
+$(OBJ): | $(GENERATED)
 
 # | (pipe) operator causes make to just check for existence instead of timestamp
 $(OBJ): | $(BUILDDIRS)
