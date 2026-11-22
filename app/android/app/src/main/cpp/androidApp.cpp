@@ -723,9 +723,12 @@ JNI_FN(onResume)(JNIEnv* env, jclass)
   MapsApp::runOnMainThread([=](){ app->onResume(); });
 }
 
-JNI_FN(onLowMemory)(JNIEnv* env, jclass)
+JNI_FN(onTrimMemory)(JNIEnv* env, jclass, jint level)
 {
-  MapsApp::runOnMainThread([=](){ app->onLowMemory(); });
+  // ComponentCallbacks2: TRIM_MEMORY_UI_HIDDEN = 20, TRIM_MEMORY_BACKGROUND = 40, TRIM_MEMORY_COMPLETE = 80
+  //  (onLowMemory()); RUNNING_* levels < 20 are deprecated and not sent since API 34
+  if(level < 20) { return; }
+  MapsApp::runOnMainThread([=](){ app->onLowMemory(level >= 80); });
 }
 
 JNI_FN(onLowPower)(JNIEnv* env, jclass, jint state)

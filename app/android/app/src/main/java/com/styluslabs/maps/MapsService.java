@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ComponentCallbacks2;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
@@ -65,7 +66,7 @@ public class MapsService extends Service implements LocationListener
 
   @Override
   public void onLowMemory() {
-    MapsLib.onLowMemory();
+    MapsLib.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_COMPLETE);  // equivalent per Android docs
   }
 
   @Override
@@ -132,8 +133,6 @@ public class MapsService extends Service implements LocationListener
     synchronized(MapsService.class) { if(instance == this) instance = null; }
     super.onDestroy();
   }
-
-  public static synchronized boolean isRecording() { return instance != null; }
 
   // may be called from any thread
   public static synchronized void updateNotification(String text, long startMs)

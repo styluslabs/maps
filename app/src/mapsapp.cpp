@@ -10,6 +10,7 @@
 // for elevation
 #include "util/elevationManager.h"
 #include "data/rasterSource.h"
+#include "tile/tileCache.h"
 #include "debug/frameInfo.h"
 
 #include "touchhandler.h"
@@ -934,10 +935,15 @@ void MapsApp::mapUpdate(double time)
   sendMapEvent(MAP_CHANGE);
 }
 
-void MapsApp::onLowMemory()
+// critical: release all tiles and fonts; otherwise (e.g., app hidden) just clear cache of non-visible tiles
+//  (if enabled) to make us a less likely target for low memory killer
+void MapsApp::onLowMemory(bool critical)
 {
   // could be more aggressive if suspended, e.g., completely unload scene
-  map->onMemoryWarning();
+  if(critical)
+    map->onMemoryWarning();
+  else if(cfg()["storage"]["trim_on_hidden"].as<bool>(false) && map->getScene())
+    map->getScene()->tileManager()->getTileCache()->clear();
 }
 
 void MapsApp::onLowPower(int state)

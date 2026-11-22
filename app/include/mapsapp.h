@@ -64,7 +64,7 @@ public:
   //void onResize(int wWidth, int wHeight, int fWidth, int fHeight);
   void onSuspend();
   void onResume();
-  void onLowMemory();
+  void onLowMemory(bool critical);
   void onLowPower(int state);
   void updateLocation(const Location& _loc);
   void updateOrientation(double time, float azimuth, float pitch, float roll);

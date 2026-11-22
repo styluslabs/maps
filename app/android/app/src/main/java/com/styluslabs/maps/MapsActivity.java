@@ -43,7 +43,6 @@ import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.Manifest;
 import android.content.Context;
-import android.content.ComponentCallbacks2;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
@@ -302,10 +301,7 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   public void onTrimMemory(int level)
   {
     super.onTrimMemory(level);
-    // when recording in background, release tiles and fonts so we're less likely to be chosen by the low
-    //  memory killer; not done otherwise since tiles would have to be rebuilt every time app is resumed
-    if(level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN && MapsService.isRecording())
-      MapsLib.onLowMemory();
+    MapsLib.onTrimMemory(level);
   }
 
   public void stopSensors()
