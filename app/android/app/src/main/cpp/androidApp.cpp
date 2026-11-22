@@ -336,6 +336,7 @@ static jmethodID shareFileMID = nullptr;
 static jmethodID notifyStatusBarBGMID = nullptr;
 static jmethodID setSensorsEnabledMID = nullptr;
 static jmethodID setServiceStateMID = nullptr;
+static jmethodID updateNotificationMID = nullptr;
 static jmethodID extractAssetsMID = nullptr;
 static jmethodID sendToBackMID = nullptr;
 
@@ -363,6 +364,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* javaVM, void*)
   notifyStatusBarBGMID = jniEnv->GetMethodID(cls, "notifyStatusBarBG", "(Z)V");
   setSensorsEnabledMID = jniEnv->GetMethodID(cls, "setSensorsEnabled", "(Z)V");
   setServiceStateMID = jniEnv->GetMethodID(cls, "setServiceState", "(IFF)V");
+  updateNotificationMID = jniEnv->GetMethodID(cls, "updateNotification", "(Ljava/lang/String;J)V");
   extractAssetsMID = jniEnv->GetMethodID(cls, "extractAssets", "(Ljava/lang/String;)V");
   sendToBackMID = jniEnv->GetMethodID(cls, "sendToBack", "()V");
   return TANGRAM_JNI_VERSION;
@@ -526,6 +528,14 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
 {
   JniThreadBinding jniEnv(JniHelpers::getJVM());
   jniEnv->CallVoidMethod(mapsActivityRef, setServiceStateMID, state, intervalSec, minDist);
+}
+
+void MapsApp::updateServiceNotification(const char* text, int64_t startMs)
+{
+  JniThreadBinding jniEnv(JniHelpers::getJVM());
+  jstring jtext = jniEnv->NewStringUTF(text);  // OK since text has no chars outside BMP
+  jniEnv->CallVoidMethod(mapsActivityRef, updateNotificationMID, jtext, jlong(startMs));
+  jniEnv->DeleteLocalRef(jtext);
 }
 
 void MapsApp::getSafeAreaInsets(float *top, float *bottom)

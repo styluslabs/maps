@@ -211,6 +211,8 @@ public:
   static void notifyStatusBarBG(bool isLight);
   static void setSensorsEnabled(bool enabled);
   static void setServiceState(int state, float intervalSec = 0, float minDist = 0);
+  // text and chronometer start time (ms since epoch) for track recording notification (Android only)
+  static void updateServiceNotification(const char* text, int64_t startMs);
   static void getSafeAreaInsets(float* top, float* bottom);
   static void extractAssets(const char* assetPath);
   static bool loadConfig(const char* assetPath);

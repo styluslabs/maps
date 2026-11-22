@@ -30,6 +30,10 @@ public class MapsService extends Service implements LocationListener
   public static final String CHANNEL_ID = "MapsService_channel";
   //private boolean isRecording = false;
   private LocationManager locationManager;
+  // notification content set from native code (possibly before service is started)
+  private static MapsService instance = null;
+  private static String notifyText = null;
+  private static long notifyStartMs = 0;
 
   @Override
   public void onCreate()
@@ -68,11 +72,15 @@ public class MapsService extends Service implements LocationListener
   {
     String action = intent.getAction();
     if(action.equals(START_RECORDING)) {
-      prepareNotification();  // this calls startForeground()
+      synchronized(MapsService.class) {
+        instance = this;
+        prepareNotification();  // this calls startForeground()
+      }
       startLocationUpdates(intent.getFloatExtra(EXTRA_INTERVAL, 0), intent.getFloatExtra(EXTRA_DISTANCE, 0));
     }
     else if(action.equals(STOP_RECORDING)) {
       //isRecording = false;
+      synchronized(MapsService.class) { instance = null; }
       stopForeground(true);
       stopSelf();  //stopSelfResult(startId);
     }
@@ -87,19 +95,45 @@ public class MapsService extends Service implements LocationListener
       serviceChannel.setSound(null, null);
       getSystemService(NotificationManager.class).createNotificationChannel(serviceChannel);
     }
+    startForeground(NOTIFICATION_ID, buildNotification());  //ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+  }
+
+  // caller must hold MapsService.class lock
+  private Notification buildNotification()
+  {
     Intent intent = new Intent(this, MapsActivity.class);
     intent.setAction(Intent.ACTION_MAIN);
     intent.addCategory(Intent.CATEGORY_LAUNCHER);
     PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
-    Notification notification = new Notification.Builder(this, CHANNEL_ID)  //NotificationCompat
-        .setContentTitle("Ascend")
-        .setContentText("Ascend Maps is recording a track")
+    Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)  //NotificationCompat
+        .setContentTitle("Recording track")
+        .setContentText(notifyText != null ? notifyText : "Ascend Maps is recording a track")
         .setSmallIcon(R.mipmap.ic_launcher)
         .setOngoing(true)  // prevent dismissal (at least until Android 14)
-        .setContentIntent(pendingIntent)
-        .build();
-    startForeground(NOTIFICATION_ID, notification);  //ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        .setOnlyAlertOnce(true)  // no sound/vibration/heads-up for updates
+        .setContentIntent(pendingIntent);
+    if(notifyStartMs > 0) {
+      // elapsed time shown by system w/o updates from us
+      builder.setWhen(notifyStartMs).setShowWhen(true).setUsesChronometer(true);
+    }
+    return builder.build();
+  }
+
+  @Override
+  public void onDestroy()
+  {
+    synchronized(MapsService.class) { if(instance == this) instance = null; }
+    super.onDestroy();
+  }
+
+  // may be called from any thread
+  public static synchronized void updateNotification(String text, long startMs)
+  {
+    notifyText = text;
+    notifyStartMs = startMs;
+    if(instance != null)
+      instance.getSystemService(NotificationManager.class).notify(NOTIFICATION_ID, instance.buildNotification());
   }
 
   //@Nullable

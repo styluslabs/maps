@@ -71,6 +71,7 @@ private:
   Waypoint* addWaypoint(Waypoint wpt);
   void removeTrackMarkers(GpxFile* track);
   void updateStats(GpxFile* track);
+  void updateNotification();
   Waypoint* nearestRoutePt(const Waypoint& wpt);
   void updateDistances();
   bool findPickedWaypoint(GpxFile* track);
@@ -148,6 +149,7 @@ private:
   std::string insertionWpt;
   std::string trackSummary;
   TrackStats recordStats;  // incremental stats for recordedTrack while recording
+  Timestamp notifyTime = 0;  // last update of recording notification
   Timestamp lastTrackPtTime;
   Waypoint trackHoverLoc = LngLat{0, 0};
   double sliderPos = 0;

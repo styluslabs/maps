@@ -65,6 +65,8 @@ void MapsTracks::updateLocation(const Location& loc)
     }
   }
 
+  updateNotification();
+
   if(recordedTrack.modified || locs.size() == 1) {
     recordedTrack.modified = !saveTrack(&recordedTrack);
     return;
@@ -627,6 +629,23 @@ void MapsTracks::updateStats(GpxFile* track)
       return 0;
     });
   }
+}
+
+// update text of Android track recording notification; elapsed time is shown by notification (chronometer)
+void MapsTracks::updateNotification()
+{
+  // NotificationManager drops updates if posted too frequently; when stationary, a point is still added every
+  //  minTrackTime, so notification is never stale for long
+  Timestamp now = mSecSinceEpoch();
+  if(!recordTrack || now - notifyTime < 3000) return;
+  notifyTime = now;
+  auto& locs = recordedTrack.tracks.back().pts;
+  TrackStats stats = recordStats.update(locs);
+  std::string text = MapsApp::distKmToStr(stats.trackDist/1000) + u8" | \u2191 "
+      + MapsApp::elevToStr(stats.trackAscent) + u8" \u2193 " + MapsApp::elevToStr(-stats.trackDescent);
+  // chronometer start time; total time shown in app is approx. now - time of first point
+  int64_t startMs = locs.empty() ? lastTrackPtTime : int64_t(locs.front().loc.time*1000);
+  app->updateServiceNotification(text.c_str(), startMs);
 }
 
 static std::string wayptDetailStr(double distm, double alt, const std::string& desc)
@@ -1669,6 +1688,8 @@ void MapsTracks::startRecording()
   tracksBtn->setIcon(MapsApp::uiIcon("track-recording"));
   recordTrackBtn->setChecked(true);
   app->config["tracks"]["recording"] = recordedTrack.rowid;
+  notifyTime = 0;
+  updateNotification();  // replace any text from previous recording
 }
 
 void MapsTracks::setTrackEdit(bool show)
@@ -2312,6 +2333,7 @@ void MapsTracks::createTrackPanel()
       setTrackEdit(false);  // show/hide track editing controls
     recordStats = TrackStats(true, recordedTrack.hasSpeed, speedInvTau);  // track may be edited while paused
     app->setServiceState(recordTrack, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
+    updateNotification();  // in case app was restarted w/ recording paused
   };
 
   stopRecordBtn->onClicked = [=](){

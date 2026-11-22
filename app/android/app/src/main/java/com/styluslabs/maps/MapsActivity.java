@@ -355,6 +355,12 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
         .show();
   }
 
+  // called from native code to update track recording notification text and chronometer start time
+  public void updateNotification(String text, long startMs)
+  {
+    MapsService.updateNotification(text, startMs);
+  }
+
   public void setServiceState(int state, float intervalSec, float minDist)
   {
     runOnUiThread(new Runnable() { @Override public void run() {

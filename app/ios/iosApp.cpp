@@ -144,6 +144,9 @@ void MapsApp::setServiceState(int state, float intervalSec, float minDist)
   iosPlatform_setServiceState(sdlWin, state, intervalSec, minDist);
 }
 
+// iOS shows location indicator in status bar instead of a notification
+void MapsApp::updateServiceNotification(const char* text, int64_t startMs) {}
+
 void MapsApp::getSafeAreaInsets(float *top, float *bottom)
 {
   if(top) *top = _topInset;

@@ -96,6 +96,7 @@ bool MapsApp::openURL(const char* url)
 void MapsApp::notifyStatusBarBG(bool) {}
 void MapsApp::setSensorsEnabled(bool enabled) {}
 void MapsApp::setServiceState(int state, float intervalSec, float minDist) {}
+void MapsApp::updateServiceNotification(const char* text, int64_t startMs) {}
 void MapsApp::getSafeAreaInsets(float *top, float *bottom) { *top = 0; *bottom = 0; }
 void MapsApp::extractAssets(const char*) {}
 
