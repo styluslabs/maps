@@ -4,7 +4,7 @@
 
 # common C and C++ flags; always include debug info, use strip for packaging
 # ... don't use -ffast-math, it breaks std::isnan() among other things!
-CFLAGS += -MMD -g -march=x86-64-v2 -fno-trapping-math -Wall -Werror=return-type -Wno-strict-aliasing
+CFLAGS += -MMD -MP -g -march=x86-64-v2 -fno-trapping-math -Wall -Werror=return-type -Wno-strict-aliasing
 #-Wshadow
 # C++; -Wconditionally-supported catches passing non-POD to varargs fn
 CXX = g++
@@ -62,9 +62,12 @@ COMPILE_CMDS_DIR ?= $(PWD)
 
 # project independent stuff
 # pkg-config headers and libraries
+# (:= so pkg-config runs once, not for every compile and link command)
 ifneq ($(PKGS),)
-  CFLAGS += $(shell pkg-config --cflags $(PKGS))
-  LIBS += $(shell pkg-config --libs $(PKGS))
+  PKGS_CFLAGS := $(shell pkg-config --cflags $(PKGS))
+  PKGS_LIBS := $(shell pkg-config --libs $(PKGS))
+  CFLAGS += $(PKGS_CFLAGS)
+  LIBS += $(PKGS_LIBS)
 endif
 
 # assumes *FLAGS variables use deferred evaluation
@@ -134,8 +137,9 @@ $(BUILDDIRS):
 clean:
 	rm -f $(TGT) $(OBJ) $(DEPS)
 
+# remove build dir for current configuration and generated/downloaded files
 distclean:
-	rm -rf ./Debug ./Release
+	rm -rf $(BUILDDIR) $(GENERATED)
 
 sourcelist:
 	@printf '%s\n' $(SOURCES)

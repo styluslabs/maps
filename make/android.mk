@@ -3,7 +3,7 @@
 # - https://android.googlesource.com/platform/ndk/+/master/docs/BuildSystemMaintainers.md
 
 # common C and C++ flags
-CFLAGS += -MMD -fPIC -fvisibility=hidden -ffunction-sections -fdata-sections -Wall -Werror=return-type -Wno-strict-aliasing
+CFLAGS += -MMD -MP -fPIC -fvisibility=hidden -ffunction-sections -fdata-sections -Wall -Werror=return-type -Wno-strict-aliasing
 NDK_PREBUILT := $(wildcard $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/*)
 # C++
 CXX = $(NDK_PREBUILT)/bin/clang++ --target=aarch64-linux-android21
@@ -50,7 +50,7 @@ TGT=$(BUILDDIR)/$(TARGET)
 # sort removes duplicates (which cause make error)
 BUILDDIRS=$(sort $(dir $(OBJ)))
 
-.PHONY: all stripped clean sourcelist
+.PHONY: all stripped clean distclean sourcelist
 
 all: $(TGT)
 
@@ -83,6 +83,10 @@ $(BUILDDIRS):
 
 clean:
 	rm -f $(TGT) $(OBJ) $(DEPS)
+
+# remove build dir for current configuration and generated/downloaded files
+distclean:
+	rm -rf $(BUILDDIR) $(GENERATED)
 
 sourcelist:
 	@printf '%s\n' $(SOURCES)

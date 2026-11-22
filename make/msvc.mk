@@ -141,8 +141,10 @@ $(BUILDDIRSMADE):
 clean:
 	cd $(BUILDDIR) && del /S "*.obj" "*.d" "$(TARGET).exe"
 
+# remove build dir for current configuration and generated/downloaded files (rd and del need backslashes)
 distclean:
-	rd /s /q ./Debug ./Release
+	if exist "$(subst /,\,$(BUILDDIR))" rd /s /q "$(subst /,\,$(BUILDDIR))"
+	del /q $(subst /,\,$(GENERATED)) 2>NUL || VER>NUL
 
 # run `make COMPILE_CMDS_DIR="C:/<path to repo>" OS=Windows_NT compile_commands` from WSL bash
 compile_commands:
