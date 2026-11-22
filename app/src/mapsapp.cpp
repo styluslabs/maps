@@ -2464,7 +2464,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // Setup UI panels
   mapsSources = std::make_unique<MapsSources>(this);
   mapsOffline = std::make_unique<MapsOffline>(this);
-  MapsOffline::checkCacheSize();  // runs on offline worker thread
+  MapsOffline::onCacheGrowth(0);  // initial cache size check
   pluginManager = std::make_unique<PluginManager>(this);
   // no longer recreated when scene loaded
   mapsTracks = std::make_unique<MapsTracks>(this);

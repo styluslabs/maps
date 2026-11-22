@@ -257,30 +257,26 @@ bool MapsOffline::runSQL(std::string dbpath, std::string sql)
   return false;
 }
 
-// Cache size management: instead of tracking cache size incrementally (error prone), we measure size of cached
-//  (non-offline) tiles at startup and after every cacheCheckInterval bytes of new tiles
+// Cache size management: at startup and after every cacheCheckInterval bytes of new tiles, we estimate size
+//  of cached (non-offline) tiles from DB page counts, and only if this exceeds max_cache do we get the exact
+//  size (which requires reading entire DB) and delete least recently used tiles if needed.  Check interval
+//  is set to the space remaining under max_cache at last check, but no less than minCheckInterval
+static constexpr int64_t minCheckInterval = 10*1024*1024;
 static std::atomic<int64_t> cacheBytesWritten{0};
-static std::atomic<int64_t> cacheCheckInterval{64*1024*1024};
+static std::atomic<int64_t> cacheCheckInterval{0};  // 0 so that first call to onCacheGrowth() runs check
 static std::atomic_bool cacheCheckQueued{false};
 
-// main thread only (reads config)
-void MapsOffline::checkCacheSize()
-{
-  if(cacheCheckQueued.exchange(true)) { return; }
-  cacheBytesWritten = 0;
-  int64_t shrinkAt = MapsApp::cfg()["storage"]["shrink_at"].as<int64_t>(600) * 1024*1024;
-  int64_t shrinkTo = MapsApp::cfg()["storage"]["shrink_to"].as<int64_t>(400) * 1024*1024;
-  cacheCheckInterval = std::max(int64_t(1024*1024), (shrinkAt - shrinkTo)/4);
-  if(shrinkAt <= 0) { cacheCheckQueued = false; return; }  // no limit
-  // offline tasks run sequentially, so this will wait for any in-progress offline download to finish
-  queueOfflineTask(0, [=](){ shrinkCache(shrinkTo, shrinkAt);  cacheCheckQueued = false; });
-}
-
-// called from any thread when tiles are added to cache (or offline tiles are converted to cached)
+// called from any thread when tiles are added to cache (or offline tiles are converted to cached), and with
+//  bytes = 0 at startup for initial check
 void MapsOffline::onCacheGrowth(int64_t bytes)
 {
-  if((cacheBytesWritten += bytes) > cacheCheckInterval && !cacheCheckQueued)
-    MapsApp::runOnMainThread(checkCacheSize);
+  if((cacheBytesWritten += bytes) < cacheCheckInterval || cacheCheckQueued.exchange(true)) { return; }
+  // config must be read and queueOfflineTask() called on main thread
+  MapsApp::runOnMainThread([](){
+    int64_t maxCache = MapsApp::cfg()["storage"]["max_cache"].as<int64_t>(600) * 1024*1024;
+    // offline tasks run sequentially, so this will wait for any in-progress offline download to finish
+    queueOfflineTask(0, [=](){ shrinkCache(maxCache);  cacheCheckQueued = false; });
+  });
 }
 
 // delete cache file if it contains no tiles and is not in use by a tile source
@@ -309,63 +305,70 @@ void MapsOffline::clearCacheFile(std::string path)
     runSQL(path, "VACUUM;");
 }
 
-// if total size of cached (non-offline) tiles in all cache files exceeds threshold, delete least recently
-//  accessed tiles until total is <= maxbytes; also deletes cache files which are empty and not in use
-void MapsOffline::shrinkCache(int64_t maxbytes, int64_t threshold)
+// if size of cached (non-offline) tiles in all cache files could exceed maxbytes before the next check, delete
+//  least recently accessed tiles to reduce size to 3/4 of maxbytes; also deletes empty cache files not in use
+//  (note that files emptied by shrinking will not be deleted until next check)
+void MapsOffline::shrinkCache(int64_t maxbytes)
 {
+  // amount by which estimate exceeded exact size at last exact check (DB overhead, imported offline maps w/o
+  //  size, tiles shared between offline maps, etc.)
+  static int64_t estimateExcess = 0;
+  cacheBytesWritten = 0;  // tiles written after this point may not be included in measurement
   std::vector<SQLiteDB> dbsources;
-  std::vector<std::string> cachefiles;
-  std::vector< std::pair<int64_t, int64_t> > tiles;  // (last access time, size)
-  auto insertTile = [&](const char*, int oflid, int64_t t, int64_t size){
-    if(!oflid) { tiles.emplace_back(t, size); }
-  };
-
+  int64_t estimate = 0, offline = 0;
   FSPath cachedir(MapsApp::baseDir, "cache");
   for(auto& file : lsDirectory(cachedir)) {
     FSPath cachefile = cachedir.child(file);
-    if(cachefile.extension() != "mbtiles") continue;
-    cachefiles.push_back(cachefile.path);
+    if(cachefile.extension() != "mbtiles" || removeCacheFileIfUnused(cachefile.path)) continue;
     SQLiteDB mbtiles;
     if(mbtiles.open(cachefile.path, SQLITE_OPEN_READWRITE) != SQLITE_OK) { continue; }
     sqlite3_busy_timeout(mbtiles.db, 5000);  // tile sources may be writing to DB
-    size_t ntiles = tiles.size();
-    bool ok = mbtiles.stmt("SELECT images.tile_id, ot.offline_id, tla.last_access, length(tile_data)"
-        " FROM images LEFT JOIN tile_last_access AS tla ON images.tile_id = tla.tile_id"
-        " LEFT JOIN offline_tiles AS ot ON images.tile_id = ot.tile_id;").exec(insertTile);
-    if(!ok) {
-      LOGW("Error getting tile sizes from %s: %s", cachefile.c_str(), mbtiles.errMsg());
-      tiles.resize(ntiles);
-      continue;
-    }
+    int64_t size = 0;  // excludes free pages (we don't VACUUM after deleting tiles, since space will be reused)
+    mbtiles.stmt("SELECT (page_count - freelist_count)*page_size FROM"
+        " pragma_page_count(), pragma_freelist_count(), pragma_page_size();").onerow(size);
+    estimate += size;
     dbsources.push_back(std::move(mbtiles));
   }
+  SQLiteStmt(MapsApp::bkmkDB, "SELECT sum(done) FROM offlinemaps;").onerow(offline);  // done = size
+  estimate -= offline;
+  int64_t cacheSize = estimate - estimateExcess;
+  // shrink now if limit could be exceeded before next check (also avoids wasting exact check if close to limit)
+  auto needShrink = [&](int64_t size){ return size + minCheckInterval > maxbytes; };
+  LOG("shrinkCache: estimated cache size %.1f MB (excess %.1f MB, limit %.1f MB)",
+      estimate/1048576.0, estimateExcess/1048576.0, maxbytes/1048576.0);
 
-  int64_t total = 0;
-  for(auto& x : tiles) { total += x.second; }
-  LOG("shrinkCache: cache size %.1f MB (threshold %.1f MB)", total/1048576.0, threshold/1048576.0);
-  if(total > threshold && total > maxbytes) {  // latter ensures loop below stops before end of tiles
-    std::sort(tiles.rbegin(), tiles.rend());  // sort by timestamp, descending (newest to oldest)
-    int64_t tot = 0;
-    auto it = tiles.begin();
-    while(it != tiles.end() && tot + it->second <= maxbytes) { tot += (it++)->second; }
-    // delete all tiles last accessed at or before cutoff (including tiles w/o last access)
+  if(needShrink(cacheSize)) {
+    std::vector< std::pair<int64_t, int64_t> > tiles;  // (last access time, size)
+    int64_t total = 0;
     for(auto& src : dbsources) {
-      const char* dbname = sqlite3_db_filename(src.db, "main");
-      if(!src.stmt("DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM tile_last_access WHERE"
-          " last_access > ?) AND tile_id NOT IN (SELECT tile_id FROM offline_tiles);").bind(it->first).exec()) {
-        LOGE("shrinkCache: error deleting tiles from %s: %s", dbname, src.errMsg());
-        continue;
+      if(!src.stmt("SELECT tla.last_access, length(tile_data) FROM images LEFT JOIN tile_last_access AS tla"
+          " ON images.tile_id = tla.tile_id WHERE images.tile_id NOT IN (SELECT tile_id FROM offline_tiles);")
+          .exec([&](int64_t t, int64_t size){ tiles.emplace_back(t, size);  total += size; }))
+        LOGW("shrinkCache: error getting tile sizes: %s", src.errMsg());
+    }
+    estimateExcess = std::max(int64_t(0), estimate - total);
+    cacheSize = total;
+    LOG("shrinkCache: cache size %.1f MB", total/1048576.0);
+    if(needShrink(total) && total > maxbytes*3/4) {
+      std::sort(tiles.rbegin(), tiles.rend());  // sort by timestamp, descending (newest to oldest)
+      int64_t tot = 0;
+      auto it = tiles.begin();
+      while(tot + it->second <= maxbytes*3/4) { tot += (it++)->second; }  // total > maxbytes*3/4 so won't hit end
+      cacheSize = tot;
+      // delete all tiles last accessed at or before cutoff (including tiles w/o last access)
+      for(auto& src : dbsources) {
+        const char* dbname = sqlite3_db_filename(src.db, "main");
+        if(src.stmt("DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM tile_last_access WHERE"
+            " last_access > ?) AND tile_id NOT IN (SELECT tile_id FROM offline_tiles);").bind(it->first).exec())
+          LOG("shrinkCache: deleted %d tiles from %s", sqlite3_changes(src.db), dbname);
+        else
+          LOGE("shrinkCache: error deleting tiles from %s: %s", dbname, src.errMsg());
       }
-      int ndeleted = sqlite3_changes(src.db);  // excludes rows deleted by trigger
-      LOG("shrinkCache: deleted %d tiles from %s", ndeleted, dbname);
-      if(ndeleted > 32 && !src.exec("VACUUM;"))
-        LOGW("shrinkCache: VACUUM failed for %s: %s", dbname, src.errMsg());
     }
   }
 
-  dbsources.clear();  // close DBs
-  for(auto& path : cachefiles)
-    removeCacheFileIfUnused(path);
+  cacheCheckInterval = std::max(minCheckInterval, maxbytes - cacheSize);
+  LOG("shrinkCache: next check after %.1f MB of new tiles", cacheCheckInterval/1048576.0);
 }
 
 void MapsOffline::queueOfflineTask(int mapid, std::function<void()>&& fn)
@@ -752,6 +755,13 @@ bool MapsOffline::importFile(std::string destsrc, std::unique_ptr<PlatformFile> 
     }
     if(!mbtilesImport(tileDB, offlineId))
       return;
+    // record (approx.) size of imported map, used for display and cache size estimate
+    int64_t pages = 0, pagesize = 0;
+    tileDB.stmt("PRAGMA src.page_count;").onerow(pages);
+    tileDB.stmt("PRAGMA src.page_size;").onerow(pagesize);
+    SQLiteStmt(MapsApp::bkmkDB, "UPDATE offlinemaps SET done = ? WHERE mapid = ?;")
+        .bind(std::max(int64_t(1), pages*pagesize), offlineId).exec();
+    MapsApp::runOnMainThread([this](){ populateOffline(); });
     // refresh map to show new tiles
     app->mapsSources->rebuildSource(destsrc);
     if(searchYaml)  // !poiimport)

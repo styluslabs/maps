@@ -42,7 +42,7 @@ The default configuration includes [markers.yaml](assets/scenes/markers.yaml) fo
 
 ### Application data ###
 
-Application data is stored in `~/.config/Ascend/` on Linux (unless `config.yaml` already exists in the current folder or the executable's folder).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more are available in `config.yaml` in the application data folder.  It can be edited directly after exiting the app or via the plugin console within the app, e.g., `readSceneValue("config.storage.shrink_at")`, `writeSceneValue("config.storage.shrink_at", 500)`.  See [config.default.yaml](assets/config.default.yaml) for documentation.
+Application data is stored in `~/.config/Ascend/` on Linux (unless `config.yaml` already exists in the current folder or the executable's folder).  On Android, `/Android/data/com.styluslabs.maps/files` is used by default but if All Files Access is enabled for Ascend, it is possible to choose a more accessible shared folder when Ascend is first installed.  Currently, there are only a few configuration options available in the GUI, but many more are available in `config.yaml` in the application data folder.  It can be edited directly after exiting the app or via the plugin console within the app, e.g., `readSceneValue("config.storage.max_cache")`, `writeSceneValue("config.storage.max_cache", 500)`.  See [config.default.yaml](assets/config.default.yaml) for documentation.
 
 On Android, all files created by the application (except `config.yaml` and `mapsources.yaml`) will be replaced when a newer APK is installed, so edits should only be made to copies, not the original files.
 
@@ -152,7 +152,7 @@ Tangram-ES supports RTL text and complex shaping through Harfbuzz and Freetype. 
 * `mapsources.yaml` - map sources; exit application before editing
 * `places.sqlite` - saved places, etc.
 
-Storage use can be controlled with the `shrink_at` and `shrink_to` values (in MB) in the `storage` section of `config.yaml`: if the total size of cached (i.e., not offline map) tiles exceeds `shrink_at`, the least recently used tiles are deleted until the size is below `shrink_to`.  The cache size is checked at startup and after every (`shrink_at` - `shrink_to`)/4 MB of new tiles.
+Storage use can be controlled with the `max_cache` value (in MB) in the `storage` section of `config.yaml`: if the total size of cached (i.e., not offline map) tiles approaches `max_cache`, the least recently used tiles are deleted to reduce the size to 3/4 of `max_cache`.  Disk space freed by deleting cached tiles is reused for new tiles but not returned to the OS, so cache files will generally stay close to `max_cache` in size.
 
 To enable debug menus, run the following in the plugin console: `writeSceneValue("config.ui.show_debug", "true")`
 

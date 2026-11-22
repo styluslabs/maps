@@ -976,7 +976,13 @@ Button* MapsSources::createPanel()
   });
   auto clearAllCachesFn = [](std::string res){
     if(res == "OK") {
-      MapsOffline::queueOfflineTask(0, [](){ MapsOffline::shrinkCache(0); });
+      MapsOffline::queueOfflineTask(0, [](){
+        FSPath cachedir(MapsApp::baseDir, "cache");
+        for(auto& file : lsDirectory(cachedir)) {
+          if(FSPath(file).extension() == "mbtiles")
+            MapsOffline::clearCacheFile(cachedir.childPath(file));
+        }
+      });
     }
   };
   overflowMenu->addItem("Clear all caches", [=](){
