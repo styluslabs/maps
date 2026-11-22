@@ -8,7 +8,7 @@ class PlatformFile;
 class MapsOffline : public MapsComponent
 {
 public:
-  using MapsComponent::MapsComponent;
+  MapsOffline(MapsApp* _app);
   ~MapsOffline();
   int numOfflinePending() const;
   void saveOfflineMap(int mapid, Tangram::LngLat lngLat00, Tangram::LngLat lngLat11, int maxZoom);

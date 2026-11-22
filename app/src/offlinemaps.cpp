@@ -868,14 +868,20 @@ void MapsOffline::populateOffline()
   }
 }
 
-Widget* MapsOffline::createPanel()
+// table is created here, not in createPanel(), since initial cache size check (queued right after this is
+//  constructed, before GUI is created) reads it
+MapsOffline::MapsOffline(MapsApp* _app) : MapsComponent(_app)
 {
-  mapsOfflineInst = this;
-  maxOfflineDownloads = MapsApp::config["storage"]["offline_download_rate"].as<int>(8);
   // should we include zoom? total bytes?
   DB_exec(app->bkmkDB, "CREATE TABLE IF NOT EXISTS offlinemaps(mapid INTEGER PRIMARY KEY,"
       " lng0 REAL, lat0 REAL, lng1 REAL, lat1 REAL, maxzoom INTEGER, source TEXT, title TEXT,"
       " done INTEGER DEFAULT 0, timestamp INTEGER DEFAULT (CAST(strftime('%s') AS INTEGER)));");
+}
+
+Widget* MapsOffline::createPanel()
+{
+  mapsOfflineInst = this;
+  maxOfflineDownloads = MapsApp::config["storage"]["offline_download_rate"].as<int>(8);
 
   TextBox* downloadText = new TextBox(createTextNode(""));
   downloadText->node->setAttribute("box-anchor", "left");
