@@ -12,6 +12,10 @@
 #include "style/style.h"
 #include "tile/tile.h"
 #include "tile/tileManager.h"
+#include "tile/tileCache.h"
+#include "data/tileSource.h"
+#include "util/mapProjection.h"
+#include "view/view.h"
 #include "labels/labelManager.h"
 #include "util/elevationManager.h"
 #include "util/asyncWorker.h"
@@ -20,6 +24,7 @@
 #include <memory>
 #include <atomic>
 #include <map>
+#include <set>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -51,6 +56,15 @@ struct MapAutomation
   int lastCheckedFrame = 0;
   std::shared_ptr<std::atomic<int>> workersIdle;  // set by marker tasks queued on async workers
 
+  // blank area measurement (`blank` command): per tile source, integrated over time since `blank start`
+  struct BlankStats { std::string name; double blankSecs = 0, peak = 0, lastBlankT = 0, frac = 0; };
+  std::map<int32_t, BlankStats> blankStats;
+  bool blankActive = false;
+  double blankStartT = 0, blankPrevT = 0, lastLoadingT = 0;
+  int blankFrames = 0;
+  void updateBlank();
+  std::string blankReport();
+
   void start(const std::string& path);
   void poll(bool frameDrawn);
   void addCommands();
@@ -72,6 +86,84 @@ std::string mapStateStr(Tangram::MapState s)
   if(s.sceneLoading()) res += " scene_loading";
   if(s.isAnimating()) res += " is_animating";
   return res;
+}
+
+// blank area measurement: fraction of map view (grid of ground plane samples; sky excluded) not covered by any tile
+//  of each active source drawn this frame (incl. proxies)
+static std::map<int32_t, double> blankFractions()
+{
+  auto& map = MapsApp::inst->map;
+  std::map<int32_t, double> res;
+  auto* scene = map->getScene();
+  if(!scene || !scene->tileManager()) return res;
+  auto& view = map->getView();
+  std::map<int32_t, std::set<Tangram::TileID>> drawn;
+  for(auto& src : scene->tileSources()) {
+    if(src->isActiveForZoom(view.getZoom()) && src->isVisible()) drawn[src->id()];
+  }
+  for(auto& tile : scene->tileManager()->getVisibleTiles()) {
+    auto it = drawn.find(tile->sourceID());
+    if(it == drawn.end()) continue;
+    auto id = tile->getID();
+    it->second.insert(Tangram::TileID(id.x, id.y, id.z));
+  }
+  const int NX = 32, NY = 32;
+  float w = view.getWidth(), h = view.getHeight();
+  glm::dvec2 pos(view.getPosition());
+  std::map<int32_t, int> nblank;
+  int nsamples = 0;
+  for(int jj = 0; jj < NY; ++jj) {
+    for(int ii = 0; ii < NX; ++ii) {
+      double t = 0;
+      glm::dvec2 m = view.screenToGroundPlane((ii + 0.5f)*w/NX, (jj + 0.5f)*h/NY, 0, &t) + pos;
+      if(t <= 0) continue;  // above horizon
+      ++nsamples;
+      Tangram::TileID tid = Tangram::MapProjection::projectedMetersTile(m, 24);
+      for(auto& kv : drawn) {
+        bool covered = false;
+        for(int z = 24; z >= 0 && !covered; --z)
+          covered = kv.second.count(Tangram::TileID(tid.x >> (24 - z), tid.y >> (24 - z), z)) > 0;
+        if(!covered) ++nblank[kv.first];
+      }
+    }
+  }
+  for(auto& kv : drawn) { res[kv.first] = nsamples > 0 ? double(nblank[kv.first])/nsamples : 0; }
+  return res;
+}
+
+void MapAutomation::updateBlank()
+{
+  double now = mSecSinceEpoch()/1000.0;
+  // blank fraction is piecewise constant between frames
+  for(auto& kv : blankStats) { kv.second.blankSecs += kv.second.frac*(now - blankPrevT); }
+  blankPrevT = now;
+  auto* scene = MapsApp::inst->map->getScene();
+  for(auto& kv : blankFractions()) {
+    BlankStats& st = blankStats[kv.first];
+    if(st.name.empty() && scene) {
+      auto src = scene->getTileSource(kv.first);
+      st.name = src ? src->name() : std::to_string(kv.first);
+    }
+    st.frac = kv.second;
+    st.peak = std::max(st.peak, kv.second);
+    if(kv.second > 0) { st.lastBlankT = now - blankStartT; }
+  }
+  if(scene && scene->tileManager()->numLoadingTiles() > 0) { lastLoadingT = now - blankStartT; }
+  ++blankFrames;
+}
+
+std::string MapAutomation::blankReport()
+{
+  double now = mSecSinceEpoch()/1000.0;
+  std::string out = fstring("elapsed %.3f frames %d last_visible_loading %.3f\n", now - blankStartT,
+      blankFrames, lastLoadingT);
+  for(auto& kv : blankStats) {
+    const BlankStats& st = kv.second;
+    double secs = st.blankSecs + st.frac*(now - blankPrevT);
+    out += fstring("source %s blank_secs %.3f peak %.3f last_blank %.3f current %.3f\n", st.name.c_str(),
+        secs, st.peak, st.lastBlankT, st.frac);
+  }
+  return out;
 }
 
 void MapAutomation::beginPending(double timeoutSecs)
@@ -131,6 +223,8 @@ std::string MapAutomation::dumpMap()
   const auto& tiles = tm->getVisibleTiles();
   out += fstring("tiles visible %d loading %d tasks_in_flight %d labels %d\n", int(tiles.size()),
       tm->numLoadingTiles(), int(tm->tasksInFlight()), int(scene->labelManager()->numLabels()));
+  out += fstring("tile cache %d (%.1f MB)\n", int(tm->getTileCache()->getNumEntries()),
+      tm->getTileCache()->getMemoryUsage()/1048576.0);
   struct Stats { size_t meshes = 0, vertices = 0, indices = 0, bytes = 0; };
   std::map<std::string, Stats> styleStats;
   Stats total;
@@ -227,6 +321,33 @@ void MapAutomation::addCommands()
       return UiDriver::CMD_DONE;
     }
     status = "error: unknown flag " + args[1];
+    return UiDriver::CMD_DONE;
+  });
+
+  d->addCommand("blank", "blank start|stop|now - measure map area not covered by drawn tiles (per source):"
+      " blank screen-seconds, peak fraction, time of last blank frame since start", [=](const Args& args,
+      std::string& status, std::string& out) {
+    if(args.size() != 2) { status = "error: wrong arguments"; return UiDriver::CMD_DONE; }
+    if(args[1] == "start") {
+      blankStats.clear();
+      blankFrames = 0;
+      lastLoadingT = 0;
+      blankStartT = blankPrevT = mSecSinceEpoch()/1000.0;
+      blankActive = true;
+      updateBlank();  // initial state
+      MapsApp::platform->requestRender();
+    }
+    else if(args[1] == "stop") {
+      out = blankReport();
+      blankActive = false;
+    }
+    else if(args[1] == "now") {
+      for(auto& kv : blankFractions()) {
+        auto src = MapsApp::inst->map->getScene()->getTileSource(kv.first);
+        out += fstring("source %s blank %.3f\n", src ? src->name().c_str() : "?", kv.second);
+      }
+    }
+    else { status = "error: wrong arguments"; }
     return UiDriver::CMD_DONE;
   });
 
@@ -337,7 +458,10 @@ void MapAutomation::start(const std::string& path)
 
 void MapAutomation::poll(bool frameDrawn)
 {
-  if(frameDrawn) { ++framesDrawn; }
+  if(frameDrawn) {
+    ++framesDrawn;
+    if(blankActive) { updateBlank(); }
+  }
   if(driver) { driver->poll(); }
 }
 

@@ -819,6 +819,9 @@ void MapsApp::loadSceneFile(bool async, bool setPosition)
 
   // max tile cache size
   map->getScene()->tileManager()->setCacheSize(cfg()["tile_cache_limit"].as<size_t>(512*1024*1024));
+  // cover tiles: keep ancestors this many levels up of visible tiles, loaded first when tiles are missing (e.g. on
+  //  fast zoom out) so view is covered quickly
+  map->getScene()->tileManager()->setCoverLevels(cfg()["tile_cover_levels"].as<int>(2));
 }
 
 void MapsApp::sendMapEvent(MapEvent_t event)
