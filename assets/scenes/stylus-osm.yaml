@@ -1941,13 +1941,19 @@ layers:
             draw:
                 text:
                     priority: global.priority.boundary
-                    text_source: global.names_one_line  #{ left: "", right: global.names_one_line } -- need to fix tilemaker
+                    text_source: global.names_one_line
                     font:
                         family: global.primary_font
                         size: 10px
                         fill: global.color.place_name
                         stroke: { color: global.color.place_halo, width: 4 }
                         transform: uppercase
+            # name of area on each side of border (older tiles only have name, used above)
+            sides:
+                filter: { any: [ { name_left: true }, { name_right: true } ] }
+                draw:
+                    text:
+                        text_source: { left: [name_en_left, name_left], right: [name_en_right, name_right] }
             country:
                 filter: { admin_level: 2 }
                 draw:
