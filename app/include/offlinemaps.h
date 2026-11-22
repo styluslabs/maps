@@ -20,8 +20,11 @@ public:
   Widget* createPanel();
 
   static void queueOfflineTask(int mapid, std::function<void()>&& fn);
-  static int64_t shrinkCache(int64_t maxbytes);
-  static void runSQL(std::string dbpath, std::string sql);
+  static void shrinkCache(int64_t maxbytes, int64_t threshold = 0);
+  static void checkCacheSize();
+  static void onCacheGrowth(int64_t bytes);
+  static bool runSQL(std::string dbpath, std::string sql);
+  static void clearCacheFile(std::string path);
 
   Widget* offlinePanel = NULL;
 

@@ -2355,9 +2355,6 @@ bool MapsApp::loadConfig(const char* assetPath)
 //  update config as soon as change is made (vs. us having to broadcast a signal on pause)
 void MapsApp::saveConfig()
 {
-  config["storage"]["offline"] = storageOffline.load();
-  config["storage"]["total"] = storageTotal.load();
-
   CameraPosition pos = map->getCameraPosition(true);  // get 2D pos since pos restored before scene loaded
   // should never happen, but if camera position is corrupted, don't persist it!
   if(!std::isnan(pos.longitude) && !std::isnan(pos.latitude)
@@ -2450,27 +2447,8 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   createPath(FSPath(baseDir, ".trash"));  //, 0777);
   removeDir(FSPath(baseDir, ".trash"), false);  // empty trash
 
-  // cache management
-  storageTotal = cfg()["storage"]["total"].as<int64_t>(0);
-  storageOffline = cfg()["storage"]["offline"].as<int64_t>(0);
-  int64_t storageShrinkMax = cfg()["storage"]["shrink_at"].as<int64_t>(500) * 1024*1024;
-  int64_t storageShrinkMin = cfg()["storage"]["shrink_to"].as<int64_t>(250) * 1024*1024;
-  // easier to track total storage and offline map storage instead cached storage directly, since offline
-  //   map download/deletion can convert some tiles between cached and offline
-  platform->onNotifyStorage = [=](int64_t dtotal, int64_t doffline){
-    storageTotal += dtotal;
-    storageOffline += doffline;
-    // write out changes to offline storage total immediately since errors here can persist; errors w/ total
-    //  storage will be fixed by shrinkCache
-    if(doffline)
-      saveConfig();
-    if(storageShrinkMax > 0 && storageTotal - storageOffline > storageShrinkMax && !mapsOffline->numOfflinePending()) {
-      MapsOffline::queueOfflineTask(0, [=](){
-        int64_t tot = MapsOffline::shrinkCache(storageShrinkMin);
-        storageTotal = tot + storageOffline;  // update storage usage
-      });
-    }
-  };
+  // cache management - notifyStorage() is called by MBTilesDataSource when tiles are stored
+  platform->onNotifyStorage = MapsOffline::onCacheGrowth;
 
   // GLES 3 needed on iOS for highp float textures
   //Tangram::ShaderSource::glesVersion = 300;  ... now detected in gl/hardware.cpp
@@ -2486,6 +2464,7 @@ MapsApp::MapsApp(Platform* _platform) : touchHandler(new TouchHandler(this))
   // Setup UI panels
   mapsSources = std::make_unique<MapsSources>(this);
   mapsOffline = std::make_unique<MapsOffline>(this);
+  MapsOffline::checkCacheSize();  // runs on offline worker thread
   pluginManager = std::make_unique<PluginManager>(this);
   // no longer recreated when scene loaded
   mapsTracks = std::make_unique<MapsTracks>(this);

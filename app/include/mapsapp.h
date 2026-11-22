@@ -192,9 +192,6 @@ public:
   Timer* progressTimer = NULL;
   float currProgress = 1;
 
-  std::atomic_int_fast64_t storageTotal = {0};
-  std::atomic_int_fast64_t storageOffline = {0};
-
   enum EventTypes { PANEL_CLOSED=0xE001, PANEL_OPENED };
 
   static bool openURL(const char* url);

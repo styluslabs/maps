@@ -449,10 +449,10 @@ void MapsSources::populateSources()
       if(res != "OK") return;
       auto cache = mapSources[key]["cache"].as<std::string>(key);
       if(cache != "false") {
-        if(removeFile(FSPath(MapsApp::baseDir, "cache").childPath(cache + ".mbtiles")))
-          LOGW("Removed cache file for deleted source %s", key.c_str());
-        else
-          LOGW("No cache file found for deleted source %s", key.c_str());
+        // file can't be deleted if in use (e.g. if this is current source), in which case it will be deleted
+        //  by a later cache size check after becoming empty; tiles for offline maps are not deleted
+        std::string path = FSPath(MapsApp::baseDir, "cache").childPath(cache + ".mbtiles");
+        MapsOffline::queueOfflineTask(0, [path](){ MapsOffline::clearCacheFile(path); });
       }
       mapSources.remove(key);
       saveSources();
@@ -967,20 +967,16 @@ Button* MapsSources::createPanel()
   });
 
   overflowMenu->addItem("Clear cache", [=](){
-    static const char* wipe = "DELETE FROM images WHERE tile_id NOT IN (SELECT tile_id FROM offline_tiles); VACUUM;";
     auto& tileSources = app->map->getScene()->tileSources();
     for(auto& tilesrc : tileSources) {
       auto& info = tilesrc->offlineInfo();
       if(info.cacheFile.empty()) continue;
-      MapsOffline::queueOfflineTask(0, [db=info.cacheFile](){ MapsOffline::runSQL(db, wipe); });
+      MapsOffline::queueOfflineTask(0, [db=info.cacheFile](){ MapsOffline::clearCacheFile(db); });
     }
   });
-  auto clearAllCachesFn = [this](std::string res){
+  auto clearAllCachesFn = [](std::string res){
     if(res == "OK") {
-      MapsOffline::queueOfflineTask(0, [this](){
-        int64_t tot = MapsOffline::shrinkCache(0);  //20'000'000);
-        app->storageTotal = tot + app->storageOffline;
-      });
+      MapsOffline::queueOfflineTask(0, [](){ MapsOffline::shrinkCache(0); });
     }
   };
   overflowMenu->addItem("Clear all caches", [=](){

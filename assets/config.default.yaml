@@ -40,7 +40,7 @@ fallback_fonts:
   - shared/fonts/DroidSansFallback.ttf
 
 storage:
-  # cache size thresholds (MB) - set to 0 for no limit
+  # cache size thresholds (MB) for cached (not offline) tiles - set shrink_at to 0 for no limit
   shrink_at: 600
   shrink_to: 400
   # immediately delete tiles when deleting offline map?
