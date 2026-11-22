@@ -269,6 +269,71 @@ std::vector<Waypoint> decodePolylineStr(const std::string& encoded, double preci
   return shape;
 }
 
+// this was the loop body of the original single pass calculation in MapsTracks::updateStats()
+void TrackStats::addPoint(std::vector<Waypoint>& locs, size_t ii, bool islast)
+{
+  Location& loc = locs[ii].loc;
+  double dt = loc.time - locs[ii-1].loc.time;
+  double dist = 1000*lngLatDist(loc.lngLat(), locs[prevDistLoc].lngLat());  //prev.lngLat()
+  double disterr = loc.poserr + locs[prevDistLoc].loc.poserr;
+  double vert = loc.alt - locs[prevVertLoc].loc.alt;
+  double verterr = loc.alterr + locs[prevVertLoc].loc.alterr;
+
+  // if !hasSpeed, loc.spd is our estimate (set below), so result would depend on previous calculations
+  if(hasSpeed && loc.spd > 0.1f)
+    movingTimeGps += dt;
+
+  rawDist += 1000*lngLatDist(loc.lngLat(), locs[ii-1].lngLat());
+  disterr = disterr > 0 ? disterr : 10;
+  if(!isTrack)
+    trackDist = rawDist;
+  else if(dist > disterr/2 || islast) {  // be more generous with distance than vert
+    double tdist = loc.time - locs[prevDistLoc].loc.time;
+    trackDist += dist;
+    movingTime += std::min(10.0, tdist);
+
+    if(!hasSpeed) {
+      double a = std::exp(-dt*speedInvTau);
+      estSpeed = a*estSpeed + (1-a)*dist/tdist;
+    }
+    prevDistLoc = ii;
+  }
+  locs[ii].dist = trackDist;
+  if(!hasSpeed)
+    loc.spd = estSpeed;
+  maxSpeed = std::max(double(loc.spd), maxSpeed);
+
+  verterr = verterr > 0 ? verterr : 20;
+  if(std::abs(vert) > verterr) {
+    double vertdt = dt;  //loc.time - locs[prevVertLoc].loc.time;
+    for(size_t jj = prevVertLoc; jj < ii; ++jj) {
+      // idea here is to try to exclude flat sections
+      if(std::abs(loc.alt - locs[jj+1].loc.alt) <= verterr) {
+        vertdt = loc.time - locs[jj].loc.time;
+        break;
+      }
+    }
+    trackAscent += std::max(0.0, vert);
+    trackDescent += std::min(0.0, vert);
+    ascentTime += vert > 0 ? vertdt : 0;
+    descentTime += vert < 0 ? vertdt : 0;
+    prevVertLoc = ii;
+  }
+}
+
+TrackStats TrackStats::update(std::vector<Waypoint>& locs)
+{
+  if(!locs.empty()) locs.front().dist = 0;
+  // commit all but last point
+  for(; nextIdx + 1 < locs.size(); ++nextIdx)
+    addPoint(locs, nextIdx, false);
+  TrackStats res = *this;
+  if(locs.size() > 1)
+    res.addPoint(locs, locs.size() - 1, true);
+  return res;
+}
+
+#ifndef GPXFILE_STANDALONE
 // Tangram stores marker coords normalized to marker extent (max of bbox width, height) and line width is in
 //  same coords, so for large marker (e.g. route), width becomes too small (passed as round(float * 4096))
 //  and gets rounded to zero, so marker isn't drawn.  For even larger markers, use of floats instead of
@@ -324,3 +389,5 @@ TrackMarker::~TrackMarker()
   Tangram::ClientDataSource::PolylineBuilder builder;
   MapsApp::inst->tracksDataSource->addPolylineFeature(Properties(), std::move(builder), featureId);
 }
+
+#endif  // GPXFILE_STANDALONE

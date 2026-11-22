@@ -48,7 +48,10 @@ void MapsTracks::updateLocation(const Location& loc)
       return;
     lastTrackPtTime = mSecSinceEpoch();
     plotDirty = true;
-    if(loc.spd > 0) recordedTrack.hasSpeed = true;  // comparison false for NaN
+    if(loc.spd > 0 && !recordedTrack.hasSpeed) {  // comparison false for NaN
+      recordedTrack.hasSpeed = true;
+      recordStats = TrackStats(true, true, speedInvTau);  // speeds are no longer estimated
+    }
     double d0 = prev.dist;
     locs.emplace_back(loc);
     locs.back().dist = d0 + dist;
@@ -533,73 +536,15 @@ void MapsTracks::updateStats(GpxFile* track)
   if(isRecording)
     totalTime += (mSecSinceEpoch() - lastTrackPtTime)/1000.0;
 
-  double movingTime = isTrack ? 0 : totalTime;
-  double trackDist = 0, trackAscent = 0, trackDescent = 0, ascentTime = 0, descentTime = 0;
-  double estSpeed = 0, maxSpeed = 0, currSlope = 0, movingTimeGps = 0, rawDist = 0, movingDist = 0;
-  size_t prevDistLoc = 0, prevVertLoc = 0;
-  if(!locs.empty()) locs.front().dist = 0;
-  for(size_t ii = 1; ii < locs.size(); ++ii) {
-    Location& loc = locs[ii].loc;
-    double dt = loc.time - locs[ii-1].loc.time;
-    double dist = 1000*lngLatDist(loc.lngLat(), locs[prevDistLoc].lngLat());  //prev.lngLat()
-    double disterr = loc.poserr + locs[prevDistLoc].loc.poserr;
-    double vert = loc.alt - locs[prevVertLoc].loc.alt;
-    double verterr = loc.alterr + locs[prevVertLoc].loc.alterr;
-
-    if(loc.spd > 0.1f)
-      movingTimeGps += dt;
-    //if(dist > minTrackDist || vert > minTrackDist) {  // dt < minTrackTime
-
-    rawDist += 1000*lngLatDist(loc.lngLat(), locs[ii-1].lngLat());
-    disterr = disterr > 0 ? disterr : 10;
-    if(!isTrack)
-      trackDist = rawDist;
-    else if(dist > disterr/2 || ii == locs.size() - 1) {  // be more generous with distance than vert
-      double tdist = loc.time - locs[prevDistLoc].loc.time;
-      trackDist += dist;
-      movingTime += std::min(10.0, tdist);
-
-      if(!track->hasSpeed) {
-        double a = std::exp(-dt*speedInvTau);
-        estSpeed = a*estSpeed + (1-a)*dist/tdist;
-      }
-      //double dd = dist/(ii - prevDistLoc);  -- this isn't really correct
-      //for(++prevDistLoc; prevDistLoc < ii; ++prevDistLoc)
-      //  locs[prevDistLoc].dist = locs[prevDistLoc-1].dist + dd;
-      prevDistLoc = ii;
-    }
-    locs[ii].dist = trackDist;
-    if(!track->hasSpeed)
-      loc.spd = estSpeed;
-    maxSpeed = std::max(double(loc.spd), maxSpeed);
-
-    verterr = verterr > 0 ? verterr : 20;
-    if(std::abs(vert) > verterr) {
-      double vertdt = dt;  //loc.time - locs[prevVertLoc].loc.time;
-      for(size_t jj = prevVertLoc; jj < ii; ++jj) {
-        // idea here is to try to exclude flat sections
-        if(std::abs(loc.alt - locs[jj+1].loc.alt) <= verterr) {
-          vertdt = loc.time - locs[jj].loc.time;
-          break;
-        }
-      }
-      trackAscent += std::max(0.0, vert);
-      trackDescent += std::min(0.0, vert);
-      ascentTime += vert > 0 ? vertdt : 0;
-      descentTime += vert < 0 ? vertdt : 0;
-      prevVertLoc = ii;
-    }
-  }
-
-  //if(!locs.empty()) {
-  //  for(size_t ii = locs.size() - 1; ii-- > 0;) {
-  //    if(locs.back().dist - locs[ii].dist > 10 && (locs.back().loc.time - locs[ii].loc.time > 10
-  //        || std::abs(locs.back().loc.alt - locs[ii].loc.alt) > 10)) {
-  //      currSlope = (locs.back().loc.alt - locs[ii].loc.alt)/(locs.back().dist - locs[ii].dist);
-  //      break;
-  //    }
-  //  }
-  //}
+  // stats for recorded track are calculated incrementally, processing only new points; recordStats is reset
+  //  when recording is started or paused (track can be edited while paused)
+  TrackStats stats = isRecording ? recordStats.update(locs)
+      : TrackStats(isTrack, track->hasSpeed, speedInvTau).update(locs);
+  double movingTime = isTrack ? stats.movingTime : totalTime;
+  double trackDist = stats.trackDist, trackAscent = stats.trackAscent, trackDescent = stats.trackDescent;
+  double ascentTime = stats.ascentTime, descentTime = stats.descentTime;
+  double maxSpeed = stats.maxSpeed, movingTimeGps = stats.movingTimeGps, rawDist = stats.rawDist;
+  double currSlope = 0, movingDist = 0;
   currSlope = calcCurrSlope(locs);
 
   liveStatsRow->setVisible(isRecording);
@@ -1699,6 +1644,7 @@ void MapsTracks::loadTrackGPX(std::unique_ptr<PlatformFile> file)
 void MapsTracks::startRecording()
 {
   recordTrack = true;
+  recordStats = TrackStats(true, false, speedInvTau);
   app->setServiceState(true, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
   std::string timestr = ftimestr("%FT%H.%M.%S");
   FSPath gpxPath(app->baseDir, "tracks/" + timestr + ".gpx");
@@ -2364,6 +2310,7 @@ void MapsTracks::createTrackPanel()
       recordGPXStrm->flush();
     if(recordTrack && editTrackTb->isVisible())
       setTrackEdit(false);  // show/hide track editing controls
+    recordStats = TrackStats(true, recordedTrack.hasSpeed, speedInvTau);  // track may be edited while paused
     app->setServiceState(recordTrack, gpsSamplePeriod, 0);  //minTrackTime*1.1, minTrackDist*1.1);
   };
 

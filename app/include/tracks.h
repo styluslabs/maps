@@ -147,6 +147,7 @@ private:
   std::unique_ptr<GpxFile> origTrack;
   std::string insertionWpt;
   std::string trackSummary;
+  TrackStats recordStats;  // incremental stats for recordedTrack while recording
   Timestamp lastTrackPtTime;
   Waypoint trackHoverLoc = LngLat{0, 0};
   double sliderPos = 0;

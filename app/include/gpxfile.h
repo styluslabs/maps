@@ -103,6 +103,43 @@ struct GpxFile
   std::vector<Waypoint>::iterator addWaypoint(Waypoint wpt, const std::string& nextuid = {});
 };
 
+// Track statistics (distance, moving time, ascent/descent, ...) for a list of points, calculated
+//  incrementally: update() processes only points added since the previous call, so a persistent TrackStats
+//  can be kept for a track being recorded.  A fresh TrackStats gives a full calculation.
+// - update() returns stats for all points; the last point always counts toward distance (even if within
+//  position error of previous counted point), so it is processed provisionally on a copy and only committed
+//  once another point is added
+// - update() also sets Waypoint::dist and, if !hasSpeed, Location::spd (estimated speed) for each point
+// - must be reset (by assigning a fresh TrackStats) if any processed points are modified or removed
+struct TrackStats
+{
+  // results (meters, seconds, meters/sec)
+  double trackDist = 0;  // for tracks, only moves larger than position error are counted
+  double rawDist = 0;
+  double movingTime = 0;  // tracks only (routes use total time)
+  double movingTimeGps = 0;  // time w/ GPS speed > 0.1 m/s (only if hasSpeed)
+  double maxSpeed = 0;
+  double trackAscent = 0, trackDescent = 0;  // trackDescent <= 0
+  double ascentTime = 0, descentTime = 0;
+
+  // parameters
+  bool isTrack = true;  // false for route
+  bool hasSpeed = false;  // points have GPS speed (otherwise speed is estimated from position)
+  double speedInvTau = 0.5;  // 1/time constant for estimated speed smoothing
+
+  // state for incremental calculation
+  size_t nextIdx = 1;  // next point to commit
+  size_t prevDistLoc = 0, prevVertLoc = 0;
+  double estSpeed = 0;
+
+  TrackStats(bool _isTrack = true, bool _hasSpeed = false, double _speedInvTau = 0.5)
+      : isTrack(_isTrack), hasSpeed(_hasSpeed), speedInvTau(_speedInvTau) {}
+  TrackStats update(std::vector<Waypoint>& locs);
+
+private:
+  void addPoint(std::vector<Waypoint>& locs, size_t ii, bool islast);
+};
+
 namespace pugi { class xml_node; }
 void saveWaypoint(pugi::xml_node trkpt, const Waypoint& wpt, bool savespd = false, bool savedist = false);
 bool loadGPX(GpxFile* track, const char* gpxSrc = NULL);
