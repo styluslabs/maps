@@ -161,8 +161,11 @@ void TouchHandler::touchEvent(int ptrId, int action, double t, float x, float y,
     if(multiTouchState == TOUCH_PINCH && t - prevTime < 0.1) {
       auto it = --prevDists.end();
       while(it != prevDists.begin() && prevTime - it->t < 0.05) --it;  //FLING_AVG_SECS
-      float pinchSpeed = (prevDist/it->dist - 1)/float(prevTime - it->t);
-      map->handlePinchGesture(prevCOM.x, prevCOM.y, 1.0, pinchSpeed);
+      // events can arrive w/ identical timestamps - dt = 0 gives infinite speed (-> NaN zoom)
+      if(prevTime - it->t > 0.005 && it->dist > 0) {  //MIN_INPUT_DT
+        float pinchSpeed = (prevDist/it->dist - 1)/float(prevTime - it->t);
+        map->handlePinchGesture(prevCOM.x, prevCOM.y, 1.0, pinchSpeed);
+      }
     }
     multiTouchState = TOUCH_NONE;
     return;
