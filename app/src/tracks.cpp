@@ -604,7 +604,10 @@ void MapsTracks::updateStats(GpxFile* track)
   setStatsText(".track-max-speed", maxSpeed > 0 ? speedToStr(maxSpeed) : notime);
 
   trackSummary = (totalTime > 0 ? (timeStr + " | ") : "") + distStr;
-  trackSpark->setTrack(locs);
+  // skip O(n) sparkline rebuild on record timer updates (every second) if no points were added
+  if(!isRecording || locs.size() != sparkRecordPts)
+    trackSpark->setTrack(locs);
+  sparkRecordPts = isRecording ? locs.size() : SIZE_MAX;
   plotVsTimeBtn->setVisible(totalTime > 0);
 
   if(plotDirty && plotWidgets[0]->isVisible()) {

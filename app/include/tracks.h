@@ -150,6 +150,7 @@ private:
   std::string trackSummary;
   TrackStats recordStats;  // incremental stats for recordedTrack while recording
   Timestamp notifyTime = 0;  // last update of recording notification
+  size_t sparkRecordPts = SIZE_MAX;  // recorded track size at last sparkline update (SIZE_MAX if other track)
   Timestamp lastTrackPtTime;
   Waypoint trackHoverLoc = LngLat{0, 0};
   double sliderPos = 0;
