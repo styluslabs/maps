@@ -67,7 +67,7 @@ tracks:
   min_distance: 0.5
   min_time: 5
   # Android leaves GPS on continuously if sample_period (sec) is less than 10 seconds
-  sample_period: 0.1
+  sample_period: 1
 
 metric_units: true
 

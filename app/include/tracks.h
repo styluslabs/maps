@@ -49,7 +49,7 @@ public:
   double speedInvTau = 0.5;
   double minTrackDist = 2;  // meters
   double minTrackTime = 5;  // seconds
-  float gpsSamplePeriod = 0.1f;  // seconds
+  float gpsSamplePeriod = 1.0f;  // seconds
 
 private:
   void loadTracks(bool archived);

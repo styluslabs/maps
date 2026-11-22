@@ -43,6 +43,7 @@ import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.Manifest;
 import android.content.Context;
+import android.content.ComponentCallbacks2;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
@@ -297,6 +298,16 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
     MapsLib.onLowPower(pm.isPowerSaveMode() ? 1 : 0);
   }
 
+  @Override
+  public void onTrimMemory(int level)
+  {
+    super.onTrimMemory(level);
+    // when recording in background, release tiles and fonts so we're less likely to be chosen by the low
+    //  memory killer; not done otherwise since tiles would have to be rebuilt every time app is resumed
+    if(level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN && MapsService.isRecording())
+      MapsLib.onLowMemory();
+  }
+
   public void stopSensors()
   {
     if(canGetLocation()) {
@@ -338,7 +349,8 @@ public class MapsActivity extends Activity implements GpsStatus.Listener, Locati
   {
     new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
         .setTitle("Disable Battery Optimization")
-        .setMessage("Battery optimization must be disabled to record a track.")
+        .setMessage("Battery optimization must be disabled to record a track."
+            + "  Visit dontkillmyapp.com for more information.")
         .setPositiveButton("OK", new DialogInterface.OnClickListener() {
           public void onClick(DialogInterface dialog, int which) {
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);

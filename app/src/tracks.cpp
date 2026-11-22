@@ -101,6 +101,8 @@ void MapsTracks::updateLocation(const Location& loc)
   pugi::xml_node trkpt = xmldoc.append_child("trkpt");
   saveWaypoint(trkpt, locs.back(), recordedTrack.hasSpeed);
   trkpt.print(writer, "  ", pugi::format_default | pugi::format_no_declaration);
+  // Android kills w/ SIGKILL, so stdio buffer would be lost; once written, data survives process death
+  recordGPXStrm->flush();
 }
 
 bool MapsTracks::saveTrack(GpxFile* track)
@@ -2511,7 +2513,7 @@ Button* MapsTracks::createPanel()
 
   minTrackDist = app->config["tracks"]["min_distance"].as<double>(0.5);
   minTrackTime = app->config["tracks"]["min_time"].as<double>(5);
-  gpsSamplePeriod = app->config["tracks"]["sample_period"].as<float>(0.1f);
+  gpsSamplePeriod = app->config["tracks"]["sample_period"].as<float>(1.0f);
 
   createTrackListPanel();
   createTrackPanel();
